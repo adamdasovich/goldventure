@@ -7,6 +7,9 @@ import anthropic
 from django.conf import settings
 from typing import List, Dict, Any
 from mcp_servers.mining_data import MiningDataServer
+from mcp_servers.financial_data import FinancialDataServer
+from mcp_servers.alpha_vantage import AlphaVantageServer
+from mcp_servers.document_processor_hybrid import HybridDocumentProcessor
 
 
 class ClaudeClient:
@@ -31,16 +34,25 @@ class ClaudeClient:
 
         # Initialize MCP servers
         self.mining_server = MiningDataServer(company_id, user)
+        self.financial_server = FinancialDataServer(company_id, user)
+        self.alpha_vantage_server = AlphaVantageServer(company_id, user)
+        self.document_processor = HybridDocumentProcessor(company_id, user)
 
         # Map tool name prefixes to servers
         self.server_map = {
             'mining_': self.mining_server,
+            'financial_': self.financial_server,
+            'alphavantage_': self.alpha_vantage_server,
+            'document_': self.document_processor,
         }
 
     def _get_all_tools(self) -> List[Dict]:
         """Get tool definitions from all MCP servers"""
         tools = []
         tools.extend(self.mining_server.get_tool_definitions())
+        tools.extend(self.financial_server.get_tool_definitions())
+        tools.extend(self.alpha_vantage_server.get_tool_definitions())
+        tools.extend(self.document_processor.get_tool_definitions())
         return tools
 
     def _route_tool_call(self, tool_name: str, parameters: Dict) -> Any:
@@ -75,19 +87,46 @@ class ClaudeClient:
         if system_prompt is None:
             system_prompt = """You are an AI assistant for a junior gold mining investment platform.
 
-You have access to a database of mining companies, projects, resources, and technical data.
+You have access to a comprehensive database of mining companies, projects, resources, financial data, and market information.
 Use the available tools to answer questions accurately about:
+
+MINING DATA:
 - Mining companies and their details
 - Mining projects (location, stage, commodity, ownership)
 - Resource estimates (gold, silver, copper)
-- Economic studies and project economics
+- Economic studies and project economics (NPV, IRR, capex, opex)
+
+FINANCIAL DATA:
+- Stock prices and market capitalization
+- Trading volume and shares outstanding
+- Capital raises and financings (private placements, offerings)
+- Investor information and ownership
+- Market comparisons and valuations
+- Financing trends and analytics
+
+REAL-TIME MARKET DATA (Alpha Vantage):
+- Real-time stock quotes for any ticker symbol
+- Intraday price data (minute/hourly intervals)
+- Daily historical price data
+- Automatic caching of fetched data to database
+- Use these tools when market data is not available in the database
+
+DOCUMENT PROCESSING (Hybrid Docling + Claude):
+- Process NI 43-101 technical reports automatically
+- Extract resource estimates, economic studies, project details
+- Use Docling for table extraction + Claude for interpretation
+- Automatically store extracted data in database
+- Generate intelligent summaries and key findings
+- Highest accuracy for complex mining documents
 
 When presenting data:
 - Format numbers clearly (use commas for thousands, appropriate decimals)
+- Use $ for currency values, M for millions (e.g., $5.2M)
 - Provide context (dates, sources, categories)
-- Explain technical terms if needed (like M&I, PEA, NI 43-101)
+- Explain technical terms if needed (like M&I, PEA, NI 43-101, market cap, NPV)
 - Be concise but thorough
 - If you use a tool, explain what data you found
+- For financial data, always note the date of the information
 
 If you don't have access to specific information, say so clearly and suggest where the user might find it."""
 
