@@ -412,9 +412,9 @@ EXTRACTED TABLES ({len(docling_data['tables'])} total tables, showing {len(filte
                     company=company,
                     name=project_info['project_name'],
                     defaults={
-                        'location': project_info.get('location', 'Unknown'),
+                        'country': 'Unknown',  # Will be updated from location string if available
                         'project_stage': 'exploration',
-                        'commodity_primary': 'gold'
+                        'primary_commodity': 'gold'
                     }
                 )
                 document.project = project
@@ -478,6 +478,17 @@ EXTRACTED TABLES ({len(docling_data['tables'])} total tables, showing {len(filte
                 except Exception as e:
                     print(f"Error storing economics: {str(e)}")
 
+            # Store full document text for RAG/semantic search
+            chunks_stored = 0
+            try:
+                from .rag_utils import RAGManager
+                rag_manager = RAGManager()
+                full_text = docling_data['text']  # Full extracted text from Docling
+                chunks_stored = rag_manager.store_document_chunks(document, full_text)
+                print(f"Stored {chunks_stored} chunks for semantic search")
+            except Exception as e:
+                print(f"Error storing document chunks for RAG: {str(e)}")
+
             return {
                 "success": True,
                 "method": "Docling + Claude Hybrid",
@@ -488,7 +499,8 @@ EXTRACTED TABLES ({len(docling_data['tables'])} total tables, showing {len(filte
                     "tables_extracted": len(docling_data['tables']),
                     "pages_processed": docling_data['page_count'],
                     "resources_stored": resources_added,
-                    "economic_study_stored": econ_stored
+                    "economic_study_stored": econ_stored,
+                    "document_chunks_stored": chunks_stored
                 },
                 "extracted_data": {
                     "document_info": doc_info,

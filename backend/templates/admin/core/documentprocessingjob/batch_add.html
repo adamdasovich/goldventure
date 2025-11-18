@@ -1,0 +1,98 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+
+{% block title %}Batch Add Document URLs{% endblock %}
+
+{% block content %}
+<h1>Batch Add Document URLs</h1>
+
+<p>Add multiple document URLs to process. Each URL should be on a new line.</p>
+
+<form method="post">
+    {% csrf_token %}
+
+    <div style="margin-bottom: 20px;">
+        <label for="urls" style="display: block; font-weight: bold; margin-bottom: 5px;">
+            Document URLs (one per line):
+        </label>
+        <textarea
+            name="urls"
+            id="urls"
+            rows="10"
+            cols="80"
+            style="width: 100%; font-family: monospace; padding: 10px;"
+            placeholder="https://example.com/report1.pdf&#10;https://example.com/report2.pdf&#10;https://example.com/report3.pdf"
+            required
+        ></textarea>
+        <small style="display: block; margin-top: 5px; color: #666;">
+            Example: https://www.1911gold.com/_resources/reports/2024-43-101-True-North-Gold-Project.pdf
+        </small>
+    </div>
+
+    <div style="margin-bottom: 20px;">
+        <label for="document_type" style="display: block; font-weight: bold; margin-bottom: 5px;">
+            Document Type:
+        </label>
+        <select name="document_type" id="document_type" style="width: 300px; padding: 5px;">
+            <option value="ni43101">NI 43-101 Technical Report</option>
+            <option value="news_release">News Release</option>
+            <option value="financial_statement">Financial Statement</option>
+            <option value="presentation">Presentation</option>
+            <option value="other">Other</option>
+        </select>
+    </div>
+
+    <div style="margin-bottom: 20px;">
+        <label for="company_name" style="display: block; font-weight: bold; margin-bottom: 5px;">
+            Company Name (optional):
+        </label>
+        <input
+            type="text"
+            name="company_name"
+            id="company_name"
+            style="width: 300px; padding: 5px;"
+            placeholder="e.g., 1911 Gold, Aston Bay"
+        >
+        <small style="display: block; margin-top: 5px; color: #666;">
+            Leave blank for auto-detection from document
+        </small>
+    </div>
+
+    <div style="margin-bottom: 20px;">
+        <label for="project_name" style="display: block; font-weight: bold; margin-bottom: 5px;">
+            Project Name (optional):
+        </label>
+        <input
+            type="text"
+            name="project_name"
+            id="project_name"
+            style="width: 300px; padding: 5px;"
+            placeholder="e.g., True North Gold Project, Storm Copper"
+        >
+        <small style="display: block; margin-top: 5px; color: #666;">
+            Leave blank for auto-detection from document
+        </small>
+    </div>
+
+    <div style="margin-top: 30px;">
+        <input type="submit" value="Add Jobs to Queue" class="button" style="background-color: #417690; color: white; padding: 10px 20px; cursor: pointer;">
+        <a href="{% url 'admin:core_documentprocessingjob_changelist' %}" class="button" style="padding: 10px 20px; text-decoration: none;">Cancel</a>
+    </div>
+</form>
+
+<div style="margin-top: 40px; padding: 15px; background-color: #f8f8f8; border-left: 4px solid #417690;">
+    <h3 style="margin-top: 0;">Quick Guide:</h3>
+    <ol>
+        <li>Paste one or more URLs (one per line)</li>
+        <li>Select document type (usually NI 43-101 for technical reports)</li>
+        <li>Optionally specify company/project name (auto-detected if left blank)</li>
+        <li>Click "Add Jobs to Queue"</li>
+        <li>Go back to job list and click "Process Queue" to start processing</li>
+    </ol>
+
+    <p style="margin-bottom: 0;">
+        <strong>Note:</strong> Processing typically takes 30-90 minutes per document depending on size and complexity.
+    </p>
+</div>
+
+{% endblock %}

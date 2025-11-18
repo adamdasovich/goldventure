@@ -1,0 +1,86 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+
+{% block title %}Process Document Queue{% endblock %}
+
+{% block content %}
+<h1>Process Document Queue</h1>
+
+<div style="margin-bottom: 30px; padding: 20px; background-color: #f8f8f8; border-left: 4px solid #417690;">
+    <h2 style="margin-top: 0;">Queue Status</h2>
+    <p style="font-size: 18px; margin: 10px 0;">
+        <strong>Pending Jobs:</strong> {{ pending_jobs }}
+    </p>
+</div>
+
+{% if pending_jobs > 0 %}
+<form method="post">
+    {% csrf_token %}
+
+    <div style="margin-bottom: 20px; padding: 15px; background-color: #fff4e6; border-left: 4px solid #ff9800;">
+        <h3 style="margin-top: 0;">Important Information:</h3>
+        <ul>
+            <li>Processing will start {{ pending_jobs }} job{{ pending_jobs|pluralize }} in sequence</li>
+            <li>Each job typically takes 30-90 minutes depending on document size</li>
+            <li>Total estimated time: {{ pending_jobs|add:"-1"|mul:40|add:30 }}-{{ pending_jobs|mul:90 }} minutes</li>
+            <li>You can safely close this page - processing will continue in the background</li>
+            <li>Refresh the job list to see real-time status updates</li>
+        </ul>
+    </div>
+
+    <div style="margin-top: 30px;">
+        <input
+            type="submit"
+            value="Start Processing Queue"
+            class="button"
+            style="background-color: #417690; color: white; padding: 15px 30px; cursor: pointer; font-size: 16px;"
+        >
+        <a href="{% url 'admin:core_documentprocessingjob_changelist' %}" class="button" style="padding: 15px 30px; text-decoration: none; font-size: 16px;">Cancel</a>
+    </div>
+</form>
+{% else %}
+<div style="padding: 20px; background-color: #e8f5e9; border-left: 4px solid #4caf50;">
+    <p style="margin: 0; font-size: 16px;">
+        <strong>No pending jobs.</strong> Add documents using "Batch Add" or create individual jobs.
+    </p>
+</div>
+
+<div style="margin-top: 20px;">
+    <a href="{% url 'admin:core_documentprocessingjob_batch_add' %}" class="button" style="background-color: #417690; color: white; padding: 10px 20px; text-decoration: none;">
+        Batch Add URLs
+    </a>
+    <a href="{% url 'admin:core_documentprocessingjob_changelist' %}" class="button" style="padding: 10px 20px; text-decoration: none;">Back to Job List</a>
+</div>
+{% endif %}
+
+<div style="margin-top: 40px; padding: 15px; background-color: #f8f8f8; border-left: 4px solid #417690;">
+    <h3 style="margin-top: 0;">Processing Steps:</h3>
+    <ol>
+        <li><strong>Download PDF</strong> (~30 seconds)</li>
+        <li><strong>Extract with Docling</strong> (~30-75 minutes)
+            <ul>
+                <li>Extracts text, tables, and structure</li>
+                <li>Longest step in the process</li>
+            </ul>
+        </li>
+        <li><strong>Interpret with Claude</strong> (~10-20 seconds)
+            <ul>
+                <li>Identifies resource estimates, economics, etc.</li>
+                <li>Creates structured data</li>
+            </ul>
+        </li>
+        <li><strong>Store in Database</strong> (~1 second)
+            <ul>
+                <li>Saves resource estimates, project details</li>
+            </ul>
+        </li>
+        <li><strong>Chunk and Embed for RAG</strong> (~5-10 seconds)
+            <ul>
+                <li>Creates 200-300 searchable chunks</li>
+                <li>Enables detailed question answering</li>
+            </ul>
+        </li>
+    </ol>
+</div>
+
+{% endblock %}

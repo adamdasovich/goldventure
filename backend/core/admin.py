@@ -1,10 +1,14 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
+from django.utils.html import format_html
+from django.urls import path
+from django.shortcuts import render, redirect
+from django.contrib import messages
 from .models import (
     User, Company, Project, ResourceEstimate, EconomicStudy,
     Financing, Investor, InvestorPosition, MarketData, CommodityPrice,
     NewsRelease, Document, InvestorCommunication, CompanyMetrics,
-    Watchlist, Alert
+    Watchlist, Alert, DocumentProcessingJob
 )
 
 
@@ -119,3 +123,136 @@ class AlertAdmin(admin.ModelAdmin):
     list_display = ['user', 'company', 'alert_type', 'is_active', 'last_triggered']
     list_filter = ['alert_type', 'is_active']
     search_fields = ['user__username', 'company__name']
+
+
+@admin.register(DocumentProcessingJob)
+class DocumentProcessingJobAdmin(admin.ModelAdmin):
+    """Admin interface for document processing with batch capabilities"""
+
+    list_display = [
+        'id', 'status_badge', 'url_display', 'document_type',
+        'company_name', 'duration_display', 'results_display', 'created_at'
+    ]
+    list_filter = ['status', 'document_type', 'created_at']
+    search_fields = ['url', 'company_name', 'project_name', 'error_message']
+    readonly_fields = [
+        'status', 'progress_message', 'error_message',
+        'document', 'resources_created', 'chunks_created',
+        'started_at', 'completed_at', 'processing_time_seconds',
+        'created_at', 'created_by'
+    ]
+
+    fieldsets = (
+        ('Job Details', {
+            'fields': ('url', 'document_type', 'company_name', 'project_name')
+        }),
+        ('Status', {
+            'fields': ('status', 'progress_message', 'error_message')
+        }),
+        ('Results', {
+            'fields': ('document', 'resources_created', 'chunks_created')
+        }),
+        ('Timing', {
+            'fields': ('created_at', 'started_at', 'completed_at', 'processing_time_seconds')
+        }),
+        ('Metadata', {
+            'fields': ('created_by',)
+        }),
+    )
+
+    def get_urls(self):
+        urls = super().get_urls()
+        custom_urls = [
+            path('batch-add/', self.batch_add_view, name='core_documentprocessingjob_batch_add'),
+            path('process-queue/', self.process_queue_view, name='core_documentprocessingjob_process_queue'),
+        ]
+        return custom_urls + urls
+
+    def batch_add_view(self, request):
+        """View for adding multiple URLs at once"""
+        if request.method == 'POST':
+            urls_text = request.POST.get('urls', '')
+            urls = [url.strip() for url in urls_text.split('\n') if url.strip()]
+
+            company_name = request.POST.get('company_name', '').strip()
+            project_name = request.POST.get('project_name', '').strip()
+            document_type = request.POST.get('document_type', 'ni43101')
+
+            created_count = 0
+            for url in urls:
+                DocumentProcessingJob.objects.create(
+                    url=url,
+                    document_type=document_type,
+                    company_name=company_name,
+                    project_name=project_name,
+                    created_by=request.user
+                )
+                created_count += 1
+
+            messages.success(request, f'Created {created_count} processing jobs. Click "Process Queue" to start processing.')
+            return redirect('..')
+
+        context = {
+            'title': 'Batch Add Document URLs',
+            'opts': self.model._meta,
+            'has_permission': True,
+        }
+        return render(request, 'admin/core/documentprocessingjob/batch_add.html', context)
+
+    def process_queue_view(self, request):
+        """Process all pending jobs"""
+        from .tasks import process_document_queue
+
+        pending_jobs = DocumentProcessingJob.objects.filter(status='pending').count()
+
+        if request.method == 'POST':
+            # Start processing in background
+            process_document_queue()
+            messages.success(request, f'Started processing {pending_jobs} pending jobs.')
+            return redirect('..')
+
+        context = {
+            'title': 'Process Document Queue',
+            'pending_jobs': pending_jobs,
+            'opts': self.model._meta,
+            'has_permission': True,
+        }
+        return render(request, 'admin/core/documentprocessingjob/process_queue.html', context)
+
+    def save_model(self, request, obj, form, change):
+        if not change:  # Only set on creation
+            obj.created_by = request.user
+        super().save_model(request, obj, form, change)
+
+    def status_badge(self, obj):
+        colors = {
+            'pending': 'gray',
+            'processing': 'blue',
+            'completed': 'green',
+            'failed': 'red',
+        }
+        color = colors.get(obj.status, 'gray')
+        return format_html(
+            '<span style="background-color:{}; color:white; padding:3px 10px; border-radius:3px;">{}</span>',
+            color, obj.get_status_display()
+        )
+    status_badge.short_description = 'Status'
+
+    def url_display(self, obj):
+        return format_html('<a href="{}" target="_blank">{}</a>', obj.url, obj.url[:60] + '...')
+    url_display.short_description = 'URL'
+
+    def results_display(self, obj):
+        if obj.status == 'completed':
+            return format_html(
+                '{} resources, {} chunks',
+                obj.resources_created, obj.chunks_created
+            )
+        return '-'
+    results_display.short_description = 'Results'
+
+    def changelist_view(self, request, extra_context=None):
+        extra_context = extra_context or {}
+        extra_context['pending_count'] = DocumentProcessingJob.objects.filter(status='pending').count()
+        extra_context['processing_count'] = DocumentProcessingJob.objects.filter(status='processing').count()
+        return super().changelist_view(request, extra_context=extra_context)

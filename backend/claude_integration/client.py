@@ -10,6 +10,7 @@ from mcp_servers.mining_data import MiningDataServer
 from mcp_servers.financial_data import FinancialDataServer
 from mcp_servers.alpha_vantage import AlphaVantageServer
 from mcp_servers.document_processor_hybrid import HybridDocumentProcessor
+from mcp_servers.document_search import DocumentSearchServer
 
 
 class ClaudeClient:
@@ -37,6 +38,7 @@ class ClaudeClient:
         self.financial_server = FinancialDataServer(company_id, user)
         self.alpha_vantage_server = AlphaVantageServer(company_id, user)
         self.document_processor = HybridDocumentProcessor(company_id, user)
+        self.document_search = DocumentSearchServer(company_id, user)
 
         # Map tool name prefixes to servers
         self.server_map = {
@@ -44,6 +46,8 @@ class ClaudeClient:
             'financial_': self.financial_server,
             'alphavantage_': self.alpha_vantage_server,
             'document_': self.document_processor,
+            'search_': self.document_search,
+            'get_document_': self.document_search,
         }
 
     def _get_all_tools(self) -> List[Dict]:
@@ -53,6 +57,7 @@ class ClaudeClient:
         tools.extend(self.financial_server.get_tool_definitions())
         tools.extend(self.alpha_vantage_server.get_tool_definitions())
         tools.extend(self.document_processor.get_tool_definitions())
+        tools.extend(self.document_search.get_tools())
         return tools
 
     def _route_tool_call(self, tool_name: str, parameters: Dict) -> Any:
@@ -119,6 +124,13 @@ DOCUMENT PROCESSING (Hybrid Docling + Claude):
 - Generate intelligent summaries and key findings
 - Highest accuracy for complex mining documents
 
+DOCUMENT SEARCH (Semantic Search with RAG):
+- Search across all processed NI 43-101 reports and technical documents
+- Ask detailed questions about drilling results, metallurgy, geology, infrastructure
+- Get specific information with document citations
+- Use search_documents for any detailed questions about technical reports
+- Use get_document_context to get formatted context for answering questions
+
 When presenting data:
 - Format numbers clearly (use commas for thousands, appropriate decimals)
 - Use $ for currency values, M for millions (e.g., $5.2M)
@@ -127,6 +139,7 @@ When presenting data:
 - Be concise but thorough
 - If you use a tool, explain what data you found
 - For financial data, always note the date of the information
+- When answering from document search, cite the source document
 
 If you don't have access to specific information, say so clearly and suggest where the user might find it."""
 

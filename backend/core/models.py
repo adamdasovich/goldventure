@@ -527,6 +527,32 @@ class Document(models.Model):
         ordering = ['-document_date']
 
 
+class DocumentChunk(models.Model):
+    """Chunks of document text for RAG/semantic search. Embeddings stored in ChromaDB."""
+    document = models.ForeignKey(Document, on_delete=models.CASCADE, related_name='chunks')
+
+    # Chunk metadata
+    chunk_index = models.IntegerField()  # Order within document
+    page_number = models.IntegerField(null=True, blank=True)
+    section_title = models.CharField(max_length=500, blank=True)
+
+    # Content
+    text = models.TextField()  # The actual chunk text
+    token_count = models.IntegerField()
+
+    # ChromaDB reference (embeddings stored in ChromaDB, not in PostgreSQL)
+    chroma_id = models.CharField(max_length=100, unique=True, blank=True, null=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'document_chunks'
+        ordering = ['document', 'chunk_index']
+        indexes = [
+            models.Index(fields=['document', 'chunk_index']),
+        ]
+
+
 class InvestorCommunication(models.Model):
     """Track communications with investors"""
     COMMUNICATION_TYPES = [
@@ -640,3 +666,70 @@ class Alert(models.Model):
 
     class Meta:
         db_table = 'alerts'
+
+
+class DocumentProcessingJob(models.Model):
+    """Track document processing jobs for admin interface"""
+
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('processing', 'Processing'),
+        ('completed', 'Completed'),
+        ('failed', 'Failed'),
+    ]
+
+    DOCUMENT_TYPE_CHOICES = [
+        ('ni43101', 'NI 43-101 Technical Report'),
+        ('news_release', 'News Release'),
+        ('financial_statement', 'Financial Statement'),
+        ('presentation', 'Presentation'),
+        ('other', 'Other'),
+    ]
+
+    # Job details
+    url = models.URLField(max_length=500)
+    document_type = models.CharField(max_length=30, choices=DOCUMENT_TYPE_CHOICES, default='ni43101')
+    company_name = models.CharField(max_length=200, blank=True, help_text="Leave blank for auto-detection")
+    project_name = models.CharField(max_length=200, blank=True, help_text="Leave blank for auto-detection")
+
+    # Status tracking
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    progress_message = models.TextField(blank=True, help_text="Current processing step")
+    error_message = models.TextField(blank=True)
+
+    # Results
+    document = models.ForeignKey(Document, on_delete=models.SET_NULL, null=True, blank=True,
+                                 related_name='processing_jobs')
+    resources_created = models.IntegerField(default=0)
+    chunks_created = models.IntegerField(default=0)
+
+    # Timing
+    created_at = models.DateTimeField(auto_now_add=True)
+    started_at = models.DateTimeField(null=True, blank=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    processing_time_seconds = models.IntegerField(null=True, blank=True)
+
+    # User tracking
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
+
+    class Meta:
+        db_table = 'document_processing_jobs'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['status', '-created_at']),
+            models.Index(fields=['created_by', '-created_at']),
+        ]
+
+    def __str__(self):
+        return f"{self.get_status_display()}: {self.url[:50]}..."
+
+    @property
+    def duration_display(self):
+        """Human-readable processing duration"""
+        if self.processing_time_seconds:
+            minutes = self.processing_time_seconds // 60
+            seconds = self.processing_time_seconds % 60
+            if minutes > 0:
+                return f"{minutes}m {seconds}s"
+            return f"{seconds}s"
+        return "-"
