@@ -7,6 +7,7 @@ import { Button } from './ui/Button';
 import { Badge } from './ui/Badge';
 import { claudeAPI } from '@/lib/api';
 import type { ChatMessage, ToolCall } from '@/types/api';
+import LogoIcon from './LogoIcon';
 
 export default function ChatInterface() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -15,12 +16,24 @@ export default function ChatInterface() {
   const [toolCalls, setToolCalls] = useState<ToolCall[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
+
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    // Scroll within the messages container, not the whole page
+    if (messagesContainerRef.current) {
+      messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
+    }
   };
 
+  // Only auto-scroll when a new message is added, not on every render
+  const prevMessagesLengthRef = useRef(0);
+
   useEffect(() => {
-    scrollToBottom();
+    // Only scroll if messages were actually added (not just state updates)
+    if (messages.length > prevMessagesLengthRef.current) {
+      scrollToBottom();
+    }
+    prevMessagesLengthRef.current = messages.length;
   }, [messages]);
 
   const handleSend = async () => {
@@ -57,7 +70,7 @@ export default function ChatInterface() {
     }
   };
 
-  const handleKeyPress = (e: React.KeyboardEvent) => {
+  const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSend();
@@ -73,10 +86,10 @@ export default function ChatInterface() {
         </CardDescription>
       </CardHeader>
 
-      <CardContent className="flex-1 overflow-y-auto space-y-4 py-4">
+      <CardContent ref={messagesContainerRef} className="flex-1 overflow-y-auto space-y-4 py-4">
         {messages.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-center space-y-4">
-            <div className="text-6xl">🪙</div>
+            <LogoIcon className="h-24 w-24" />
             <div className="space-y-2">
               <h3 className="text-xl font-semibold text-gold-400">Start a conversation</h3>
               <p className="text-slate-400 max-w-md">
@@ -146,7 +159,7 @@ export default function ChatInterface() {
           <Input
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            onKeyPress={handleKeyPress}
+            onKeyDown={handleKeyDown}
             placeholder="Ask about companies, resources, projects..."
             disabled={isLoading}
             className="flex-1"

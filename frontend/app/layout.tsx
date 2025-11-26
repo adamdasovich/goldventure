@@ -15,6 +15,9 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "GoldVenture - AI-Powered Mining Intelligence",
   description: "Junior gold mining investment platform powered by Claude AI. Instant access to companies, projects, resources, and technical data.",
+  icons: {
+    icon: '/favicon.svg',
+  },
 };
 
 export default function RootLayout({
