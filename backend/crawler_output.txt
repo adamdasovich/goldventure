@@ -1,0 +1,382 @@
+================================================================================
+TESTING WEBSITE CRAWLER
+================================================================================
+
+Crawling: https://www.1911gold.com
+Max depth: 2 (homepage + one level deep)
+Looking for: NI 43-101 reports, presentations, technical documents
+
+This may take 30-60 seconds...
+
+[FETCH]... ↓ https://www.1911gold.com                                          
+| ✓ | ⏱: 2.42s 
+[SCRAPE].. ◆ https://www.1911gold.com                                          
+| ✓ | ⏱: 0.04s 
+[COMPLETE] ● https://www.1911gold.com                                          
+| ✓ | ⏱: 2.47s 
+[FETCH]... ↓ https://www.1911gold.com/investors/overview/                      
+| ✓ | ⏱: 1.75s 
+[SCRAPE].. ◆ https://www.1911gold.com/investors/overview/                      
+| ✓ | ⏱: 0.04s 
+[COMPLETE] ● https://www.1911gold.com/investors/overview/                      
+| ✓ | ⏱: 1.80s 
+[FETCH]... ↓ https://www.1911gold.com/investors/stock-information/             
+| ✓ | ⏱: 2.27s 
+[SCRAPE].. ◆ https://www.1911gold.com/investors/stock-information/             
+| ✓ | ⏱: 0.03s 
+[COMPLETE] ● https://www.1911gold.com/investors/stock-information/             
+| ✓ | ⏱: 2.31s 
+[FETCH]... ↓ https://www.1911gold.com/investors/presentations/                 
+| ✓ | ⏱: 1.91s 
+[SCRAPE].. ◆ https://www.1911gold.com/investors/presentations/                 
+| ✓ | ⏱: 0.04s 
+[COMPLETE] ● https://www.1911gold.com/investors/presentations/                 
+| ✓ | ⏱: 1.96s 
+[FETCH]... ↓ https://www.1911gold.com/investors/events/                        
+| ✓ | ⏱: 1.74s 
+[SCRAPE].. ◆ https://www.1911gold.com/investors/events/                        
+| ✓ | ⏱: 0.02s 
+[COMPLETE] ● https://www.1911gold.com/investors/events/                        
+| ✓ | ⏱: 1.77s 
+[FETCH]... ↓ https://www.1911gold.com/investors/analyst-coverage/              
+| ✓ | ⏱: 1.70s 
+[SCRAPE].. ◆ https://www.1911gold.com/investors/analyst-coverage/              
+| ✓ | ⏱: 0.02s 
+[COMPLETE] ● https://www.1911gold.com/investors/analyst-coverage/              
+| ✓ | ⏱: 1.73s 
+[FETCH]... ↓ https://www.1911gold.com/investors/financial-reports/             
+| ✓ | ⏱: 1.72s 
+[SCRAPE].. ◆ https://www.1911gold.com/investors/financial-reports/             
+| ✓ | ⏱: 0.03s 
+[COMPLETE] ● https://www.1911gold.com/investors/financial-reports/             
+| ✓ | ⏱: 1.76s 
+[FETCH]... ↓ https://www.1911gold.com/investors/regulatory-documents/          
+| ✓ | ⏱: 1.77s 
+[SCRAPE].. ◆ https://www.1911gold.com/investors/regulatory-documents/          
+| ✓ | ⏱: 0.02s 
+[COMPLETE] ● https://www.1911gold.com/investors/regulatory-documents/          
+| ✓ | ⏱: 1.80s 
+[FETCH]... ↓ https://www.1911gold.com/investors/agm-materials/                 
+| ✓ | ⏱: 1.57s 
+[SCRAPE].. ◆ https://www.1911gold.com/investors/agm-materials/                 
+| ✓ | ⏱: 0.02s 
+[COMPLETE] ● https://www.1911gold.com/investors/agm-materials/                 
+| ✓ | ⏱: 1.60s 
+[FETCH]... ↓ https://www.1911gold.com/news/press-releases/                     
+| ✓ | ⏱: 1.75s 
+[SCRAPE].. ◆ https://www.1911gold.com/news/press-releases/                     
+| ✓ | ⏱: 0.06s 
+[COMPLETE] ● https://www.1911gold.com/news/press-releases/                     
+| ✓ | ⏱: 1.81s 
+[PDF] Found: nr-20251111.pdf
+[PDF] Found: nr-20251110.pdf
+[PDF] Found: nr-20251106.pdf
+[PDF] Found: nr-20251028.pdf
+[PDF] Found: nr-20251020.pdf
+[PDF] Found: nr-20251007.pdf
+[PDF] Found: nr-20250925.pdf
+[PDF] Found: nr-20250919b.pdf
+[PDF] Found: nr-20250919.pdf
+[PDF] Found: nr-20250908.pdf
+[PDF] Found: nr-20250828.pdf
+[PDF] Found: nr-20250815.pdf
+[PDF] Found: nr-20250807.pdf
+[PDF] Found: nr-20250717.pdf
+[PDF] Found: nr-20250624.pdf
+[PDF] Found: nr-20250610.pdf
+[PDF] Found: nr-20250530.pdf
+[PDF] Found: nr-20250430.pdf
+[PDF] Found: nr-20250401.pdf
+[PDF] Found: nr-20250226-v2.pdf
+[PDF] Found: nr-20250204.pdf
+[PDF] Found: nr-20250122.pdf
+[PDF] Found: nr-20250108.pdf
+[PDF] Found: nr-20250102.pdf
+[PDF] Found: nr-20241223.pdf
+[PDF] Found: nr-20241209.pdf
+[PDF] Found: nr-20241120.pdf
+[PDF] Found: nr-20240926.pdf
+[PDF] Found: nr-20240827.pdf
+[PDF] Found: nr-20240708.pdf
+[PDF] Found: nr-20240627.pdf
+[PDF] Found: nr-20240620b.pdf
+[PDF] Found: nr-20240415.pdf
+[PDF] Found: nr-20240411.pdf
+[PDF] Found: nr-20240222.pdf
+[PDF] Found: nr-20231227.pdf
+[PDF] Found: nr-20231205a.pdf
+[PDF] Found: nr-20231205.pdf
+[PDF] Found: nr-20231117.pdf
+[PDF] Found: nr-20231025.pdf
+[PDF] Found: nr-20230828.pdf
+[PDF] Found: nr-20230808.pdf
+[PDF] Found: nr-20220822.pdf
+[PDF] Found: nr-20220719.pdf
+[PDF] Found: nr-20220706.pdf
+[PDF] Found: nr-20220623.pdf
+[PDF] Found: nr-20220608.pdf
+[PDF] Found: nr-20220524.pdf
+[PDF] Found: nr-20220315.pdf
+[PDF] Found: nr-20220210.pdf
+[PDF] Found: nr-20220203.pdf
+[PDF] Found: nr-20220106.pdf
+[PDF] Found: nr-20211230.pdf
+[PDF] Found: nr-20211209b.pdf
+[PDF] Found: nr-20211209.pdf
+[PDF] Found: nr-20211006.pdf
+[PDF] Found: nr-20210909.pdf
+[PDF] Found: nr-20210901.pdf
+[PDF] Found: nr-20210824.pdf
+[PDF] Found: nr-20210727.pdf
+[PDF] Found: nr-20210607.pdf
+[PDF] Found: nr-20210521.pdf
+[PDF] Found: nr-20210511.pdf
+[PDF] Found: nr-20210420.pdf
+[PDF] Found: nr-20210413.pdf
+[PDF] Found: nr-20210324.pdf
+[PDF] Found: nr-20210301.pdf
+[PDF] Found: nr-20210118.pdf
+[PDF] Found: nr-20201112.pdf
+[PDF] Found: nr-20201105.pdf
+[PDF] Found: nr-20201104.pdf
+[PDF] Found: nr-20201029.pdf
+[PDF] Found: nr-20200817.pdf
+[PDF] Found: nr-20200723.pdf
+[PDF] Found: nr-20200714.pdf
+[PDF] Found: nr-20200623.pdf
+[PDF] Found: nr-20200609.pdf
+[PDF] Found: nr-20200520.pdf
+[PDF] Found: nr-20200506.pdf
+[PDF] Found: nr-20200430.pdf
+[PDF] Found: nr-20200319.pdf
+[PDF] Found: nr-20200130.pdf
+[PDF] Found: nr-20191106.pdf
+[PDF] Found: nr-20191002.pdf
+[PDF] Found: nr-20190927.pdf
+[PDF] Found: nr-20190910.pdf
+[PDF] Found: nr-20190717.pdf
+[PDF] Found: nr-20190710.pdf
+[PDF] Found: nr-20190605.pdf
+[PDF] Found: nr-20190321.pdf
+[PDF] Found: nr-20190318.pdf
+[PDF] Found: nr-20190305.pdf
+[PDF] Found: nr-20190304-b.pdf
+[PDF] Found: nr-20190304.pdf
+[PDF] Found: nr-20190114.pdf
+[PDF] Found: nr-20190110.pdf
+[PDF] Found: nr-20181217.pdf
+[PDF] Found: nr-20181213.pdf
+[PDF] Found: nr-20181127.pdf
+[PDF] Found: nr-20181113.pdf
+[PDF] Found: nr-20180926.pdf
+[PDF] Found: nr-20180919.pdf
+[PDF] Found: nr-20180905.pdf
+[PDF] Found: nr-20180815.pdf
+[PDF] Found: nr-20180807-b.pdf
+[PDF] Found: nr-20180807.pdf
+[PDF] Found: nr-20180725.pdf
+[PDF] Found: nr-20180723.pdf
+[FETCH]... ↓ https://www.1911gold.com/news/media/                              
+| ✓ | ⏱: 1.72s 
+[SCRAPE].. ◆ https://www.1911gold.com/news/media/                              
+| ✓ | ⏱: 0.04s 
+[COMPLETE] ● https://www.1911gold.com/news/media/                              
+| ✓ | ⏱: 1.77s 
+[FETCH]... ↓ https://www.1911gold.com/projects/rice-lake-exploration-projects/ 
+| ✓ | ⏱: 2.12s 
+[SCRAPE].. ◆ https://www.1911gold.com/projects/rice-lake-exploration-projects/ 
+| ✓ | ⏱: 0.11s 
+[COMPLETE] ● https://www.1911gold.com/projects/rice-lake-exploration-projects/ 
+| ✓ | ⏱: 2.24s 
+[FETCH]... ↓ 
+https://www.1911gold.com/news/press-releases/191...ults-from-the-rice-lake-gold
+-project-in-manitoba  | ✓ | ⏱: 1.72s 
+[SCRAPE].. ◆ 
+https://www.1911gold.com/news/press-releases/191...ults-from-the-rice-lake-gold
+-project-in-manitoba  | ✓ | ⏱: 0.04s 
+[COMPLETE] ● 
+https://www.1911gold.com/news/press-releases/191...ults-from-the-rice-lake-gold
+-project-in-manitoba  | ✓ | ⏱: 1.76s 
+[FETCH]... ↓ 
+https://www.1911gold.com/news/press-releases/191...ram-at-its-rice-lake-gold-pr
+operties-in-manitoba  | ✓ | ⏱: 1.59s 
+[SCRAPE].. ◆ 
+https://www.1911gold.com/news/press-releases/191...ram-at-its-rice-lake-gold-pr
+operties-in-manitoba  | ✓ | ⏱: 0.05s 
+[COMPLETE] ● 
+https://www.1911gold.com/news/press-releases/191...ram-at-its-rice-lake-gold-pr
+operties-in-manitoba  | ✓ | ⏱: 1.64s 
+[FETCH]... ↓ 
+https://www.1911gold.com/news/press-releases/191...and-initiates-the-2020-field
+-exploration-program  | ✓ | ⏱: 1.47s 
+[SCRAPE].. ◆ 
+https://www.1911gold.com/news/press-releases/191...and-initiates-the-2020-field
+-exploration-program  | ✓ | ⏱: 0.02s 
+[COMPLETE] ● 
+https://www.1911gold.com/news/press-releases/191...and-initiates-the-2020-field
+-exploration-program  | ✓ | ⏱: 1.50s 
+[FETCH]... ↓ 
+https://www.1911gold.com/news/press-releases/191...-targets-on-its-rice-lake-pr
+operties-in-manitoba  | ✓ | ⏱: 1.50s 
+[SCRAPE].. ◆ 
+https://www.1911gold.com/news/press-releases/191...-targets-on-its-rice-lake-pr
+operties-in-manitoba  | ✓ | ⏱: 0.04s 
+[COMPLETE] ● 
+https://www.1911gold.com/news/press-releases/191...-targets-on-its-rice-lake-pr
+operties-in-manitoba  | ✓ | ⏱: 1.55s 
+[FETCH]... ↓ 
+https://www.1911gold.com/_resources/reports/2013-Technical-Report-Ogama-Rocklan
+d.pdf?v=111911        | ✓ | ⏱: 0.29s 
+[SCRAPE].. ◆ 
+https://www.1911gold.com/_resources/reports/2013-Technical-Report-Ogama-Rocklan
+d.pdf?v=111911        | ✓ | ⏱: 0.00s 
+[COMPLETE] ● 
+https://www.1911gold.com/_resources/reports/2013-Technical-Report-Ogama-Rocklan
+d.pdf?v=111911        | ✓ | ⏱: 0.30s 
+[FETCH]... ↓ 
+https://www.1911gold.com/news/press-releases/hav...te-on-the-verification-progr
+am-at-ogama-rockland  | ✓ | ⏱: 1.51s 
+[SCRAPE].. ◆ 
+https://www.1911gold.com/news/press-releases/hav...te-on-the-verification-progr
+am-at-ogama-rockland  | ✓ | ⏱: 0.04s 
+[COMPLETE] ● 
+https://www.1911gold.com/news/press-releases/hav...te-on-the-verification-progr
+am-at-ogama-rockland  | ✓ | ⏱: 1.55s 
+[FETCH]... ↓ 
+https://www.1911gold.com/news/press-releases/191...best-efforts-life-offering-a
+nd-private-placement  | ✓ | ⏱: 1.72s 
+[SCRAPE].. ◆ 
+https://www.1911gold.com/news/press-releases/191...best-efforts-life-offering-a
+nd-private-placement  | ✓ | ⏱: 0.03s 
+[COMPLETE] ● 
+https://www.1911gold.com/news/press-releases/191...best-efforts-life-offering-a
+nd-private-placement  | ✓ | ⏱: 1.76s 
+[FETCH]... ↓ 
+https://www.1911gold.com/news/press-releases/191...-san-antonio-west-at-the-tru
+e-north-gold-project  | ✓ | ⏱: 1.60s 
+[SCRAPE].. ◆ 
+https://www.1911gold.com/news/press-releases/191...-san-antonio-west-at-the-tru
+e-north-gold-project  | ✓ | ⏱: 0.07s 
+[COMPLETE] ● 
+https://www.1911gold.com/news/press-releases/191...-san-antonio-west-at-the-tru
+e-north-gold-project  | ✓ | ⏱: 1.67s 
+[FETCH]... ↓ https://www.1911gold.com/_resources/news/nr-20251111-Figure1.jpg  
+| ✓ | ⏱: 0.21s 
+[SCRAPE].. ◆ https://www.1911gold.com/_resources/news/nr-20251111-Figure1.jpg  
+| ✓ | ⏱: 0.00s 
+[COMPLETE] ● https://www.1911gold.com/_resources/news/nr-20251111-Figure1.jpg  
+| ✓ | ⏱: 0.22s 
+[FETCH]... ↓ https://www.1911gold.com/_resources/news/nr-20251111-Figure2.jpg  
+| ✓ | ⏱: 0.25s 
+[SCRAPE].. ◆ https://www.1911gold.com/_resources/news/nr-20251111-Figure2.jpg  
+| ✓ | ⏱: 0.00s 
+[COMPLETE] ● https://www.1911gold.com/_resources/news/nr-20251111-Figure2.jpg  
+| ✓ | ⏱: 0.25s 
+[FETCH]... ↓ 
+https://www.1911gold.com/news/press-releases/191...ver-140-m-on-san-antonio-wes
+t-zone-at-true-north  | ✓ | ⏱: 1.52s 
+[SCRAPE].. ◆ 
+https://www.1911gold.com/news/press-releases/191...ver-140-m-on-san-antonio-wes
+t-zone-at-true-north  | ✓ | ⏱: 0.06s 
+[COMPLETE] ● 
+https://www.1911gold.com/news/press-releases/191...ver-140-m-on-san-antonio-wes
+t-zone-at-true-north  | ✓ | ⏱: 1.58s 
+[FETCH]... ↓ https://www.1911gold.com/_resources/news/nr-20251111-Figure3.jpg  
+| ✓ | ⏱: 0.61s 
+[SCRAPE].. ◆ https://www.1911gold.com/_resources/news/nr-20251111-Figure3.jpg  
+| ✓ | ⏱: 0.00s 
+[COMPLETE] ● https://www.1911gold.com/_resources/news/nr-20251111-Figure3.jpg  
+| ✓ | ⏱: 0.61s 
+[FETCH]... ↓ https://www.1911gold.com/_resources/news/nr-20251111-Figure4.jpg  
+| ✓ | ⏱: 4.25s 
+[SCRAPE].. ◆ https://www.1911gold.com/_resources/news/nr-20251111-Figure4.jpg  
+| ✓ | ⏱: 0.00s 
+[COMPLETE] ● https://www.1911gold.com/_resources/news/nr-20251111-Figure4.jpg  
+| ✓ | ⏱: 4.25s 
+[FETCH]... ↓ https://www.1911gold.com/_resources/news/nr-20251111-Figure5.jpg  
+| ✓ | ⏱: 0.80s 
+[SCRAPE].. ◆ https://www.1911gold.com/_resources/news/nr-20251111-Figure5.jpg  
+| ✓ | ⏱: 0.00s 
+[COMPLETE] ● https://www.1911gold.com/_resources/news/nr-20251111-Figure5.jpg  
+| ✓ | ⏱: 0.80s 
+[FETCH]... ↓ 
+https://www.1911gold.com/news/press-releases/191...rground-drill-program-at-tru
+e-north-gold-project  | ✓ | ⏱: 1.43s 
+[SCRAPE].. ◆ 
+https://www.1911gold.com/news/press-releases/191...rground-drill-program-at-tru
+e-north-gold-project  | ✓ | ⏱: 0.02s 
+[COMPLETE] ● 
+https://www.1911gold.com/news/press-releases/191...rground-drill-program-at-tru
+e-north-gold-project  | ✓ | ⏱: 1.45s 
+[FETCH]... ↓ 
+https://www.1911gold.com/news/press-releases/191...nt-to-support-underground-dr
+illing-at-true-north  | ✓ | ⏱: 1.47s 
+[SCRAPE].. ◆ 
+https://www.1911gold.com/news/press-releases/191...nt-to-support-underground-dr
+illing-at-true-north  | ✓ | ⏱: 0.03s 
+[COMPLETE] ● 
+https://www.1911gold.com/news/press-releases/191...nt-to-support-underground-dr
+illing-at-true-north  | ✓ | ⏱: 1.50s 
+[FETCH]... ↓ https://www.1911gold.com/projects/true-north-operations/          
+| ✓ | ⏱: 1.70s 
+[SCRAPE].. ◆ https://www.1911gold.com/projects/true-north-operations/          
+| ✓ | ⏱: 0.05s 
+[COMPLETE] ● https://www.1911gold.com/projects/true-north-operations/          
+| ✓ | ⏱: 1.76s 
+[FETCH]... ↓ 
+https://www.1911gold.com/_resources/reports/Tech...Gold-Mine.pdf?v=111911?v=173
+3165236?v=1730229837  | ✓ | ⏱: 0.32s 
+[SCRAPE].. ◆ 
+https://www.1911gold.com/_resources/reports/Tech...Gold-Mine.pdf?v=111911?v=173
+3165236?v=1730229837  | ✓ | ⏱: 0.00s 
+[COMPLETE] ● 
+https://www.1911gold.com/_resources/reports/Tech...Gold-Mine.pdf?v=111911?v=173
+3165236?v=1730229837  | ✓ | ⏱: 0.33s 
+[FETCH]... ↓ 
+https://www.1911gold.com/_resources/reports/2024-43-101-True-North-Gold-Project
+.pdf?v=111911         | ✓ | ⏱: 0.32s 
+[SCRAPE].. ◆ 
+https://www.1911gold.com/_resources/reports/2024-43-101-True-North-Gold-Project
+.pdf?v=111911         | ✓ | ⏱: 0.00s 
+[COMPLETE] ● 
+https://www.1911gold.com/_resources/reports/2024-43-101-True-North-Gold-Project
+.pdf?v=111911         | ✓ | ⏱: 0.33s 
+[FETCH]... ↓ 
+https://www.1911gold.com/_resources/reports/Tech...?v=111911?v=1733179390?v=173
+3179057?v=1733166058  | ✓ | ⏱: 0.34s 
+[SCRAPE].. ◆ 
+https://www.1911gold.com/_resources/reports/Tech...?v=111911?v=1733179390?v=173
+3179057?v=1733166058  | ✓ | ⏱: 0.00s 
+[COMPLETE] ● 
+https://www.1911gold.com/_resources/reports/Tech...?v=111911?v=1733179390?v=173
+3179057?v=1733166058  | ✓ | ⏱: 0.35s 
+
+================================================================================
+DISCOVERED 108 DOCUMENTS
+================================================================================
+
+NEWS RELEASE: 108 documents
+--------------------------------------------------------------------------------
+  [0.0] nr-20251111.pdf
+       https://www.1911gold.com/_resources/news/nr-20251111.pdf
+       Year: 2025
+  [0.0] nr-20251110.pdf
+       https://www.1911gold.com/_resources/news/nr-20251110.pdf
+       Year: 2025
+  [0.0] nr-20251106.pdf
+       https://www.1911gold.com/_resources/news/nr-20251106.pdf
+       Year: 2025
+  [0.0] nr-20251028.pdf
+       https://www.1911gold.com/_resources/news/nr-20251028.pdf
+       Year: 2025
+  [0.0] nr-20251020.pdf
+       https://www.1911gold.com/_resources/news/nr-20251020.pdf
+       Year: 2025
+  ... and 103 more
+
+[!] No NI 43-101 reports found
+    Try increasing max_depth or check a different URL
+
+================================================================================
+CRAWLER TEST COMPLETE
+================================================================================

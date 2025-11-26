@@ -1,0 +1,56 @@
+"""
+Test News Release Tool Integration
+Tests if chatbot can access news releases
+"""
+
+import os
+import django
+
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
+django.setup()
+
+from claude_integration.client import ClaudeClient
+from core.models import User
+
+# Get or create test user
+user = User.objects.filter(is_superuser=True).first()
+
+if not user:
+    print("No admin user found. Creating one...")
+    user = User.objects.create_superuser(
+        username='admin',
+        email='admin@example.com',
+        password='admin123'
+    )
+
+# Initialize Claude client
+client = ClaudeClient(company_id=None, user=user)
+
+# Test the chatbot
+print("="*80)
+print("TESTING NEWS RELEASE TOOL")
+print("="*80)
+
+query = "Can you give me the latest 5 news releases from 1911 Gold?"
+
+print(f"\nQuery: {query}\n")
+print("Response:")
+print("-"*80)
+
+result = client.chat(query)
+print(result['message'])
+
+# Show tool calls
+if result['tool_calls']:
+    print("\n" + "="*80)
+    print(f"Tool calls made: {len(result['tool_calls'])}")
+    print("="*80)
+    for i, tool_call in enumerate(result['tool_calls'], 1):
+        print(f"\n{i}. {tool_call['tool']}")
+        print(f"   Input: {tool_call['input']}")
+        if 'news_releases' in tool_call['result']:
+            print(f"   Result: {len(tool_call['result']['news_releases'])} news releases")
+
+print("\n" + "="*80)
+print("TEST COMPLETE")
+print("="*80)

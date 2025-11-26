@@ -11,6 +11,7 @@ from mcp_servers.financial_data import FinancialDataServer
 from mcp_servers.alpha_vantage import AlphaVantageServer
 from mcp_servers.document_processor_hybrid import HybridDocumentProcessor
 from mcp_servers.document_search import DocumentSearchServer
+from mcp_servers.news_release_server import NewsReleaseServer
 
 
 class ClaudeClient:
@@ -39,6 +40,7 @@ class ClaudeClient:
         self.alpha_vantage_server = AlphaVantageServer(company_id, user)
         self.document_processor = HybridDocumentProcessor(company_id, user)
         self.document_search = DocumentSearchServer(company_id, user)
+        self.news_release_server = NewsReleaseServer(company_id, user)
 
         # Map tool name prefixes to servers
         self.server_map = {
@@ -48,6 +50,9 @@ class ClaudeClient:
             'document_': self.document_processor,
             'search_': self.document_search,
             'get_document_': self.document_search,
+            'get_latest_news': self.news_release_server,
+            'search_news': self.news_release_server,
+            'get_news_by': self.news_release_server,
         }
 
     def _get_all_tools(self) -> List[Dict]:
@@ -58,6 +63,7 @@ class ClaudeClient:
         tools.extend(self.alpha_vantage_server.get_tool_definitions())
         tools.extend(self.document_processor.get_tool_definitions())
         tools.extend(self.document_search.get_tools())
+        tools.extend(self.news_release_server.get_tool_definitions())
         return tools
 
     def _route_tool_call(self, tool_name: str, parameters: Dict) -> Any:
@@ -130,6 +136,14 @@ DOCUMENT SEARCH (Semantic Search with RAG):
 - Get specific information with document citations
 - Use search_documents for any detailed questions about technical reports
 - Use get_document_context to get formatted context for answering questions
+
+NEWS RELEASES & PRESS RELEASES:
+- Access to company news releases and press releases
+- Get the latest news releases for any mining company
+- Search news releases by keywords or date range
+- News releases include titles, dates, URLs, and types
+- Use get_latest_news_releases to get recent news for a company
+- Use search_news_releases to find news by specific topics or keywords
 
 When presenting data:
 - Format numbers clearly (use commas for thousands, appropriate decimals)
