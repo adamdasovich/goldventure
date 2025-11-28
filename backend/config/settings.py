@@ -5,6 +5,7 @@ Django settings for GoldVenture Platform
 import os
 from pathlib import Path
 from dotenv import load_dotenv
+from corsheaders.defaults import default_headers
 
 # Load environment variables
 load_dotenv()
@@ -144,11 +145,21 @@ CORS_ALLOWED_ORIGINS = os.getenv(
 
 CORS_ALLOW_CREDENTIALS = True
 
+# Allow cache control headers for frontend
+CORS_ALLOW_HEADERS = list(default_headers) + [
+    'cache-control',
+    'pragma',
+    'expires',
+]
+
 # Anthropic API Key
 ANTHROPIC_API_KEY = os.getenv('ANTHROPIC_API_KEY', '')
 
 # Alpha Vantage API Key
 ALPHA_VANTAGE_API_KEY = os.getenv('ALPHA_VANTAGE_API_KEY', '')
+
+# Twelve Data API Key (for metals pricing)
+TWELVE_DATA_API_KEY = os.getenv('TWELVE_DATA_API_KEY', '')
 
 # AWS Settings (for S3 document storage - Phase 2)
 AWS_ACCESS_KEY_ID = os.getenv('AWS_ACCESS_KEY_ID', '')

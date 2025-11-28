@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test API Call</title>
+</head>
+<body>
+    <h1>Testing News API</h1>
+    <button onclick="fetchNews()">Fetch News</button>
+    <div id="result"></div>
+
+    <script>
+        async function fetchNews() {
+            try {
+                const response = await fetch('http://localhost:8000/api/companies/2/news-releases/');
+                const data = await response.json();
+
+                document.getElementById('result').innerHTML = `
+                    <h2>Financial News (${data.financial.length} items):</h2>
+                    <ul>
+                        ${data.financial.map(n => `<li>${n.release_date}: ${n.title}</li>`).join('')}
+                    </ul>
+
+                    <h2>Non-Financial News (${data.non_financial.length} items):</h2>
+                    <ul>
+                        ${data.non_financial.slice(0, 5).map(n => `<li>${n.release_date}: ${n.title}</li>`).join('')}
+                    </ul>
+                `;
+            } catch (error) {
+                document.getElementById('result').innerHTML = `<p style="color: red;">Error: ${error.message}</p>`;
+            }
+        }
+
+        // Auto-fetch on load
+        window.onload = fetchNews;
+    </script>
+</body>
+</html>

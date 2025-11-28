@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>News API Debug Tool</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 1200px;
+            margin: 20px auto;
+            padding: 20px;
+            background: #1a1a1a;
+            color: #fff;
+        }
+        h1 {
+            color: #d4af37;
+            border-bottom: 2px solid #d4af37;
+            padding-bottom: 10px;
+        }
+        h2 {
+            color: #c96e2c;
+            margin-top: 30px;
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+            font-weight: bold;
+        }
+        .success {
+            background: #2d5016;
+            color: #90ee90;
+        }
+        .error {
+            background: #5d1f1f;
+            color: #ff6b6b;
+        }
+        .info {
+            background: #1f3a5d;
+            color: #6bb6ff;
+        }
+        .warning {
+            background: #5d4a1f;
+            color: #ffd700;
+        }
+        button {
+            background: #d4af37;
+            color: #000;
+            border: none;
+            padding: 12px 24px;
+            font-size: 16px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 10px 5px;
+        }
+        button:hover {
+            background: #c96e2c;
+        }
+        button:disabled {
+            background: #666;
+            cursor: not-allowed;
+        }
+        pre {
+            background: #2a2a2a;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        .news-item {
+            background: #2a2a2a;
+            padding: 15px;
+            margin: 10px 0;
+            border-left: 4px solid #d4af37;
+            border-radius: 5px;
+        }
+        .news-item.financial {
+            border-left-color: #90ee90;
+        }
+        .news-item.non-financial {
+            border-left-color: #6bb6ff;
+        }
+        .news-date {
+            color: #d4af37;
+            font-weight: bold;
+        }
+        .news-title {
+            font-size: 18px;
+            margin: 5px 0;
+        }
+        .badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 3px;
+            font-size: 12px;
+            font-weight: bold;
+            margin-left: 10px;
+        }
+        .badge.financial {
+            background: #2d5016;
+            color: #90ee90;
+        }
+        .badge.non-financial {
+            background: #1f3a5d;
+            color: #6bb6ff;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔍 News Releases API Debug Tool</h1>
+    <p>This tool helps diagnose frontend display issues by testing the API directly in your browser.</p>
+
+    <div id="status" class="status info">Ready to test. Click "Fetch News Releases" to begin.</div>
+
+    <div>
+        <button onclick="fetchNews()">🔄 Fetch News Releases</button>
+        <button onclick="clearAllCache()">🗑️ Clear All Browser Cache</button>
+        <button onclick="location.reload(true)">♻️ Hard Reload Page</button>
+    </div>
+
+    <h2>Summary</h2>
+    <div id="summary"></div>
+
+    <h2>Financial News (is_material = true)</h2>
+    <div id="financial-news"></div>
+
+    <h2>Non-Financial News (is_material = false)</h2>
+    <div id="non-financial-news"></div>
+
+    <h2>Raw JSON Response</h2>
+    <pre id="raw-json">No data yet. Click "Fetch News Releases" above.</pre>
+
+    <script>
+        const API_URL = 'http://localhost:8000/api/companies/2/news-releases/';
+
+        async function fetchNews() {
+            const statusDiv = document.getElementById('status');
+            const summaryDiv = document.getElementById('summary');
+            const financialDiv = document.getElementById('financial-news');
+            const nonFinancialDiv = document.getElementById('non-financial-news');
+            const rawJsonDiv = document.getElementById('raw-json');
+
+            try {
+                statusDiv.className = 'status info';
+                statusDiv.textContent = 'Fetching news releases from API...';
+
+                const response = await fetch(API_URL, {
+                    cache: 'no-store',
+                    headers: {
+                        'Cache-Control': 'no-cache, no-store, must-revalidate',
+                        'Pragma': 'no-cache',
+                        'Expires': '0'
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                const data = await response.json();
+
+                // Show raw JSON
+                rawJsonDiv.textContent = JSON.stringify(data, null, 2);
+
+                // Show summary
+                const hasNov12 = data.financial.some(item => item.release_date === '2025-11-12');
+                const hasNov11 = data.non_financial.some(item => item.release_date === '2025-11-11');
+
+                summaryDiv.innerHTML = `
+                    <div class="news-item">
+                        <strong>Total Financial News:</strong> ${data.financial_count} items<br>
+                        <strong>Total Non-Financial News:</strong> ${data.non_financial_count} items<br>
+                        <strong>Last Updated:</strong> ${data.last_updated || 'Never'}<br><br>
+                        <div class="${hasNov12 ? 'success' : 'error'}" style="padding: 10px; margin: 5px 0; border-radius: 5px;">
+                            ${hasNov12 ? '✅ November 12, 2025 FOUND in Financial News' : '❌ November 12, 2025 NOT FOUND in Financial News'}
+                        </div>
+                        <div class="${hasNov11 ? 'success' : 'error'}" style="padding: 10px; margin: 5px 0; border-radius: 5px;">
+                            ${hasNov11 ? '✅ November 11, 2025 FOUND in Non-Financial News' : '❌ November 11, 2025 NOT FOUND in Non-Financial News'}
+                        </div>
+                    </div>
+                `;
+
+                // Show financial news
+                if (data.financial && data.financial.length > 0) {
+                    financialDiv.innerHTML = data.financial.map(item => `
+                        <div class="news-item financial">
+                            <div class="news-date">${formatDate(item.release_date)}</div>
+                            <div class="news-title">${item.title} <span class="badge financial">Financial</span></div>
+                            <div style="color: #aaa; margin-top: 5px;">Type: ${item.release_type}</div>
+                            <div style="color: #aaa;">URL: <a href="${item.url}" target="_blank" style="color: #6bb6ff;">${item.url}</a></div>
+                        </div>
+                    `).join('');
+                } else {
+                    financialDiv.innerHTML = '<div class="warning" style="padding: 10px;">No financial news found.</div>';
+                }
+
+                // Show non-financial news
+                if (data.non_financial && data.non_financial.length > 0) {
+                    nonFinancialDiv.innerHTML = data.non_financial.map(item => `
+                        <div class="news-item non-financial">
+                            <div class="news-date">${formatDate(item.release_date)}</div>
+                            <div class="news-title">${item.title} <span class="badge non-financial">Non-Financial</span></div>
+                            <div style="color: #aaa; margin-top: 5px;">Type: ${item.release_type}</div>
+                            <div style="color: #aaa;">URL: <a href="${item.url}" target="_blank" style="color: #6bb6ff;">${item.url}</a></div>
+                        </div>
+                    `).join('');
+                } else {
+                    nonFinancialDiv.innerHTML = '<div class="warning" style="padding: 10px;">No non-financial news found.</div>';
+                }
+
+                statusDiv.className = 'status success';
+                statusDiv.textContent = `✅ Successfully fetched ${data.financial_count + data.non_financial_count} news releases from API`;
+
+            } catch (error) {
+                statusDiv.className = 'status error';
+                statusDiv.textContent = `❌ Error: ${error.message}`;
+                rawJsonDiv.textContent = `Error fetching data:\n${error.stack}`;
+            }
+        }
+
+        function formatDate(dateStr) {
+            if (!dateStr) return 'No date';
+            // Add time to avoid timezone conversion issues
+            const date = new Date(dateStr + 'T00:00:00');
+            return date.toLocaleDateString('en-US', {
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric'
+            });
+        }
+
+        function clearAllCache() {
+            // Clear localStorage
+            localStorage.clear();
+
+            // Clear sessionStorage
+            sessionStorage.clear();
+
+            // Clear cookies
+            document.cookie.split(";").forEach(function(c) {
+                document.cookie = c.replace(/^ +/, "").replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/");
+            });
+
+            // Clear IndexedDB
+            if (window.indexedDB && window.indexedDB.databases) {
+                window.indexedDB.databases().then(databases => {
+                    databases.forEach(db => {
+                        window.indexedDB.deleteDatabase(db.name);
+                    });
+                });
+            }
+
+            alert('✅ All browser cache cleared!\n\nRecommended next steps:\n1. Close this tab\n2. Close your main app tab\n3. Open a new tab and go to http://localhost:3000/companies/2');
+        }
+
+        // Auto-fetch on page load
+        window.addEventListener('load', () => {
+            fetchNews();
+        });
+    </script>
+</body>
+</html>

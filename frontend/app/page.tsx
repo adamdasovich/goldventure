@@ -1,3 +1,5 @@
+'use client';
+
 import ChatInterface from '@/components/ChatInterface';
 import { Card, CardHeader, CardTitle, CardDescription } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -17,7 +19,8 @@ export default function Home() {
             <div className="flex items-center space-x-4">
               <Badge variant="copper">AI-Powered</Badge>
               <Button variant="ghost" size="sm">Dashboard</Button>
-              <Button variant="ghost" size="sm">Companies</Button>
+              <Button variant="ghost" size="sm" onClick={() => window.location.href = '/companies'}>Companies</Button>
+              <Button variant="ghost" size="sm" onClick={() => window.location.href = '/metals'}>Metals</Button>
               <Button variant="primary" size="sm">Sign In</Button>
             </div>
           </div>
@@ -76,7 +79,7 @@ export default function Home() {
             <p className="text-slate-300 text-lg mb-8">
               Explore our portfolio of junior gold mining companies
             </p>
-            <Button variant="primary" size="lg">View All Companies</Button>
+            <Button variant="primary" size="lg" onClick={() => window.location.href = '/companies'}>View All Companies</Button>
           </div>
         </div>
       </section>
@@ -93,32 +96,37 @@ export default function Home() {
               {
                 title: 'Claude AI Assistant',
                 description: 'Natural language queries for mining data',
-                icon: '🤖',
-                badge: 'AI'
+                badge: 'AI',
+                svgPath: 'M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z'
               },
               {
                 title: 'Resource Database',
                 description: 'Comprehensive M&I resource tracking',
-                icon: '📊',
-                badge: 'Data'
+                badge: 'Data',
+                svgPath: 'M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4'
+              },
+              {
+                title: 'Metals Prices',
+                description: 'Real-time gold, silver, and metal pricing',
+                badge: 'Markets',
+                svgPath: 'M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z'
               },
               {
                 title: 'Project Analytics',
                 description: 'Economic studies and feasibility data',
-                icon: '📈',
-                badge: 'Analytics'
-              },
-              {
-                title: 'Real-time Market',
-                description: 'Stock prices and market capitalization',
-                icon: '💹',
-                badge: 'Markets'
+                badge: 'Analytics',
+                svgPath: 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z'
               }
             ].map((feature, idx) => (
               <Card key={idx} variant="glass-card" className="text-center animate-slide-in-up" style={{ animationDelay: `${idx * 100}ms` }}>
                 <CardHeader>
                   <Badge variant="gold" className="mx-auto mb-4">{feature.badge}</Badge>
-                  <div className="text-5xl mb-4">{feature.icon}</div>
+                  <div className="w-16 h-16 rounded-lg mx-auto mb-4 flex items-center justify-center"
+                       style={{ backgroundColor: 'rgba(212, 175, 55, 0.2)', border: '2px solid #d4af37' }}>
+                    <svg className="w-8 h-8" style={{ color: '#d4af37' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={feature.svgPath} />
+                    </svg>
+                  </div>
                   <CardTitle className="text-lg mb-2">{feature.title}</CardTitle>
                   <CardDescription>{feature.description}</CardDescription>
                 </CardHeader>

@@ -6,6 +6,7 @@ export interface Company {
   exchange: string;
   description: string;
   website: string;
+  headquarters: string;
   headquarters_country: string;
   ceo: string;
   is_active: boolean;
@@ -21,16 +22,22 @@ export interface Project {
   company_name?: string;
   company_ticker?: string;
   name: string;
-  location: string;
+  project_stage: string;
+  primary_commodity: string;
   country: string;
-  stage: 'exploration' | 'development' | 'production';
-  primary_commodity: 'gold' | 'silver' | 'copper' | 'other';
-  ownership_percent: number;
+  province_state: string;
+  latitude: number | null;
+  longitude: number | null;
+  description: string;
+  ownership_percentage: number;
+  acquisition_date: string | null;
+  last_drill_program: string | null;
   is_flagship: boolean;
   is_active: boolean;
   created_at: string;
   updated_at: string;
   resource_count?: number;
+  total_resources_oz?: number;
 }
 
 // Resource Estimate Types

@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Clear Browser Cache</title>
+</head>
+<body>
+    <h1>Clear Browser Storage</h1>
+    <button onclick="clearAll()">Clear All Storage</button>
+    <div id="result"></div>
+
+    <script>
+        function clearAll() {
+            // Clear localStorage
+            localStorage.clear();
+
+            // Clear sessionStorage
+            sessionStorage.clear();
+
+            // Clear all cookies
+            document.cookie.split(";").forEach(function(c) {
+                document.cookie = c.replace(/^ +/, "").replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/");
+            });
+
+            document.getElementById('result').innerHTML = `
+                <p style="color: green;">✓ Cleared localStorage</p>
+                <p style="color: green;">✓ Cleared sessionStorage</p>
+                <p style="color: green;">✓ Cleared cookies</p>
+                <p><strong>Now press Ctrl+Shift+R to hard refresh the page</strong></p>
+            `;
+        }
+
+        // Auto-clear on load
+        window.onload = clearAll;
+    </script>
+</body>
+</html>
