@@ -733,3 +733,974 @@ class DocumentProcessingJob(models.Model):
                 return f"{minutes}m {seconds}s"
             return f"{seconds}s"
         return "-"
+
+
+# ============================================================================
+# REAL-TIME FORUM MODELS
+# ============================================================================
+
+class ForumDiscussion(models.Model):
+    """Discussion thread for a company"""
+    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name='forum_discussions')
+    title = models.CharField(max_length=255)
+    description = models.TextField(blank=True)
+    created_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='created_discussions')
+
+    # Status
+    is_active = models.BooleanField(default=True)
+    is_archived = models.BooleanField(default=False)
+    is_pinned = models.BooleanField(default=False)
+
+    # Stats
+    message_count = models.IntegerField(default=0)
+    participant_count = models.IntegerField(default=0)
+    view_count = models.IntegerField(default=0)
+
+    # Timestamps
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    last_message_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = 'forum_discussions'
+        ordering = ['-is_pinned', '-updated_at']
+        indexes = [
+            models.Index(fields=['company', 'is_active', '-updated_at']),
+            models.Index(fields=['company', 'is_archived']),
+            models.Index(fields=['-is_pinned', '-updated_at']),
+        ]
+
+    def __str__(self):
+        return f"{self.company.name}: {self.title}"
+
+
+class ForumMessage(models.Model):
+    """Individual message in a discussion"""
+    discussion = models.ForeignKey(ForumDiscussion, on_delete=models.CASCADE, related_name='messages')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='forum_messages')
+    content = models.TextField()
+
+    # Threading support
+    reply_to = models.ForeignKey('self', on_delete=models.SET_NULL, null=True, blank=True, related_name='replies')
+
+    # Edit tracking
+    is_edited = models.BooleanField(default=False)
+    edited_at = models.DateTimeField(null=True, blank=True)
+
+    # Soft delete
+    is_deleted = models.BooleanField(default=False)
+    deleted_at = models.DateTimeField(null=True, blank=True)
+    deleted_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='deleted_messages')
+
+    # Moderation
+    is_pinned = models.BooleanField(default=False)
+    is_highlighted = models.BooleanField(default=False)
+    is_flagged = models.BooleanField(default=False)
+
+    # Timestamps
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'forum_messages'
+        ordering = ['created_at']
+        indexes = [
+            models.Index(fields=['discussion', 'created_at']),
+            models.Index(fields=['discussion', 'is_pinned', '-created_at']),
+            models.Index(fields=['user', '-created_at']),
+            models.Index(fields=['discussion', 'is_deleted', 'created_at']),
+        ]
+
+    def __str__(self):
+        content_preview = self.content[:50] + '...' if len(self.content) > 50 else self.content
+        return f"{self.user.username}: {content_preview}"
+
+
+class GuestSpeakerSession(models.Model):
+    """Scheduled Q&A session with guest speakers"""
+    SESSION_STATUS = [
+        ('scheduled', 'Scheduled'),
+        ('live', 'Live Now'),
+        ('ended', 'Ended'),
+        ('cancelled', 'Cancelled'),
+    ]
+
+    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name='guest_sessions')
+    discussion = models.ForeignKey(ForumDiscussion, on_delete=models.CASCADE, related_name='guest_sessions')
+    title = models.CharField(max_length=255)
+    description = models.TextField()
+
+    # Scheduling
+    scheduled_start = models.DateTimeField()
+    scheduled_end = models.DateTimeField()
+    actual_start = models.DateTimeField(null=True, blank=True)
+    actual_end = models.DateTimeField(null=True, blank=True)
+    status = models.CharField(max_length=20, choices=SESSION_STATUS, default='scheduled')
+
+    # Settings
+    is_moderated = models.BooleanField(default=True)
+    allow_anonymous_questions = models.BooleanField(default=False)
+    max_participants = models.IntegerField(null=True, blank=True)
+
+    # Stats
+    total_questions = models.IntegerField(default=0)
+    total_participants = models.IntegerField(default=0)
+
+    # Archive
+    is_archived = models.BooleanField(default=False)
+    archive_url = models.URLField(blank=True)
+    transcript_url = models.URLField(blank=True)
+    transcript_content = models.TextField(blank=True)
+
+    # Timestamps
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'guest_speaker_sessions'
+        ordering = ['-scheduled_start']
+        indexes = [
+            models.Index(fields=['company', 'scheduled_start']),
+            models.Index(fields=['status', 'scheduled_start']),
+            models.Index(fields=['company', 'status', '-scheduled_start']),
+        ]
+
+    def __str__(self):
+        return f"{self.title} - {self.get_status_display()}"
+
+
+class SessionSpeaker(models.Model):
+    """Guest speakers for a session"""
+    session = models.ForeignKey(GuestSpeakerSession, on_delete=models.CASCADE, related_name='speakers')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='speaker_sessions')
+
+    # Speaker details
+    role = models.CharField(max_length=100, blank=True)  # e.g., "CEO", "CFO", "Geologist"
+    bio = models.TextField(blank=True)
+
+    # Status
+    is_primary = models.BooleanField(default=False)
+    confirmed = models.BooleanField(default=False)
+
+    # Stats
+    questions_answered = models.IntegerField(default=0)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'session_speakers'
+        unique_together = [['session', 'user']]
+        indexes = [
+            models.Index(fields=['session', 'is_primary']),
+        ]
+
+    def __str__(self):
+        return f"{self.user.get_full_name() or self.user.username} - {self.role}"
+
+
+class SessionModerator(models.Model):
+    """Moderators for a guest speaker session"""
+    session = models.ForeignKey(GuestSpeakerSession, on_delete=models.CASCADE, related_name='moderators')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='moderated_sessions')
+
+    # Permissions
+    can_approve_questions = models.BooleanField(default=True)
+    can_reject_questions = models.BooleanField(default=True)
+    can_delete_messages = models.BooleanField(default=True)
+    can_control_session = models.BooleanField(default=False)  # Start/end session
+
+    # Stats
+    questions_approved = models.IntegerField(default=0)
+    questions_rejected = models.IntegerField(default=0)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'session_moderators'
+        unique_together = [['session', 'user']]
+
+    def __str__(self):
+        return f"{self.user.username} - Moderator for {self.session.title}"
+
+
+class SessionQuestion(models.Model):
+    """Questions asked during guest speaker sessions"""
+    QUESTION_STATUS = [
+        ('pending', 'Pending Review'),
+        ('approved', 'Approved'),
+        ('answered', 'Answered'),
+        ('rejected', 'Rejected'),
+    ]
+
+    session = models.ForeignKey(GuestSpeakerSession, on_delete=models.CASCADE, related_name='questions')
+    message = models.ForeignKey(ForumMessage, on_delete=models.CASCADE, related_name='session_question')
+    asked_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='asked_questions')
+
+    # Status
+    status = models.CharField(max_length=20, choices=QUESTION_STATUS, default='pending')
+    priority = models.IntegerField(default=0)  # Higher = more important
+
+    # Moderation
+    reviewed_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='reviewed_questions'
+    )
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    rejection_reason = models.TextField(blank=True)
+
+    # Engagement
+    upvote_count = models.IntegerField(default=0)
+
+    # Answer tracking
+    answered_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='answered_questions'
+    )
+    answered_at = models.DateTimeField(null=True, blank=True)
+    answer_message = models.ForeignKey(
+        ForumMessage,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='answer_to_question'
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'session_questions'
+        ordering = ['-priority', '-upvote_count', 'created_at']
+        indexes = [
+            models.Index(fields=['session', 'status', '-priority']),
+            models.Index(fields=['session', '-upvote_count']),
+            models.Index(fields=['asked_by', '-created_at']),
+        ]
+
+    def __str__(self):
+        content = self.message.content[:50] + '...' if len(self.message.content) > 50 else self.message.content
+        return f"Q: {content} ({self.get_status_display()})"
+
+
+class QuestionUpvote(models.Model):
+    """Track which users upvoted which questions"""
+    question = models.ForeignKey(SessionQuestion, on_delete=models.CASCADE, related_name='upvotes')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='question_upvotes')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'question_upvotes'
+        unique_together = [['question', 'user']]
+        indexes = [
+            models.Index(fields=['question', 'user']),
+        ]
+
+    def __str__(self):
+        return f"{self.user.username} upvoted question {self.question.id}"
+
+
+class UserPresence(models.Model):
+    """Track user online/offline status in discussions"""
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='presences')
+    discussion = models.ForeignKey(ForumDiscussion, on_delete=models.CASCADE, related_name='user_presences')
+
+    # Status
+    is_online = models.BooleanField(default=False)
+    is_typing = models.BooleanField(default=False)
+
+    # Connection tracking
+    connection_id = models.CharField(max_length=255, blank=True)  # WebSocket connection ID
+
+    # Timestamps
+    last_seen = models.DateTimeField(auto_now=True)
+    connected_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'user_presence'
+        unique_together = [['user', 'discussion']]
+        indexes = [
+            models.Index(fields=['discussion', 'is_online']),
+            models.Index(fields=['user', 'discussion']),
+            models.Index(fields=['discussion', 'is_typing']),
+        ]
+
+    def __str__(self):
+        status = "Online" if self.is_online else "Offline"
+        typing = " (typing)" if self.is_typing else ""
+        return f"{self.user.username} - {status}{typing}"
+
+
+class SessionNotification(models.Model):
+    """User notifications for guest speaker sessions"""
+    NOTIFICATION_TYPE = [
+        ('session_reminder_24h', '24 Hour Reminder'),
+        ('session_reminder_1h', '1 Hour Reminder'),
+        ('session_starting', 'Session Starting'),
+        ('session_live', 'Session Live Now'),
+        ('session_ended', 'Session Ended'),
+        ('question_approved', 'Question Approved'),
+        ('question_answered', 'Question Answered'),
+        ('speaker_response', 'Speaker Responded'),
+    ]
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='session_notifications')
+    session = models.ForeignKey(GuestSpeakerSession, on_delete=models.CASCADE, related_name='notifications')
+    notification_type = models.CharField(max_length=30, choices=NOTIFICATION_TYPE)
+
+    # Content
+    title = models.CharField(max_length=255)
+    message = models.TextField()
+    action_url = models.URLField(blank=True)
+
+    # Status
+    is_read = models.BooleanField(default=False)
+    is_sent = models.BooleanField(default=False)
+
+    # Related objects
+    related_question = models.ForeignKey(
+        SessionQuestion,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='notifications'
+    )
+
+    # Timestamps
+    scheduled_for = models.DateTimeField(null=True, blank=True)
+    sent_at = models.DateTimeField(null=True, blank=True)
+    read_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'session_notifications'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['user', 'is_read', '-created_at']),
+            models.Index(fields=['session', 'notification_type']),
+            models.Index(fields=['is_sent', 'scheduled_for']),
+        ]
+
+    def __str__(self):
+        return f"{self.user.username}: {self.title}"
+
+
+class SessionParticipant(models.Model):
+    """Track participants in guest speaker sessions"""
+    session = models.ForeignKey(GuestSpeakerSession, on_delete=models.CASCADE, related_name='participants')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='attended_sessions')
+
+    # Participation tracking
+    joined_at = models.DateTimeField(auto_now_add=True)
+    left_at = models.DateTimeField(null=True, blank=True)
+    is_currently_active = models.BooleanField(default=True)
+
+    # Engagement stats
+    messages_sent = models.IntegerField(default=0)
+    questions_asked = models.IntegerField(default=0)
+    questions_upvoted = models.IntegerField(default=0)
+
+    class Meta:
+        db_table = 'session_participants'
+        unique_together = [['session', 'user']]
+        indexes = [
+            models.Index(fields=['session', 'is_currently_active']),
+            models.Index(fields=['user', '-joined_at']),
+        ]
+
+    def __str__(self):
+        return f"{self.user.username} in {self.session.title}"
+
+
+# ============================================================================
+# GUEST SPEAKER EVENT MODELS
+# ============================================================================
+
+class SpeakerEvent(models.Model):
+    """Scheduled guest speaker event for companies"""
+    EVENT_FORMAT = [
+        ('video', 'Video Stream'),
+        ('text', 'Text Chat'),
+    ]
+    EVENT_STATUS = [
+        ('draft', 'Draft'),
+        ('scheduled', 'Scheduled'),
+        ('live', 'Live Now'),
+        ('ended', 'Ended'),
+        ('cancelled', 'Cancelled'),
+    ]
+
+    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name='speaker_events')
+    created_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='created_events')
+
+    # Event Details
+    title = models.CharField(max_length=255)
+    description = models.TextField()
+    topic = models.CharField(max_length=255)
+    agenda = models.TextField(blank=True)
+
+    # Scheduling
+    scheduled_start = models.DateTimeField()
+    scheduled_end = models.DateTimeField()
+    timezone = models.CharField(max_length=50, default='UTC')
+    duration_minutes = models.IntegerField()
+
+    # Format & Capacity
+    format = models.CharField(max_length=10, choices=EVENT_FORMAT, default='text')
+    max_participants = models.IntegerField(null=True, blank=True)
+
+    # Status
+    status = models.CharField(max_length=20, choices=EVENT_STATUS, default='draft')
+    actual_start = models.DateTimeField(null=True, blank=True)
+    actual_end = models.DateTimeField(null=True, blank=True)
+
+    # Recording
+    is_recorded = models.BooleanField(default=False)
+    recording_url = models.URLField(blank=True)
+    transcript_url = models.URLField(blank=True)
+
+    # Metadata
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    # Stats (denormalized for performance)
+    registered_count = models.IntegerField(default=0)
+    attended_count = models.IntegerField(default=0)
+    questions_count = models.IntegerField(default=0)
+
+    class Meta:
+        ordering = ['-scheduled_start']
+        indexes = [
+            models.Index(fields=['company', 'status']),
+            models.Index(fields=['status', 'scheduled_start']),
+            models.Index(fields=['-scheduled_start']),
+        ]
+
+    def __str__(self):
+        return f"{self.title} - {self.company.name}"
+
+
+class EventSpeaker(models.Model):
+    """Speaker assigned to an event"""
+    event = models.ForeignKey(SpeakerEvent, on_delete=models.CASCADE, related_name='speakers')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='speaking_events')
+    title = models.CharField(max_length=255)  # CEO, CFO, Lead Geologist, etc.
+    bio = models.TextField(blank=True)
+    is_primary = models.BooleanField(default=False)
+    added_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ['event', 'user']
+        indexes = [
+            models.Index(fields=['event', 'is_primary']),
+        ]
+
+    def __str__(self):
+        return f"{self.user.get_full_name()} - {self.event.title}"
+
+
+class EventRegistration(models.Model):
+    """User registration for an event"""
+    REGISTRATION_STATUS = [
+        ('registered', 'Registered'),
+        ('attended', 'Attended'),
+        ('no_show', 'No Show'),
+        ('cancelled', 'Cancelled'),
+    ]
+
+    event = models.ForeignKey(SpeakerEvent, on_delete=models.CASCADE, related_name='registrations')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='event_registrations')
+    status = models.CharField(max_length=20, choices=REGISTRATION_STATUS, default='registered')
+
+    # Notifications
+    reminder_sent = models.BooleanField(default=False)
+    joined_at = models.DateTimeField(null=True, blank=True)
+    left_at = models.DateTimeField(null=True, blank=True)
+
+    registered_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ['event', 'user']
+        indexes = [
+            models.Index(fields=['event', 'status']),
+            models.Index(fields=['user', '-registered_at']),
+        ]
+
+    def __str__(self):
+        return f"{self.user.username} -> {self.event.title}"
+
+
+class EventQuestion(models.Model):
+    """Question submitted during event"""
+    QUESTION_STATUS = [
+        ('pending', 'Pending'),
+        ('approved', 'Approved'),
+        ('answered', 'Answered'),
+        ('rejected', 'Rejected'),
+    ]
+
+    event = models.ForeignKey(SpeakerEvent, on_delete=models.CASCADE, related_name='questions')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='event_questions')
+
+    content = models.TextField()
+    status = models.CharField(max_length=20, choices=QUESTION_STATUS, default='pending')
+    answer = models.TextField(blank=True)
+    answered_by = models.ForeignKey(User, null=True, on_delete=models.SET_NULL, related_name='answered_event_questions')
+
+    upvotes = models.IntegerField(default=0)
+    is_featured = models.BooleanField(default=False)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    answered_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-upvotes', '-created_at']
+        indexes = [
+            models.Index(fields=['event', 'status']),
+            models.Index(fields=['-upvotes', '-created_at']),
+        ]
+
+    def __str__(self):
+        return f"Q: {self.content[:50]}..."
+
+
+class EventReaction(models.Model):
+    """Participant engagement reactions"""
+    REACTION_TYPE = [
+        ('applause', 'Applause'),
+        ('thumbs_up', 'Thumbs Up'),
+        ('fire', 'Fire'),
+        ('heart', 'Heart'),
+    ]
+
+    event = models.ForeignKey(SpeakerEvent, on_delete=models.CASCADE, related_name='reactions')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='event_reactions')
+    reaction_type = models.CharField(max_length=20, choices=REACTION_TYPE)
+    timestamp = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['event', 'reaction_type']),
+            models.Index(fields=['-timestamp']),
+        ]
+
+    def __str__(self):
+        return f"{self.user.username} - {self.reaction_type}"
+
+
+# ============================================================================
+# FINANCIAL HUB - INVESTOR EDUCATION & QUALIFICATION
+# ============================================================================
+
+class EducationalModule(models.Model):
+    """Educational content modules for investor education"""
+    MODULE_TYPES = [
+        ('basics', 'Mining Financing Basics'),
+        ('regulations', 'Canadian Securities Regulations'),
+        ('investor_rights', 'Investor Rights & Obligations'),
+        ('risk_disclosure', 'Risk Disclosures'),
+        ('subscription_agreement', 'Subscription Agreement Guide'),
+        ('drs', 'Direct Registration System (DRS)'),
+    ]
+
+    module_type = models.CharField(max_length=30, choices=MODULE_TYPES, unique=True)
+    title = models.CharField(max_length=255)
+    description = models.TextField()
+
+    # Content
+    content = models.TextField(help_text="HTML/Markdown content")
+    estimated_read_time_minutes = models.IntegerField(default=5)
+
+    # Ordering
+    sort_order = models.IntegerField(default=0)
+
+    # Status
+    is_published = models.BooleanField(default=True)
+    is_required = models.BooleanField(default=False, help_text="Required for accreditation process")
+
+    # Metadata
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
+
+    class Meta:
+        db_table = 'educational_modules'
+        ordering = ['sort_order', 'title']
+
+    def __str__(self):
+        return self.title
+
+
+class ModuleCompletion(models.Model):
+    """Track user completion of educational modules"""
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='module_completions')
+    module = models.ForeignKey(EducationalModule, on_delete=models.CASCADE, related_name='completions')
+
+    # Tracking
+    started_at = models.DateTimeField(auto_now_add=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    time_spent_seconds = models.IntegerField(default=0)
+
+    # Quiz/Assessment (optional)
+    quiz_score = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
+    passed = models.BooleanField(default=False)
+
+    class Meta:
+        db_table = 'module_completions'
+        unique_together = ['user', 'module']
+        indexes = [
+            models.Index(fields=['user', 'completed_at']),
+            models.Index(fields=['module', '-completed_at']),
+        ]
+
+    def __str__(self):
+        status = "Completed" if self.completed_at else "In Progress"
+        return f"{self.user.username} - {self.module.title} ({status})"
+
+
+class AccreditedInvestorQualification(models.Model):
+    """Store accredited investor qualification results"""
+    QUALIFICATION_STATUS = [
+        ('pending', 'Pending Review'),
+        ('qualified', 'Qualified'),
+        ('not_qualified', 'Not Qualified'),
+        ('expired', 'Expired'),
+    ]
+
+    QUALIFICATION_CRITERIA = [
+        ('income_individual', 'Individual Income >$200k'),
+        ('income_combined', 'Combined Income >$300k'),
+        ('financial_assets', 'Financial Assets ≥$1M'),
+        ('net_assets', 'Net Assets ≥$5M'),
+        ('entity_assets', 'Entity with Assets ≥$5M'),
+        ('professional', 'Registered Dealer/Adviser'),
+    ]
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='accreditation_qualifications')
+
+    # Qualification Details
+    status = models.CharField(max_length=20, choices=QUALIFICATION_STATUS, default='pending')
+    criteria_met = models.CharField(max_length=30, choices=QUALIFICATION_CRITERIA, null=True, blank=True)
+
+    # Questionnaire Responses (JSON)
+    questionnaire_responses = models.JSONField(default=dict, help_text="Stores all questionnaire answers")
+
+    # Supporting Documentation
+    documents_submitted = models.BooleanField(default=False)
+    documents_verified = models.BooleanField(default=False)
+
+    # Review
+    reviewed_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='reviewed_qualifications'
+    )
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    review_notes = models.TextField(blank=True)
+
+    # Validity
+    qualified_at = models.DateTimeField(null=True, blank=True)
+    expires_at = models.DateTimeField(null=True, blank=True)
+
+    # Audit
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'accredited_investor_qualifications'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['user', 'status']),
+            models.Index(fields=['status', '-created_at']),
+        ]
+
+    def __str__(self):
+        return f"{self.user.username} - {self.get_status_display()}"
+
+
+# ============================================================================
+# FINANCIAL HUB - SUBSCRIPTION AGREEMENTS & INVESTMENTS
+# ============================================================================
+
+class SubscriptionAgreement(models.Model):
+    """Subscription agreement for financing participation"""
+    AGREEMENT_STATUS = [
+        ('draft', 'Draft'),
+        ('pending_signature', 'Pending Signature'),
+        ('signed', 'Signed'),
+        ('accepted', 'Accepted by Company'),
+        ('funded', 'Funded'),
+        ('completed', 'Completed'),
+        ('rejected', 'Rejected'),
+        ('cancelled', 'Cancelled'),
+    ]
+
+    # Parties
+    investor = models.ForeignKey(User, on_delete=models.CASCADE, related_name='subscription_agreements')
+    financing = models.ForeignKey(Financing, on_delete=models.CASCADE, related_name='subscription_agreements')
+    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name='subscription_agreements')
+
+    # Investment Details
+    num_shares = models.BigIntegerField()
+    price_per_share = models.DecimalField(max_digits=10, decimal_places=4)
+    total_investment_amount = models.DecimalField(max_digits=15, decimal_places=2)
+    currency = models.CharField(max_length=3, default='USD')
+
+    # Warrants (if applicable)
+    includes_warrants = models.BooleanField(default=False)
+    warrant_shares = models.BigIntegerField(null=True, blank=True)
+    warrant_strike_price = models.DecimalField(max_digits=10, decimal_places=4, null=True, blank=True)
+    warrant_expiry_date = models.DateField(null=True, blank=True)
+
+    # Agreement Status
+    status = models.CharField(max_length=30, choices=AGREEMENT_STATUS, default='draft')
+
+    # Document Management
+    agreement_pdf_url = models.URLField(blank=True)
+    docusign_envelope_id = models.CharField(max_length=255, blank=True)
+
+    # Signature Tracking
+    investor_signed_at = models.DateTimeField(null=True, blank=True)
+    investor_ip_address = models.GenericIPAddressField(null=True, blank=True)
+    company_accepted_at = models.DateTimeField(null=True, blank=True)
+    company_accepted_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='accepted_agreements'
+    )
+
+    # Payment Tracking
+    payment_instructions_sent_at = models.DateTimeField(null=True, blank=True)
+    payment_received_at = models.DateTimeField(null=True, blank=True)
+    payment_reference = models.CharField(max_length=255, blank=True)
+
+    # DRS & Share Issuance
+    shares_issued = models.BooleanField(default=False)
+    shares_issued_at = models.DateTimeField(null=True, blank=True)
+    drs_statement_sent_at = models.DateTimeField(null=True, blank=True)
+    certificate_number = models.CharField(max_length=100, blank=True)
+
+    # Legal & Compliance
+    accreditation_verified = models.BooleanField(default=False)
+    kyc_completed = models.BooleanField(default=False)
+    aml_check_completed = models.BooleanField(default=False)
+
+    # Notes
+    notes = models.TextField(blank=True)
+    rejection_reason = models.TextField(blank=True)
+
+    # Audit
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'subscription_agreements'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['investor', 'status']),
+            models.Index(fields=['financing', 'status']),
+            models.Index(fields=['company', '-created_at']),
+            models.Index(fields=['status', '-created_at']),
+            models.Index(fields=['docusign_envelope_id']),
+        ]
+
+    def __str__(self):
+        return f"{self.investor.username} - {self.company.name} - ${self.total_investment_amount:,.2f}"
+
+
+class InvestmentTransaction(models.Model):
+    """Track individual investment transactions and their lifecycle"""
+    TRANSACTION_STATUS = [
+        ('initiated', 'Initiated'),
+        ('payment_pending', 'Payment Pending'),
+        ('payment_received', 'Payment Received'),
+        ('shares_issued', 'Shares Issued'),
+        ('completed', 'Completed'),
+        ('failed', 'Failed'),
+        ('refunded', 'Refunded'),
+    ]
+
+    subscription_agreement = models.ForeignKey(
+        SubscriptionAgreement,
+        on_delete=models.CASCADE,
+        related_name='transactions'
+    )
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='investment_transactions')
+    financing = models.ForeignKey(Financing, on_delete=models.CASCADE, related_name='investment_transactions')
+
+    # Transaction Details
+    amount = models.DecimalField(max_digits=15, decimal_places=2)
+    currency = models.CharField(max_length=3, default='USD')
+    status = models.CharField(max_length=20, choices=TRANSACTION_STATUS, default='initiated')
+
+    # Payment Details
+    payment_method = models.CharField(max_length=50, blank=True)
+    payment_reference = models.CharField(max_length=255, blank=True)
+    payment_date = models.DateTimeField(null=True, blank=True)
+
+    # Share Allocation
+    shares_allocated = models.BigIntegerField(null=True, blank=True)
+    price_per_share = models.DecimalField(max_digits=10, decimal_places=4, null=True, blank=True)
+
+    # Audit Trail
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = 'investment_transactions'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['user', 'status']),
+            models.Index(fields=['financing', 'status']),
+            models.Index(fields=['status', '-created_at']),
+        ]
+
+    def __str__(self):
+        return f"{self.user.username} - {self.financing.company.name} - ${self.amount:,.2f}"
+
+
+class FinancingAggregate(models.Model):
+    """Aggregate investment data for financing rounds"""
+    financing = models.OneToOneField(Financing, on_delete=models.CASCADE, related_name='aggregate_data')
+
+    # Subscription Metrics
+    total_subscriptions = models.IntegerField(default=0)
+    total_subscribers = models.IntegerField(default=0)
+
+    # Amount Metrics
+    total_committed_amount = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    total_funded_amount = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    total_shares_allocated = models.BigIntegerField(default=0)
+
+    # Status Breakdown (JSON)
+    status_breakdown = models.JSONField(
+        default=dict,
+        help_text="Breakdown by agreement status: {draft: 2, signed: 5, funded: 10}"
+    )
+
+    # Investor Type Breakdown (JSON)
+    investor_type_breakdown = models.JSONField(
+        default=dict,
+        help_text="Breakdown by investor type: {individual: 8, institutional: 2}"
+    )
+
+    # Last Updated
+    last_calculated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'financing_aggregates'
+
+    def __str__(self):
+        return f"{self.financing.company.name} - {self.financing.financing_type} Aggregate"
+
+
+class PaymentInstruction(models.Model):
+    """Payment instructions for financing participations"""
+    PAYMENT_METHOD = [
+        ('wire', 'Wire Transfer'),
+        ('ach', 'ACH Transfer'),
+        ('check', 'Check'),
+        ('crypto', 'Cryptocurrency'),
+    ]
+
+    subscription_agreement = models.OneToOneField(
+        SubscriptionAgreement,
+        on_delete=models.CASCADE,
+        related_name='payment_instruction'
+    )
+    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name='payment_instructions')
+
+    # Payment Method
+    payment_method = models.CharField(max_length=20, choices=PAYMENT_METHOD)
+
+    # Banking Details (encrypted in production)
+    bank_name = models.CharField(max_length=255, blank=True)
+    bank_account_name = models.CharField(max_length=255, blank=True)
+    bank_account_number = models.CharField(max_length=255, blank=True)
+    routing_number = models.CharField(max_length=50, blank=True)
+    swift_code = models.CharField(max_length=50, blank=True)
+
+    # Additional Instructions
+    reference_code = models.CharField(max_length=100, help_text="Unique reference for payment tracking")
+    special_instructions = models.TextField(blank=True)
+
+    # Tracking
+    sent_to_investor_at = models.DateTimeField(null=True, blank=True)
+    viewed_by_investor_at = models.DateTimeField(null=True, blank=True)
+
+    # Audit
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'payment_instructions'
+
+    def __str__(self):
+        return f"{self.subscription_agreement.investor.username} - {self.get_payment_method_display()}"
+
+
+class DRSDocument(models.Model):
+    """DRS (Direct Registration System) documents and delivery tracking"""
+    DOCUMENT_TYPE = [
+        ('statement', 'DRS Statement'),
+        ('certificate', 'Share Certificate'),
+        ('confirmation', 'Issuance Confirmation'),
+        ('educational', 'DRS Educational Material'),
+    ]
+
+    DELIVERY_STATUS = [
+        ('pending', 'Pending'),
+        ('sent', 'Sent'),
+        ('delivered', 'Delivered'),
+        ('failed', 'Failed'),
+    ]
+
+    subscription_agreement = models.ForeignKey(
+        SubscriptionAgreement,
+        on_delete=models.CASCADE,
+        related_name='drs_documents',
+        null=True,
+        blank=True
+    )
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='drs_documents')
+    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name='drs_documents')
+
+    # Document Details
+    document_type = models.CharField(max_length=20, choices=DOCUMENT_TYPE)
+    document_url = models.URLField(blank=True)
+    document_hash = models.CharField(max_length=64, blank=True, help_text="SHA-256 hash for verification")
+
+    # Share Details (for statements/certificates)
+    num_shares = models.BigIntegerField(null=True, blank=True)
+    certificate_number = models.CharField(max_length=100, blank=True)
+    issue_date = models.DateField(null=True, blank=True)
+
+    # Delivery Tracking
+    delivery_status = models.CharField(max_length=20, choices=DELIVERY_STATUS, default='pending')
+    sent_at = models.DateTimeField(null=True, blank=True)
+    delivered_at = models.DateTimeField(null=True, blank=True)
+    delivery_method = models.CharField(max_length=50, blank=True, help_text="email, postal, etc")
+
+    # Audit
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'drs_documents'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['user', 'document_type']),
+            models.Index(fields=['subscription_agreement', '-created_at']),
+            models.Index(fields=['delivery_status', '-created_at']),
+        ]
+
+    def __str__(self):
+        return f"{self.user.username} - {self.get_document_type_display()} - {self.company.name}"

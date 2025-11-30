@@ -10,14 +10,17 @@ from django.db.models import Q
 
 from .models import (
     Company, Project, ResourceEstimate, EconomicStudy,
-    Financing, Investor, MarketData, NewsRelease, Document
+    Financing, Investor, MarketData, NewsRelease, Document,
+    SpeakerEvent, EventSpeaker, EventRegistration, EventQuestion, EventReaction
 )
 from .serializers import (
     CompanySerializer, CompanyDetailSerializer,
     ProjectSerializer, ProjectDetailSerializer,
     ResourceEstimateSerializer, EconomicStudySerializer,
     FinancingSerializer, InvestorSerializer,
-    MarketDataSerializer, NewsReleaseSerializer, DocumentSerializer
+    MarketDataSerializer, NewsReleaseSerializer, DocumentSerializer,
+    SpeakerEventListSerializer, SpeakerEventDetailSerializer,
+    SpeakerEventCreateSerializer, EventQuestionSerializer, EventReactionSerializer
 )
 from claude_integration.client import ClaudeClient
 import requests
@@ -688,3 +691,687 @@ class FinancingViewSet(viewsets.ModelViewSet):
     queryset = Financing.objects.all()
     serializer_class = FinancingSerializer
     permission_classes = [AllowAny]
+
+
+# ============================================================================
+# GUEST SPEAKER EVENT VIEWSETS
+# ============================================================================
+
+class SpeakerEventViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for managing speaker events
+
+    Endpoints:
+    - GET /api/events/ - List all events (with filters)
+    - GET /api/events/{id}/ - Get event details
+    - POST /api/events/ - Create new event (company admins only)
+    - PUT/PATCH /api/events/{id}/ - Update event
+    - DELETE /api/events/{id}/ - Delete event
+    - POST /api/events/{id}/register/ - Register for event
+    - POST /api/events/{id}/unregister/ - Unregister from event
+    - POST /api/events/{id}/start/ - Start event (change status to live)
+    - POST /api/events/{id}/end/ - End event
+    - GET /api/events/upcoming/ - Get upcoming events
+    """
+    permission_classes = [AllowAny]
+
+    def get_queryset(self):
+        queryset = SpeakerEvent.objects.select_related('company', 'created_by').prefetch_related('speakers__user')
+
+        # Filter by company
+        company_id = self.request.query_params.get('company', None)
+        if company_id:
+            queryset = queryset.filter(company_id=company_id)
+
+        # Filter by status
+        status_param = self.request.query_params.get('status', None)
+        if status_param:
+            queryset = queryset.filter(status=status_param)
+
+        # Filter by format
+        format_param = self.request.query_params.get('format', None)
+        if format_param:
+            queryset = queryset.filter(format=format_param)
+
+        return queryset.order_by('-scheduled_start')
+
+    def get_serializer_class(self):
+        if self.action == 'list':
+            return SpeakerEventListSerializer
+        elif self.action == 'create':
+            return SpeakerEventCreateSerializer
+        return SpeakerEventDetailSerializer
+
+    def perform_create(self, serializer):
+        """Set the created_by field to current user"""
+        serializer.save(created_by=self.request.user)
+
+    @action(detail=True, methods=['post'])
+    def register(self, request, pk=None):
+        """Register current user for an event"""
+        event = self.get_object()
+
+        # Check if event is open for registration
+        if event.status != 'scheduled':
+            return Response(
+                {'error': 'Event is not open for registration'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Check if already registered
+        if event.registrations.filter(user=request.user, status='registered').exists():
+            return Response(
+                {'error': 'Already registered for this event'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Check capacity
+        if event.max_participants and event.registered_count >= event.max_participants:
+            return Response(
+                {'error': 'Event is full'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Check if user has a cancelled registration and reactivate it
+        existing_registration = event.registrations.filter(user=request.user).first()
+        if existing_registration:
+            existing_registration.status = 'registered'
+            existing_registration.save()
+            registration = existing_registration
+        else:
+            # Create new registration
+            registration = EventRegistration.objects.create(
+                event=event,
+                user=request.user,
+                status='registered'
+            )
+
+        # Update event registered count
+        event.registered_count += 1
+        event.save(update_fields=['registered_count'])
+
+        return Response(
+            {'message': 'Successfully registered for event'},
+            status=status.HTTP_201_CREATED
+        )
+
+    @action(detail=True, methods=['post'])
+    def unregister(self, request, pk=None):
+        """Unregister current user from an event"""
+        event = self.get_object()
+
+        try:
+            registration = event.registrations.get(user=request.user, status='registered')
+            registration.status = 'cancelled'
+            registration.save()
+
+            # Update event registered count
+            event.registered_count = max(0, event.registered_count - 1)
+            event.save(update_fields=['registered_count'])
+
+            return Response({'message': 'Successfully unregistered from event'})
+        except EventRegistration.DoesNotExist:
+            return Response(
+                {'error': 'Not registered for this event'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+    @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
+    def start(self, request, pk=None):
+        """Start an event (change status to live)"""
+        event = self.get_object()
+
+        # Check if user is authorized (event creator or company admin)
+        if event.created_by != request.user:
+            return Response(
+                {'error': 'Not authorized to start this event'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        if event.status != 'scheduled':
+            return Response(
+                {'error': 'Event must be scheduled to start'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        event.status = 'live'
+        event.actual_start = datetime.now()
+        event.save(update_fields=['status', 'actual_start'])
+
+        return Response({'message': 'Event started successfully'})
+
+    @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
+    def end(self, request, pk=None):
+        """End an event"""
+        event = self.get_object()
+
+        # Check if user is authorized
+        if event.created_by != request.user:
+            return Response(
+                {'error': 'Not authorized to end this event'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        if event.status != 'live':
+            return Response(
+                {'error': 'Event must be live to end'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        event.status = 'ended'
+        event.actual_end = datetime.now()
+        event.save(update_fields=['status', 'actual_end'])
+
+        return Response({'message': 'Event ended successfully'})
+
+    @action(detail=False, methods=['get'])
+    def upcoming(self, request):
+        """Get upcoming events across all companies"""
+        upcoming_events = SpeakerEvent.objects.filter(
+            status='scheduled',
+            scheduled_start__gte=datetime.now()
+        ).select_related('company', 'created_by').prefetch_related('speakers__user').order_by('scheduled_start')[:10]
+
+        serializer = SpeakerEventListSerializer(upcoming_events, many=True, context={'request': request})
+        return Response(serializer.data)
+
+
+class EventQuestionViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for managing event questions
+
+    Endpoints:
+    - GET /api/event-questions/?event={event_id} - List questions for an event
+    - POST /api/event-questions/ - Submit a question
+    - PATCH /api/event-questions/{id}/ - Update question (moderate/answer)
+    - POST /api/event-questions/{id}/upvote/ - Upvote a question
+    """
+    serializer_class = EventQuestionSerializer
+    permission_classes = [AllowAny]
+
+    def get_queryset(self):
+        queryset = EventQuestion.objects.select_related('user', 'answered_by')
+
+        # Filter by event
+        event_id = self.request.query_params.get('event', None)
+        if event_id:
+            queryset = queryset.filter(event_id=event_id)
+
+        # Filter by status
+        status_param = self.request.query_params.get('status', None)
+        if status_param:
+            queryset = queryset.filter(status=status_param)
+
+        return queryset.order_by('-upvotes', '-created_at')
+
+    def perform_create(self, serializer):
+        """Set the user field to current user"""
+        serializer.save(user=self.request.user)
+
+    @action(detail=True, methods=['post'])
+    def upvote(self, request, pk=None):
+        """Upvote a question"""
+        question = self.get_object()
+        question.upvotes += 1
+        question.save(update_fields=['upvotes'])
+
+        # Update event questions count
+        event = question.event
+        event.questions_count = event.questions.count()
+        event.save(update_fields=['questions_count'])
+
+        return Response({'message': 'Question upvoted', 'upvotes': question.upvotes})
+
+
+class EventReactionViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for managing event reactions
+
+    Endpoints:
+    - POST /api/event-reactions/ - Send a reaction
+    - GET /api/event-reactions/?event={event_id} - Get reactions for an event
+    """
+    serializer_class = EventReactionSerializer
+    permission_classes = [AllowAny]
+
+    def get_queryset(self):
+        queryset = EventReaction.objects.select_related('user')
+
+        # Filter by event
+        event_id = self.request.query_params.get('event', None)
+        if event_id:
+            queryset = queryset.filter(event_id=event_id)
+
+        return queryset.order_by('-timestamp')
+
+    def perform_create(self, serializer):
+        """Set the user field to current user"""
+        serializer.save(user=self.request.user)
+
+
+# ============================================================================
+# USER AUTHENTICATION API
+# ============================================================================
+
+from rest_framework_simplejwt.tokens import RefreshToken
+from django.contrib.auth import authenticate
+from .models import User
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def register_user(request):
+    """
+    Register a new user account
+    POST /api/auth/register/
+    Body: {
+        "username": "string",
+        "email": "string",
+        "password": "string",
+        "full_name": "string",
+        "user_type": "investor" (optional, defaults to investor)
+    }
+    Returns: {
+        "user": {...},
+        "access": "token",
+        "refresh": "token"
+    }
+    """
+    username = request.data.get('username')
+    email = request.data.get('email')
+    password = request.data.get('password')
+    full_name = request.data.get('full_name', '')
+    user_type = request.data.get('user_type', 'investor')
+
+    # Validation
+    if not username or not email or not password:
+        return Response(
+            {'error': 'Username, email, and password are required'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    # Check if username already exists
+    if User.objects.filter(username=username).exists():
+        return Response(
+            {'error': 'Username already exists'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    # Check if email already exists
+    if User.objects.filter(email=email).exists():
+        return Response(
+            {'error': 'Email already exists'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    # Create user
+    try:
+        user = User.objects.create_user(
+            username=username,
+            email=email,
+            password=password,
+            user_type=user_type
+        )
+
+        # Set full name (split into first and last name)
+        if full_name:
+            name_parts = full_name.strip().split(' ', 1)
+            user.first_name = name_parts[0]
+            if len(name_parts) > 1:
+                user.last_name = name_parts[1]
+            user.save()
+
+        # Generate JWT tokens
+        refresh = RefreshToken.for_user(user)
+
+        # Get full name
+        user_full_name = f"{user.first_name} {user.last_name}".strip() or user.username
+
+        return Response({
+            'user': {
+                'id': user.id,
+                'username': user.username,
+                'email': user.email,
+                'full_name': user_full_name,
+                'user_type': user.user_type,
+            },
+            'access': str(refresh.access_token),
+            'refresh': str(refresh),
+        }, status=status.HTTP_201_CREATED)
+
+    except Exception as e:
+        return Response(
+            {'error': str(e)},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def login_user(request):
+    """
+    Login and get JWT tokens
+    POST /api/auth/login/
+    Body: {
+        "username": "string",
+        "password": "string"
+    }
+    Returns: {
+        "user": {...},
+        "access": "token",
+        "refresh": "token"
+    }
+    """
+    username = request.data.get('username')
+    password = request.data.get('password')
+
+    if not username or not password:
+        return Response(
+            {'error': 'Username and password are required'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    # Authenticate user
+    user = authenticate(username=username, password=password)
+
+    if user is None:
+        return Response(
+            {'error': 'Invalid credentials'},
+            status=status.HTTP_401_UNAUTHORIZED
+        )
+
+    # Generate JWT tokens
+    refresh = RefreshToken.for_user(user)
+
+    # Get full name
+    user_full_name = f"{user.first_name} {user.last_name}".strip() or user.username
+
+    return Response({
+        'user': {
+            'id': user.id,
+            'username': user.username,
+            'email': user.email,
+            'full_name': user_full_name,
+            'user_type': user.user_type,
+        },
+        'access': str(refresh.access_token),
+        'refresh': str(refresh),
+    }, status=status.HTTP_200_OK)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_current_user(request):
+    """
+    Get current authenticated user info
+    GET /api/auth/me/
+    Headers: Authorization: Bearer <access_token>
+    Returns: {
+        "id": int,
+        "username": "string",
+        "email": "string",
+        "full_name": "string",
+        "user_type": "string"
+    }
+    """
+    user = request.user
+
+    # Get full name
+    user_full_name = f"{user.first_name} {user.last_name}".strip() or user.username
+
+    return Response({
+        'id': user.id,
+        'username': user.username,
+        'email': user.email,
+        'full_name': user_full_name,
+        'user_type': user.user_type,
+    }, status=status.HTTP_200_OK)
+
+
+# ============================================================================
+# FINANCIAL HUB API
+# ============================================================================
+
+from .models import (
+    EducationalModule, ModuleCompletion, AccreditedInvestorQualification,
+    SubscriptionAgreement, InvestmentTransaction, FinancingAggregate,
+    PaymentInstruction, DRSDocument
+)
+from .serializers import (
+    EducationalModuleSerializer, ModuleCompletionSerializer,
+    AccreditedInvestorQualificationSerializer, SubscriptionAgreementSerializer,
+    SubscriptionAgreementDetailSerializer, InvestmentTransactionSerializer,
+    FinancingAggregateSerializer, PaymentInstructionSerializer, DRSDocumentSerializer
+)
+from django.utils import timezone
+
+
+class EducationalModuleViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for Educational Modules
+
+    Endpoints:
+    - GET /api/education/modules/ - List all published modules
+    - GET /api/education/modules/{id}/ - Get module details
+    - POST /api/education/modules/{id}/complete/ - Mark module as complete
+    """
+    serializer_class = EducationalModuleSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return EducationalModule.objects.filter(is_published=True)
+
+    @action(detail=True, methods=['post'])
+    def complete(self, request, pk=None):
+        """Mark a module as completed"""
+        module = self.get_object()
+        user = request.user
+
+        # Get or create completion record
+        completion, created = ModuleCompletion.objects.get_or_create(
+            user=user,
+            module=module,
+            defaults={
+                'time_spent_seconds': request.data.get('time_spent_seconds', 0),
+                'passed': request.data.get('passed', True),
+            }
+        )
+
+        if not created:
+            # Update existing completion
+            completion.time_spent_seconds += request.data.get('time_spent_seconds', 0)
+            completion.passed = request.data.get('passed', True)
+
+        # Mark as completed
+        if not completion.completed_at:
+            completion.completed_at = timezone.now()
+
+        completion.save()
+
+        return Response({
+            'message': 'Module marked as complete',
+            'completion': ModuleCompletionSerializer(completion).data
+        }, status=status.HTTP_200_OK)
+
+
+class ModuleCompletionViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    ViewSet for Module Completions
+
+    Endpoints:
+    - GET /api/education/completions/ - List user's completions
+    """
+    serializer_class = ModuleCompletionSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return ModuleCompletion.objects.filter(user=self.request.user).select_related('module')
+
+
+class AccreditedInvestorQualificationViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for Accredited Investor Qualifications
+
+    Endpoints:
+    - GET /api/qualifications/ - List user's qualifications
+    - POST /api/qualifications/ - Submit qualification
+    - GET /api/qualifications/status/ - Get current qualification status
+    """
+    serializer_class = AccreditedInvestorQualificationSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return AccreditedInvestorQualification.objects.filter(user=self.request.user)
+
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
+
+    @action(detail=False, methods=['get'])
+    def status(self, request):
+        """Get user's current qualification status"""
+        qualification = AccreditedInvestorQualification.objects.filter(
+            user=request.user
+        ).order_by('-created_at').first()
+
+        if qualification:
+            return Response(
+                AccreditedInvestorQualificationSerializer(qualification).data,
+                status=status.HTTP_200_OK
+            )
+
+        return Response({
+            'status': 'pending',
+            'criteria_met': None,
+            'qualified_at': None
+        }, status=status.HTTP_200_OK)
+
+
+class SubscriptionAgreementViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for Subscription Agreements
+
+    Endpoints:
+    - GET /api/agreements/ - List user's agreements
+    - GET /api/agreements/{id}/ - Get agreement details
+    - POST /api/agreements/ - Create new agreement
+    - PATCH /api/agreements/{id}/ - Update agreement
+    - POST /api/agreements/{id}/sign/ - Sign agreement
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get_serializer_class(self):
+        if self.action == 'retrieve':
+            return SubscriptionAgreementDetailSerializer
+        return SubscriptionAgreementSerializer
+
+    def get_queryset(self):
+        user = self.request.user
+        queryset = SubscriptionAgreement.objects.select_related(
+            'investor', 'financing', 'company'
+        )
+
+        # If user is investor, show their agreements
+        if user.user_type == 'investor':
+            queryset = queryset.filter(investor=user)
+        # If user is company, show their company's agreements
+        elif user.user_type == 'company' and user.company:
+            queryset = queryset.filter(company=user.company)
+
+        return queryset.order_by('-created_at')
+
+    def perform_create(self, serializer):
+        serializer.save(investor=self.request.user)
+
+    @action(detail=True, methods=['post'])
+    def sign(self, request, pk=None):
+        """Sign a subscription agreement"""
+        agreement = self.get_object()
+
+        # Verify user is the investor
+        if agreement.investor != request.user:
+            return Response(
+                {'error': 'Only the investor can sign this agreement'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        # Check if already signed
+        if agreement.investor_signed_at:
+            return Response(
+                {'error': 'Agreement already signed'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Sign the agreement
+        agreement.investor_signed_at = timezone.now()
+        agreement.investor_ip_address = request.META.get('REMOTE_ADDR')
+        agreement.status = 'signed'
+        agreement.save(update_fields=['investor_signed_at', 'investor_ip_address', 'status'])
+
+        return Response({
+            'message': 'Agreement signed successfully',
+            'agreement': SubscriptionAgreementSerializer(agreement).data
+        }, status=status.HTTP_200_OK)
+
+
+class InvestmentTransactionViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    ViewSet for Investment Transactions
+
+    Endpoints:
+    - GET /api/investments/transactions/ - List user's transactions
+    - GET /api/investments/transactions/{id}/ - Get transaction details
+    """
+    serializer_class = InvestmentTransactionSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return InvestmentTransaction.objects.filter(
+            user=self.request.user
+        ).select_related('subscription_agreement', 'financing', 'user')
+
+
+class FinancingAggregateViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    ViewSet for Financing Aggregates
+
+    Endpoints:
+    - GET /api/investments/aggregates/ - List financing aggregates
+    - GET /api/investments/aggregates/{id}/ - Get aggregate details
+    """
+    serializer_class = FinancingAggregateSerializer
+    permission_classes = [IsAuthenticated]
+    queryset = FinancingAggregate.objects.select_related('financing')
+
+
+class PaymentInstructionViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    ViewSet for Payment Instructions
+
+    Endpoints:
+    - GET /api/investments/payment-instructions/ - List user's payment instructions
+    - GET /api/investments/payment-instructions/{id}/ - Get payment instruction details
+    """
+    serializer_class = PaymentInstructionSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return PaymentInstruction.objects.filter(
+            subscription_agreement__investor=self.request.user
+        ).select_related('subscription_agreement', 'company')
+
+
+class DRSDocumentViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    ViewSet for DRS Documents
+
+    Endpoints:
+    - GET /api/drs/documents/ - List user's DRS documents
+    - GET /api/drs/documents/{id}/ - Get document details
+    """
+    serializer_class = DRSDocumentSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return DRSDocument.objects.filter(
+            user=self.request.user
+        ).select_related('subscription_agreement', 'company', 'user')

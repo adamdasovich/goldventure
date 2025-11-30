@@ -1,6 +1,8 @@
-import type { Metadata } from "next";
+'use client';
+
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import { AuthProvider } from '@/contexts/AuthContext';
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -12,14 +14,6 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-export const metadata: Metadata = {
-  title: "GoldVenture - AI-Powered Mining Intelligence",
-  description: "Junior gold mining investment platform powered by Claude AI. Instant access to companies, projects, resources, and technical data.",
-  icons: {
-    icon: '/favicon.svg',
-  },
-};
-
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -30,7 +24,9 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        {children}
+        <AuthProvider>
+          {children}
+        </AuthProvider>
       </body>
     </html>
   );

@@ -8,10 +8,15 @@ import { Button } from '@/components/ui/Button';
 import { companyAPI, projectAPI, newsAPI, type Company, type Project, type NewsReleasesResponse } from '@/lib/api';
 import LogoMono from '@/components/LogoMono';
 import CompanyChatbot from '@/components/CompanyChatbot';
+import { CompanyForum } from '@/components/forum';
+import { EventBanner } from '@/components/events';
+import { LoginModal, RegisterModal } from '@/components/auth';
+import { useAuth } from '@/contexts/AuthContext';
 
 export default function CompanyDetailPage() {
   const params = useParams();
   const companyId = params.id as string;
+  const { user, logout } = useAuth();
 
   const [company, setCompany] = useState<Company | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
@@ -21,6 +26,8 @@ export default function CompanyDetailPage() {
   const [newsLoading, setNewsLoading] = useState(false);
   const [scrapingNews, setScrapingNews] = useState(false);
   const [scrapeError, setScrapeError] = useState<string | null>(null);
+  const [showLogin, setShowLogin] = useState(false);
+  const [showRegister, setShowRegister] = useState(false);
 
   useEffect(() => {
     if (companyId) {
@@ -112,11 +119,50 @@ export default function CompanyDetailPage() {
               <Button variant="ghost" size="sm" onClick={() => window.location.href = '/'}>Dashboard</Button>
               <Button variant="ghost" size="sm" onClick={() => window.location.href = '/companies'}>Companies</Button>
               <Button variant="ghost" size="sm" onClick={() => window.location.href = '/metals'}>Metals</Button>
-              <Button variant="ghost" size="sm">Sign In</Button>
+
+              {user ? (
+                <div className="flex items-center space-x-3">
+                  <span className="text-sm text-slate-300">
+                    Welcome, {user.full_name || user.username}
+                  </span>
+                  <Button variant="ghost" size="sm" onClick={logout}>
+                    Logout
+                  </Button>
+                </div>
+              ) : (
+                <>
+                  <Button variant="ghost" size="sm" onClick={() => setShowLogin(true)}>
+                    Login
+                  </Button>
+                  <Button variant="primary" size="sm" onClick={() => setShowRegister(true)}>
+                    Register
+                  </Button>
+                </>
+              )}
             </div>
           </div>
         </div>
       </nav>
+
+      {/* Auth Modals */}
+      {showLogin && (
+        <LoginModal
+          onClose={() => setShowLogin(false)}
+          onSwitchToRegister={() => {
+            setShowLogin(false);
+            setShowRegister(true);
+          }}
+        />
+      )}
+      {showRegister && (
+        <RegisterModal
+          onClose={() => setShowRegister(false)}
+          onSwitchToLogin={() => {
+            setShowRegister(false);
+            setShowLogin(true);
+          }}
+        />
+      )}
 
       {error && (
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -324,6 +370,19 @@ export default function CompanyDetailPage() {
                     </CardContent>
                   </Card>
                 </div>
+              </div>
+
+              {/* Event Banner Section */}
+              <EventBanner companyId={parseInt(companyId)} />
+
+              {/* Community Forum Section */}
+              <div className="mb-12">
+                <div className="mb-6">
+                  <h2 className="text-3xl font-bold text-gold-400 mb-2">Community Forum</h2>
+                  <p className="text-slate-400">Join real-time discussions with investors and analysts</p>
+                </div>
+
+                <CompanyForum companyId={parseInt(companyId)} companyName={company.name} />
               </div>
 
               {/* News Releases Section */}

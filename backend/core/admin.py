@@ -8,7 +8,12 @@ from .models import (
     User, Company, Project, ResourceEstimate, EconomicStudy,
     Financing, Investor, InvestorPosition, MarketData, CommodityPrice,
     NewsRelease, Document, InvestorCommunication, CompanyMetrics,
-    Watchlist, Alert, DocumentProcessingJob
+    Watchlist, Alert, DocumentProcessingJob,
+    SpeakerEvent, EventSpeaker, EventRegistration, EventQuestion, EventReaction,
+    # Financial Hub models
+    EducationalModule, ModuleCompletion, AccreditedInvestorQualification,
+    SubscriptionAgreement, InvestmentTransaction, FinancingAggregate,
+    PaymentInstruction, DRSDocument
 )
 
 
@@ -256,3 +261,289 @@ class DocumentProcessingJobAdmin(admin.ModelAdmin):
         extra_context['pending_count'] = DocumentProcessingJob.objects.filter(status='pending').count()
         extra_context['processing_count'] = DocumentProcessingJob.objects.filter(status='processing').count()
         return super().changelist_view(request, extra_context=extra_context)
+
+
+# ============================================================================
+# GUEST SPEAKER EVENT ADMIN
+# ============================================================================
+
+class EventSpeakerInline(admin.TabularInline):
+    """Inline admin for event speakers"""
+    model = EventSpeaker
+    extra = 1
+    fields = ['user', 'title', 'bio', 'is_primary']
+
+
+@admin.register(SpeakerEvent)
+class SpeakerEventAdmin(admin.ModelAdmin):
+    """Admin interface for speaker events"""
+    list_display = [
+        'title', 'company', 'status', 'format', 'scheduled_start',
+        'registered_count', 'attended_count', 'created_by'
+    ]
+    list_filter = ['status', 'format', 'company', 'scheduled_start']
+    search_fields = ['title', 'description', 'topic', 'company__name']
+    readonly_fields = ['created_by', 'registered_count', 'attended_count', 'questions_count', 'created_at', 'updated_at']
+    inlines = [EventSpeakerInline]
+
+    fieldsets = (
+        ('Event Details', {
+            'fields': ('company', 'title', 'description', 'topic')
+        }),
+        ('Scheduling', {
+            'fields': ('scheduled_start', 'scheduled_end', 'duration_minutes', 'registration_deadline')
+        }),
+        ('Format & Capacity', {
+            'fields': ('format', 'max_participants', 'video_url', 'banner_image')
+        }),
+        ('Status', {
+            'fields': ('status', 'actual_start', 'actual_end')
+        }),
+        ('Statistics', {
+            'fields': ('registered_count', 'attended_count', 'questions_count')
+        }),
+        ('Metadata', {
+            'fields': ('created_by', 'created_at', 'updated_at')
+        }),
+    )
+
+    def save_model(self, request, obj, form, change):
+        if not change:
+            obj.created_by = request.user
+        super().save_model(request, obj, form, change)
+
+
+@admin.register(EventSpeaker)
+class EventSpeakerAdmin(admin.ModelAdmin):
+    """Admin interface for event speakers"""
+    list_display = ['user', 'event', 'title', 'is_primary']
+    list_filter = ['is_primary', 'event']
+    search_fields = ['user__username', 'event__title', 'title']
+
+
+@admin.register(EventRegistration)
+class EventRegistrationAdmin(admin.ModelAdmin):
+    """Admin interface for event registrations"""
+    list_display = ['user', 'event', 'status', 'registered_at', 'reminder_sent']
+    list_filter = ['status', 'reminder_sent', 'registered_at']
+    search_fields = ['user__username', 'event__title']
+    readonly_fields = ['registered_at', 'joined_at', 'left_at']
+
+
+@admin.register(EventQuestion)
+class EventQuestionAdmin(admin.ModelAdmin):
+    """Admin interface for event questions"""
+    list_display = ['content_preview', 'event', 'user', 'status', 'upvotes', 'is_featured', 'created_at']
+    list_filter = ['status', 'is_featured', 'event']
+    search_fields = ['content', 'user__username', 'event__title']
+    readonly_fields = ['upvotes', 'created_at', 'answered_at']
+
+    def content_preview(self, obj):
+        return obj.content[:50] + '...' if len(obj.content) > 50 else obj.content
+    content_preview.short_description = 'Question'
+
+
+@admin.register(EventReaction)
+class EventReactionAdmin(admin.ModelAdmin):
+    """Admin interface for event reactions"""
+    list_display = ['user', 'event', 'reaction_type', 'timestamp']
+    list_filter = ['reaction_type', 'event', 'timestamp']
+    search_fields = ['user__username', 'event__title']
+    readonly_fields = ['timestamp']
+
+
+# ============================================================================
+# FINANCIAL HUB ADMIN
+# ============================================================================
+
+@admin.register(EducationalModule)
+class EducationalModuleAdmin(admin.ModelAdmin):
+    """Admin interface for educational modules"""
+    list_display = ['title', 'module_type', 'is_published', 'is_required', 'sort_order', 'estimated_read_time_minutes']
+    list_filter = ['module_type', 'is_published', 'is_required']
+    search_fields = ['title', 'description']
+    readonly_fields = ['created_at', 'updated_at']
+
+    fieldsets = (
+        ('Module Details', {
+            'fields': ('module_type', 'title', 'description')
+        }),
+        ('Content', {
+            'fields': ('content', 'estimated_read_time_minutes')
+        }),
+        ('Settings', {
+            'fields': ('is_published', 'is_required', 'sort_order')
+        }),
+        ('Metadata', {
+            'fields': ('created_by', 'created_at', 'updated_at')
+        }),
+    )
+
+    def save_model(self, request, obj, form, change):
+        if not change:
+            obj.created_by = request.user
+        super().save_model(request, obj, form, change)
+
+
+@admin.register(ModuleCompletion)
+class ModuleCompletionAdmin(admin.ModelAdmin):
+    """Admin interface for module completions"""
+    list_display = ['user', 'module', 'started_at', 'completed_at', 'time_spent_seconds', 'passed']
+    list_filter = ['module', 'passed', 'completed_at']
+    search_fields = ['user__username', 'module__title']
+    readonly_fields = ['started_at']
+
+
+@admin.register(AccreditedInvestorQualification)
+class AccreditedInvestorQualificationAdmin(admin.ModelAdmin):
+    """Admin interface for accredited investor qualifications"""
+    list_display = ['user', 'status', 'criteria_met', 'qualified_at', 'expires_at', 'reviewed_by']
+    list_filter = ['status', 'criteria_met', 'documents_verified']
+    search_fields = ['user__username', 'review_notes']
+    readonly_fields = ['created_at', 'updated_at']
+
+    fieldsets = (
+        ('User & Status', {
+            'fields': ('user', 'status', 'criteria_met')
+        }),
+        ('Questionnaire', {
+            'fields': ('questionnaire_responses',)
+        }),
+        ('Documentation', {
+            'fields': ('documents_submitted', 'documents_verified')
+        }),
+        ('Review', {
+            'fields': ('reviewed_by', 'reviewed_at', 'review_notes')
+        }),
+        ('Validity', {
+            'fields': ('qualified_at', 'expires_at')
+        }),
+        ('Audit', {
+            'fields': ('created_at', 'updated_at')
+        }),
+    )
+
+
+@admin.register(SubscriptionAgreement)
+class SubscriptionAgreementAdmin(admin.ModelAdmin):
+    """Admin interface for subscription agreements"""
+    list_display = [
+        'investor', 'company', 'financing', 'total_investment_amount',
+        'num_shares', 'status', 'investor_signed_at', 'shares_issued'
+    ]
+    list_filter = ['status', 'company', 'accreditation_verified', 'kyc_completed', 'shares_issued']
+    search_fields = ['investor__username', 'company__name', 'docusign_envelope_id']
+    readonly_fields = ['created_at', 'updated_at']
+
+    fieldsets = (
+        ('Parties', {
+            'fields': ('investor', 'financing', 'company')
+        }),
+        ('Investment Details', {
+            'fields': ('num_shares', 'price_per_share', 'total_investment_amount', 'currency')
+        }),
+        ('Warrants', {
+            'fields': ('includes_warrants', 'warrant_shares', 'warrant_strike_price', 'warrant_expiry_date'),
+            'classes': ('collapse',)
+        }),
+        ('Agreement Status', {
+            'fields': ('status', 'agreement_pdf_url', 'docusign_envelope_id')
+        }),
+        ('Signatures', {
+            'fields': ('investor_signed_at', 'investor_ip_address', 'company_accepted_at', 'company_accepted_by')
+        }),
+        ('Payment', {
+            'fields': ('payment_instructions_sent_at', 'payment_received_at', 'payment_reference')
+        }),
+        ('Share Issuance', {
+            'fields': ('shares_issued', 'shares_issued_at', 'drs_statement_sent_at', 'certificate_number')
+        }),
+        ('Compliance', {
+            'fields': ('accreditation_verified', 'kyc_completed', 'aml_check_completed')
+        }),
+        ('Notes', {
+            'fields': ('notes', 'rejection_reason')
+        }),
+        ('Audit', {
+            'fields': ('created_at', 'updated_at')
+        }),
+    )
+
+
+@admin.register(InvestmentTransaction)
+class InvestmentTransactionAdmin(admin.ModelAdmin):
+    """Admin interface for investment transactions"""
+    list_display = ['user', 'financing', 'amount', 'status', 'payment_date', 'shares_allocated']
+    list_filter = ['status', 'financing', 'payment_date']
+    search_fields = ['user__username', 'payment_reference']
+    readonly_fields = ['created_at', 'updated_at']
+
+
+@admin.register(FinancingAggregate)
+class FinancingAggregateAdmin(admin.ModelAdmin):
+    """Admin interface for financing aggregates"""
+    list_display = [
+        'financing', 'total_subscriptions', 'total_subscribers',
+        'total_committed_amount', 'total_funded_amount', 'last_calculated_at'
+    ]
+    list_filter = ['last_calculated_at']
+    search_fields = ['financing__company__name']
+    readonly_fields = ['last_calculated_at']
+
+
+@admin.register(PaymentInstruction)
+class PaymentInstructionAdmin(admin.ModelAdmin):
+    """Admin interface for payment instructions"""
+    list_display = ['subscription_agreement', 'company', 'payment_method', 'sent_to_investor_at', 'viewed_by_investor_at']
+    list_filter = ['payment_method', 'company']
+    search_fields = ['reference_code', 'bank_name']
+    readonly_fields = ['created_at', 'updated_at']
+
+    fieldsets = (
+        ('Agreement & Company', {
+            'fields': ('subscription_agreement', 'company', 'payment_method')
+        }),
+        ('Banking Details', {
+            'fields': ('bank_name', 'bank_account_name', 'bank_account_number', 'routing_number', 'swift_code'),
+            'description': 'These details should be encrypted in production'
+        }),
+        ('Instructions', {
+            'fields': ('reference_code', 'special_instructions')
+        }),
+        ('Tracking', {
+            'fields': ('sent_to_investor_at', 'viewed_by_investor_at')
+        }),
+        ('Audit', {
+            'fields': ('created_at', 'updated_at')
+        }),
+    )
+
+
+@admin.register(DRSDocument)
+class DRSDocumentAdmin(admin.ModelAdmin):
+    """Admin interface for DRS documents"""
+    list_display = [
+        'user', 'company', 'document_type', 'num_shares',
+        'delivery_status', 'sent_at', 'delivered_at'
+    ]
+    list_filter = ['document_type', 'delivery_status', 'company']
+    search_fields = ['user__username', 'certificate_number', 'document_hash']
+    readonly_fields = ['created_at', 'updated_at']
+
+    fieldsets = (
+        ('Document & Parties', {
+            'fields': ('subscription_agreement', 'user', 'company', 'document_type')
+        }),
+        ('Document Details', {
+            'fields': ('document_url', 'document_hash')
+        }),
+        ('Share Details', {
+            'fields': ('num_shares', 'certificate_number', 'issue_date')
+        }),
+        ('Delivery', {
+            'fields': ('delivery_status', 'delivery_method', 'sent_at', 'delivered_at')
+        }),
+        ('Audit', {
+            'fields': ('created_at', 'updated_at')
+        }),
+    )

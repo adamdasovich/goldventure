@@ -1,12 +1,20 @@
 'use client';
 
+import { useState } from 'react';
 import ChatInterface from '@/components/ChatInterface';
 import { Card, CardHeader, CardTitle, CardDescription } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import LogoMono from '@/components/LogoMono';
+import { UpcomingEvents } from '@/components/events';
+import { LoginModal, RegisterModal } from '@/components/auth';
+import { useAuth } from '@/contexts/AuthContext';
 
 export default function Home() {
+  const [showLogin, setShowLogin] = useState(false);
+  const [showRegister, setShowRegister] = useState(false);
+  const { user, logout } = useAuth();
+
   return (
     <div className="min-h-screen">
       {/* Navigation */}
@@ -21,11 +29,50 @@ export default function Home() {
               <Button variant="ghost" size="sm">Dashboard</Button>
               <Button variant="ghost" size="sm" onClick={() => window.location.href = '/companies'}>Companies</Button>
               <Button variant="ghost" size="sm" onClick={() => window.location.href = '/metals'}>Metals</Button>
-              <Button variant="primary" size="sm">Sign In</Button>
+
+              {user ? (
+                <div className="flex items-center space-x-3">
+                  <span className="text-sm text-slate-300">
+                    Welcome, {user.full_name || user.username}
+                  </span>
+                  <Button variant="ghost" size="sm" onClick={logout}>
+                    Logout
+                  </Button>
+                </div>
+              ) : (
+                <>
+                  <Button variant="ghost" size="sm" onClick={() => setShowLogin(true)}>
+                    Login
+                  </Button>
+                  <Button variant="primary" size="sm" onClick={() => setShowRegister(true)}>
+                    Register
+                  </Button>
+                </>
+              )}
             </div>
           </div>
         </div>
       </nav>
+
+      {/* Auth Modals */}
+      {showLogin && (
+        <LoginModal
+          onClose={() => setShowLogin(false)}
+          onSwitchToRegister={() => {
+            setShowLogin(false);
+            setShowRegister(true);
+          }}
+        />
+      )}
+      {showRegister && (
+        <RegisterModal
+          onClose={() => setShowRegister(false)}
+          onSwitchToLogin={() => {
+            setShowRegister(false);
+            setShowLogin(true);
+          }}
+        />
+      )}
 
       {/* Hero Section */}
       <section className="relative py-20 px-4 sm:px-6 lg:px-8 overflow-hidden">
@@ -68,6 +115,13 @@ export default function Home() {
           </div>
 
           <ChatInterface />
+        </div>
+      </section>
+
+      {/* Upcoming Events Section */}
+      <section className="py-16 px-4 sm:px-6 lg:px-8">
+        <div className="max-w-7xl mx-auto">
+          <UpcomingEvents />
         </div>
       </section>
 

@@ -32,5 +32,16 @@ pypdf==4.0.2
 python-dateutil==2.8.2
 pytz==2024.1
 
+# WebSocket Support
+channels==4.0.0
+channels-redis==4.1.0
+redis==5.0.1
+daphne==4.0.0
+
+# Task Queue
+celery==5.3.4
+django-celery-beat==2.5.0
+django-redis==5.4.0
+
 # Development
 ipython==8.21.0

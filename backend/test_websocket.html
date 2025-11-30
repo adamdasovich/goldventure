@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebSocket Forum Test</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            display: grid;
+            grid-template-columns: 300px 1fr;
+            gap: 20px;
+        }
+        .panel {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .status {
+            padding: 10px;
+            border-radius: 4px;
+            margin-bottom: 15px;
+        }
+        .status.connected {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .status.disconnected {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .messages {
+            height: 400px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 10px;
+            margin-bottom: 15px;
+            background: #fafafa;
+        }
+        .message {
+            margin-bottom: 10px;
+            padding: 8px 12px;
+            background: white;
+            border-radius: 4px;
+            border-left: 3px solid #007bff;
+        }
+        .message.system {
+            border-left-color: #6c757d;
+            background: #f8f9fa;
+        }
+        .message.error {
+            border-left-color: #dc3545;
+            background: #f8d7da;
+        }
+        .message-meta {
+            font-size: 0.85em;
+            color: #666;
+            margin-bottom: 4px;
+        }
+        .message-content {
+            margin: 0;
+        }
+        input, button {
+            padding: 10px;
+            border-radius: 4px;
+            border: 1px solid #ddd;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            cursor: pointer;
+            margin-right: 5px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        button:disabled {
+            background: #6c757d;
+            cursor: not-allowed;
+        }
+        .input-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+        .input-group input {
+            flex: 1;
+        }
+        .online-users {
+            list-style: none;
+            padding: 0;
+        }
+        .online-users li {
+            padding: 8px;
+            margin-bottom: 5px;
+            background: #f8f9fa;
+            border-radius: 4px;
+        }
+        .typing-indicator {
+            font-style: italic;
+            color: #666;
+            padding: 5px 0;
+        }
+        h1 {
+            margin-top: 0;
+        }
+        h2 {
+            font-size: 1.2em;
+            margin-bottom: 15px;
+            color: #333;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 600;
+            color: #555;
+        }
+        .actions {
+            display: flex;
+            gap: 5px;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <h1>WebSocket Forum Test</h1>
+
+    <div class="panel" style="margin-bottom: 20px;">
+        <h2>Connection Settings</h2>
+        <div class="input-group">
+            <div style="flex: 1;">
+                <label>Discussion ID:</label>
+                <input type="number" id="discussionId" value="1" min="1">
+            </div>
+            <div style="flex: 2;">
+                <label>JWT Token:</label>
+                <input type="text" id="jwtToken" placeholder="Enter your JWT token">
+            </div>
+        </div>
+        <div class="actions">
+            <button id="connectBtn" onclick="connect()">Connect</button>
+            <button id="disconnectBtn" onclick="disconnect()" disabled>Disconnect</button>
+        </div>
+    </div>
+
+    <div id="statusPanel" class="status disconnected">
+        <strong>Status:</strong> Disconnected
+    </div>
+
+    <div class="container">
+        <div class="panel">
+            <h2>Online Users</h2>
+            <ul id="onlineUsers" class="online-users">
+                <li>Not connected</li>
+            </ul>
+            <div id="typingIndicators" class="typing-indicator"></div>
+        </div>
+
+        <div class="panel">
+            <h2>Messages</h2>
+            <div id="messages" class="messages"></div>
+
+            <div class="input-group">
+                <input type="text" id="messageInput" placeholder="Type a message..." onkeypress="handleKeyPress(event)" disabled>
+                <button onclick="sendMessage()" id="sendBtn" disabled>Send</button>
+            </div>
+
+            <div class="actions">
+                <button onclick="startTyping()" id="typingBtn" disabled>Start Typing</button>
+                <button onclick="stopTyping()" id="stopTypingBtn" disabled>Stop Typing</button>
+                <button onclick="sendHeartbeat()" id="heartbeatBtn" disabled>Send Heartbeat</button>
+                <button onclick="clearMessages()">Clear Messages</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let ws = null;
+        let typingTimeout = null;
+
+        function connect() {
+            const discussionId = document.getElementById('discussionId').value;
+            const token = document.getElementById('jwtToken').value;
+
+            if (!token) {
+                alert('Please enter a JWT token');
+                return;
+            }
+
+            const wsUrl = `ws://localhost:8000/ws/forum/${discussionId}/?token=${token}`;
+
+            addSystemMessage(`Connecting to ${wsUrl}...`);
+
+            ws = new WebSocket(wsUrl);
+
+            ws.onopen = () => {
+                updateStatus('connected', 'Connected');
+                addSystemMessage('Connected to WebSocket');
+                enableControls(true);
+            };
+
+            ws.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                handleMessage(data);
+            };
+
+            ws.onerror = (error) => {
+                console.error('WebSocket error:', error);
+                addErrorMessage('WebSocket error occurred');
+            };
+
+            ws.onclose = (event) => {
+                updateStatus('disconnected', `Disconnected (Code: ${event.code})`);
+                addSystemMessage(`WebSocket closed: ${event.code} - ${event.reason || 'No reason provided'}`);
+                enableControls(false);
+            };
+        }
+
+        function disconnect() {
+            if (ws) {
+                ws.close();
+                ws = null;
+            }
+        }
+
+        function handleMessage(data) {
+            console.log('Received:', data);
+
+            switch (data.type) {
+                case 'initial.state':
+                    handleInitialState(data.data);
+                    break;
+                case 'user.joined':
+                    addSystemMessage(`${data.user.username} joined`);
+                    break;
+                case 'user.left':
+                    addSystemMessage(`User ${data.user_id} left`);
+                    break;
+                case 'message.new':
+                    addMessage(data.message);
+                    break;
+                case 'message.edited':
+                    addSystemMessage(`Message ${data.message.id} was edited`);
+                    addMessage(data.message);
+                    break;
+                case 'message.deleted':
+                    addSystemMessage(`Message ${data.message_id} was deleted`);
+                    break;
+                case 'typing.indicator':
+                    handleTypingIndicator(data.user, data.is_typing);
+                    break;
+                case 'error':
+                    addErrorMessage(data.message);
+                    break;
+                default:
+                    addSystemMessage(`Unknown message type: ${data.type}`);
+            }
+        }
+
+        function handleInitialState(state) {
+            addSystemMessage(`Loaded ${state.messages.length} messages, ${state.online_users.length} users online`);
+
+            // Display online users
+            const usersList = document.getElementById('onlineUsers');
+            usersList.innerHTML = state.online_users.map(user =>
+                `<li>${user.full_name} (@${user.username})</li>`
+            ).join('');
+
+            // Display recent messages
+            state.messages.forEach(msg => addMessage(msg));
+        }
+
+        function addMessage(msg) {
+            const messagesDiv = document.getElementById('messages');
+            const messageEl = document.createElement('div');
+            messageEl.className = 'message';
+
+            const time = new Date(msg.created_at).toLocaleTimeString();
+            const edited = msg.is_edited ? ' (edited)' : '';
+
+            messageEl.innerHTML = `
+                <div class="message-meta">
+                    <strong>${msg.user.full_name}</strong> - ${time}${edited}
+                </div>
+                <p class="message-content">${escapeHtml(msg.content)}</p>
+            `;
+
+            messagesDiv.appendChild(messageEl);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+
+        function addSystemMessage(text) {
+            const messagesDiv = document.getElementById('messages');
+            const messageEl = document.createElement('div');
+            messageEl.className = 'message system';
+
+            const time = new Date().toLocaleTimeString();
+
+            messageEl.innerHTML = `
+                <div class="message-meta">${time}</div>
+                <p class="message-content">${escapeHtml(text)}</p>
+            `;
+
+            messagesDiv.appendChild(messageEl);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+
+        function addErrorMessage(text) {
+            const messagesDiv = document.getElementById('messages');
+            const messageEl = document.createElement('div');
+            messageEl.className = 'message error';
+
+            const time = new Date().toLocaleTimeString();
+
+            messageEl.innerHTML = `
+                <div class="message-meta">ERROR - ${time}</div>
+                <p class="message-content">${escapeHtml(text)}</p>
+            `;
+
+            messagesDiv.appendChild(messageEl);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+
+        function handleTypingIndicator(user, isTyping) {
+            const indicatorDiv = document.getElementById('typingIndicators');
+
+            if (isTyping) {
+                indicatorDiv.textContent = `${user.username} is typing...`;
+            } else {
+                indicatorDiv.textContent = '';
+            }
+        }
+
+        function sendMessage() {
+            const input = document.getElementById('messageInput');
+            const content = input.value.trim();
+
+            if (!content) return;
+
+            const message = {
+                type: 'message.send',
+                content: content
+            };
+
+            ws.send(JSON.stringify(message));
+            input.value = '';
+
+            // Stop typing indicator
+            stopTyping();
+        }
+
+        function startTyping() {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: 'typing.start' }));
+                addSystemMessage('Sent typing start indicator');
+            }
+        }
+
+        function stopTyping() {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: 'typing.stop' }));
+            }
+        }
+
+        function sendHeartbeat() {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: 'presence.update' }));
+                addSystemMessage('Sent presence heartbeat');
+            }
+        }
+
+        function handleKeyPress(event) {
+            if (event.key === 'Enter') {
+                sendMessage();
+            } else {
+                // Auto typing indicator
+                if (typingTimeout) {
+                    clearTimeout(typingTimeout);
+                } else {
+                    startTyping();
+                }
+
+                typingTimeout = setTimeout(() => {
+                    stopTyping();
+                    typingTimeout = null;
+                }, 3000);
+            }
+        }
+
+        function clearMessages() {
+            document.getElementById('messages').innerHTML = '';
+        }
+
+        function updateStatus(status, text) {
+            const statusPanel = document.getElementById('statusPanel');
+            statusPanel.className = `status ${status}`;
+            statusPanel.innerHTML = `<strong>Status:</strong> ${text}`;
+        }
+
+        function enableControls(enabled) {
+            document.getElementById('connectBtn').disabled = enabled;
+            document.getElementById('disconnectBtn').disabled = !enabled;
+            document.getElementById('messageInput').disabled = !enabled;
+            document.getElementById('sendBtn').disabled = !enabled;
+            document.getElementById('typingBtn').disabled = !enabled;
+            document.getElementById('stopTypingBtn').disabled = !enabled;
+            document.getElementById('heartbeatBtn').disabled = !enabled;
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // Auto-heartbeat every 30 seconds
+        setInterval(() => {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                sendHeartbeat();
+            }
+        }, 30000);
+    </script>
+</body>
+</html>

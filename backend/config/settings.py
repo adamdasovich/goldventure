@@ -166,3 +166,28 @@ AWS_ACCESS_KEY_ID = os.getenv('AWS_ACCESS_KEY_ID', '')
 AWS_SECRET_ACCESS_KEY = os.getenv('AWS_SECRET_ACCESS_KEY', '')
 AWS_STORAGE_BUCKET_NAME = os.getenv('AWS_STORAGE_BUCKET_NAME', '')
 AWS_S3_REGION_NAME = os.getenv('AWS_S3_REGION_NAME', 'us-east-1')
+
+# ============================================================================
+# DJANGO CHANNELS & WEBSOCKET CONFIGURATION
+# ============================================================================
+
+# ASGI Application
+ASGI_APPLICATION = 'config.asgi.application'
+
+# Channels (for WebSocket support)
+INSTALLED_APPS += ['channels']
+
+# Channel Layers Configuration (In-Memory for development)
+CHANNEL_LAYERS = {
+    'default': {
+        'BACKEND': 'channels.layers.InMemoryChannelLayer',
+    },
+}
+
+# Cache Configuration - LocMemCache (development)
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        'LOCATION': 'unique-snowflake',
+    }
+}
