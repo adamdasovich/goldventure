@@ -90,13 +90,13 @@ export default function CompanyDetailPage() {
   };
 
   const getExchangeBadgeVariant = (exchange: string) => {
-    const variants: Record<string, 'gold' | 'copper' | 'secondary'> = {
+    const variants: Record<string, 'gold' | 'copper' | 'slate'> = {
       'TSX': 'gold',
       'TSXV': 'copper',
       'NYSE': 'gold',
       'NASDAQ': 'gold',
     };
-    return variants[exchange] || 'secondary';
+    return variants[exchange] || 'slate';
   };
 
   const formatNumber = (num: number | null | undefined) => {
