@@ -364,7 +364,7 @@ export default function AgreementDetail() {
         </div>
 
         {/* Payment Instructions */}
-        {showPaymentInfo && agreement.payment_instruction.length > 0 && (
+        {showPaymentInfo && agreement.payment_instruction && agreement.payment_instruction.length > 0 && (
           <div className="bg-white dark:bg-slate-800 rounded-xl shadow-md p-6 mb-6">
             <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-6 flex items-center gap-2">
               <CreditCard className="w-6 h-6 text-green-600 dark:text-green-400" />
