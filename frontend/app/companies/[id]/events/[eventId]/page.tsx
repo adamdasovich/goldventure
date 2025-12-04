@@ -636,8 +636,8 @@ export default function EventDetailPage() {
                 {user?.is_superuser && event.status === 'live' && (
                   <div className="mb-4">
                     <Button
-                      variant="destructive"
-                      className="w-full"
+                      variant="secondary"
+                      className="w-full bg-red-600 hover:bg-red-700 text-white"
                       onClick={handleEndEvent}
                     >
                       End Event
