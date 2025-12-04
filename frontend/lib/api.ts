@@ -180,3 +180,13 @@ export const newsAPI = {
       method: 'POST',
     }),
 };
+
+// Re-export types for convenience
+export type {
+  Company,
+  Project,
+  ResourceEstimate,
+  Financing,
+  ChatRequest,
+  ChatResponse
+} from '@/types/api';
