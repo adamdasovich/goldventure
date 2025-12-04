@@ -32,7 +32,9 @@ export default function CompanyList() {
     return (
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {[1, 2, 3].map((i) => (
-          <Card key={i} variant="glass-card" className="h-48 animate-shimmer" />
+          <Card key={i} variant="glass-card" className="h-48 animate-shimmer">
+            <div />
+          </Card>
         ))}
       </div>
     );
