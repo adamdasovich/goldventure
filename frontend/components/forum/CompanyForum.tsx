@@ -172,7 +172,7 @@ export function CompanyForum({ companyId, companyName }: CompanyForumProps) {
                     Connected
                   </Badge>
                 ) : (
-                  <Badge variant="secondary" className="flex items-center gap-2">
+                  <Badge variant="slate" className="flex items-center gap-2">
                     <div className="w-2 h-2 bg-red-400 rounded-full"></div>
                     Connecting...
                   </Badge>
