@@ -62,8 +62,8 @@ export function useEventWebSocket({ eventId, token, onError }: UseEventWebSocket
   const [recentReactions, setRecentReactions] = useState<EventReaction[]>([]);
 
   const wsRef = useRef<WebSocket | null>(null);
-  const reconnectTimeoutRef = useRef<NodeJS.Timeout>();
-  const heartbeatIntervalRef = useRef<NodeJS.Timeout>();
+  const reconnectTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined);
+  const heartbeatIntervalRef = useRef<NodeJS.Timeout | undefined>(undefined);
 
   const connect = useCallback(() => {
     if (wsRef.current?.readyState === WebSocket.OPEN) return;
