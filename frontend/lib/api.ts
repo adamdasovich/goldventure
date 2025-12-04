@@ -188,5 +188,6 @@ export type {
   ResourceEstimate,
   Financing,
   ChatRequest,
-  ChatResponse
+  ChatResponse,
+  ChatMessage
 } from '@/types/api';
