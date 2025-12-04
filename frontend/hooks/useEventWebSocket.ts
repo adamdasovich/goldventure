@@ -86,9 +86,9 @@ export function useEventWebSocket({ eventId, token, onError }: UseEventWebSocket
       }, 30000); // Every 30 seconds
     };
 
-    ws.onmessage = (event) => {
+    ws.onmessage = (messageEvent) => {
       try {
-        const data: WebSocketMessage = JSON.parse(event.data);
+        const data: WebSocketMessage = JSON.parse(messageEvent.data);
 
         switch (data.type) {
           case 'initial.state':
