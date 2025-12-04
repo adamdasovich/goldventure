@@ -364,7 +364,7 @@ export default function AgreementDetail() {
         </div>
 
         {/* Payment Instructions */}
-        {showPaymentInfo && agreement.payment_instruction && agreement.payment_instruction.length > 0 && (
+        {showPaymentInfo && agreement.payment_instruction && (
           <div className="bg-white dark:bg-slate-800 rounded-xl shadow-md p-6 mb-6">
             <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-6 flex items-center gap-2">
               <CreditCard className="w-6 h-6 text-green-600 dark:text-green-400" />
@@ -372,26 +372,24 @@ export default function AgreementDetail() {
             </h2>
 
             <div className="space-y-4">
-              {agreement.payment_instruction.map((instruction) => (
-                <div
-                  key={instruction.id}
-                  className={`p-4 rounded-lg border ${
-                    instruction.paid_at
-                      ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800'
-                      : 'bg-orange-50 dark:bg-orange-900/20 border-orange-200 dark:border-orange-800'
-                  }`}
-                >
-                  <div className="flex items-start justify-between mb-3">
-                    <div>
-                      <h3 className="font-semibold text-slate-900 dark:text-white mb-1">
-                        {instruction.payment_method.replace('_', ' ').toUpperCase()}
-                      </h3>
-                      <p className="text-2xl font-bold text-slate-900 dark:text-white">
-                        ${parseFloat(instruction.amount).toLocaleString()}
-                      </p>
-                    </div>
-                    {instruction.paid_at ? (
-                      <span className="px-3 py-1 bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300 rounded-full text-sm font-medium">
+              <div
+                className={`p-4 rounded-lg border ${
+                  agreement.payment_instruction.paid_at
+                    ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800'
+                    : 'bg-orange-50 dark:bg-orange-900/20 border-orange-200 dark:border-orange-800'
+                }`}
+              >
+                <div className="flex items-start justify-between mb-3">
+                  <div>
+                    <h3 className="font-semibold text-slate-900 dark:text-white mb-1">
+                      {agreement.payment_instruction.payment_method.replace('_', ' ').toUpperCase()}
+                    </h3>
+                    <p className="text-2xl font-bold text-slate-900 dark:text-white">
+                      ${parseFloat(agreement.payment_instruction.amount).toLocaleString()}
+                    </p>
+                  </div>
+                  {agreement.payment_instruction.paid_at ? (
+                    <span className="px-3 py-1 bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300 rounded-full text-sm font-medium">
                         Paid
                       </span>
                     ) : (
@@ -403,22 +401,21 @@ export default function AgreementDetail() {
 
                   <div className="mb-3">
                     <p className="text-sm text-slate-600 dark:text-slate-300 whitespace-pre-wrap">
-                      {instruction.instructions}
+                      {agreement.payment_instruction.instructions}
                     </p>
                   </div>
 
                   <div className="flex items-center gap-4 text-sm">
                     <span className="text-slate-600 dark:text-slate-300">
-                      Due: {new Date(instruction.due_date).toLocaleDateString()}
+                      Due: {new Date(agreement.payment_instruction.due_date).toLocaleDateString()}
                     </span>
-                    {instruction.paid_at && (
+                    {agreement.payment_instruction.paid_at && (
                       <span className="text-green-600 dark:text-green-400">
-                        Paid: {new Date(instruction.paid_at).toLocaleDateString()}
+                        Paid: {new Date(agreement.payment_instruction.paid_at).toLocaleDateString()}
                       </span>
                     )}
                   </div>
                 </div>
-              ))}
             </div>
           </div>
         )}
