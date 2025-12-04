@@ -184,10 +184,55 @@ CHANNEL_LAYERS = {
     },
 }
 
-# Cache Configuration - LocMemCache (development)
-CACHES = {
-    'default': {
-        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
-        'LOCATION': 'unique-snowflake',
+# Cache Configuration
+REDIS_URL = os.getenv('REDIS_URL', None)
+if REDIS_URL and not DEBUG:
+    # Production: Use Redis for caching and channel layers
+    CACHES = {
+        'default': {
+            'BACKEND': 'django_redis.cache.RedisCache',
+            'LOCATION': REDIS_URL,
+            'OPTIONS': {
+                'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+            }
+        }
     }
-}
+    CHANNEL_LAYERS = {
+        'default': {
+            'BACKEND': 'channels_redis.core.RedisChannelLayer',
+            'CONFIG': {
+                "hosts": [REDIS_URL],
+            },
+        },
+    }
+else:
+    # Development: Use LocMemCache
+    CACHES = {
+        'default': {
+            'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+            'LOCATION': 'unique-snowflake',
+        }
+    }
+
+# ============================================================================
+# PRODUCTION SECURITY SETTINGS
+# ============================================================================
+
+if not DEBUG:
+    # HTTPS/SSL
+    SECURE_SSL_REDIRECT = os.getenv('SECURE_SSL_REDIRECT', 'True') == 'True'
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+
+    # HSTS (HTTP Strict Transport Security)
+    SECURE_HSTS_SECONDS = 31536000  # 1 year
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
+
+    # Security Headers
+    SECURE_CONTENT_TYPE_NOSNIFF = True
+    SECURE_BROWSER_XSS_FILTER = True
+    X_FRAME_OPTIONS = 'DENY'
+
+    # Proxy Headers
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
