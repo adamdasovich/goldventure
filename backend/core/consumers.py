@@ -1410,9 +1410,9 @@ class SpeakerEventConsumer(AsyncWebsocketConsumer):
                 user=self.user,
                 status='registered'
             )
-            if not registration.attended_at:
-                registration.attended_at = timezone.now()
-                registration.save(update_fields=['attended_at'])
+            if not registration.joined_at:
+                registration.joined_at = timezone.now()
+                registration.save(update_fields=['joined_at'])
 
                 # Update event attended count
                 event = SpeakerEvent.objects.get(id=self.event_id)
@@ -1504,10 +1504,10 @@ class SpeakerEventConsumer(AsyncWebsocketConsumer):
             status__in=['approved', 'answered']
         ).select_related('user', 'answered_by').order_by('-upvotes', '-created_at')[:50]
 
-        # Get active participants (those who attended)
+        # Get active participants (those who joined)
         participants = EventRegistration.objects.filter(
             event=event,
-            attended_at__isnull=False
+            joined_at__isnull=False
         ).select_related('user')[:100]
 
         return {

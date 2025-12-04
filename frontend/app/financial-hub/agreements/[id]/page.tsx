@@ -56,31 +56,33 @@ interface PaymentInstruction {
 interface DRSDocument {
   id: number;
   document_type: string;
-  file_path: string;
-  shares_quantity: number;
-  issued_date: string;
+  document_url: string;
+  num_shares: number;
+  issue_date: string;
   delivered_at: string | null;
+  delivery_status: string;
 }
 
 interface SubscriptionAgreementDetail {
   id: number;
-  user: {
+  investor: {
     id: number;
     username: string;
     email: string;
   };
+  company: Company;
   financing: Financing;
   status: string;
-  investment_amount: string;
-  shares_allocated: number | null;
-  warrants_allocated: number | null;
-  payment_deadline: string | null;
-  signed_at: string | null;
+  status_display: string;
+  total_investment_amount: string;
+  num_shares: number | null;
+  warrant_shares: number | null;
+  investor_signed_at: string | null;
   docusign_envelope_id: string | null;
   created_at: string;
   updated_at: string;
   transactions: InvestmentTransaction[];
-  payment_instructions: PaymentInstruction[];
+  payment_instruction: PaymentInstruction | null;
   drs_documents: DRSDocument[];
 }
 
@@ -99,7 +101,7 @@ export default function AgreementDetail() {
 
   const fetchAgreement = async (id: string) => {
     try {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem('accessToken');
       const response = await fetch(`http://localhost:8000/api/agreements/${id}/`, {
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -127,7 +129,7 @@ export default function AgreementDetail() {
 
     setSigning(true);
     try {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem('accessToken');
       const response = await fetch(`http://localhost:8000/api/agreements/${agreement.id}/sign/`, {
         method: 'POST',
         headers: {
@@ -296,7 +298,7 @@ export default function AgreementDetail() {
             <div>
               <p className="text-sm text-slate-500 dark:text-slate-400 mb-1">Investment Amount</p>
               <p className="text-2xl font-bold text-slate-900 dark:text-white">
-                ${parseFloat(agreement.investment_amount).toLocaleString()}
+                ${parseFloat(agreement.total_investment_amount).toLocaleString()}
               </p>
             </div>
 
@@ -307,11 +309,11 @@ export default function AgreementDetail() {
               </p>
             </div>
 
-            {agreement.shares_allocated !== null && (
+            {agreement.num_shares !== null && (
               <div>
                 <p className="text-sm text-slate-500 dark:text-slate-400 mb-1">Shares Allocated</p>
                 <p className="text-2xl font-bold text-slate-900 dark:text-white">
-                  {agreement.shares_allocated.toLocaleString()}
+                  {agreement.num_shares.toLocaleString()}
                 </p>
               </div>
             )}
@@ -323,11 +325,11 @@ export default function AgreementDetail() {
                 Warrant Information
               </h3>
               <div className="grid md:grid-cols-3 gap-4">
-                {agreement.warrants_allocated !== null && (
+                {agreement.warrant_shares !== null && (
                   <div>
                     <p className="text-sm text-purple-700 dark:text-purple-300 mb-1">Warrants Allocated</p>
                     <p className="text-lg font-semibold text-purple-900 dark:text-purple-100">
-                      {agreement.warrants_allocated.toLocaleString()}
+                      {agreement.warrant_shares.toLocaleString()}
                     </p>
                   </div>
                 )}
@@ -352,10 +354,10 @@ export default function AgreementDetail() {
               <Calendar className="w-4 h-4" />
               <span>Created: {new Date(agreement.created_at).toLocaleString()}</span>
             </div>
-            {agreement.signed_at && (
+            {agreement.investor_signed_at && (
               <div className="flex items-center gap-2 text-green-600 dark:text-green-400">
                 <CheckCircle className="w-4 h-4" />
-                <span>Signed: {new Date(agreement.signed_at).toLocaleString()}</span>
+                <span>Signed: {new Date(agreement.investor_signed_at).toLocaleString()}</span>
               </div>
             )}
           </div>
@@ -502,13 +504,13 @@ export default function AgreementDetail() {
                         <div>
                           <p className="text-indigo-700 dark:text-indigo-300 mb-1">Shares</p>
                           <p className="font-semibold text-indigo-900 dark:text-indigo-100">
-                            {doc.shares_quantity.toLocaleString()}
+                            {doc.num_shares.toLocaleString()}
                           </p>
                         </div>
                         <div>
                           <p className="text-indigo-700 dark:text-indigo-300 mb-1">Issued</p>
                           <p className="font-semibold text-indigo-900 dark:text-indigo-100">
-                            {new Date(doc.issued_date).toLocaleDateString()}
+                            {new Date(doc.issue_date).toLocaleDateString()}
                           </p>
                         </div>
                         {doc.delivered_at && (
@@ -522,7 +524,7 @@ export default function AgreementDetail() {
                       </div>
                     </div>
                     <button
-                      onClick={() => window.open(doc.file_path, '_blank')}
+                      onClick={() => window.open(doc.document_url, '_blank')}
                       className="ml-4 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors inline-flex items-center gap-2"
                     >
                       <Download className="w-4 h-4" />

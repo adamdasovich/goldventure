@@ -8,6 +8,8 @@ interface User {
   email: string;
   full_name: string;
   user_type: string;
+  is_staff?: boolean;
+  is_superuser?: boolean;
 }
 
 interface AuthContextType {

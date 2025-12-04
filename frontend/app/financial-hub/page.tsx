@@ -12,6 +12,11 @@ import {
   Clock,
   ArrowRight
 } from 'lucide-react';
+import { Button } from '@/components/ui/Button';
+import { Badge } from '@/components/ui/Badge';
+import LogoMono from '@/components/LogoMono';
+import { LoginModal, RegisterModal } from '@/components/auth';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface QualificationStatus {
   status: string;
@@ -23,6 +28,9 @@ export default function FinancialHub() {
   const router = useRouter();
   const [qualificationStatus, setQualificationStatus] = useState<QualificationStatus | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showLogin, setShowLogin] = useState(false);
+  const [showRegister, setShowRegister] = useState(false);
+  const { user, logout } = useAuth();
 
   useEffect(() => {
     fetchQualificationStatus();
@@ -30,7 +38,7 @@ export default function FinancialHub() {
 
   const fetchQualificationStatus = async () => {
     try {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem('accessToken');
       const response = await fetch('http://localhost:8000/api/qualifications/status/', {
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -98,40 +106,110 @@ export default function FinancialHub() {
   ];
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
-      <div className="container mx-auto px-4 py-12">
-        {/* Header */}
-        <div className="mb-12">
-          <h1 className="text-4xl font-bold text-slate-900 dark:text-white mb-4">
-            Financial Hub
-          </h1>
-          <p className="text-lg text-slate-600 dark:text-slate-300 max-w-3xl">
-            Your comprehensive platform for participating in mining company financing rounds.
-            Complete your education, get qualified, and invest in opportunities.
-          </p>
+    <div className="min-h-screen">
+      {/* Navigation */}
+      <nav className="glass-nav sticky top-0 z-50">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between h-24">
+            <div className="flex items-center space-x-3 cursor-pointer" onClick={() => router.push('/')}>
+              <LogoMono className="h-18" />
+            </div>
+            <div className="flex items-center space-x-4">
+              <Badge variant="copper">AI-Powered</Badge>
+              <Button variant="ghost" size="sm" onClick={() => router.push('/')}>Dashboard</Button>
+              <Button variant="ghost" size="sm" onClick={() => router.push('/companies')}>Companies</Button>
+              <Button variant="ghost" size="sm" onClick={() => router.push('/metals')}>Metals</Button>
+              <Button variant="ghost" size="sm" onClick={() => router.push('/financial-hub')}>Financial Hub</Button>
+
+              {user ? (
+                <div className="flex items-center space-x-3">
+                  <span className="text-sm text-slate-300">
+                    Welcome, {user.full_name || user.username}
+                  </span>
+                  <Button variant="ghost" size="sm" onClick={logout}>
+                    Logout
+                  </Button>
+                </div>
+              ) : (
+                <>
+                  <Button variant="ghost" size="sm" onClick={() => setShowLogin(true)}>
+                    Login
+                  </Button>
+                  <Button variant="primary" size="sm" onClick={() => setShowRegister(true)}>
+                    Register
+                  </Button>
+                </>
+              )}
+            </div>
+          </div>
         </div>
+      </nav>
+
+      {/* Auth Modals */}
+      {showLogin && (
+        <LoginModal
+          onClose={() => setShowLogin(false)}
+          onSwitchToRegister={() => {
+            setShowLogin(false);
+            setShowRegister(true);
+          }}
+        />
+      )}
+      {showRegister && (
+        <RegisterModal
+          onClose={() => setShowRegister(false)}
+          onSwitchToLogin={() => {
+            setShowRegister(false);
+            setShowLogin(true);
+          }}
+        />
+      )}
+
+      {/* Hero Section with Background Effects */}
+      <section className="relative py-20 px-4 sm:px-6 lg:px-8 overflow-hidden">
+        {/* Background gradient effect */}
+        <div className="absolute inset-0 bg-linear-to-b from-slate-900 via-slate-900 to-slate-800 opacity-50"></div>
+        <div className="absolute inset-0" style={{
+          backgroundImage: 'radial-gradient(circle at 50% 50%, rgba(212, 161, 42, 0.1) 0%, transparent 50%)'
+        }}></div>
+
+        <div className="relative max-w-7xl mx-auto">
+          {/* Header */}
+          <div className="text-center mb-12">
+            <h1 className="text-5xl md:text-6xl font-bold mb-6 text-gradient-gold animate-fade-in leading-tight pb-2">
+              Financial Hub
+            </h1>
+            <p className="text-xl text-slate-300 max-w-3xl mx-auto">
+              Your comprehensive platform for participating in mining company financing rounds.
+              Complete your education, get qualified, and invest in opportunities.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 -mt-8">{/* Overlap section */}
 
         {/* Qualification Status Banner */}
         {!loading && (
-          <div className={`mb-8 p-6 rounded-lg ${
+          <div className={`mb-8 p-6 rounded-xl backdrop-blur-sm border-2 ${
             qualificationStatus?.status === 'qualified'
-              ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800'
-              : 'bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800'
+              ? 'bg-green-500/10 border-green-500/30'
+              : 'bg-yellow-500/10 border-yellow-500/30'
           }`}>
             <div className="flex items-start gap-4">
               {qualificationStatus?.status === 'qualified' ? (
-                <CheckCircle className="w-6 h-6 text-green-600 dark:text-green-400 mt-1" />
+                <CheckCircle className="w-6 h-6 text-green-400 mt-1" />
               ) : (
-                <Clock className="w-6 h-6 text-yellow-600 dark:text-yellow-400 mt-1" />
+                <Clock className="w-6 h-6 text-yellow-400 mt-1" />
               )}
               <div className="flex-1">
-                <h3 className="font-semibold text-lg text-slate-900 dark:text-white mb-1">
+                <h3 className="font-semibold text-lg text-white mb-1">
                   {qualificationStatus?.status === 'qualified'
                     ? 'Accredited Investor Status: Qualified'
                     : 'Accredited Investor Status: Not Qualified'
                   }
                 </h3>
-                <p className="text-slate-600 dark:text-slate-300">
+                <p className="text-slate-300">
                   {qualificationStatus?.status === 'qualified'
                     ? `You are qualified as an accredited investor and can participate in financing rounds.`
                     : 'Complete the accreditation questionnaire to unlock investment opportunities.'
@@ -140,7 +218,7 @@ export default function FinancialHub() {
                 {!qualificationStatus && (
                   <button
                     onClick={() => router.push('/financial-hub/qualification')}
-                    className="mt-3 inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                    className="mt-3 inline-flex items-center gap-2 px-4 py-2 bg-gold-400 text-slate-900 font-semibold rounded-lg hover:bg-gold-500 transition-colors"
                   >
                     Get Qualified
                     <ArrowRight className="w-4 h-4" />
@@ -152,7 +230,7 @@ export default function FinancialHub() {
         )}
 
         {/* Module Cards Grid */}
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 mb-16">
           {modules.map((module) => {
             const Icon = module.icon;
             const isLocked = module.status === 'locked';
@@ -163,36 +241,37 @@ export default function FinancialHub() {
                 onClick={() => !isLocked && router.push(module.href)}
                 disabled={isLocked}
                 className={`
-                  group relative p-6 bg-white dark:bg-slate-800 rounded-xl shadow-md
+                  group relative p-6 backdrop-blur-sm bg-slate-800/50 border border-slate-700/50 rounded-xl
                   transition-all duration-300
                   ${isLocked
                     ? 'opacity-50 cursor-not-allowed'
-                    : 'hover:shadow-xl hover:-translate-y-1 cursor-pointer'
+                    : 'hover:bg-slate-800/80 hover:border-gold-400/30 hover:-translate-y-1 cursor-pointer'
                   }
                 `}
               >
                 {/* Status Badge */}
                 {module.status === 'completed' && (
                   <div className="absolute top-4 right-4">
-                    <CheckCircle className="w-6 h-6 text-green-500" />
+                    <CheckCircle className="w-6 h-6 text-green-400" />
                   </div>
                 )}
 
                 {/* Icon */}
-                <div className={`${module.color} w-14 h-14 rounded-lg flex items-center justify-center mb-4 transition-transform group-hover:scale-110`}>
-                  <Icon className="w-7 h-7 text-white" />
+                <div className="w-14 h-14 rounded-lg flex items-center justify-center mb-4 transition-transform group-hover:scale-110"
+                     style={{ backgroundColor: 'rgba(212, 175, 55, 0.2)', border: '2px solid #d4af37' }}>
+                  <Icon className="w-7 h-7" style={{ color: '#d4af37' }} />
                 </div>
 
                 {/* Content */}
-                <h3 className="text-xl font-semibold text-slate-900 dark:text-white mb-2">
+                <h3 className="text-xl font-semibold text-white mb-2">
                   {module.title}
                 </h3>
-                <p className="text-slate-600 dark:text-slate-300 mb-4 min-h-[48px]">
+                <p className="text-slate-300 mb-4 min-h-[48px]">
                   {module.description}
                 </p>
 
                 {/* Action */}
-                <div className="flex items-center gap-2 text-blue-600 dark:text-blue-400 font-medium">
+                <div className="flex items-center gap-2 text-gold-400 font-medium">
                   {isLocked ? (
                     <>
                       <Shield className="w-4 h-4" />
@@ -211,14 +290,14 @@ export default function FinancialHub() {
         </div>
 
         {/* Help Section */}
-        <div className="mt-12 p-8 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-200 dark:border-blue-800">
-          <h3 className="text-xl font-semibold text-slate-900 dark:text-white mb-3">
+        <div className="mt-12 p-8 backdrop-blur-sm bg-slate-800/30 border border-gold-400/20 rounded-xl">
+          <h3 className="text-xl font-semibold text-white mb-3">
             Need Help Getting Started?
           </h3>
-          <p className="text-slate-600 dark:text-slate-300 mb-4">
+          <p className="text-slate-300 mb-4">
             We recommend completing the modules in this order:
           </p>
-          <ol className="list-decimal list-inside space-y-2 text-slate-700 dark:text-slate-300">
+          <ol className="list-decimal list-inside space-y-2 text-slate-300">
             <li>Complete the Educational Hub to understand mining financing</li>
             <li>Fill out the Accredited Investor Qualification questionnaire</li>
             <li>Review available financing opportunities and subscription agreements</li>

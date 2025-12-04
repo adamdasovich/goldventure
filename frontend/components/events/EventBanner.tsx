@@ -36,6 +36,20 @@ interface SpeakerEvent {
   banner_image: string | null;
 }
 
+interface Registration {
+  id: number;
+  user: {
+    id: number;
+    username: string;
+    email: string;
+    full_name: string;
+  };
+  status: string;
+  registered_at: string;
+  joined_at: string | null;
+  left_at: string | null;
+}
+
 interface EventBannerProps {
   companyId: number;
 }
@@ -46,7 +60,23 @@ export function EventBanner({ companyId }: EventBannerProps) {
   const [registering, setRegistering] = useState(false);
   const [showLogin, setShowLogin] = useState(false);
   const [showRegister, setShowRegister] = useState(false);
+  const [showRegistrations, setShowRegistrations] = useState(false);
+  const [registrations, setRegistrations] = useState<Registration[]>([]);
+  const [loadingRegistrations, setLoadingRegistrations] = useState(false);
   const { user, accessToken } = useAuth();
+
+  // Check if user has staff access (staff, superuser, or event creator)
+  const hasStaffAccess = user && (user.is_staff || user.is_superuser);
+
+  // Debug: Log user data and staff access
+  useEffect(() => {
+    console.log('=== EventBanner User Debug ===');
+    console.log('User object:', user);
+    console.log('is_staff:', user?.is_staff);
+    console.log('is_superuser:', user?.is_superuser);
+    console.log('hasStaffAccess:', hasStaffAccess);
+    console.log('============================');
+  }, [user, hasStaffAccess]);
 
   useEffect(() => {
     fetchUpcomingEvent();
@@ -175,6 +205,38 @@ export function EventBanner({ companyId }: EventBannerProps) {
     }
   };
 
+  const fetchRegistrations = async () => {
+    if (!event || !accessToken) return;
+
+    setLoadingRegistrations(true);
+    try {
+      const response = await fetch(
+        `http://localhost:8000/api/events/${event.id}/registrations/`,
+        {
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+          },
+        }
+      );
+
+      if (response.ok) {
+        const data = await response.json();
+        setRegistrations(data.registrations || []);
+      } else {
+        console.error('Failed to fetch registrations');
+      }
+    } catch (err) {
+      console.error('Error fetching registrations:', err);
+    } finally {
+      setLoadingRegistrations(false);
+    }
+  };
+
+  const handleViewRegistrations = async () => {
+    setShowRegistrations(true);
+    await fetchRegistrations();
+  };
+
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
     return date.toLocaleDateString('en-US', {
@@ -208,7 +270,42 @@ export function EventBanner({ companyId }: EventBannerProps) {
     return 'Starting soon';
   };
 
-  if (loading || !event) {
+  // If loading, don't show anything
+  if (loading) {
+    return null;
+  }
+
+  // If no event and user is staff, show "Create Event" button
+  if (!event && hasStaffAccess) {
+    return (
+      <Card
+        variant="glass-card"
+        className="mb-8 border-slate-700/50"
+      >
+        <CardContent className="p-6">
+          <div className="text-center py-8">
+            <svg className="w-16 h-16 text-slate-600 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+            </svg>
+            <h3 className="text-xl font-semibold text-white mb-2">No Upcoming Events</h3>
+            <p className="text-slate-400 mb-6">Create a speaker event for this company</p>
+            <Link
+              href={`/companies/${companyId}/events/create`}
+              className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-gold-500 to-copper-500 text-white font-semibold rounded-lg hover:from-gold-600 hover:to-copper-600 transition-all"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              Create Event
+            </Link>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  // If no event and not staff, don't show anything
+  if (!event) {
     return null;
   }
 
@@ -358,6 +455,33 @@ export function EventBanner({ companyId }: EventBannerProps) {
                   Join Live Event
                 </Link>
               )}
+
+              {/* Staff: View Registrations Button */}
+              {(() => {
+                console.log('🔍 Button Check:', { hasStaffAccess, user, is_staff: user?.is_staff, is_superuser: user?.is_superuser });
+                return hasStaffAccess && (
+                  <>
+                    <button
+                      onClick={handleViewRegistrations}
+                      className="px-4 py-2 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-all flex items-center gap-2 text-sm"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                      </svg>
+                      View Registrations ({event.registered_count})
+                    </button>
+                    <Link
+                      href={`/companies/${companyId}/events/create`}
+                      className="px-4 py-2 bg-purple-600 text-white font-medium rounded-lg hover:bg-purple-700 transition-all flex items-center gap-2 text-sm"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                      </svg>
+                      Create Event
+                    </Link>
+                  </>
+                );
+              })()}
             </div>
           </div>
         </div>
@@ -381,6 +505,128 @@ export function EventBanner({ companyId }: EventBannerProps) {
             setShowLogin(true);
           }}
         />
+      )}
+
+      {/* Registrations Modal */}
+      {showRegistrations && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-slate-900 rounded-xl shadow-2xl max-w-4xl w-full max-h-[80vh] overflow-hidden border border-slate-700">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between p-6 border-b border-slate-700">
+              <div>
+                <h2 className="text-2xl font-bold text-white">Event Registrations</h2>
+                <p className="text-slate-400 text-sm mt-1">{event?.title}</p>
+              </div>
+              <button
+                onClick={() => setShowRegistrations(false)}
+                className="text-slate-400 hover:text-white transition-colors p-2 hover:bg-slate-800 rounded-lg"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div className="p-6 overflow-y-auto max-h-[calc(80vh-140px)]">
+              {loadingRegistrations ? (
+                <div className="flex items-center justify-center py-12">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gold-400"></div>
+                </div>
+              ) : registrations.length === 0 ? (
+                <div className="text-center py-12">
+                  <svg className="w-16 h-16 text-slate-600 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                  </svg>
+                  <p className="text-slate-400 text-lg">No registrations yet</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {registrations.map((registration, index) => (
+                    <div
+                      key={registration.id}
+                      className="bg-slate-800 rounded-lg p-4 hover:bg-slate-750 transition-colors border border-slate-700"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-4 flex-1">
+                          {/* User Avatar */}
+                          <div className="w-12 h-12 rounded-full bg-gradient-to-br from-gold-400 to-copper-400 flex items-center justify-center text-white font-bold text-lg flex-shrink-0">
+                            {registration.user.full_name.charAt(0).toUpperCase()}
+                          </div>
+
+                          {/* User Info */}
+                          <div className="flex-1 min-w-0">
+                            <h3 className="text-white font-semibold text-lg">
+                              {registration.user.full_name}
+                            </h3>
+                            <div className="flex items-center gap-4 text-sm text-slate-400 mt-1">
+                              <div className="flex items-center gap-1">
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                                </svg>
+                                <span>{registration.user.username}</span>
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                                </svg>
+                                <span>{registration.user.email}</span>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Registration Info */}
+                          <div className="text-right">
+                            <div className="flex items-center gap-2 text-sm text-slate-400">
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                              </svg>
+                              <span>
+                                {new Date(registration.registered_at).toLocaleDateString('en-US', {
+                                  month: 'short',
+                                  day: 'numeric',
+                                  hour: 'numeric',
+                                  minute: '2-digit',
+                                })}
+                              </span>
+                            </div>
+                            <Badge
+                              variant={registration.status === 'attended' ? 'gold' : 'slate'}
+                              className="mt-2 text-xs"
+                            >
+                              {registration.status === 'registered' && (
+                                <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                </svg>
+                              )}
+                              {registration.status}
+                            </Badge>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="flex items-center justify-between p-6 border-t border-slate-700 bg-slate-850">
+              <div className="text-slate-400 text-sm">
+                Total: <span className="text-white font-semibold">{registrations.length}</span> registered
+                {event?.max_participants && (
+                  <span> / {event.max_participants} capacity</span>
+                )}
+              </div>
+              <button
+                onClick={() => setShowRegistrations(false)}
+                className="px-4 py-2 bg-slate-700 text-white font-medium rounded-lg hover:bg-slate-600 transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </Card>
   );

@@ -1157,7 +1157,8 @@ class SpeakerEvent(models.Model):
     actual_start = models.DateTimeField(null=True, blank=True)
     actual_end = models.DateTimeField(null=True, blank=True)
 
-    # Recording
+    # Streaming & Recording
+    stream_url = models.URLField(blank=True, help_text="Live stream embed URL (YouTube, Twitch, etc.)")
     is_recorded = models.BooleanField(default=False)
     recording_url = models.URLField(blank=True)
     transcript_url = models.URLField(blank=True)

@@ -43,7 +43,7 @@ export default function ModuleContent() {
 
   const fetchModule = async (id: string) => {
     try {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem('accessToken');
       const response = await fetch(`http://localhost:8000/api/education/modules/${id}/`, {
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -68,7 +68,7 @@ export default function ModuleContent() {
     const timeSpentSeconds = Math.floor((Date.now() - startTime) / 1000);
 
     try {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem('accessToken');
       const response = await fetch(`http://localhost:8000/api/education/modules/${module.id}/complete/`, {
         method: 'POST',
         headers: {

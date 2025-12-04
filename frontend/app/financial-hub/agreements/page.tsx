@@ -14,22 +14,30 @@ import {
   Building2,
   TrendingUp
 } from 'lucide-react';
+import { Button } from '@/components/ui/Button';
+import { Badge } from '@/components/ui/Badge';
+import LogoMono from '@/components/LogoMono';
+import { LoginModal, RegisterModal } from '@/components/auth';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface SubscriptionAgreement {
   id: number;
-  financing: {
+  financing_detail: {
     id: number;
     company: {
       id: number;
       name: string;
+      ticker_symbol: string;
     };
     price_per_share: string;
+    financing_type: string;
   };
   status: string;
-  investment_amount: string;
-  shares_allocated: number | null;
-  warrants_allocated: number | null;
-  signed_at: string | null;
+  status_display: string;
+  total_investment_amount: string;
+  num_shares: number | null;
+  warrant_shares: number | null;
+  investor_signed_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -39,6 +47,9 @@ export default function SubscriptionAgreements() {
   const [agreements, setAgreements] = useState<SubscriptionAgreement[]>([]);
   const [loading, setLoading] = useState(true);
   const [qualified, setQualified] = useState(false);
+  const [showLogin, setShowLogin] = useState(false);
+  const [showRegister, setShowRegister] = useState(false);
+  const { user, logout } = useAuth();
 
   useEffect(() => {
     checkQualification();
@@ -47,7 +58,7 @@ export default function SubscriptionAgreements() {
 
   const checkQualification = async () => {
     try {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem('accessToken');
       const response = await fetch('http://localhost:8000/api/qualifications/status/', {
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -65,7 +76,7 @@ export default function SubscriptionAgreements() {
 
   const fetchAgreements = async () => {
     try {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem('accessToken');
       const response = await fetch('http://localhost:8000/api/agreements/', {
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -74,10 +85,13 @@ export default function SubscriptionAgreements() {
 
       if (response.ok) {
         const data = await response.json();
-        setAgreements(data);
+        setAgreements(Array.isArray(data) ? data : []);
+      } else {
+        setAgreements([]);
       }
     } catch (error) {
       console.error('Error fetching agreements:', error);
+      setAgreements([]);
     } finally {
       setLoading(false);
     }
@@ -108,10 +122,10 @@ export default function SubscriptionAgreements() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-slate-600 dark:text-slate-300">Loading subscription agreements...</p>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gold-400 mx-auto mb-4"></div>
+          <p className="text-slate-300">Loading subscription agreements...</p>
         </div>
       </div>
     );
@@ -119,95 +133,228 @@ export default function SubscriptionAgreements() {
 
   if (!qualified) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
-        <div className="container mx-auto px-4 py-12 max-w-4xl">
-          <button
-            onClick={() => router.push('/financial-hub')}
-            className="flex items-center gap-2 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white mb-4 transition-colors"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            Back to Financial Hub
-          </button>
+      <div className="min-h-screen">
+        {/* Navigation */}
+        <nav className="glass-nav sticky top-0 z-50">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="flex items-center justify-between h-24">
+              <div className="flex items-center space-x-3 cursor-pointer" onClick={() => router.push('/')}>
+                <LogoMono className="h-18" />
+              </div>
+              <div className="flex items-center space-x-4">
+                <Badge variant="copper">AI-Powered</Badge>
+                <Button variant="ghost" size="sm" onClick={() => router.push('/')}>Dashboard</Button>
+                <Button variant="ghost" size="sm" onClick={() => router.push('/companies')}>Companies</Button>
+                <Button variant="ghost" size="sm" onClick={() => router.push('/metals')}>Metals</Button>
+                <Button variant="ghost" size="sm" onClick={() => router.push('/financial-hub')}>Financial Hub</Button>
 
-          <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-xl p-8 text-center">
-            <AlertCircle className="w-16 h-16 text-yellow-600 dark:text-yellow-400 mx-auto mb-4" />
-            <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-3">
-              Accreditation Required
-            </h2>
-            <p className="text-slate-600 dark:text-slate-300 mb-6">
-              You must complete the Accredited Investor Qualification to access subscription agreements.
-            </p>
-            <button
-              onClick={() => router.push('/financial-hub/qualification')}
-              className="px-6 py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-colors inline-flex items-center gap-2"
-            >
-              Complete Qualification
-              <ArrowRight className="w-4 h-4" />
-            </button>
+                {user ? (
+                  <div className="flex items-center space-x-3">
+                    <span className="text-sm text-slate-300">
+                      Welcome, {user.full_name || user.username}
+                    </span>
+                    <Button variant="ghost" size="sm" onClick={logout}>
+                      Logout
+                    </Button>
+                  </div>
+                ) : (
+                  <>
+                    <Button variant="ghost" size="sm" onClick={() => setShowLogin(true)}>
+                      Login
+                    </Button>
+                    <Button variant="primary" size="sm" onClick={() => setShowRegister(true)}>
+                      Register
+                    </Button>
+                  </>
+                )}
+              </div>
+            </div>
           </div>
-        </div>
+        </nav>
+
+        {/* Auth Modals */}
+        {showLogin && (
+          <LoginModal
+            onClose={() => setShowLogin(false)}
+            onSwitchToRegister={() => {
+              setShowLogin(false);
+              setShowRegister(true);
+            }}
+          />
+        )}
+        {showRegister && (
+          <RegisterModal
+            onClose={() => setShowRegister(false)}
+            onSwitchToLogin={() => {
+              setShowRegister(false);
+              setShowLogin(true);
+            }}
+          />
+        )}
+
+        <section className="relative py-20 px-4 sm:px-6 lg:px-8 overflow-hidden">
+          <div className="absolute inset-0 bg-linear-to-b from-slate-900 via-slate-900 to-slate-800 opacity-50"></div>
+          <div className="absolute inset-0" style={{
+            backgroundImage: 'radial-gradient(circle at 50% 50%, rgba(212, 161, 42, 0.1) 0%, transparent 50%)'
+          }}></div>
+
+          <div className="relative max-w-4xl mx-auto">
+            <button
+              onClick={() => router.push('/financial-hub')}
+              className="flex items-center gap-2 text-slate-300 hover:text-white mb-8 transition-colors"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              Back to Financial Hub
+            </button>
+
+            <div className="backdrop-blur-sm bg-yellow-500/10 border-2 border-yellow-500/30 rounded-xl p-8 text-center">
+              <AlertCircle className="w-16 h-16 text-yellow-400 mx-auto mb-4" />
+              <h2 className="text-2xl font-bold text-white mb-3">
+                Accreditation Required
+              </h2>
+              <p className="text-slate-300 mb-6">
+                You must complete the Accredited Investor Qualification to access subscription agreements.
+              </p>
+              <button
+                onClick={() => router.push('/financial-hub/qualification')}
+                className="px-6 py-3 bg-gold-400 text-slate-900 font-semibold rounded-lg hover:bg-gold-500 transition-colors inline-flex items-center gap-2"
+              >
+                Complete Qualification
+                <ArrowRight className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        </section>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
-      <div className="container mx-auto px-4 py-12">
-        {/* Header */}
-        <div className="mb-8">
+    <div className="min-h-screen">
+      {/* Navigation */}
+      <nav className="glass-nav sticky top-0 z-50">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between h-24">
+            <div className="flex items-center space-x-3 cursor-pointer" onClick={() => router.push('/')}>
+              <LogoMono className="h-18" />
+            </div>
+            <div className="flex items-center space-x-4">
+              <Badge variant="copper">AI-Powered</Badge>
+              <Button variant="ghost" size="sm" onClick={() => router.push('/')}>Dashboard</Button>
+              <Button variant="ghost" size="sm" onClick={() => router.push('/companies')}>Companies</Button>
+              <Button variant="ghost" size="sm" onClick={() => router.push('/metals')}>Metals</Button>
+              <Button variant="ghost" size="sm" onClick={() => router.push('/financial-hub')}>Financial Hub</Button>
+
+              {user ? (
+                <div className="flex items-center space-x-3">
+                  <span className="text-sm text-slate-300">
+                    Welcome, {user.full_name || user.username}
+                  </span>
+                  <Button variant="ghost" size="sm" onClick={logout}>
+                    Logout
+                  </Button>
+                </div>
+              ) : (
+                <>
+                  <Button variant="ghost" size="sm" onClick={() => setShowLogin(true)}>
+                    Login
+                  </Button>
+                  <Button variant="primary" size="sm" onClick={() => setShowRegister(true)}>
+                    Register
+                  </Button>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      </nav>
+
+      {/* Auth Modals */}
+      {showLogin && (
+        <LoginModal
+          onClose={() => setShowLogin(false)}
+          onSwitchToRegister={() => {
+            setShowLogin(false);
+            setShowRegister(true);
+          }}
+        />
+      )}
+      {showRegister && (
+        <RegisterModal
+          onClose={() => setShowRegister(false)}
+          onSwitchToLogin={() => {
+            setShowRegister(false);
+            setShowLogin(true);
+          }}
+        />
+      )}
+
+      {/* Hero Section */}
+      <section className="relative py-20 px-4 sm:px-6 lg:px-8 overflow-hidden">
+        <div className="absolute inset-0 bg-linear-to-b from-slate-900 via-slate-900 to-slate-800 opacity-50"></div>
+        <div className="absolute inset-0" style={{
+          backgroundImage: 'radial-gradient(circle at 50% 50%, rgba(212, 161, 42, 0.1) 0%, transparent 50%)'
+        }}></div>
+
+        <div className="relative max-w-7xl mx-auto">
           <button
             onClick={() => router.push('/financial-hub')}
-            className="flex items-center gap-2 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white mb-4 transition-colors"
+            className="flex items-center gap-2 text-slate-300 hover:text-white mb-8 transition-colors"
           >
             <ArrowLeft className="w-4 h-4" />
             Back to Financial Hub
           </button>
 
-          <h1 className="text-4xl font-bold text-slate-900 dark:text-white mb-4">
-            Subscription Agreements
-          </h1>
-          <p className="text-lg text-slate-600 dark:text-slate-300 max-w-3xl">
-            Review and manage your subscription agreements for mining company financing rounds.
-          </p>
+          <div className="text-center mb-12">
+            <h1 className="text-5xl md:text-6xl font-bold mb-6 text-gradient-gold animate-fade-in leading-tight pb-2">
+              Subscription Agreements
+            </h1>
+            <p className="text-xl text-slate-300 max-w-3xl mx-auto">
+              Review and manage your subscription agreements for mining company financing rounds.
+            </p>
+          </div>
         </div>
+      </section>
+
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 -mt-8">{/* Overlap section */}
 
         {/* Summary Stats */}
         {agreements.length > 0 && (
           <div className="grid md:grid-cols-4 gap-4 mb-8">
-            <div className="bg-white dark:bg-slate-800 rounded-xl shadow-md p-6">
+            <div className="backdrop-blur-sm bg-slate-800/50 border border-slate-700/50 rounded-xl p-6">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-slate-600 dark:text-slate-300 text-sm">Total Agreements</span>
-                <FileText className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                <span className="text-slate-300 text-sm">Total Agreements</span>
+                <FileText className="w-5 h-5 text-gold-400" />
               </div>
-              <p className="text-3xl font-bold text-slate-900 dark:text-white">{agreements.length}</p>
+              <p className="text-3xl font-bold text-white">{agreements.length}</p>
             </div>
 
-            <div className="bg-white dark:bg-slate-800 rounded-xl shadow-md p-6">
+            <div className="backdrop-blur-sm bg-slate-800/50 border border-slate-700/50 rounded-xl p-6">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-slate-600 dark:text-slate-300 text-sm">Pending Signature</span>
-                <Clock className="w-5 h-5 text-yellow-600 dark:text-yellow-400" />
+                <span className="text-slate-300 text-sm">Pending Signature</span>
+                <Clock className="w-5 h-5 text-yellow-400" />
               </div>
-              <p className="text-3xl font-bold text-slate-900 dark:text-white">
+              <p className="text-3xl font-bold text-white">
                 {agreements.filter(a => a.status === 'pending_signature').length}
               </p>
             </div>
 
-            <div className="bg-white dark:bg-slate-800 rounded-xl shadow-md p-6">
+            <div className="backdrop-blur-sm bg-slate-800/50 border border-slate-700/50 rounded-xl p-6">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-slate-600 dark:text-slate-300 text-sm">Total Invested</span>
-                <DollarSign className="w-5 h-5 text-green-600 dark:text-green-400" />
+                <span className="text-slate-300 text-sm">Total Invested</span>
+                <DollarSign className="w-5 h-5 text-green-400" />
               </div>
-              <p className="text-3xl font-bold text-slate-900 dark:text-white">
-                ${agreements.reduce((sum, a) => sum + parseFloat(a.investment_amount), 0).toLocaleString()}
+              <p className="text-3xl font-bold text-white">
+                ${agreements.reduce((sum, a) => sum + parseFloat(a.total_investment_amount), 0).toLocaleString()}
               </p>
             </div>
 
-            <div className="bg-white dark:bg-slate-800 rounded-xl shadow-md p-6">
+            <div className="backdrop-blur-sm bg-slate-800/50 border border-slate-700/50 rounded-xl p-6">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-slate-600 dark:text-slate-300 text-sm">Completed</span>
-                <CheckCircle className="w-5 h-5 text-green-600 dark:text-green-400" />
+                <span className="text-slate-300 text-sm">Completed</span>
+                <CheckCircle className="w-5 h-5 text-green-400" />
               </div>
-              <p className="text-3xl font-bold text-slate-900 dark:text-white">
+              <p className="text-3xl font-bold text-white">
                 {agreements.filter(a => a.status === 'completed').length}
               </p>
             </div>
@@ -216,17 +363,17 @@ export default function SubscriptionAgreements() {
 
         {/* Agreements List */}
         {agreements.length === 0 ? (
-          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-md p-12 text-center">
-            <FileText className="w-16 h-16 text-slate-300 dark:text-slate-600 mx-auto mb-4" />
-            <h3 className="text-xl font-semibold text-slate-900 dark:text-white mb-2">
+          <div className="backdrop-blur-sm bg-slate-800/50 border border-slate-700/50 rounded-xl p-12 text-center">
+            <FileText className="w-16 h-16 text-slate-600 mx-auto mb-4" />
+            <h3 className="text-xl font-semibold text-white mb-2">
               No Subscription Agreements Yet
             </h3>
-            <p className="text-slate-600 dark:text-slate-300 mb-6">
+            <p className="text-slate-300 mb-6">
               You haven't signed any subscription agreements. Browse available financing opportunities to get started.
             </p>
             <button
               onClick={() => router.push('/companies')}
-              className="px-6 py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-colors inline-flex items-center gap-2"
+              className="px-6 py-3 bg-gold-400 text-slate-900 font-semibold rounded-lg hover:bg-gold-500 transition-colors inline-flex items-center gap-2"
             >
               Browse Companies
               <ArrowRight className="w-4 h-4" />
@@ -238,18 +385,18 @@ export default function SubscriptionAgreements() {
               <button
                 key={agreement.id}
                 onClick={() => router.push(`/financial-hub/agreements/${agreement.id}`)}
-                className="w-full bg-white dark:bg-slate-800 rounded-xl shadow-md hover:shadow-xl transition-all duration-300 hover:-translate-y-1 p-6 text-left"
+                className="w-full backdrop-blur-sm bg-slate-800/50 border border-slate-700/50 rounded-xl hover:bg-slate-800/80 hover:border-gold-400/30 hover:-translate-y-1 transition-all duration-300 p-6 text-left"
               >
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex-1">
                     <div className="flex items-center gap-3 mb-2">
-                      <Building2 className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-                      <h3 className="text-xl font-semibold text-slate-900 dark:text-white">
-                        {agreement.financing.company.name}
+                      <Building2 className="w-5 h-5 text-gold-400" />
+                      <h3 className="text-xl font-semibold text-white">
+                        {agreement.financing_detail.company.name}
                       </h3>
                     </div>
-                    <p className="text-slate-600 dark:text-slate-300">
-                      Financing Round #{agreement.financing.id}
+                    <p className="text-slate-300">
+                      Financing Round #{agreement.financing_detail.id}
                     </p>
                   </div>
                   {getStatusBadge(agreement.status)}
@@ -257,49 +404,49 @@ export default function SubscriptionAgreements() {
 
                 <div className="grid md:grid-cols-4 gap-4">
                   <div>
-                    <p className="text-sm text-slate-500 dark:text-slate-400 mb-1">Investment Amount</p>
-                    <p className="text-lg font-semibold text-slate-900 dark:text-white">
-                      ${parseFloat(agreement.investment_amount).toLocaleString()}
+                    <p className="text-sm text-slate-400 mb-1">Investment Amount</p>
+                    <p className="text-lg font-semibold text-white">
+                      ${parseFloat(agreement.total_investment_amount).toLocaleString()}
                     </p>
                   </div>
 
                   <div>
-                    <p className="text-sm text-slate-500 dark:text-slate-400 mb-1">Price Per Share</p>
-                    <p className="text-lg font-semibold text-slate-900 dark:text-white">
-                      ${parseFloat(agreement.financing.price_per_share).toFixed(2)}
+                    <p className="text-sm text-slate-400 mb-1">Price Per Share</p>
+                    <p className="text-lg font-semibold text-white">
+                      ${parseFloat(agreement.financing_detail.price_per_share).toFixed(2)}
                     </p>
                   </div>
 
-                  {agreement.shares_allocated !== null && (
+                  {agreement.num_shares !== null && (
                     <div>
-                      <p className="text-sm text-slate-500 dark:text-slate-400 mb-1">Shares Allocated</p>
-                      <p className="text-lg font-semibold text-slate-900 dark:text-white">
-                        {agreement.shares_allocated.toLocaleString()}
+                      <p className="text-sm text-slate-400 mb-1">Shares Allocated</p>
+                      <p className="text-lg font-semibold text-white">
+                        {agreement.num_shares.toLocaleString()}
                       </p>
                     </div>
                   )}
 
-                  {agreement.warrants_allocated !== null && agreement.warrants_allocated > 0 && (
+                  {agreement.warrant_shares !== null && agreement.warrant_shares > 0 && (
                     <div>
-                      <p className="text-sm text-slate-500 dark:text-slate-400 mb-1">Warrants</p>
-                      <p className="text-lg font-semibold text-slate-900 dark:text-white">
-                        {agreement.warrants_allocated.toLocaleString()}
+                      <p className="text-sm text-slate-400 mb-1">Warrants</p>
+                      <p className="text-lg font-semibold text-white">
+                        {agreement.warrant_shares.toLocaleString()}
                       </p>
                     </div>
                   )}
 
                   <div>
-                    <p className="text-sm text-slate-500 dark:text-slate-400 mb-1">
-                      {agreement.signed_at ? 'Signed On' : 'Created On'}
+                    <p className="text-sm text-slate-400 mb-1">
+                      {agreement.investor_signed_at ? 'Signed On' : 'Created On'}
                     </p>
-                    <p className="text-lg font-semibold text-slate-900 dark:text-white flex items-center gap-1">
+                    <p className="text-lg font-semibold text-white flex items-center gap-1">
                       <Calendar className="w-4 h-4" />
-                      {new Date(agreement.signed_at || agreement.created_at).toLocaleDateString()}
+                      {new Date(agreement.investor_signed_at || agreement.created_at).toLocaleDateString()}
                     </p>
                   </div>
                 </div>
 
-                <div className="mt-4 flex items-center justify-end text-blue-600 dark:text-blue-400 font-medium">
+                <div className="mt-4 flex items-center justify-end text-gold-400 font-medium">
                   <span>View Details</span>
                   <ArrowRight className="w-4 h-4 ml-2 transition-transform group-hover:translate-x-1" />
                 </div>
@@ -309,24 +456,24 @@ export default function SubscriptionAgreements() {
         )}
 
         {/* Help Section */}
-        <div className="mt-12 p-6 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-200 dark:border-blue-800">
-          <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-2">
+        <div className="mt-12 p-6 backdrop-blur-sm bg-slate-800/30 border border-gold-400/20 rounded-xl">
+          <h3 className="text-lg font-semibold text-white mb-2">
             About Subscription Agreements
           </h3>
-          <p className="text-slate-600 dark:text-slate-300 mb-4">
+          <p className="text-slate-300 mb-4">
             A subscription agreement is a legal contract between you and the mining company outlining the terms of your investment in their financing round.
           </p>
-          <ul className="space-y-2 text-slate-600 dark:text-slate-300 text-sm">
+          <ul className="space-y-2 text-slate-300 text-sm">
             <li className="flex items-start gap-2">
-              <CheckCircle className="w-5 h-5 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
+              <CheckCircle className="w-5 h-5 text-gold-400 mt-0.5 flex-shrink-0" />
               <span>Review all terms carefully before signing</span>
             </li>
             <li className="flex items-start gap-2">
-              <CheckCircle className="w-5 h-5 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
+              <CheckCircle className="w-5 h-5 text-gold-400 mt-0.5 flex-shrink-0" />
               <span>Your shares will be allocated after payment is confirmed</span>
             </li>
             <li className="flex items-start gap-2">
-              <CheckCircle className="w-5 h-5 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
+              <CheckCircle className="w-5 h-5 text-gold-400 mt-0.5 flex-shrink-0" />
               <span>DRS certificates will be issued once the financing round closes</span>
             </li>
           </ul>

@@ -17,11 +17,18 @@ from .models import (
 
 class UserSerializer(serializers.ModelSerializer):
     """Serializer for User model"""
+    full_name = serializers.SerializerMethodField()
+
     class Meta:
         model = User
-        fields = ['id', 'username', 'email', 'user_type', 'company',
-                  'phone', 'linkedin_url', 'created_at']
-        read_only_fields = ['id', 'created_at']
+        fields = ['id', 'username', 'email', 'first_name', 'last_name', 'full_name',
+                  'user_type', 'company', 'phone', 'linkedin_url', 'created_at',
+                  'is_staff', 'is_superuser']
+        read_only_fields = ['id', 'created_at', 'full_name', 'is_staff', 'is_superuser']
+
+    def get_full_name(self, obj):
+        """Get user's full name"""
+        return obj.get_full_name() if hasattr(obj, 'get_full_name') else f"{obj.first_name} {obj.last_name}".strip() or obj.username
 
 
 class CompanySerializer(serializers.ModelSerializer):
@@ -153,8 +160,8 @@ class EventSpeakerSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = EventSpeaker
-        fields = ['id', 'user', 'user_id', 'title', 'bio', 'is_primary', 'display_order']
-        read_only_fields = ['id']
+        fields = ['id', 'user', 'user_id', 'title', 'bio', 'is_primary', 'added_at']
+        read_only_fields = ['id', 'added_at']
 
 
 class EventRegistrationSerializer(serializers.ModelSerializer):
@@ -163,8 +170,8 @@ class EventRegistrationSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = EventRegistration
-        fields = ['id', 'user', 'status', 'registered_at', 'attended_at', 'reminder_sent']
-        read_only_fields = ['id', 'user', 'registered_at', 'attended_at', 'reminder_sent']
+        fields = ['id', 'user', 'status', 'registered_at', 'joined_at', 'left_at', 'reminder_sent']
+        read_only_fields = ['id', 'user', 'registered_at', 'joined_at', 'left_at', 'reminder_sent']
 
 
 class EventQuestionSerializer(serializers.ModelSerializer):
@@ -174,7 +181,7 @@ class EventQuestionSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = EventQuestion
-        fields = ['id', 'user', 'content', 'status', 'answer', 'answered_by',
+        fields = ['id', 'event', 'user', 'content', 'status', 'answer', 'answered_by',
                   'upvotes', 'is_featured', 'created_at', 'answered_at']
         read_only_fields = ['id', 'user', 'upvotes', 'created_at', 'answered_at']
 
@@ -185,7 +192,7 @@ class EventReactionSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = EventReaction
-        fields = ['id', 'user', 'reaction_type', 'timestamp']
+        fields = ['id', 'event', 'user', 'reaction_type', 'timestamp']
         read_only_fields = ['id', 'user', 'timestamp']
 
 
@@ -265,27 +272,77 @@ class SpeakerEventDetailSerializer(serializers.ModelSerializer):
         return None
 
 
+class SpeakerEventSpeakerCreateSerializer(serializers.Serializer):
+    """Nested serializer for creating speakers during event creation"""
+    name = serializers.CharField(max_length=255)
+    title = serializers.CharField(max_length=255)
+    bio = serializers.CharField(allow_blank=True)
+    is_primary = serializers.BooleanField(default=False)
+
+
 class SpeakerEventCreateSerializer(serializers.ModelSerializer):
     """Serializer for creating speaker events"""
-    speakers = EventSpeakerSerializer(many=True, required=False)
+    speakers = SpeakerEventSpeakerCreateSerializer(many=True, required=False, write_only=True)
 
     class Meta:
         model = SpeakerEvent
         fields = [
-            'company', 'title', 'description', 'topic', 'scheduled_start',
+            'id', 'company', 'title', 'description', 'topic', 'scheduled_start',
             'scheduled_end', 'duration_minutes', 'format', 'max_participants',
-            'registration_deadline', 'banner_image', 'video_url', 'speakers'
+            'status', 'stream_url', 'is_recorded', 'speakers'
         ]
+        read_only_fields = ['id']
 
     def create(self, validated_data):
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+
         speakers_data = validated_data.pop('speakers', [])
         event = SpeakerEvent.objects.create(**validated_data)
 
-        # Create speakers
+        # Create speakers with auto-generated user accounts
         for speaker_data in speakers_data:
-            EventSpeaker.objects.create(event=event, **speaker_data)
+            name = speaker_data['name']
+            title = speaker_data['title']
+            bio = speaker_data.get('bio', '')
+            is_primary = speaker_data.get('is_primary', False)
+
+            # Generate username from name (lowercase, replace spaces with underscores)
+            username = name.lower().replace(' ', '_').replace('.', '')
+            email = f"{username}@speakers.goldventure.com"
+
+            # Try to get or create user
+            user, created = User.objects.get_or_create(
+                username=username,
+                defaults={
+                    'email': email,
+                    'first_name': name.split()[0] if name.split() else name,
+                    'last_name': ' '.join(name.split()[1:]) if len(name.split()) > 1 else '',
+                }
+            )
+
+            # If user was just created, set a random password
+            if created:
+                import secrets
+                user.set_password(secrets.token_urlsafe(16))
+                user.save()
+
+            # Create event speaker entry (avoid duplicates)
+            EventSpeaker.objects.get_or_create(
+                event=event,
+                user=user,
+                defaults={
+                    'title': title,
+                    'bio': bio,
+                    'is_primary': is_primary,
+                }
+            )
 
         return event
+
+    def to_representation(self, instance):
+        """Use the full detail serializer for the response"""
+        return SpeakerEventDetailSerializer(instance, context=self.context).data
 
 
 # ============================================================================
@@ -353,7 +410,7 @@ class AccreditedInvestorQualificationSerializer(serializers.ModelSerializer):
             'reviewed_by_name', 'reviewed_at', 'review_notes',
             'qualified_at', 'expires_at', 'created_at', 'updated_at'
         ]
-        read_only_fields = ['id', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'user', 'user_name', 'created_at', 'updated_at']
 
 
 class SubscriptionAgreementSerializer(serializers.ModelSerializer):
@@ -362,11 +419,12 @@ class SubscriptionAgreementSerializer(serializers.ModelSerializer):
     company_name = serializers.CharField(source='company.name', read_only=True)
     financing_type = serializers.CharField(source='financing.financing_type', read_only=True)
     status_display = serializers.CharField(source='get_status_display', read_only=True)
+    financing_detail = serializers.SerializerMethodField()
 
     class Meta:
         model = SubscriptionAgreement
         fields = [
-            'id', 'investor', 'investor_name', 'financing', 'financing_type',
+            'id', 'investor', 'investor_name', 'financing', 'financing_type', 'financing_detail',
             'company', 'company_name', 'num_shares', 'price_per_share',
             'total_investment_amount', 'currency', 'includes_warrants',
             'warrant_shares', 'warrant_strike_price', 'warrant_expiry_date',
@@ -377,6 +435,19 @@ class SubscriptionAgreementSerializer(serializers.ModelSerializer):
             'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
+
+    def get_financing_detail(self, obj):
+        """Return financing details for frontend"""
+        return {
+            'id': obj.financing.id,
+            'company': {
+                'id': obj.company.id,
+                'name': obj.company.name,
+                'ticker_symbol': obj.company.ticker_symbol if hasattr(obj.company, 'ticker_symbol') else None,
+            },
+            'price_per_share': str(obj.financing.price_per_share) if obj.financing.price_per_share else '0.00',
+            'financing_type': obj.financing.financing_type,
+        }
 
 
 class SubscriptionAgreementDetailSerializer(serializers.ModelSerializer):

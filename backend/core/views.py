@@ -867,13 +867,58 @@ class SpeakerEventViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'])
     def upcoming(self, request):
         """Get upcoming events across all companies"""
+        from django.utils import timezone
+
+        # Get events scheduled for the next 90 days or events that are scheduled (even if in near past)
+        now = timezone.now()
         upcoming_events = SpeakerEvent.objects.filter(
-            status='scheduled',
-            scheduled_start__gte=datetime.now()
+            status='scheduled'
         ).select_related('company', 'created_by').prefetch_related('speakers__user').order_by('scheduled_start')[:10]
 
         serializer = SpeakerEventListSerializer(upcoming_events, many=True, context={'request': request})
         return Response(serializer.data)
+
+    @action(detail=True, methods=['get'], permission_classes=[IsAuthenticated])
+    def registrations(self, request, pk=None):
+        """Get list of registered users for an event (staff/admin only)"""
+        event = self.get_object()
+
+        # Check if user is staff, admin, or event creator
+        if not (request.user.is_staff or request.user.is_superuser or event.created_by == request.user):
+            return Response(
+                {'error': 'Not authorized to view registrations'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        # Get all registrations for this event
+        registrations = event.registrations.filter(
+            status__in=['registered', 'attended']
+        ).select_related('user').order_by('-registered_at')
+
+        # Serialize registration data
+        registration_data = []
+        for reg in registrations:
+            registration_data.append({
+                'id': reg.id,
+                'user': {
+                    'id': reg.user.id,
+                    'username': reg.user.username,
+                    'email': reg.user.email,
+                    'full_name': reg.user.get_full_name() if hasattr(reg.user, 'get_full_name') else f"{reg.user.first_name} {reg.user.last_name}".strip() or reg.user.username,
+                },
+                'status': reg.status,
+                'registered_at': reg.registered_at,
+                'joined_at': reg.joined_at,
+                'left_at': reg.left_at,
+            })
+
+        return Response({
+            'event_id': event.id,
+            'event_title': event.title,
+            'total_registrations': len(registration_data),
+            'max_participants': event.max_participants,
+            'registrations': registration_data
+        })
 
 
 class EventQuestionViewSet(viewsets.ModelViewSet):
@@ -1093,6 +1138,8 @@ def login_user(request):
             'email': user.email,
             'full_name': user_full_name,
             'user_type': user.user_type,
+            'is_staff': user.is_staff,
+            'is_superuser': user.is_superuser,
         },
         'access': str(refresh.access_token),
         'refresh': str(refresh),
@@ -1125,6 +1172,8 @@ def get_current_user(request):
         'email': user.email,
         'full_name': user_full_name,
         'user_type': user.user_type,
+        'is_staff': user.is_staff,
+        'is_superuser': user.is_superuser,
     }, status=status.HTTP_200_OK)
 
 
