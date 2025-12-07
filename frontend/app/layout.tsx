@@ -81,8 +81,7 @@ export const metadata: Metadata = {
     },
   },
   verification: {
-    // Add Google Search Console verification here
-    // google: 'your-google-verification-code',
+    google: 'Dl6Cet84N81hYfuQbcFr-CNUqfyv71gDQje7aOPqkqQ',
   },
   alternates: {
     canonical: 'https://juniorgoldminingintelligence.com',
