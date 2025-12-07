@@ -1,0 +1,26 @@
+{
+  "name": "Junior Gold Mining Intelligence",
+  "short_name": "JGMI",
+  "description": "AI-powered platform for analyzing and discovering junior gold mining companies",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#212f3c",
+  "theme_color": "#d4af37",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    },
+    {
+      "src": "/android-chrome-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/android-chrome-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
