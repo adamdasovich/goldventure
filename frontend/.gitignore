@@ -39,3 +39,15 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Build artifacts
+*.tar.gz
+*.zip
+
+# Deployment scripts
+/scripts/
+*.bat
+*.ps1
+
+# Lock files from dev
+/dev/lock

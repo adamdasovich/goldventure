@@ -40,6 +40,7 @@ urlpatterns = [
     # News Scraping endpoints
     path('companies/<int:company_id>/scrape-news/', views.scrape_company_news, name='scrape_company_news'),
     path('companies/<int:company_id>/news-releases/', views.company_news_releases, name='company_news_releases'),
+    path('tasks/<str:task_id>/status/', views.check_scrape_status, name='check_scrape_status'),
 
     # ViewSet routes
     path('', include(router.urls)),

@@ -86,7 +86,7 @@ export default function DRSDocuments() {
   const fetchDocuments = async () => {
     try {
       const token = localStorage.getItem('accessToken');
-      const response = await fetch('http://localhost:8000/api/drs/documents/', {
+      const response = await fetch('https://api.juniorgoldminingintelligence.com/api/drs/documents/', {
         headers: {
           'Authorization': `Bearer ${token}`,
         },

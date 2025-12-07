@@ -54,7 +54,7 @@ export function UpcomingEvents() {
 
   const fetchUpcomingEvents = async () => {
     try {
-      const response = await fetch('http://localhost:8000/api/events/upcoming/');
+      const response = await fetch('https://api.juniorgoldminingintelligence.com/api/events/upcoming/');
       if (!response.ok) throw new Error('Failed to fetch events');
       const data = await response.json();
       setEvents(data);
@@ -76,7 +76,7 @@ export function UpcomingEvents() {
     setDeleting(eventId);
     try {
       const token = localStorage.getItem('accessToken');
-      const response = await fetch(`http://localhost:8000/api/events/${eventId}/`, {
+      const response = await fetch(`https://api.juniorgoldminingintelligence.com/api/events/${eventId}/`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`,

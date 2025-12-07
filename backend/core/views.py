@@ -447,114 +447,69 @@ def scrape_company_news(request, company_id):
             })
 
     try:
-        # Use real web crawler to scrape news releases
-        from mcp_servers.website_crawler import crawl_news_releases
-        import asyncio
+        # Trigger async Celery task for news scraping
+        from .tasks import scrape_company_news_task
 
-        # Run async crawler
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        try:
-            news_releases = loop.run_until_complete(
-                crawl_news_releases(
-                    url=company.website,
-                    months=6,  # Get news from last 6 months
-                    max_depth=2
-                )
-            )
-        finally:
-            loop.close()
-
-        if not news_releases:
-            # No news releases found
-            return Response({
-                'status': 'success',
-                'message': 'No news releases found on company website',
-                'financial_count': 0,
-                'non_financial_count': 0,
-                'last_scraped': datetime.now().isoformat()
-            })
-
-        # Save to database and count by category
-        financial_count = 0
-        non_financial_count = 0
-
-        for release_data in news_releases:
-            title = release_data.get('title', '')
-            url = release_data.get('url', '')
-            date_str = release_data.get('date')
-
-            # Classify as financial or non-financial based on title
-            title_lower = title.lower()
-            is_financial = any(keyword in title_lower for keyword in ['financial', 'financials', 'financing'])
-
-            # Determine release type
-            if is_financial:
-                # Financial releases include financial statements, financials, and financing announcements
-                release_type = 'financing' if 'financing' in title_lower or 'placement' in title_lower else 'corporate'
-                financial_count += 1
-            else:
-                non_financial_count += 1
-                # Try to categorize non-financial releases
-                if 'drill' in title_lower or 'assay' in title_lower:
-                    release_type = 'drill_results'
-                elif 'resource' in title_lower:
-                    release_type = 'resource_update'
-                elif 'acquisition' in title_lower or 'disposition' in title_lower:
-                    release_type = 'acquisition'
-                elif 'management' in title_lower or 'appoint' in title_lower:
-                    release_type = 'management'
-                else:
-                    release_type = 'other'
-
-            # Parse date
-            if date_str:
-                try:
-                    release_date = datetime.strptime(date_str, '%Y-%m-%d').date()
-                except:
-                    release_date = None
-            else:
-                release_date = None
-
-            # Skip if no URL or date
-            if not url or not release_date:
-                continue
-
-            # Create or update news release (using URL as unique identifier)
-            NewsRelease.objects.update_or_create(
-                company=company,
-                url=url,
-                defaults={
-                    'title': title,
-                    'release_type': release_type,
-                    'release_date': release_date,
-                    'summary': '',  # Could be extracted later with Claude or PDF parsing
-                    'is_material': is_financial,
-                    'full_text': ''  # Could be extracted from PDF later
-                }
-            )
-
-        # Cache the scrape results for 24 hours
-        cache_data = {
-            'timestamp': datetime.now().isoformat(),
-            'financial_count': financial_count,
-            'non_financial_count': non_financial_count
-        }
-        cache.set(cache_key, cache_data, 86400)  # 24 hours
+        task = scrape_company_news_task.delay(company_id)
 
         return Response({
-            'status': 'success',
-            'message': f'Scraped {len(news_releases)} news releases',
-            'financial_count': financial_count,
-            'non_financial_count': non_financial_count,
-            'last_scraped': datetime.now().isoformat()
-        })
+            'status': 'processing',
+            'message': 'News scraping started in background',
+            'task_id': task.id
+        }, status=status.HTTP_202_ACCEPTED)
 
     except Exception as e:
         return Response(
             {'error': str(e)},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def check_scrape_status(request, task_id):
+    """
+    Check the status of a background news scraping task.
+
+    GET /api/tasks/<task_id>/status/
+
+    Returns:
+        {
+            "state": "PENDING|STARTED|SUCCESS|FAILURE",
+            "result": {...task result if completed...}
+        }
+    """
+    from celery.result import AsyncResult
+
+    task_result = AsyncResult(task_id)
+
+    if task_result.state == 'PENDING':
+        response = {
+            'state': task_result.state,
+            'status': 'Task is waiting to be processed...'
+        }
+    elif task_result.state == 'STARTED':
+        response = {
+            'state': task_result.state,
+            'status': 'Task is currently running...'
+        }
+    elif task_result.state == 'SUCCESS':
+        response = {
+            'state': task_result.state,
+            'result': task_result.result
+        }
+    elif task_result.state == 'FAILURE':
+        response = {
+            'state': task_result.state,
+            'error': str(task_result.info)
+        }
+    else:
+        response = {
+            'state': task_result.state,
+            'status': 'Unknown state'
+        }
+
+    return Response(response)
 
 
 @api_view(['GET'])

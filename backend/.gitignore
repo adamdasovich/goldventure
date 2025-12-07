@@ -54,3 +54,12 @@ Thumbs.db
 .pytest_cache/
 .coverage
 htmlcov/
+
+# Database backups
+*.sql
+*.json.backup
+*_backup.sql
+*_backup.json
+
+# Temporary files
+NUL

@@ -1,11 +1,15 @@
 """
-Background Tasks for Document Processing
+Background Tasks for Document Processing and News Scraping
 Processes document queue jobs sequentially
 """
 
+from celery import shared_task
+from django.utils import timezone
 from datetime import datetime
-from .models import DocumentProcessingJob
+from .models import DocumentProcessingJob, Company, NewsRelease
 from mcp_servers.document_processor_hybrid import HybridDocumentProcessor
+from mcp_servers.website_crawler import crawl_news_releases
+import asyncio
 
 
 def process_document_queue():
@@ -114,3 +118,119 @@ def process_single_job(job: DocumentProcessingJob):
         print(f"✗ Job {job.id} failed with exception: {str(e)}")
         import traceback
         traceback.print_exc()
+
+
+@shared_task(bind=True, max_retries=3)
+def scrape_company_news_task(self, company_id):
+    """
+    Background task to scrape news releases for a company.
+
+    Args:
+        company_id (int): ID of the company to scrape news for
+
+    Returns:
+        dict: Status information about the scraping operation
+    """
+    try:
+        # Get the company
+        company = Company.objects.get(id=company_id)
+
+        if not company.website:
+            return {
+                'status': 'error',
+                'message': f'Company {company.name} has no website configured',
+                'news_count': 0
+            }
+
+        # Run the async crawler in a new event loop
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+
+        try:
+            news_releases = loop.run_until_complete(
+                crawl_news_releases(
+                    url=company.website,
+                    months=48,  # Increased from 6 to 48 months to capture older news
+                    max_depth=2
+                )
+            )
+        finally:
+            loop.close()
+
+        # Process and save news releases
+        created_count = 0
+        updated_count = 0
+
+        for news in news_releases:
+            title = news.get('title', '').strip()
+            url = news.get('url', '').strip()
+            date_str = news.get('date')
+            release_type = news.get('document_type', 'news_release')
+
+            # Determine if this is a financial report
+            is_financial = any(keyword in title.lower() for keyword in [
+                'financial', 'earnings', 'quarter', 'q1', 'q2', 'q3', 'q4',
+                'annual report', 'md&a', 'interim', 'fiscal'
+            ])
+
+            # Parse date
+            if date_str:
+                try:
+                    release_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+                except:
+                    release_date = None
+            else:
+                release_date = None
+
+            # Skip if no URL
+            if not url:
+                continue
+
+            # If no date provided, use today's date as fallback
+            if not release_date:
+                release_date = timezone.now().date()
+
+            # Create or update news release (using URL as unique identifier)
+            obj, created = NewsRelease.objects.update_or_create(
+                company=company,
+                url=url,
+                defaults={
+                    'title': title,
+                    'release_type': release_type,
+                    'release_date': release_date,
+                    'summary': '',
+                    'is_material': is_financial,
+                    'full_text': ''
+                }
+            )
+
+            if created:
+                created_count += 1
+            else:
+                updated_count += 1
+
+        return {
+            'status': 'success',
+            'company': company.name,
+            'news_count': len(news_releases),
+            'created': created_count,
+            'updated': updated_count,
+            'message': f'Successfully scraped {len(news_releases)} news releases for {company.name}'
+        }
+
+    except Company.DoesNotExist:
+        return {
+            'status': 'error',
+            'message': f'Company with ID {company_id} not found',
+            'news_count': 0
+        }
+
+    except Exception as e:
+        # Retry on failure
+        self.retry(exc=e, countdown=60)  # Retry after 60 seconds
+
+        return {
+            'status': 'error',
+            'message': f'Error scraping news: {str(e)}',
+            'news_count': 0
+        }

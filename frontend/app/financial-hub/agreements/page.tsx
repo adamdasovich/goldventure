@@ -59,7 +59,7 @@ export default function SubscriptionAgreements() {
   const checkQualification = async () => {
     try {
       const token = localStorage.getItem('accessToken');
-      const response = await fetch('http://localhost:8000/api/qualifications/status/', {
+      const response = await fetch('https://api.juniorgoldminingintelligence.com/api/qualifications/status/', {
         headers: {
           'Authorization': `Bearer ${token}`,
         },
@@ -77,7 +77,7 @@ export default function SubscriptionAgreements() {
   const fetchAgreements = async () => {
     try {
       const token = localStorage.getItem('accessToken');
-      const response = await fetch('http://localhost:8000/api/agreements/', {
+      const response = await fetch('https://api.juniorgoldminingintelligence.com/api/agreements/', {
         headers: {
           'Authorization': `Bearer ${token}`,
         },

@@ -48,7 +48,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const fetchCurrentUser = async (token: string) => {
-    const response = await fetch('http://localhost:8000/api/auth/me/', {
+    const response = await fetch('https://api.juniorgoldminingintelligence.com/api/auth/me/', {
       headers: {
         'Authorization': `Bearer ${token}`,
       },
@@ -71,7 +71,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
     setAccessToken(null);
 
-    const response = await fetch('http://localhost:8000/api/auth/login/', {
+    const response = await fetch('https://api.juniorgoldminingintelligence.com/api/auth/login/', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -112,7 +112,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
     setAccessToken(null);
 
-    const response = await fetch('http://localhost:8000/api/auth/register/', {
+    const response = await fetch('https://api.juniorgoldminingintelligence.com/api/auth/register/', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

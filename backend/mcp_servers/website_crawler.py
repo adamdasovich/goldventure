@@ -495,4 +495,296 @@ async def crawl_news_releases(url: str, months: int = 6, max_depth: int = 2) -> 
     # Filter by date range
     news_releases = crawler._filter_by_date_range(news_releases, months=months)
 
+    # ALSO crawl HTML news pages (not just PDFs)
+    html_news = await crawl_html_news_pages(url, months=months)
+
+    # Combine PDF and HTML news releases
+    all_news = news_releases + html_news
+
+    # Sort by date (newest first)
+    all_news.sort(key=lambda x: x.get('date') or '', reverse=True)
+
+    return all_news
+
+
+async def _extract_date_from_article_page(crawler, article_url: str, crawler_config) -> str:
+    """
+    Fetch an individual news article page and extract the publication date.
+
+    Args:
+        crawler: AsyncWebCrawler instance
+        article_url: URL of the news article page
+        crawler_config: Crawler configuration
+
+    Returns:
+        Date string in YYYY-MM-DD format, or None if not found
+    """
+    try:
+        # Fetch the article page
+        result = await crawler.arun(url=article_url, config=crawler_config)
+
+        if not result.success:
+            return None
+
+        soup = BeautifulSoup(result.html, 'html.parser')
+
+        # Strategy 1: Look for meta tags with publication date
+        meta_tags = [
+            ('property', 'article:published_time'),
+            ('name', 'publish-date'),
+            ('name', 'publication_date'),
+            ('name', 'date'),
+            ('property', 'og:published_time'),
+            ('itemprop', 'datePublished'),
+        ]
+
+        for attr, value in meta_tags:
+            meta = soup.find('meta', {attr: value})
+            if meta and meta.get('content'):
+                date_content = meta['content']
+                # Parse ISO format or other common formats
+                date_match = re.search(r'(\d{4})-(\d{2})-(\d{2})', date_content)
+                if date_match:
+                    return f"{date_match.group(1)}-{date_match.group(2)}-{date_match.group(3)}"
+
+        # Strategy 2: Look for time element with datetime attribute
+        time_elem = soup.find('time', datetime=True)
+        if time_elem:
+            datetime_str = time_elem['datetime']
+            date_match = re.search(r'(\d{4})-(\d{2})-(\d{2})', datetime_str)
+            if date_match:
+                return f"{date_match.group(1)}-{date_match.group(2)}-{date_match.group(3)}"
+
+        # Strategy 3: Look for common date patterns in text near the article title
+        # Find article header or title area
+        article_areas = soup.find_all(['article', 'header', 'div'], class_=re.compile(r'(article|post|entry|news|content)', re.IGNORECASE))
+
+        for area in article_areas[:3]:  # Check first 3 matching areas
+            area_text = area.get_text()
+
+            # Look for date patterns like "December 7, 2025" or "Dec 7, 2025"
+            date_pattern = r'(January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[\\s,]+(\d{1,2})[\\s,]+(\d{4})'
+            date_match = re.search(date_pattern, area_text, re.IGNORECASE)
+
+            if date_match:
+                month_name = date_match.group(1)
+                day = date_match.group(2).zfill(2)
+                year = date_match.group(3)
+
+                # Convert month name to number
+                month_map = {
+                    'january': '01', 'february': '02', 'march': '03', 'april': '04',
+                    'may': '05', 'june': '06', 'july': '07', 'august': '08',
+                    'september': '09', 'october': '10', 'november': '11', 'december': '12',
+                    'jan': '01', 'feb': '02', 'mar': '03', 'apr': '04',
+                    'may': '05', 'jun': '06', 'jul': '07', 'aug': '08',
+                    'sep': '09', 'oct': '10', 'nov': '11', 'dec': '12'
+                }
+                month_num = month_map.get(month_name.lower(), '01')
+                return f"{year}-{month_num}-{day}"
+
+        # Strategy 3b: Look in ALL divs near the top of the page (first 50 divs)
+        all_divs = soup.find_all('div')[:50]
+        for div in all_divs:
+            div_text = div.get_text(strip=True)
+            # Look for standalone date text (likely the publication date)
+            if len(div_text) < 100:  # Short text - likely just a date
+                date_pattern = r'^(January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{1,2}),?\s+(\d{4})$'
+                date_match = re.search(date_pattern, div_text.strip(), re.IGNORECASE)
+
+                if date_match:
+                    month_name = date_match.group(1)
+                    day = date_match.group(2).zfill(2)
+                    year = date_match.group(3)
+
+                    month_map = {
+                        'january': '01', 'february': '02', 'march': '03', 'april': '04',
+                        'may': '05', 'june': '06', 'july': '07', 'august': '08',
+                        'september': '09', 'october': '10', 'november': '11', 'december': '12',
+                        'jan': '01', 'feb': '02', 'mar': '03', 'apr': '04',
+                        'may': '05', 'jun': '06', 'jul': '07', 'aug': '08',
+                        'sep': '09', 'oct': '10', 'nov': '11', 'dec': '12'
+                    }
+                    month_num = month_map.get(month_name.lower(), '01')
+                    return f"{year}-{month_num}-{day}"
+
+        # Strategy 4: Look for numeric date patterns in the first few paragraphs
+        text_content = soup.get_text()[:2000]  # First 2000 chars
+
+        # Pattern like "12/07/2025" or "12-07-2025"
+        numeric_date = re.search(r'(\d{1,2})[/-](\d{1,2})[/-](\d{4})', text_content)
+        if numeric_date:
+            month = numeric_date.group(1).zfill(2)
+            day = numeric_date.group(2).zfill(2)
+            year = numeric_date.group(3)
+            return f"{year}-{month}-{day}"
+
+        return None
+
+    except Exception as e:
+        # Silently fail and return None
+        print(f"[DATE EXTRACT ERROR] {article_url}: {str(e)}")
+        return None
+
+
+async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
+    """
+    Crawl HTML news pages (not PDFs) from a company website.
+    Many companies have news as HTML pages, not PDF downloads.
+
+    Args:
+        url: Company website URL
+        months: Number of months to look back
+
+    Returns:
+        List of news release dictionaries with title, url, date
+    """
+    import re
+    from datetime import datetime, timedelta
+
+    news_releases = []
+    cutoff_date = datetime.now() - timedelta(days=months * 30)
+
+    browser_config = BrowserConfig(
+        headless=True,
+        verbose=False
+    )
+
+    crawler_config = CrawlerRunConfig(
+        cache_mode="bypass",
+    )
+
+    async with AsyncWebCrawler(config=browser_config) as crawler:
+        # Common news page patterns - including year-specific pages
+        current_year = datetime.now().year
+        years_to_check = [current_year, current_year - 1]  # Check current year and last year
+
+        news_page_patterns = [
+            f'{url}/news',
+            f'{url}/news-releases',
+            f'{url}/press-releases',
+            f'{url}/investors/news',
+            f'{url}/investors/news-releases',
+        ]
+
+        # Add year-specific patterns
+        for year in years_to_check:
+            news_page_patterns.extend([
+                f'{url}/news/{year}',
+                f'{url}/news-releases/{year}',
+                f'{url}/press-releases/{year}',
+            ])
+
+        for news_url in news_page_patterns:
+            try:
+                # Try to fetch the news listing page
+                result = await crawler.arun(url=news_url, config=crawler_config)
+
+                if not result.success:
+                    continue
+
+                soup = BeautifulSoup(result.html, 'html.parser')
+
+                # Find all links on the page that look like news articles
+                for link in soup.find_all('a', href=True):
+                    href = link.get('href', '')
+                    link_text = link.get_text(strip=True)
+
+                    # Skip if link text is empty or too short
+                    if not link_text or len(link_text) < 15:
+                        continue
+
+                    # Build full URL
+                    if href.startswith('http'):
+                        full_url = href
+                    elif href.startswith('/'):
+                        full_url = urljoin(url, href)
+                    else:
+                        full_url = urljoin(news_url, href)
+
+                    # Check if this looks like a news article URL
+                    if not any(pattern in full_url.lower() for pattern in ['/news/', '/press-release', 'news-release']):
+                        continue
+
+                    # Try to extract date from the URL or nearby text
+                    date_str = None
+                    year = None
+
+                    # Pattern 1: /news/2024/article-name or /news/2024-12-01/
+                    date_match = re.search(r'/(\d{4})[/-](\d{1,2})[/-](\d{1,2})', full_url)
+                    if date_match:
+                        year = date_match.group(1)
+                        month = date_match.group(2).zfill(2)
+                        day = date_match.group(3).zfill(2)
+                        date_str = f"{year}-{month}-{day}"
+
+                    # Pattern 2: Just year in URL /news/2024/
+                    if not date_str:
+                        year_match = re.search(r'/(\d{4})/', full_url)
+                        if year_match:
+                            year = year_match.group(1)
+
+                    # Try to find date in nearby text (parent or sibling elements)
+                    if not date_str:
+                        # Look for date in parent element
+                        parent = link.find_parent(['div', 'li', 'article'])
+                        if parent:
+                            parent_text = parent.get_text()
+                            # Look for common date patterns
+                            date_pattern = r'(January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[\\s,]+(\d{1,2})[\\s,]+(\d{4})'
+                            date_match = re.search(date_pattern, parent_text, re.IGNORECASE)
+                            if date_match:
+                                month_name = date_match.group(1)
+                                day = date_match.group(2).zfill(2)
+                                year = date_match.group(3)
+
+                                # Convert month name to number
+                                month_map = {
+                                    'jan': '01', 'feb': '02', 'mar': '03', 'apr': '04',
+                                    'may': '05', 'jun': '06', 'jul': '07', 'aug': '08',
+                                    'sep': '09', 'oct': '10', 'nov': '11', 'dec': '12'
+                                }
+                                month_num = month_map.get(month_name[:3].lower(), '01')
+                                date_str = f"{year}-{month_num}-{day}"
+
+                    # If still no date found, fetch the actual article page and extract date
+                    if not date_str:
+                        date_str = await _extract_date_from_article_page(crawler, full_url, crawler_config)
+                        if date_str:
+                            # Extract year from the date string
+                            year_match = re.search(r'^(\d{4})', date_str)
+                            if year_match:
+                                year = year_match.group(1)
+
+                    # If we have a date, check if it's within our time range
+                    if date_str:
+                        try:
+                            article_date = datetime.strptime(date_str, '%Y-%m-%d')
+                            if article_date < cutoff_date:
+                                continue  # Too old
+                        except:
+                            pass  # Keep the article if we can't parse the date
+                    elif year:
+                        # If we only have year, check if it's recent enough
+                        try:
+                            if int(year) < cutoff_date.year:
+                                continue  # Too old
+                        except:
+                            pass
+
+                    # Add this news release
+                    news_releases.append({
+                        'title': link_text,
+                        'url': full_url,
+                        'date': date_str,
+                        'document_type': 'news_release',
+                        'year': year
+                    })
+
+                    print(f"[HTML NEWS] Found: {link_text[:60]}... | {date_str or year or 'unknown date'}")
+
+            except Exception as e:
+                # Silently continue if this news URL doesn't exist
+                continue
+
     return news_releases

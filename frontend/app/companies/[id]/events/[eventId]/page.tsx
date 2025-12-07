@@ -118,7 +118,7 @@ export default function EventDetailPage() {
         headers['Authorization'] = `Bearer ${token}`;
       }
 
-      const response = await fetch(`http://localhost:8000/api/events/${params.eventId}/`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://api.juniorgoldminingintelligence.com/api'}/events/${params.eventId}/`, {
         headers,
       });
 
@@ -135,7 +135,7 @@ export default function EventDetailPage() {
 
   const fetchQuestions = async () => {
     try {
-      const response = await fetch(`http://localhost:8000/api/event-questions/?event=${params.eventId}`);
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://api.juniorgoldminingintelligence.com/api'}/event-questions/?event=${params.eventId}`);
       if (response.ok) {
         const data = await response.json();
         // Handle both array response and paginated response
@@ -155,7 +155,7 @@ export default function EventDetailPage() {
 
     try {
       const token = localStorage.getItem('accessToken');
-      const response = await fetch(`http://localhost:8000/api/events/${params.eventId}/register/`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://api.juniorgoldminingintelligence.com/api'}/events/${params.eventId}/register/`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -173,7 +173,7 @@ export default function EventDetailPage() {
   const handleUnregister = async () => {
     try {
       const token = localStorage.getItem('accessToken');
-      const response = await fetch(`http://localhost:8000/api/events/${params.eventId}/unregister/`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://api.juniorgoldminingintelligence.com/api'}/events/${params.eventId}/unregister/`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -195,7 +195,7 @@ export default function EventDetailPage() {
 
     try {
       const token = localStorage.getItem('accessToken');
-      const response = await fetch(`http://localhost:8000/api/events/${params.eventId}/`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://api.juniorgoldminingintelligence.com/api'}/events/${params.eventId}/`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
@@ -232,7 +232,7 @@ export default function EventDetailPage() {
         embedUrl = `https://www.youtube.com/embed/${videoId}`;
       }
 
-      const response = await fetch(`http://localhost:8000/api/events/${params.eventId}/`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://api.juniorgoldminingintelligence.com/api'}/events/${params.eventId}/`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
@@ -268,7 +268,7 @@ export default function EventDetailPage() {
     setSubmittingQuestion(true);
     try {
       const token = localStorage.getItem('accessToken');
-      const response = await fetch('http://localhost:8000/api/event-questions/', {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://api.juniorgoldminingintelligence.com/api'}/event-questions/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -299,7 +299,7 @@ export default function EventDetailPage() {
 
     try {
       const token = localStorage.getItem('accessToken');
-      await fetch(`http://localhost:8000/api/event-questions/${questionId}/upvote/`, {
+      await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://api.juniorgoldminingintelligence.com/api'}/event-questions/${questionId}/upvote/`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -313,7 +313,7 @@ export default function EventDetailPage() {
 
   const fetchReactionCounts = async () => {
     try {
-      const response = await fetch(`http://localhost:8000/api/event-reactions/?event=${params.eventId}`);
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://api.juniorgoldminingintelligence.com/api'}/event-reactions/?event=${params.eventId}`);
       if (response.ok) {
         const data = await response.json();
         const counts: Record<string, number> = {
@@ -342,7 +342,7 @@ export default function EventDetailPage() {
 
     try {
       const token = localStorage.getItem('accessToken');
-      await fetch('http://localhost:8000/api/event-reactions/', {
+      await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://api.juniorgoldminingintelligence.com/api'}/event-reactions/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
