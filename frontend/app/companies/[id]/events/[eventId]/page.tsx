@@ -12,9 +12,6 @@ import {
   CheckCircle,
   AlertCircle,
   ThumbsUp,
-  Heart,
-  Flame,
-  Sparkles,
   User,
   Send,
   Wifi,
@@ -97,13 +94,6 @@ export default function EventDetailPage() {
   const [streamUrl, setStreamUrl] = useState('');
   const [submittingStreamUrl, setSubmittingStreamUrl] = useState(false);
   const [showStreamUrlForm, setShowStreamUrlForm] = useState(false);
-  const [reactionCounts, setReactionCounts] = useState<Record<string, number>>({
-    applause: 0,
-    thumbs_up: 0,
-    fire: 0,
-    heart: 0,
-  });
-  const [showReactionAnimation, setShowReactionAnimation] = useState<string | null>(null);
 
   // Get auth token for WebSocket
   const [authToken, setAuthToken] = useState<string>('');
@@ -153,7 +143,6 @@ export default function EventDetailPage() {
     if (params.eventId) {
       fetchEventDetails();
       fetchQuestions();
-      fetchReactionCounts();
     }
   }, [params.eventId]);
 
@@ -403,66 +392,6 @@ export default function EventDetailPage() {
       }
     } catch (error) {
       console.error('Error upvoting question:', error);
-    }
-  };
-
-  const fetchReactionCounts = async () => {
-    try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://api.juniorgoldminingintelligence.com/api'}/event-reactions/?event=${params.eventId}`);
-      if (response.ok) {
-        const data = await response.json();
-        const counts: Record<string, number> = {
-          applause: 0,
-          thumbs_up: 0,
-          fire: 0,
-          heart: 0,
-        };
-        // Handle both array response and paginated response
-        const reactions = Array.isArray(data) ? data : (data.results || []);
-        reactions.forEach((reaction: any) => {
-          counts[reaction.reaction_type] = (counts[reaction.reaction_type] || 0) + 1;
-        });
-        setReactionCounts(counts);
-      }
-    } catch (error) {
-      console.error('Error fetching reactions:', error);
-    }
-  };
-
-  const handleReaction = async (reactionType: string) => {
-    if (!user) {
-      setShowLogin(true);
-      return;
-    }
-
-    try {
-      const token = localStorage.getItem('accessToken');
-      await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://api.juniorgoldminingintelligence.com/api'}/event-reactions/`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          event: params.eventId,
-          reaction_type: reactionType,
-        }),
-      });
-
-      // Update local count immediately
-      setReactionCounts(prev => ({
-        ...prev,
-        [reactionType]: prev[reactionType] + 1,
-      }));
-
-      // Show animation
-      setShowReactionAnimation(reactionType);
-      setTimeout(() => setShowReactionAnimation(null), 1000);
-
-      // Refresh counts from server
-      setTimeout(() => fetchReactionCounts(), 500);
-    } catch (error) {
-      console.error('Error sending reaction:', error);
     }
   };
 
@@ -822,74 +751,6 @@ export default function EventDetailPage() {
                   allowFullScreen
                   title="Live Event Stream"
                 />
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Live Reactions Section - Only show if event is live or scheduled */}
-        {(event.status === 'live' || event.status === 'scheduled') && (
-          <div className="mb-12">
-            <div className="backdrop-blur-sm bg-slate-800/50 border border-slate-700/50 rounded-xl p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-2xl font-bold text-white flex items-center gap-2">
-                  <Sparkles className="w-6 h-6 text-gold-400" />
-                  Live Reactions
-                </h2>
-                {event.status === 'live' && (
-                  <Badge className="bg-green-500/20 text-green-300 border-green-500/30 animate-pulse">
-                    Event is Live
-                  </Badge>
-                )}
-              </div>
-
-              <p className="text-slate-300 mb-6">
-                {user ? 'Show your engagement with live reactions!' : 'Log in to send reactions'}
-              </p>
-
-              {/* Reaction Buttons */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                {[
-                  { type: 'applause', icon: '👏', label: 'Applause', color: 'from-yellow-500/20 to-orange-500/20 border-yellow-500/30' },
-                  { type: 'thumbs_up', icon: '👍', label: 'Thumbs Up', color: 'from-blue-500/20 to-cyan-500/20 border-blue-500/30' },
-                  { type: 'fire', icon: '🔥', label: 'Fire', color: 'from-red-500/20 to-orange-500/20 border-red-500/30' },
-                  { type: 'heart', icon: '❤️', label: 'Love It', color: 'from-pink-500/20 to-purple-500/20 border-pink-500/30' },
-                ].map((reaction) => (
-                  <button
-                    key={reaction.type}
-                    onClick={() => handleReaction(reaction.type)}
-                    disabled={!user}
-                    className={`relative p-6 rounded-xl border backdrop-blur-sm bg-gradient-to-br ${reaction.color} hover:scale-105 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 ${
-                      showReactionAnimation === reaction.type ? 'animate-bounce' : ''
-                    }`}
-                  >
-                    <div className="text-center">
-                      <div className="text-4xl mb-2">{reaction.icon}</div>
-                      <div className="text-sm font-semibold text-white mb-1">{reaction.label}</div>
-                      <div className="text-2xl font-bold text-gold-400">
-                        {reactionCounts[reaction.type] || 0}
-                      </div>
-                    </div>
-
-                    {/* Animated emoji on click */}
-                    {showReactionAnimation === reaction.type && (
-                      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                        <div className="text-6xl animate-ping opacity-75">
-                          {reaction.icon}
-                        </div>
-                      </div>
-                    )}
-                  </button>
-                ))}
-              </div>
-
-              {/* Total Reactions Counter */}
-              <div className="mt-6 text-center">
-                <p className="text-slate-400 text-sm">
-                  Total reactions: <span className="font-bold text-gold-400">
-                    {Object.values(reactionCounts).reduce((sum, count) => sum + count, 0)}
-                  </span>
-                </p>
               </div>
             </div>
           </div>
