@@ -84,9 +84,6 @@ export function EventBanner({ companyId }: EventBannerProps) {
 
   const fetchUpcomingEvent = async () => {
     try {
-      const url = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api'}/events/?company=${companyId}&status=scheduled`;
-      console.log('Fetching events from:', url);
-
       const headers: HeadersInit = {
         'Content-Type': 'application/json',
       };
@@ -94,6 +91,28 @@ export function EventBanner({ companyId }: EventBannerProps) {
       if (accessToken) {
         headers['Authorization'] = `Bearer ${accessToken}`;
       }
+
+      // First, check for any LIVE events for this company
+      const liveUrl = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api'}/events/?company=${companyId}&status=live`;
+      console.log('Fetching live events from:', liveUrl);
+
+      const liveResponse = await fetch(liveUrl, { headers });
+      if (liveResponse.ok) {
+        const liveData = await liveResponse.json();
+        const liveEvents = liveData.results || liveData;
+
+        // If there's a live event, show it (priority over scheduled)
+        if (liveEvents.length > 0) {
+          console.log('Found live event:', liveEvents[0]);
+          setEvent(liveEvents[0]);
+          setLoading(false);
+          return;
+        }
+      }
+
+      // If no live events, fetch scheduled events
+      const url = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api'}/events/?company=${companyId}&status=scheduled`;
+      console.log('Fetching scheduled events from:', url);
 
       const response = await fetch(url, { headers });
       console.log('Event fetch response status:', response.status);
@@ -312,7 +331,7 @@ export function EventBanner({ companyId }: EventBannerProps) {
   return (
     <Card
       variant="glass-card"
-      className="mb-8 border-gold-500/30 bg-gradient-to-r from-gold-500/5 to-copper-500/5"
+      className={`mb-8 ${event.status === 'live' ? 'border-red-500/50 bg-gradient-to-r from-red-500/10 to-red-500/5 ring-2 ring-red-500/30' : 'border-gold-500/30 bg-gradient-to-r from-gold-500/5 to-copper-500/5'}`}
       id={`event-${event.id}`}
     >
       <CardContent className="p-6">
@@ -339,12 +358,19 @@ export function EventBanner({ companyId }: EventBannerProps) {
             <div className="flex items-start justify-between gap-4 mb-3">
               <div>
                 <div className="flex items-center gap-2 mb-2">
-                  <Badge variant="gold" className="text-xs">
-                    <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-                    </svg>
-                    Upcoming Event
-                  </Badge>
+                  {event.status === 'live' ? (
+                    <Badge variant="gold" className="text-xs bg-red-500 border-red-500 animate-pulse">
+                      <div className="w-2 h-2 bg-white rounded-full mr-1"></div>
+                      LIVE NOW
+                    </Badge>
+                  ) : (
+                    <Badge variant="gold" className="text-xs">
+                      <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                      </svg>
+                      Upcoming Event
+                    </Badge>
+                  )}
                   {event.format === 'video' && (
                     <Badge variant="copper" className="text-xs">
                       Live Video
@@ -359,12 +385,23 @@ export function EventBanner({ companyId }: EventBannerProps) {
                 </p>
               </div>
 
-              {/* Countdown Timer */}
-              <div className="flex-shrink-0 text-center bg-slate-900/50 rounded-lg p-4 min-w-[120px]">
-                <div className="text-sm text-slate-400 mb-1">Starts in</div>
-                <div className="text-2xl font-bold text-gold-400">
-                  {getTimeUntil(event.scheduled_start)}
-                </div>
+              {/* Countdown Timer / Live Status */}
+              <div className={`flex-shrink-0 text-center rounded-lg p-4 min-w-[120px] ${event.status === 'live' ? 'bg-red-500/20 border border-red-500/50' : 'bg-slate-900/50'}`}>
+                {event.status === 'live' ? (
+                  <>
+                    <div className="text-sm text-red-400 mb-1">Status</div>
+                    <div className="text-2xl font-bold text-red-400 animate-pulse">
+                      IN PROGRESS
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="text-sm text-slate-400 mb-1">Starts in</div>
+                    <div className="text-2xl font-bold text-gold-400">
+                      {getTimeUntil(event.scheduled_start)}
+                    </div>
+                  </>
+                )}
               </div>
             </div>
 
