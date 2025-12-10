@@ -65,153 +65,178 @@ export function useEventWebSocket({ eventId, token, enabled = true, onError }: U
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined);
   const heartbeatIntervalRef = useRef<NodeJS.Timeout | undefined>(undefined);
+  const onErrorRef = useRef(onError);
 
-  const connect = useCallback(() => {
-    if (wsRef.current?.readyState === WebSocket.OPEN) return;
+  // Keep onError ref updated
+  useEffect(() => {
+    onErrorRef.current = onError;
+  }, [onError]);
 
-    const wsUrl = `${process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8000'}/ws/event/${eventId}/?token=${token}`;
-    const ws = new WebSocket(wsUrl);
+  // Main connection effect - only depends on eventId, token, and enabled
+  useEffect(() => {
+    // Don't connect if not enabled or no token
+    if (!enabled || !token || !eventId) {
+      return;
+    }
 
-    ws.onopen = () => {
-      console.log('Event WebSocket connected');
-      setIsConnected(true);
-
-      // Start heartbeat
-      if (heartbeatIntervalRef.current) {
-        clearInterval(heartbeatIntervalRef.current);
+    const connect = () => {
+      // Don't connect if already connected or connecting
+      if (wsRef.current?.readyState === WebSocket.OPEN ||
+          wsRef.current?.readyState === WebSocket.CONNECTING) {
+        return;
       }
-      heartbeatIntervalRef.current = setInterval(() => {
-        if (ws.readyState === WebSocket.OPEN) {
-          ws.send(JSON.stringify({ type: 'presence.update' }));
+
+      const wsUrl = `${process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8000'}/ws/event/${eventId}/?token=${token}`;
+      const ws = new WebSocket(wsUrl);
+
+      ws.onopen = () => {
+        console.log('Event WebSocket connected');
+        setIsConnected(true);
+
+        // Start heartbeat
+        if (heartbeatIntervalRef.current) {
+          clearInterval(heartbeatIntervalRef.current);
         }
-      }, 30000); // Every 30 seconds
-    };
+        heartbeatIntervalRef.current = setInterval(() => {
+          if (ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ type: 'presence.update' }));
+          }
+        }, 30000); // Every 30 seconds
+      };
 
-    ws.onmessage = (messageEvent) => {
-      try {
-        const data: WebSocketMessage = JSON.parse(messageEvent.data);
+      ws.onmessage = (messageEvent) => {
+        try {
+          const data: WebSocketMessage = JSON.parse(messageEvent.data);
 
-        switch (data.type) {
-          case 'initial.state':
-            if (data.data) {
-              setEvent(data.data.event);
-              setQuestions(data.data.questions);
-              setParticipants(data.data.participants);
-            }
-            break;
+          switch (data.type) {
+            case 'initial.state':
+              if (data.data) {
+                setEvent(data.data.event);
+                setQuestions(data.data.questions);
+                setParticipants(data.data.participants);
+              }
+              break;
 
-          case 'question.new':
-            if (data.question) {
-              setQuestions((prev) => [data.question!, ...prev]);
-            }
-            break;
+            case 'question.new':
+              if (data.question) {
+                setQuestions((prev) => [data.question!, ...prev]);
+              }
+              break;
 
-          case 'question.upvoted':
-            if (data.question) {
-              setQuestions((prev) =>
-                prev
-                  .map((q) => (q.id === data.question!.id ? data.question! : q))
-                  .sort((a, b) => b.upvotes - a.upvotes)
-              );
-            }
-            break;
-
-          case 'reaction.received':
-            if (data.reaction) {
-              setRecentReactions((prev) => {
-                const updated = [data.reaction!, ...prev];
-                // Keep only last 50 reactions
-                return updated.slice(0, 50);
-              });
-
-              // Auto-remove reaction after 3 seconds
-              setTimeout(() => {
-                setRecentReactions((prev) =>
-                  prev.filter((r) => r.timestamp !== data.reaction!.timestamp)
+            case 'question.upvoted':
+              if (data.question) {
+                setQuestions((prev) =>
+                  prev
+                    .map((q) => (q.id === data.question!.id ? data.question! : q))
+                    .sort((a, b) => b.upvotes - a.upvotes)
                 );
-              }, 3000);
-            }
-            break;
+              }
+              break;
 
-          case 'user.joined':
-            if (data.user) {
-              setParticipants((prev) => {
-                if (prev.some((u) => u.id === data.user!.id)) {
-                  return prev;
+            case 'reaction.received':
+              if (data.reaction) {
+                setRecentReactions((prev) => {
+                  const updated = [data.reaction!, ...prev];
+                  // Keep only last 50 reactions
+                  return updated.slice(0, 50);
+                });
+
+                // Auto-remove reaction after 3 seconds
+                setTimeout(() => {
+                  setRecentReactions((prev) =>
+                    prev.filter((r) => r.timestamp !== data.reaction!.timestamp)
+                  );
+                }, 3000);
+              }
+              break;
+
+            case 'user.joined':
+              if (data.user) {
+                setParticipants((prev) => {
+                  if (prev.some((u) => u.id === data.user!.id)) {
+                    return prev;
+                  }
+                  return [...prev, data.user!];
+                });
+              }
+              break;
+
+            case 'user.left':
+              if (data.user_id) {
+                setParticipants((prev) => prev.filter((user) => user.id !== data.user_id));
+              }
+              break;
+
+            case 'event.status_changed':
+              setEvent((currentEvent) => {
+                if (currentEvent) {
+                  return { ...currentEvent, status: data.data?.event.status || currentEvent.status };
                 }
-                return [...prev, data.user!];
+                return currentEvent;
               });
-            }
-            break;
+              break;
 
-          case 'user.left':
-            if (data.user_id) {
-              setParticipants((prev) => prev.filter((user) => user.id !== data.user_id));
-            }
-            break;
+            case 'error':
+              console.error('WebSocket error:', data);
+              onErrorRef.current?.(data.error || 'An error occurred');
+              break;
 
-          case 'event.status_changed':
-            if (event) {
-              setEvent({ ...event, status: data.data?.event.status || event.status });
-            }
-            break;
-
-          case 'error':
-            console.error('WebSocket error:', data);
-            onError?.(data.error || 'An error occurred');
-            break;
-
-          default:
-            console.log('Unknown message type:', data.type);
+            default:
+              console.log('Unknown message type:', data.type);
+          }
+        } catch (err) {
+          console.error('Failed to parse WebSocket message:', err);
         }
-      } catch (err) {
-        console.error('Failed to parse WebSocket message:', err);
-      }
+      };
+
+      ws.onerror = () => {
+        // WebSocket error event doesn't provide useful error details
+        // Errors will be handled in onclose event
+      };
+
+      ws.onclose = (closeEvent) => {
+        console.log('WebSocket closed:', closeEvent.code, closeEvent.reason);
+        setIsConnected(false);
+
+        // Clear heartbeat
+        if (heartbeatIntervalRef.current) {
+          clearInterval(heartbeatIntervalRef.current);
+        }
+
+        // Attempt to reconnect after 3 seconds if not a normal closure
+        if (closeEvent.code !== 1000) {
+          reconnectTimeoutRef.current = setTimeout(() => {
+            console.log('Attempting to reconnect...');
+            connect();
+          }, 3000);
+        }
+      };
+
+      wsRef.current = ws;
     };
 
-    ws.onerror = () => {
-      // WebSocket error event doesn't provide useful error details
-      // Errors will be handled in onclose event
-    };
+    // Connect
+    connect();
 
-    ws.onclose = (event) => {
-      console.log('WebSocket closed:', event.code, event.reason);
-      setIsConnected(false);
-
-      // Clear heartbeat
+    // Cleanup function
+    return () => {
       if (heartbeatIntervalRef.current) {
         clearInterval(heartbeatIntervalRef.current);
       }
-
-      // Attempt to reconnect after 3 seconds
-      if (event.code !== 1000) {
-        reconnectTimeoutRef.current = setTimeout(() => {
-          console.log('Attempting to reconnect...');
-          connect();
-        }, 3000);
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+      }
+      if (wsRef.current) {
+        wsRef.current.close(1000, 'Component unmounted');
+        wsRef.current = null;
       }
     };
-
-    wsRef.current = ws;
-  }, [eventId, token, onError, event]);
-
-  const disconnect = useCallback(() => {
-    if (heartbeatIntervalRef.current) {
-      clearInterval(heartbeatIntervalRef.current);
-    }
-    if (reconnectTimeoutRef.current) {
-      clearTimeout(reconnectTimeoutRef.current);
-    }
-    if (wsRef.current) {
-      wsRef.current.close(1000, 'User disconnected');
-      wsRef.current = null;
-    }
-  }, []);
+  }, [eventId, token, enabled]);
 
   const submitQuestion = useCallback(
     (content: string) => {
       if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
-        onError?.('Not connected to server');
+        onErrorRef.current?.('Not connected to server');
         return;
       }
 
@@ -222,13 +247,13 @@ export function useEventWebSocket({ eventId, token, enabled = true, onError }: U
         })
       );
     },
-    [onError]
+    []
   );
 
   const upvoteQuestion = useCallback(
     (questionId: number) => {
       if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
-        onError?.('Not connected to server');
+        onErrorRef.current?.('Not connected to server');
         return;
       }
 
@@ -239,13 +264,13 @@ export function useEventWebSocket({ eventId, token, enabled = true, onError }: U
         })
       );
     },
-    [onError]
+    []
   );
 
   const sendReaction = useCallback(
     (reactionType: 'applause' | 'thumbs_up' | 'fire' | 'heart') => {
       if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
-        onError?.('Not connected to server');
+        onErrorRef.current?.('Not connected to server');
         return;
       }
 
@@ -256,22 +281,8 @@ export function useEventWebSocket({ eventId, token, enabled = true, onError }: U
         })
       );
     },
-    [onError]
+    []
   );
-
-  useEffect(() => {
-    // Disconnect and reconnect when token or enabled changes
-    if (wsRef.current) {
-      disconnect();
-    }
-    // Only connect if enabled (e.g., event is live) and we have a token
-    if (enabled && token) {
-      connect();
-    }
-    return () => {
-      disconnect();
-    };
-  }, [token, enabled, connect, disconnect]);
 
   return {
     isConnected,
