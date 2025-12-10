@@ -51,10 +51,11 @@ interface WebSocketMessage {
 interface UseEventWebSocketOptions {
   eventId: number;
   token: string;
+  enabled?: boolean; // Only connect when enabled (e.g., when event is live)
   onError?: (error: string) => void;
 }
 
-export function useEventWebSocket({ eventId, token, onError }: UseEventWebSocketOptions) {
+export function useEventWebSocket({ eventId, token, enabled = true, onError }: UseEventWebSocketOptions) {
   const [isConnected, setIsConnected] = useState(false);
   const [event, setEvent] = useState<EventData | null>(null);
   const [questions, setQuestions] = useState<EventQuestion[]>([]);
@@ -259,17 +260,18 @@ export function useEventWebSocket({ eventId, token, onError }: UseEventWebSocket
   );
 
   useEffect(() => {
-    // Disconnect and reconnect when token changes
+    // Disconnect and reconnect when token or enabled changes
     if (wsRef.current) {
       disconnect();
     }
-    if (token) {
+    // Only connect if enabled (e.g., event is live) and we have a token
+    if (enabled && token) {
       connect();
     }
     return () => {
       disconnect();
     };
-  }, [token, connect, disconnect]);
+  }, [token, enabled, connect, disconnect]);
 
   return {
     isConnected,

@@ -105,7 +105,7 @@ export default function EventDetailPage() {
     }
   }, [user]);
 
-  // WebSocket connection for real-time Q&A updates
+  // WebSocket connection for real-time Q&A updates (only when event is live)
   const {
     isConnected: wsConnected,
     questions: wsQuestions,
@@ -114,6 +114,7 @@ export default function EventDetailPage() {
   } = useEventWebSocket({
     eventId: params.eventId ? Number(params.eventId) : 0,
     token: authToken,
+    enabled: event?.status === 'live', // Only connect when event is live
     onError: (error) => console.error('WebSocket error:', error),
   });
 
