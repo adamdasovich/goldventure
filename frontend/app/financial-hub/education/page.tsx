@@ -48,7 +48,7 @@ export default function EducationHub() {
   const fetchModules = async () => {
     try {
       const token = localStorage.getItem('accessToken');
-      const response = await fetch('https://api.juniorgoldminingintelligence.com/api/education/modules/', {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api'}/education/modules/`, {
         headers: {
           'Authorization': `Bearer ${token}`,
         },

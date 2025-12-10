@@ -22,7 +22,7 @@ export default function Home() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-24">
             <div className="flex items-center space-x-3">
-              <LogoMono className="h-18" />
+              <LogoMono className="h-12" />
             </div>
             <div className="flex items-center space-x-4">
               <Badge variant="copper">AI-Powered</Badge>

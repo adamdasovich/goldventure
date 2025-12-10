@@ -84,7 +84,7 @@ export function EventBanner({ companyId }: EventBannerProps) {
 
   const fetchUpcomingEvent = async () => {
     try {
-      const url = `https://api.juniorgoldminingintelligence.com/api/events/?company=${companyId}&status=scheduled`;
+      const url = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api'}/events/?company=${companyId}&status=scheduled`;
       console.log('Fetching events from:', url);
 
       const headers: HeadersInit = {
@@ -148,7 +148,7 @@ export function EventBanner({ companyId }: EventBannerProps) {
     console.log('Sending registration request...');
     try {
       const response = await fetch(
-        `https://api.juniorgoldminingintelligence.com/api/events/${event.id}/register/`,
+        `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api'}/events/${event.id}/register/`,
         {
           method: 'POST',
           headers: {
@@ -184,7 +184,7 @@ export function EventBanner({ companyId }: EventBannerProps) {
     setRegistering(true);
     try {
       const response = await fetch(
-        `https://api.juniorgoldminingintelligence.com/api/events/${event.id}/unregister/`,
+        `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api'}/events/${event.id}/unregister/`,
         {
           method: 'POST',
           headers: {
@@ -211,7 +211,7 @@ export function EventBanner({ companyId }: EventBannerProps) {
     setLoadingRegistrations(true);
     try {
       const response = await fetch(
-        `https://api.juniorgoldminingintelligence.com/api/events/${event.id}/registrations/`,
+        `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api'}/events/${event.id}/registrations/`,
         {
           headers: {
             'Authorization': `Bearer ${accessToken}`,

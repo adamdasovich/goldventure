@@ -222,15 +222,45 @@ export default function EventDetailPage() {
     try {
       const token = localStorage.getItem('accessToken');
 
-      // Convert YouTube watch URL to embed URL if needed
-      let embedUrl = streamUrl.trim();
-      if (embedUrl.includes('youtube.com/watch?v=')) {
-        const videoId = embedUrl.split('v=')[1]?.split('&')[0];
-        embedUrl = `https://www.youtube.com/embed/${videoId}`;
-      } else if (embedUrl.includes('youtube.com/live/') || embedUrl.includes('youtu.be/')) {
-        const videoId = embedUrl.split('/').pop()?.split('?')[0];
-        embedUrl = `https://www.youtube.com/embed/${videoId}`;
+      // Handle different YouTube URL formats or just the video ID
+      let input = streamUrl.trim();
+      let videoId: string | undefined;
+
+      console.log('[Go Live] Input:', input);
+
+      // Check if input is just a video ID (11 characters, alphanumeric with - and _)
+      if (/^[A-Za-z0-9_-]{11}$/.test(input)) {
+        videoId = input;
+        console.log('[Go Live] Detected as video ID');
       }
+      // Extract from full URLs
+      else if (input.includes('youtube.com/watch?v=')) {
+        videoId = input.split('v=')[1]?.split('&')[0];
+        console.log('[Go Live] Extracted from watch URL');
+      } else if (input.includes('youtube.com/live/')) {
+        videoId = input.split('/live/')[1]?.split('?')[0];
+        console.log('[Go Live] Extracted from live URL');
+      } else if (input.includes('youtu.be/')) {
+        videoId = input.split('youtu.be/')[1]?.split('?')[0];
+        console.log('[Go Live] Extracted from short URL');
+      } else if (input.includes('youtube.com/embed/')) {
+        videoId = input.split('/embed/')[1]?.split('?')[0];
+        console.log('[Go Live] Extracted from embed URL');
+      }
+
+      console.log('[Go Live] Extracted video ID:', videoId);
+
+      // Validate video ID
+      if (!videoId || videoId.includes('undefined') || videoId.length !== 11) {
+        console.error('[Go Live] Invalid video ID:', videoId);
+        alert('Please enter a valid YouTube video ID or URL\n\nExamples:\n- Video ID: FpLUhtmuvXo\n- Watch URL: https://youtube.com/watch?v=FpLUhtmuvXo\n- Short URL: https://youtu.be/FpLUhtmuvXo');
+        setSubmittingStreamUrl(false);
+        return;
+      }
+
+      // Construct embed URL from video ID
+      const embedUrl = `https://www.youtube.com/embed/${videoId}`;
+      console.log('[Go Live] Final embed URL:', embedUrl);
 
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://api.juniorgoldminingintelligence.com/api'}/events/${params.eventId}/`, {
         method: 'PATCH',
@@ -248,9 +278,14 @@ export default function EventDetailPage() {
         setStreamUrl('');
         setShowStreamUrlForm(false);
         fetchEventDetails();
+      } else {
+        // Show error message from backend
+        const errorData = await response.json().catch(() => ({ detail: 'Failed to start live stream' }));
+        alert(errorData.detail || errorData.stream_url?.[0] || 'Failed to start live stream. Please check your YouTube URL.');
       }
     } catch (error) {
       console.error('Error going live:', error);
+      alert('An error occurred while starting the live stream');
     } finally {
       setSubmittingStreamUrl(false);
     }
@@ -599,12 +634,12 @@ export default function EventDetailPage() {
                             type="text"
                             value={streamUrl}
                             onChange={(e) => setStreamUrl(e.target.value)}
-                            placeholder="https://youtube.com/live/..."
+                            placeholder="Paste video ID (e.g., FpLUhtmuvXo)"
                             className="w-full px-3 py-2 bg-slate-700/50 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-gold-500"
                             disabled={submittingStreamUrl}
                           />
                           <p className="text-xs text-slate-400 mt-1">
-                            Paste your YouTube live stream URL (watch or live URL)
+                            Just paste the YouTube video ID - URLs work too!
                           </p>
                         </div>
                         <div className="flex gap-2">

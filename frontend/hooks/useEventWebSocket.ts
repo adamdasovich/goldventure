@@ -68,7 +68,7 @@ export function useEventWebSocket({ eventId, token, onError }: UseEventWebSocket
   const connect = useCallback(() => {
     if (wsRef.current?.readyState === WebSocket.OPEN) return;
 
-    const wsUrl = `${process.env.NEXT_PUBLIC_WS_URL || 'wss://api.juniorgoldminingintelligence.com'}/ws/event/${eventId}/?token=${token}`;
+    const wsUrl = `${process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8000'}/ws/event/${eventId}/?token=${token}`;
     const ws = new WebSocket(wsUrl);
 
     ws.onopen = () => {

@@ -39,7 +39,7 @@ export default function FinancialHub() {
   const fetchQualificationStatus = async () => {
     try {
       const token = localStorage.getItem('accessToken');
-      const response = await fetch('https://api.juniorgoldminingintelligence.com/api/qualifications/status/', {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api'}/qualifications/status/`, {
         headers: {
           'Authorization': `Bearer ${token}`,
         },

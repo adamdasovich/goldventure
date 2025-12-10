@@ -91,7 +91,7 @@ export default function InvestmentTracking() {
   const fetchTransactions = async () => {
     try {
       const token = localStorage.getItem('accessToken');
-      const response = await fetch('https://api.juniorgoldminingintelligence.com/api/investments/transactions/', {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api'}/investments/transactions/`, {
         headers: {
           'Authorization': `Bearer ${token}`,
         },

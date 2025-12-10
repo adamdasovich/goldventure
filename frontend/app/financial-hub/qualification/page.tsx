@@ -49,7 +49,7 @@ export default function QualificationPage() {
   const fetchExistingQualification = async () => {
     try {
       const token = localStorage.getItem('accessToken');
-      const response = await fetch('https://api.juniorgoldminingintelligence.com/api/qualifications/status/', {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api'}/qualifications/status/`, {
         headers: {
           'Authorization': `Bearer ${token}`,
         },
@@ -108,7 +108,7 @@ export default function QualificationPage() {
 
     try {
       const token = localStorage.getItem('accessToken');
-      const response = await fetch('https://api.juniorgoldminingintelligence.com/api/qualifications/', {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api'}/qualifications/`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
