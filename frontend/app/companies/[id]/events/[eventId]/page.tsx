@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import {
   Calendar,
@@ -16,7 +16,9 @@ import {
   Flame,
   Sparkles,
   User,
-  Send
+  Send,
+  Wifi,
+  WifiOff
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
@@ -24,6 +26,7 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
 import LogoMono from '@/components/LogoMono';
 import { LoginModal, RegisterModal } from '@/components/auth';
 import { useAuth } from '@/contexts/AuthContext';
+import { useEventWebSocket, EventQuestion } from '@/hooks/useEventWebSocket';
 
 interface Speaker {
   id: number;
@@ -101,6 +104,50 @@ export default function EventDetailPage() {
     heart: 0,
   });
   const [showReactionAnimation, setShowReactionAnimation] = useState<string | null>(null);
+
+  // Get auth token for WebSocket
+  const [authToken, setAuthToken] = useState<string>('');
+
+  useEffect(() => {
+    const token = localStorage.getItem('accessToken');
+    if (token) {
+      setAuthToken(token);
+    }
+  }, [user]);
+
+  // WebSocket connection for real-time Q&A updates
+  const {
+    isConnected: wsConnected,
+    questions: wsQuestions,
+    submitQuestion: wsSubmitQuestion,
+    upvoteQuestion: wsUpvoteQuestion,
+  } = useEventWebSocket({
+    eventId: params.eventId ? Number(params.eventId) : 0,
+    token: authToken,
+    onError: (error) => console.error('WebSocket error:', error),
+  });
+
+  // Sync WebSocket questions with local state when they update
+  useEffect(() => {
+    if (wsQuestions.length > 0) {
+      // Map WebSocket questions to local format
+      const mappedQuestions: Question[] = wsQuestions.map((q: EventQuestion) => ({
+        id: q.id,
+        user: {
+          username: q.user.username,
+          full_name: q.user.full_name,
+        },
+        content: q.content,
+        status: q.status,
+        answer: '', // WebSocket doesn't include answer
+        upvotes: q.upvotes,
+        is_featured: q.is_featured,
+        created_at: q.created_at,
+        answered_at: null,
+      }));
+      setQuestions(mappedQuestions);
+    }
+  }, [wsQuestions]);
 
   useEffect(() => {
     if (params.eventId) {
@@ -302,22 +349,29 @@ export default function EventDetailPage() {
 
     setSubmittingQuestion(true);
     try {
-      const token = localStorage.getItem('accessToken');
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://api.juniorgoldminingintelligence.com/api'}/event-questions/`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          event: params.eventId,
-          content: questionContent,
-        }),
-      });
-
-      if (response.ok) {
+      // Use WebSocket if connected for real-time updates
+      if (wsConnected) {
+        wsSubmitQuestion(questionContent);
         setQuestionContent('');
-        fetchQuestions();
+      } else {
+        // Fallback to HTTP if WebSocket not connected
+        const token = localStorage.getItem('accessToken');
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://api.juniorgoldminingintelligence.com/api'}/event-questions/`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            event: params.eventId,
+            content: questionContent,
+          }),
+        });
+
+        if (response.ok) {
+          setQuestionContent('');
+          fetchQuestions();
+        }
       }
     } catch (error) {
       console.error('Error submitting question:', error);
@@ -333,14 +387,20 @@ export default function EventDetailPage() {
     }
 
     try {
-      const token = localStorage.getItem('accessToken');
-      await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://api.juniorgoldminingintelligence.com/api'}/event-questions/${questionId}/upvote/`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-      fetchQuestions();
+      // Use WebSocket if connected for real-time updates
+      if (wsConnected) {
+        wsUpvoteQuestion(questionId);
+      } else {
+        // Fallback to HTTP if WebSocket not connected
+        const token = localStorage.getItem('accessToken');
+        await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://api.juniorgoldminingintelligence.com/api'}/event-questions/${questionId}/upvote/`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
+        });
+        fetchQuestions();
+      }
     } catch (error) {
       console.error('Error upvoting question:', error);
     }
@@ -886,7 +946,29 @@ export default function EventDetailPage() {
 
         {/* Q&A Section */}
         <div className="mb-12">
-          <h2 className="text-3xl font-bold text-white mb-6">Questions & Answers</h2>
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-3xl font-bold text-white">Questions & Answers</h2>
+            {/* Real-time connection indicator */}
+            {user && (
+              <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-sm ${
+                wsConnected
+                  ? 'bg-green-500/20 text-green-300 border border-green-500/30'
+                  : 'bg-slate-500/20 text-slate-400 border border-slate-500/30'
+              }`}>
+                {wsConnected ? (
+                  <>
+                    <Wifi className="w-4 h-4" />
+                    <span>Live Updates</span>
+                  </>
+                ) : (
+                  <>
+                    <WifiOff className="w-4 h-4" />
+                    <span>Connecting...</span>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
 
           {/* Submit Question Form */}
           <div className="backdrop-blur-sm bg-slate-800/50 border border-slate-700/50 rounded-xl p-6 mb-6">
