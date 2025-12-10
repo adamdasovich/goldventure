@@ -809,8 +809,8 @@ export default function EventDetailPage() {
         <div className="mb-12">
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-3xl font-bold text-white">Questions & Answers</h2>
-            {/* Real-time connection indicator */}
-            {user && (
+            {/* Real-time connection indicator - only show when event is live */}
+            {user && event.status === 'live' && (
               <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-sm ${
                 wsConnected
                   ? 'bg-green-500/20 text-green-300 border border-green-500/30'
