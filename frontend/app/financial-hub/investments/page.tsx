@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation';
 import {
   TrendingUp,
   ArrowLeft,
-  DollarSign,
   Calendar,
   Building2,
   PieChart,
@@ -19,6 +18,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
+import { Card, CardContent } from '@/components/ui/Card';
 import LogoMono from '@/components/LogoMono';
 import { LoginModal, RegisterModal } from '@/components/auth';
 import { useAuth } from '@/contexts/AuthContext';
@@ -150,36 +150,25 @@ export default function InvestmentTracking() {
   };
 
   const getStatusBadge = (status: string) => {
-    const statusConfig: Record<string, { color: string; icon: any; label: string }> = {
-      pending: { color: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300', icon: Clock, label: 'Pending' },
-      processing: { color: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300', icon: Activity, label: 'Processing' },
-      completed: { color: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300', icon: CheckCircle, label: 'Completed' },
-      failed: { color: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300', icon: AlertCircle, label: 'Failed' },
-      cancelled: { color: 'bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-300', icon: AlertCircle, label: 'Cancelled' },
-      refunded: { color: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300', icon: AlertCircle, label: 'Refunded' },
-      on_hold: { color: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300', icon: Clock, label: 'On Hold' },
+    const statusConfig: Record<string, { variant: 'gold' | 'copper' | 'success' | 'warning' | 'error' | 'info' | 'slate'; icon: any; label: string }> = {
+      pending: { variant: 'warning', icon: Clock, label: 'Pending' },
+      processing: { variant: 'info', icon: Activity, label: 'Processing' },
+      completed: { variant: 'success', icon: CheckCircle, label: 'Completed' },
+      failed: { variant: 'error', icon: AlertCircle, label: 'Failed' },
+      cancelled: { variant: 'slate', icon: AlertCircle, label: 'Cancelled' },
+      refunded: { variant: 'copper', icon: AlertCircle, label: 'Refunded' },
+      on_hold: { variant: 'info', icon: Clock, label: 'On Hold' },
     };
 
     const config = statusConfig[status] || statusConfig.pending;
     const Icon = config.icon;
 
     return (
-      <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium ${config.color}`}>
+      <Badge variant={config.variant} className="inline-flex items-center gap-1.5">
         <Icon className="w-3.5 h-3.5" />
         {config.label}
-      </span>
+      </Badge>
     );
-  };
-
-  const getTransactionTypeColor = (type: string) => {
-    const colors: Record<string, string> = {
-      investment: 'text-green-600 dark:text-green-400',
-      dividend: 'text-blue-600 dark:text-blue-400',
-      refund: 'text-orange-600 dark:text-orange-400',
-      fee: 'text-red-600 dark:text-red-400',
-      transfer: 'text-purple-600 dark:text-purple-400',
-    };
-    return colors[type] || 'text-slate-600 dark:text-slate-400';
   };
 
   const filteredTransactions = transactions.filter(txn => {
@@ -197,17 +186,17 @@ export default function InvestmentTracking() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-slate-600 dark:text-slate-300">Loading investment data...</p>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gold-400 mx-auto mb-4"></div>
+          <p className="text-slate-300">Loading investment data...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
+    <div className="min-h-screen">
       {/* Navigation */}
       <nav className="glass-nav sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -236,7 +225,7 @@ export default function InvestmentTracking() {
                   <Button variant="ghost" size="sm" onClick={() => setShowLogin(true)}>
                     Login
                   </Button>
-                  <Button variant="ghost" size="sm" onClick={() => setShowRegister(true)}>
+                  <Button variant="primary" size="sm" onClick={() => setShowRegister(true)}>
                     Register
                   </Button>
                 </>
@@ -266,233 +255,307 @@ export default function InvestmentTracking() {
         />
       )}
 
-      <div className="container mx-auto px-4 py-12">
-        {/* Header */}
-        <div className="mb-8">
+      {/* Hero Section */}
+      <section className="relative py-16 px-4 sm:px-6 lg:px-8 overflow-hidden">
+        <div className="absolute inset-0 bg-linear-to-b from-slate-900 via-slate-900 to-slate-800 opacity-50"></div>
+        <div className="absolute inset-0" style={{
+          backgroundImage: 'radial-gradient(circle at 50% 50%, rgba(212, 161, 42, 0.1) 0%, transparent 50%)'
+        }}></div>
+
+        <div className="relative max-w-7xl mx-auto">
           <button
             onClick={() => router.push('/financial-hub')}
-            className="flex items-center gap-2 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white mb-4 transition-colors"
+            className="flex items-center gap-2 text-slate-400 hover:text-gold-400 mb-6 transition-colors"
           >
             <ArrowLeft className="w-4 h-4" />
             Back to Financial Hub
           </button>
 
-          <h1 className="text-4xl font-bold text-slate-900 dark:text-white mb-4">
+          <Badge variant="gold" className="mb-4">
+            Portfolio Tracker
+          </Badge>
+          <h1 className="text-4xl md:text-5xl font-bold mb-4 text-gradient-gold animate-fade-in leading-tight pb-2">
             Investment Tracking
           </h1>
-          <p className="text-lg text-slate-600 dark:text-slate-300 max-w-3xl">
+          <p className="text-lg text-slate-300 max-w-3xl">
             Monitor your investment portfolio, track transactions, and view performance analytics.
           </p>
         </div>
+      </section>
 
-        {/* Portfolio Summary */}
-        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-md p-6">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-slate-600 dark:text-slate-300 text-sm">Total Invested</span>
-              <Wallet className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-            </div>
-            <p className="text-3xl font-bold text-slate-900 dark:text-white">
-              ${portfolio.total_invested.toLocaleString()}
-            </p>
+      {/* Main Content */}
+      <section className="py-12 px-4 sm:px-6 lg:px-8">
+        <div className="max-w-7xl mx-auto">
+          {/* Portfolio Summary */}
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            <Card variant="glass-card">
+              <CardContent className="py-6">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-slate-400 text-sm">Total Invested</span>
+                  <div className="w-10 h-10 rounded-lg flex items-center justify-center"
+                       style={{ backgroundColor: 'rgba(59, 130, 246, 0.2)', border: '2px solid rgb(59, 130, 246)' }}>
+                    <Wallet className="w-5 h-5 text-blue-400" />
+                  </div>
+                </div>
+                <p className="text-3xl font-bold text-white">
+                  ${portfolio.total_invested.toLocaleString()}
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card variant="glass-card">
+              <CardContent className="py-6">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-slate-400 text-sm">Current Value</span>
+                  <div className="w-10 h-10 rounded-lg flex items-center justify-center"
+                       style={{ backgroundColor: 'rgba(34, 197, 94, 0.2)', border: '2px solid rgb(34, 197, 94)' }}>
+                    <TrendingUp className="w-5 h-5 text-green-400" />
+                  </div>
+                </div>
+                <p className="text-3xl font-bold text-white">
+                  ${portfolio.total_current_value.toLocaleString()}
+                </p>
+                <p className={`text-sm mt-1 ${gainLoss >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                  {gainLoss >= 0 ? '+' : ''}{gainLossPercent}% ({gainLoss >= 0 ? '+' : ''}${gainLoss.toLocaleString()})
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card variant="glass-card">
+              <CardContent className="py-6">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-slate-400 text-sm">Total Shares</span>
+                  <div className="w-10 h-10 rounded-lg flex items-center justify-center"
+                       style={{ backgroundColor: 'rgba(168, 85, 247, 0.2)', border: '2px solid rgb(168, 85, 247)' }}>
+                    <BarChart3 className="w-5 h-5 text-purple-400" />
+                  </div>
+                </div>
+                <p className="text-3xl font-bold text-white">
+                  {portfolio.total_shares.toLocaleString()}
+                </p>
+                {portfolio.total_warrants > 0 && (
+                  <p className="text-sm text-slate-400 mt-1">
+                    +{portfolio.total_warrants.toLocaleString()} warrants
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card variant="glass-card">
+              <CardContent className="py-6">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-slate-400 text-sm">Companies</span>
+                  <div className="w-10 h-10 rounded-lg flex items-center justify-center"
+                       style={{ backgroundColor: 'rgba(249, 115, 22, 0.2)', border: '2px solid rgb(249, 115, 22)' }}>
+                    <Building2 className="w-5 h-5 text-orange-400" />
+                  </div>
+                </div>
+                <p className="text-3xl font-bold text-white">
+                  {portfolio.companies_count}
+                </p>
+                <p className="text-sm text-slate-400 mt-1">
+                  {portfolio.pending_transactions} pending
+                </p>
+              </CardContent>
+            </Card>
           </div>
 
-          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-md p-6">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-slate-600 dark:text-slate-300 text-sm">Current Value</span>
-              <TrendingUp className="w-5 h-5 text-green-600 dark:text-green-400" />
-            </div>
-            <p className="text-3xl font-bold text-slate-900 dark:text-white">
-              ${portfolio.total_current_value.toLocaleString()}
-            </p>
-            <p className={`text-sm mt-1 ${gainLoss >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
-              {gainLoss >= 0 ? '+' : ''}{gainLossPercent}% ({gainLoss >= 0 ? '+' : ''}${gainLoss.toLocaleString()})
-            </p>
-          </div>
+          {/* Transaction Filters */}
+          <Card variant="glass-card" className="mb-6">
+            <CardContent className="py-4">
+              <div className="flex items-center gap-4">
+                <span className="text-sm font-semibold text-slate-300">Filter:</span>
+                <div className="flex gap-2">
+                  {(['all', 'pending', 'completed', 'failed'] as const).map((f) => (
+                    <Button
+                      key={f}
+                      variant={filter === f ? 'primary' : 'secondary'}
+                      size="sm"
+                      onClick={() => setFilter(f)}
+                    >
+                      {f.charAt(0).toUpperCase() + f.slice(1)}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
 
-          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-md p-6">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-slate-600 dark:text-slate-300 text-sm">Total Shares</span>
-              <BarChart3 className="w-5 h-5 text-purple-600 dark:text-purple-400" />
-            </div>
-            <p className="text-3xl font-bold text-slate-900 dark:text-white">
-              {portfolio.total_shares.toLocaleString()}
-            </p>
-            {portfolio.total_warrants > 0 && (
-              <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
-                +{portfolio.total_warrants.toLocaleString()} warrants
-              </p>
-            )}
-          </div>
-
-          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-md p-6">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-slate-600 dark:text-slate-300 text-sm">Companies</span>
-              <Building2 className="w-5 h-5 text-orange-600 dark:text-orange-400" />
-            </div>
-            <p className="text-3xl font-bold text-slate-900 dark:text-white">
-              {portfolio.companies_count}
-            </p>
-            <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
-              {portfolio.pending_transactions} pending
-            </p>
-          </div>
-        </div>
-
-        {/* Transaction Filters */}
-        <div className="bg-white dark:bg-slate-800 rounded-xl shadow-md p-4 mb-6">
-          <div className="flex items-center gap-4">
-            <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">Filter:</span>
-            <div className="flex gap-2">
-              {(['all', 'pending', 'completed', 'failed'] as const).map((f) => (
-                <button
-                  key={f}
-                  onClick={() => setFilter(f)}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                    filter === f
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'
-                  }`}
+          {/* Transactions List */}
+          {filteredTransactions.length === 0 ? (
+            <Card variant="glass-strong" className="text-center py-12">
+              <CardContent>
+                <Activity className="w-16 h-16 text-slate-600 mx-auto mb-4" />
+                <h3 className="text-xl font-semibold text-white mb-2">
+                  {filter === 'all' ? 'No Transactions Yet' : `No ${filter} Transactions`}
+                </h3>
+                <p className="text-slate-400 mb-6">
+                  {filter === 'all'
+                    ? "You haven't made any investments yet. Start by reviewing available subscription agreements."
+                    : `You don't have any ${filter} transactions at the moment.`
+                  }
+                </p>
+                {filter === 'all' && (
+                  <Button
+                    variant="primary"
+                    onClick={() => router.push('/financial-hub/agreements')}
+                  >
+                    View Agreements
+                    <ArrowRight className="w-4 h-4 ml-2" />
+                  </Button>
+                )}
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="space-y-4">
+              {filteredTransactions.map((transaction, idx) => (
+                <Card
+                  key={transaction.id}
+                  variant="glass-card"
+                  className="hover:scale-[1.01] transition-transform cursor-pointer animate-slide-in-up"
+                  style={{ animationDelay: `${idx * 50}ms` }}
+                  onClick={() => router.push(`/financial-hub/investments/${transaction.id}`)}
                 >
-                  {f.charAt(0).toUpperCase() + f.slice(1)}
-                </button>
+                  <CardContent className="py-6">
+                    <div className="flex items-start justify-between mb-4">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-3 mb-2">
+                          <div className="w-10 h-10 rounded-lg flex items-center justify-center"
+                               style={{ backgroundColor: 'rgba(212, 175, 55, 0.2)', border: '2px solid #d4af37' }}>
+                            <Building2 className="w-5 h-5 text-gold-400" />
+                          </div>
+                          <div>
+                            <h3 className="text-xl font-semibold text-gold-400">
+                              {transaction.subscription_agreement.financing.company.name}
+                            </h3>
+                            <p className="text-sm text-slate-400">
+                              Agreement #{transaction.subscription_agreement.id}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                      {getStatusBadge(transaction.status)}
+                    </div>
+
+                    <div className="grid md:grid-cols-4 gap-4">
+                      <div>
+                        <p className="text-sm text-slate-500 mb-1">Amount</p>
+                        <p className="text-lg font-semibold text-white">
+                          ${parseFloat(transaction.amount).toLocaleString()}
+                        </p>
+                      </div>
+
+                      <div>
+                        <p className="text-sm text-slate-500 mb-1">Payment Date</p>
+                        <p className="text-lg font-semibold text-white flex items-center gap-1">
+                          <Calendar className="w-4 h-4 text-slate-400" />
+                          {transaction.payment_date ? new Date(transaction.payment_date).toLocaleDateString() : 'Pending'}
+                        </p>
+                      </div>
+
+                      {transaction.payment_reference && (
+                        <div>
+                          <p className="text-sm text-slate-500 mb-1">Reference</p>
+                          <p className="text-sm font-mono text-slate-300">
+                            {transaction.payment_reference}
+                          </p>
+                        </div>
+                      )}
+
+                      {transaction.shares_allocated !== null && (
+                        <div>
+                          <p className="text-sm text-slate-500 mb-1">Shares</p>
+                          <p className="text-lg font-semibold text-white">
+                            {transaction.shares_allocated.toLocaleString()}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="mt-4 flex items-center justify-end text-gold-400 font-medium">
+                      <span>View Details</span>
+                      <ArrowRight className="w-4 h-4 ml-2" />
+                    </div>
+                  </CardContent>
+                </Card>
               ))}
             </div>
-          </div>
-        </div>
+          )}
 
-        {/* Transactions List */}
-        {filteredTransactions.length === 0 ? (
-          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-md p-12 text-center">
-            <Activity className="w-16 h-16 text-slate-300 dark:text-slate-600 mx-auto mb-4" />
-            <h3 className="text-xl font-semibold text-slate-900 dark:text-white mb-2">
-              {filter === 'all' ? 'No Transactions Yet' : `No ${filter} Transactions`}
-            </h3>
-            <p className="text-slate-600 dark:text-slate-300 mb-6">
-              {filter === 'all'
-                ? "You haven't made any investments yet. Start by reviewing available subscription agreements."
-                : `You don't have any ${filter} transactions at the moment.`
-              }
-            </p>
-            {filter === 'all' && (
-              <button
-                onClick={() => router.push('/financial-hub/agreements')}
-                className="px-6 py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-colors inline-flex items-center gap-2"
-              >
+          {/* Quick Actions */}
+          <div className="mt-12 grid md:grid-cols-3 gap-6">
+            <button
+              onClick={() => router.push('/financial-hub/agreements')}
+              className="group p-6 backdrop-blur-sm bg-slate-800/50 border border-slate-700/50 rounded-xl
+                transition-all duration-300 hover:bg-slate-800/80 hover:border-gold-400/30 hover:-translate-y-1 text-left"
+            >
+              <div className="w-12 h-12 rounded-lg flex items-center justify-center mb-4 transition-transform group-hover:scale-110"
+                   style={{ backgroundColor: 'rgba(59, 130, 246, 0.2)', border: '2px solid rgb(59, 130, 246)' }}>
+                <PieChart className="w-6 h-6 text-blue-400" />
+              </div>
+              <h3 className="text-lg font-semibold text-white mb-2">
                 View Agreements
-                <ArrowRight className="w-4 h-4" />
-              </button>
-            )}
+              </h3>
+              <p className="text-sm text-slate-400">
+                Review and manage your subscription agreements
+              </p>
+              <div className="mt-4 flex items-center gap-2 text-gold-400 font-medium">
+                <span>Explore</span>
+                <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
+              </div>
+            </button>
+
+            <button
+              onClick={() => router.push('/financial-hub/drs')}
+              className="group p-6 backdrop-blur-sm bg-slate-800/50 border border-slate-700/50 rounded-xl
+                transition-all duration-300 hover:bg-slate-800/80 hover:border-gold-400/30 hover:-translate-y-1 text-left"
+            >
+              <div className="w-12 h-12 rounded-lg flex items-center justify-center mb-4 transition-transform group-hover:scale-110"
+                   style={{ backgroundColor: 'rgba(99, 102, 241, 0.2)', border: '2px solid rgb(99, 102, 241)' }}>
+                <CheckCircle className="w-6 h-6 text-indigo-400" />
+              </div>
+              <h3 className="text-lg font-semibold text-white mb-2">
+                DRS Documents
+              </h3>
+              <p className="text-sm text-slate-400">
+                Access your share certificates and documentation
+              </p>
+              <div className="mt-4 flex items-center gap-2 text-gold-400 font-medium">
+                <span>Explore</span>
+                <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
+              </div>
+            </button>
+
+            <button
+              onClick={() => router.push('/companies')}
+              className="group p-6 backdrop-blur-sm bg-slate-800/50 border border-slate-700/50 rounded-xl
+                transition-all duration-300 hover:bg-slate-800/80 hover:border-gold-400/30 hover:-translate-y-1 text-left"
+            >
+              <div className="w-12 h-12 rounded-lg flex items-center justify-center mb-4 transition-transform group-hover:scale-110"
+                   style={{ backgroundColor: 'rgba(34, 197, 94, 0.2)', border: '2px solid rgb(34, 197, 94)' }}>
+                <Building2 className="w-6 h-6 text-green-400" />
+              </div>
+              <h3 className="text-lg font-semibold text-white mb-2">
+                Browse Companies
+              </h3>
+              <p className="text-sm text-slate-400">
+                Discover new investment opportunities
+              </p>
+              <div className="mt-4 flex items-center gap-2 text-gold-400 font-medium">
+                <span>Explore</span>
+                <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
+              </div>
+            </button>
           </div>
-        ) : (
-          <div className="space-y-4">
-            {filteredTransactions.map((transaction) => (
-              <button
-                key={transaction.id}
-                onClick={() => router.push(`/financial-hub/investments/${transaction.id}`)}
-                className="w-full bg-white dark:bg-slate-800 rounded-xl shadow-md hover:shadow-xl transition-all duration-300 hover:-translate-y-1 p-6 text-left"
-              >
-                <div className="flex items-start justify-between mb-4">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-3 mb-2">
-                      <Building2 className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-                      <h3 className="text-xl font-semibold text-slate-900 dark:text-white">
-                        {transaction.subscription_agreement.financing.company.name}
-                      </h3>
-                    </div>
-                    <p className="text-slate-600 dark:text-slate-300">
-                      Agreement #{transaction.subscription_agreement.id}
-                    </p>
-                  </div>
-                  {getStatusBadge(transaction.status)}
-                </div>
-
-                <div className="grid md:grid-cols-4 gap-4">
-                  <div>
-                    <p className="text-sm text-slate-500 dark:text-slate-400 mb-1">Amount</p>
-                    <p className="text-lg font-semibold text-slate-900 dark:text-white">
-                      ${parseFloat(transaction.amount).toLocaleString()}
-                    </p>
-                  </div>
-
-                  <div>
-                    <p className="text-sm text-slate-500 dark:text-slate-400 mb-1">Payment Date</p>
-                    <p className="text-lg font-semibold text-slate-900 dark:text-white flex items-center gap-1">
-                      <Calendar className="w-4 h-4" />
-                      {transaction.payment_date ? new Date(transaction.payment_date).toLocaleDateString() : 'Pending'}
-                    </p>
-                  </div>
-
-                  {transaction.payment_reference && (
-                    <div>
-                      <p className="text-sm text-slate-500 dark:text-slate-400 mb-1">Reference</p>
-                      <p className="text-sm font-mono text-slate-900 dark:text-white">
-                        {transaction.payment_reference}
-                      </p>
-                    </div>
-                  )}
-
-                  {transaction.shares_allocated !== null && (
-                    <div>
-                      <p className="text-sm text-slate-500 dark:text-slate-400 mb-1">Shares</p>
-                      <p className="text-lg font-semibold text-slate-900 dark:text-white">
-                        {transaction.shares_allocated.toLocaleString()}
-                      </p>
-                    </div>
-                  )}
-                </div>
-
-                <div className="mt-4 flex items-center justify-end text-blue-600 dark:text-blue-400 font-medium">
-                  <span>View Details</span>
-                  <ArrowRight className="w-4 h-4 ml-2" />
-                </div>
-              </button>
-            ))}
-          </div>
-        )}
-
-        {/* Quick Actions */}
-        <div className="mt-12 grid md:grid-cols-3 gap-6">
-          <button
-            onClick={() => router.push('/financial-hub/agreements')}
-            className="p-6 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl hover:shadow-md transition-all"
-          >
-            <PieChart className="w-8 h-8 text-blue-600 dark:text-blue-400 mb-3" />
-            <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-2">
-              View Agreements
-            </h3>
-            <p className="text-sm text-slate-600 dark:text-slate-300">
-              Review and manage your subscription agreements
-            </p>
-          </button>
-
-          <button
-            onClick={() => router.push('/financial-hub/drs')}
-            className="p-6 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 rounded-xl hover:shadow-md transition-all"
-          >
-            <CheckCircle className="w-8 h-8 text-indigo-600 dark:text-indigo-400 mb-3" />
-            <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-2">
-              DRS Documents
-            </h3>
-            <p className="text-sm text-slate-600 dark:text-slate-300">
-              Access your share certificates and documentation
-            </p>
-          </button>
-
-          <button
-            onClick={() => router.push('/companies')}
-            className="p-6 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl hover:shadow-md transition-all"
-          >
-            <Building2 className="w-8 h-8 text-green-600 dark:text-green-400 mb-3" />
-            <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-2">
-              Browse Companies
-            </h3>
-            <p className="text-sm text-slate-600 dark:text-slate-300">
-              Discover new investment opportunities
-            </p>
-          </button>
         </div>
-      </div>
+      </section>
+
+      {/* Footer */}
+      <footer className="py-8 px-4 border-t border-slate-800">
+        <div className="max-w-7xl mx-auto text-center text-slate-400 text-sm">
+          <p>&copy; {new Date().getFullYear()} GoldVenture. All rights reserved.</p>
+        </div>
+      </footer>
     </div>
   );
 }

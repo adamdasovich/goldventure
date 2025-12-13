@@ -20,8 +20,11 @@ class User(AbstractUser):
         ('company', 'Company Representative'),
         ('investor', 'Investor'),
         ('analyst', 'Analyst'),
+        ('mining_company', 'Mining Company'),
+        ('prospector', 'Prospector'),
+        ('student', 'Student'),
     ]
-    user_type = models.CharField(max_length=20, choices=USER_TYPES)
+    user_type = models.CharField(max_length=20, choices=USER_TYPES, default='investor')
     company = models.ForeignKey('Company', on_delete=models.SET_NULL, null=True, blank=True)
     phone = models.CharField(max_length=20, blank=True)
     linkedin_url = models.URLField(blank=True)
@@ -1705,3 +1708,543 @@ class DRSDocument(models.Model):
 
     def __str__(self):
         return f"{self.user.username} - {self.get_document_type_display()} - {self.company.name}"
+
+
+# ============================================================================
+# PROSPECTOR PROPERTY EXCHANGE MODELS
+# ============================================================================
+
+class ProspectorProfile(models.Model):
+    """Extended profile for prospectors listing properties"""
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='prospector_profile')
+    display_name = models.CharField(max_length=200)
+    company_name = models.CharField(max_length=200, blank=True, help_text="Optional company/business name")
+    bio = models.TextField(blank=True)
+    years_experience = models.IntegerField(default=0, validators=[MinValueValidator(0)])
+    specializations = models.JSONField(default=list, blank=True, help_text="List of mineral specializations")
+    regions_active = models.JSONField(default=list, blank=True, help_text="List of active regions")
+    certifications = models.JSONField(default=list, blank=True, help_text="List of certifications [{name, issuer, year}]")
+    website_url = models.URLField(blank=True)
+    phone = models.CharField(max_length=20, blank=True)
+
+    # Verification
+    is_verified = models.BooleanField(default=False)
+    verification_date = models.DateTimeField(null=True, blank=True)
+    verification_notes = models.TextField(blank=True)
+
+    # Profile media
+    profile_image_url = models.URLField(blank=True)
+
+    # Denormalized stats
+    total_listings = models.IntegerField(default=0)
+    active_listings = models.IntegerField(default=0)
+    successful_transactions = models.IntegerField(default=0)
+    average_rating = models.DecimalField(max_digits=3, decimal_places=2, default=Decimal('0.00'))
+
+    # Commission Agreement - 5% on successful transactions
+    commission_agreement_accepted = models.BooleanField(default=False)
+    commission_agreement_date = models.DateTimeField(null=True, blank=True)
+    commission_agreement_ip = models.GenericIPAddressField(null=True, blank=True)
+
+    # Timestamps
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'prospector_profiles'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.display_name} ({self.user.username})"
+
+    @property
+    def can_list_properties(self):
+        """Check if prospector has accepted commission agreement"""
+        return self.commission_agreement_accepted
+
+
+class ProspectorCommissionAgreement(models.Model):
+    """
+    Legal record of prospector commission agreement.
+    GoldVenture receives 5% commission on any successful transaction
+    resulting from property listings on the platform.
+    """
+    AGREEMENT_VERSION = '1.0'
+    COMMISSION_RATE = Decimal('5.00')  # 5%
+
+    prospector = models.ForeignKey(ProspectorProfile, on_delete=models.CASCADE, related_name='commission_agreements')
+
+    # Agreement details
+    version = models.CharField(max_length=10, default=AGREEMENT_VERSION)
+    commission_rate = models.DecimalField(max_digits=5, decimal_places=2, default=COMMISSION_RATE)
+
+    # Legal acceptance
+    full_legal_name = models.CharField(max_length=300, help_text="Full legal name as signature")
+    accepted_at = models.DateTimeField(auto_now_add=True)
+    ip_address = models.GenericIPAddressField()
+    user_agent = models.TextField(blank=True)
+
+    # Agreement text at time of signing (for legal record)
+    agreement_text = models.TextField()
+
+    # Status
+    is_active = models.BooleanField(default=True)
+    revoked_at = models.DateTimeField(null=True, blank=True)
+    revocation_reason = models.TextField(blank=True)
+
+    class Meta:
+        db_table = 'prospector_commission_agreements'
+        ordering = ['-accepted_at']
+
+    def __str__(self):
+        return f"Commission Agreement - {self.prospector.display_name} ({self.accepted_at.strftime('%Y-%m-%d')})"
+
+    @classmethod
+    def get_agreement_text(cls):
+        """Return the current commission agreement text"""
+        return """
+GOLDVENTURE PROSPECTOR COMMISSION AGREEMENT
+
+Version: 1.0
+Effective Date: Upon Acceptance
+
+1. PARTIES
+This Commission Agreement ("Agreement") is entered into between:
+- GoldVenture Platform ("GoldVenture", "we", "us")
+- The undersigned Prospector ("You", "Prospector")
+
+2. FREE LISTING SERVICE
+GoldVenture provides a FREE property listing service that allows Prospectors to:
+- List unlimited mining properties at no upfront cost
+- Access our network of investors and mining companies
+- Receive inquiries and negotiate directly with interested parties
+
+3. COMMISSION STRUCTURE
+In consideration for the free listing service, You agree to pay GoldVenture a commission of:
+
+    FIVE PERCENT (5%) of the total transaction value
+
+This commission applies to any successful transaction resulting from contacts made through the GoldVenture platform, including but not limited to:
+- Property sales
+- Option agreements
+- Joint venture partnerships
+- Lease agreements
+- Any other transfer of rights or interests
+
+4. PAYMENT TERMS
+- Commission is due within 30 days of transaction closing
+- Payment shall be made via wire transfer or certified check
+- Failure to pay may result in legal action and platform suspension
+
+5. REPORTING OBLIGATIONS
+You agree to:
+- Notify GoldVenture within 5 business days of any transaction closing
+- Provide documentation of transaction value upon request
+- Maintain accurate records for a minimum of 7 years
+
+6. TERM AND TERMINATION
+- This Agreement remains in effect for 24 months after your last active listing
+- Commission obligations survive termination for any transactions initiated during the active period
+- GoldVenture may terminate this Agreement for violation of platform terms
+
+7. GOVERNING LAW
+This Agreement shall be governed by the laws of British Columbia, Canada.
+
+8. ELECTRONIC SIGNATURE
+By accepting this Agreement electronically, You acknowledge that:
+- Your electronic signature is legally binding
+- You have read and understood all terms
+- You have the authority to enter into this Agreement
+
+By typing your full legal name below, you agree to all terms of this Commission Agreement.
+"""
+
+
+class PropertyListing(models.Model):
+    """Mining property listings for sale/option/JV/lease"""
+
+    # Property Types
+    PROPERTY_TYPES = [
+        ('claim', 'Mineral Claim'),
+        ('lease', 'Mining Lease'),
+        ('fee_simple', 'Fee Simple'),
+        ('option', 'Option Agreement'),
+        ('permit', 'Exploration Permit'),
+    ]
+
+    # Mineral Types
+    MINERAL_TYPES = [
+        ('gold', 'Gold'),
+        ('silver', 'Silver'),
+        ('copper', 'Copper'),
+        ('zinc', 'Zinc'),
+        ('lead', 'Lead'),
+        ('nickel', 'Nickel'),
+        ('cobalt', 'Cobalt'),
+        ('lithium', 'Lithium'),
+        ('uranium', 'Uranium'),
+        ('rare_earth', 'Rare Earth Elements'),
+        ('platinum', 'Platinum Group'),
+        ('diamonds', 'Diamonds'),
+        ('iron', 'Iron'),
+        ('molybdenum', 'Molybdenum'),
+        ('tungsten', 'Tungsten'),
+        ('tin', 'Tin'),
+        ('other', 'Other'),
+    ]
+
+    # Mineral Rights Types
+    MINERAL_RIGHTS_TYPES = [
+        ('placer', 'Placer'),
+        ('lode', 'Lode/Hardrock'),
+        ('both', 'Both Placer & Lode'),
+    ]
+
+    # Deposit Types
+    DEPOSIT_TYPES = [
+        ('vein', 'Vein/Lode'),
+        ('placer', 'Placer'),
+        ('porphyry', 'Porphyry'),
+        ('vms', 'VMS (Volcanogenic Massive Sulfide)'),
+        ('sedex', 'SEDEX'),
+        ('skarn', 'Skarn'),
+        ('epithermal', 'Epithermal'),
+        ('orogenic', 'Orogenic'),
+        ('iocg', 'IOCG'),
+        ('mvt', 'MVT'),
+        ('laterite', 'Laterite'),
+        ('bif', 'BIF (Banded Iron Formation)'),
+        ('carlin', 'Carlin-type'),
+        ('intrusion', 'Intrusion-related'),
+        ('other', 'Other'),
+    ]
+
+    # Exploration Stages
+    EXPLORATION_STAGES = [
+        ('grassroots', 'Grassroots'),
+        ('early', 'Early Stage'),
+        ('advanced', 'Advanced'),
+        ('development', 'Development Ready'),
+        ('past_producer', 'Past Producer'),
+    ]
+
+    # Listing Types
+    LISTING_TYPES = [
+        ('sale', 'Outright Sale'),
+        ('option', 'Option to Purchase'),
+        ('joint_venture', 'Joint Venture'),
+        ('lease', 'Lease'),
+    ]
+
+    # Listing Status
+    LISTING_STATUS = [
+        ('draft', 'Draft'),
+        ('pending_review', 'Pending Review'),
+        ('active', 'Active'),
+        ('under_offer', 'Under Offer'),
+        ('sold', 'Sold'),
+        ('withdrawn', 'Withdrawn'),
+        ('expired', 'Expired'),
+        ('rejected', 'Rejected'),
+    ]
+
+    # Access Types
+    ACCESS_TYPES = [
+        ('road', 'Road Accessible'),
+        ('fly_in', 'Fly-in Only'),
+        ('boat', 'Boat Access'),
+        ('combination', 'Combination'),
+        ('seasonal', 'Seasonal Access'),
+    ]
+
+    # Countries with significant mining
+    COUNTRIES = [
+        ('CA', 'Canada'),
+        ('US', 'United States'),
+        ('AU', 'Australia'),
+        ('MX', 'Mexico'),
+        ('PE', 'Peru'),
+        ('CL', 'Chile'),
+        ('AR', 'Argentina'),
+        ('BR', 'Brazil'),
+        ('CO', 'Colombia'),
+        ('ZA', 'South Africa'),
+        ('GH', 'Ghana'),
+        ('ML', 'Mali'),
+        ('BF', 'Burkina Faso'),
+        ('CD', 'DRC'),
+        ('ZM', 'Zambia'),
+        ('PH', 'Philippines'),
+        ('ID', 'Indonesia'),
+        ('CN', 'China'),
+        ('MN', 'Mongolia'),
+        ('OTHER', 'Other'),
+    ]
+
+    # Canadian Provinces
+    CANADIAN_PROVINCES = [
+        ('BC', 'British Columbia'),
+        ('AB', 'Alberta'),
+        ('SK', 'Saskatchewan'),
+        ('MB', 'Manitoba'),
+        ('ON', 'Ontario'),
+        ('QC', 'Quebec'),
+        ('NB', 'New Brunswick'),
+        ('NS', 'Nova Scotia'),
+        ('NL', 'Newfoundland and Labrador'),
+        ('PE', 'Prince Edward Island'),
+        ('YT', 'Yukon'),
+        ('NT', 'Northwest Territories'),
+        ('NU', 'Nunavut'),
+    ]
+
+    # Ownership & Identification
+    prospector = models.ForeignKey(ProspectorProfile, on_delete=models.CASCADE, related_name='listings')
+    slug = models.SlugField(max_length=255, unique=True)
+
+    # Basic Information
+    title = models.CharField(max_length=200)
+    summary = models.CharField(max_length=500, blank=True, help_text="Brief summary for search results")
+    description = models.TextField(blank=True, help_text="Full property description")
+    property_type = models.CharField(max_length=20, choices=PROPERTY_TYPES)
+
+    # Location
+    country = models.CharField(max_length=5, choices=COUNTRIES)
+    province_state = models.CharField(max_length=100)
+    region_district = models.CharField(max_length=200, blank=True)
+    nearest_town = models.CharField(max_length=200, blank=True)
+    coordinates_lat = models.DecimalField(max_digits=10, decimal_places=7, null=True, blank=True)
+    coordinates_lng = models.DecimalField(max_digits=10, decimal_places=7, null=True, blank=True)
+    access_description = models.TextField(blank=True)
+    access_type = models.CharField(max_length=20, choices=ACCESS_TYPES, blank=True)
+
+    # Claim Details
+    claim_numbers = models.JSONField(default=list, help_text="List of claim numbers")
+    total_claims = models.IntegerField(default=1, validators=[MinValueValidator(1)])
+    total_hectares = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    total_acres = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True, editable=False)
+    mineral_rights_type = models.CharField(max_length=20, choices=MINERAL_RIGHTS_TYPES, blank=True)
+    surface_rights_included = models.BooleanField(default=False)
+    claim_status = models.CharField(max_length=50, blank=True, help_text="active, pending renewal, etc")
+    claim_expiry_date = models.DateField(null=True, blank=True)
+    annual_holding_cost = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+
+    # Minerals & Geology
+    primary_mineral = models.CharField(max_length=30, choices=MINERAL_TYPES)
+    secondary_minerals = models.JSONField(default=list, blank=True, help_text="List of secondary minerals")
+    deposit_type = models.CharField(max_length=30, choices=DEPOSIT_TYPES, blank=True)
+    geological_setting = models.TextField(blank=True)
+    mineralization_style = models.CharField(max_length=200, blank=True)
+
+    # Exploration Status
+    exploration_stage = models.CharField(max_length=20, choices=EXPLORATION_STAGES)
+    work_completed = models.JSONField(default=list, blank=True, help_text="List of work completed [{type, date, summary}]")
+    historical_production = models.TextField(blank=True)
+    assay_highlights = models.JSONField(default=list, blank=True, help_text="Best assay results [{sample_id, mineral, grade, unit}]")
+    resource_estimate = models.TextField(blank=True)
+    has_43_101_report = models.BooleanField(default=False)
+
+    # Transaction Terms
+    listing_type = models.CharField(max_length=20, choices=LISTING_TYPES)
+    asking_price = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True)
+    price_currency = models.CharField(max_length=3, default='CAD')
+    price_negotiable = models.BooleanField(default=True)
+    minimum_offer = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True)
+    option_terms = models.TextField(blank=True)
+    joint_venture_terms = models.TextField(blank=True)
+    lease_terms = models.TextField(blank=True)
+    nsr_royalty = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True, help_text="NSR royalty percentage to retain")
+    includes_equipment = models.BooleanField(default=False)
+    equipment_description = models.TextField(blank=True)
+    additional_terms = models.TextField(blank=True)
+
+    # Status & Visibility
+    status = models.CharField(max_length=20, choices=LISTING_STATUS, default='draft')
+    is_featured = models.BooleanField(default=False)
+    featured_until = models.DateTimeField(null=True, blank=True)
+
+    # Engagement Metrics (denormalized)
+    views_count = models.IntegerField(default=0)
+    inquiries_count = models.IntegerField(default=0)
+    watchlist_count = models.IntegerField(default=0)
+
+    # Timestamps
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    published_at = models.DateTimeField(null=True, blank=True)
+    expires_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = 'property_listings'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['status', '-created_at']),
+            models.Index(fields=['country', 'province_state']),
+            models.Index(fields=['primary_mineral', 'status']),
+            models.Index(fields=['exploration_stage', 'status']),
+            models.Index(fields=['listing_type', 'status']),
+            models.Index(fields=['prospector', '-created_at']),
+            models.Index(fields=['-views_count']),
+            models.Index(fields=['is_featured', '-created_at']),
+        ]
+
+    def __str__(self):
+        return f"{self.title} ({self.get_primary_mineral_display()})"
+
+    def save(self, *args, **kwargs):
+        # Auto-calculate acres from hectares
+        if self.total_hectares:
+            self.total_acres = self.total_hectares * Decimal('2.47105')
+        super().save(*args, **kwargs)
+
+
+class PropertyMedia(models.Model):
+    """Media files associated with property listings"""
+
+    MEDIA_TYPES = [
+        ('image', 'Image'),
+        ('video', 'Video'),
+        ('document', 'Document'),
+        ('map', 'Map'),
+    ]
+
+    MEDIA_CATEGORIES = [
+        ('hero', 'Hero Image'),
+        ('gallery', 'Gallery'),
+        ('geological_map', 'Geological Map'),
+        ('claim_map', 'Claim Map'),
+        ('location_map', 'Location Map'),
+        ('assay', 'Assay Certificate'),
+        ('report', 'Technical Report'),
+        ('permit', 'Permit/License'),
+        ('other', 'Other'),
+    ]
+
+    listing = models.ForeignKey(PropertyListing, on_delete=models.CASCADE, related_name='media')
+    media_type = models.CharField(max_length=20, choices=MEDIA_TYPES)
+    category = models.CharField(max_length=30, choices=MEDIA_CATEGORIES)
+    title = models.CharField(max_length=200)
+    description = models.TextField(blank=True)
+    file_url = models.URLField()
+    thumbnail_url = models.URLField(blank=True)
+    file_size_mb = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    file_format = models.CharField(max_length=20, blank=True)
+    sort_order = models.IntegerField(default=0)
+    is_primary = models.BooleanField(default=False, help_text="Primary/hero image for the listing")
+
+    # Audit
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+    uploaded_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
+
+    class Meta:
+        db_table = 'property_media'
+        ordering = ['sort_order', '-uploaded_at']
+        indexes = [
+            models.Index(fields=['listing', 'media_type']),
+            models.Index(fields=['listing', 'is_primary']),
+        ]
+
+    def __str__(self):
+        return f"{self.listing.title} - {self.title}"
+
+
+class PropertyInquiry(models.Model):
+    """Inquiries from potential buyers to property sellers"""
+
+    INQUIRY_TYPES = [
+        ('general', 'General Information'),
+        ('site_visit', 'Site Visit Request'),
+        ('offer', 'Making an Offer'),
+        ('documents', 'Document Request'),
+        ('technical', 'Technical Questions'),
+    ]
+
+    INQUIRY_STATUS = [
+        ('new', 'New'),
+        ('read', 'Read'),
+        ('responded', 'Responded'),
+        ('closed', 'Closed'),
+    ]
+
+    CONTACT_PREFERENCES = [
+        ('email', 'Email'),
+        ('phone', 'Phone'),
+        ('either', 'Either'),
+    ]
+
+    listing = models.ForeignKey(PropertyListing, on_delete=models.CASCADE, related_name='inquiries')
+    inquirer = models.ForeignKey(User, on_delete=models.CASCADE, related_name='property_inquiries')
+    inquiry_type = models.CharField(max_length=20, choices=INQUIRY_TYPES)
+    message = models.TextField()
+    contact_preference = models.CharField(max_length=10, choices=CONTACT_PREFERENCES, default='email')
+    phone_number = models.CharField(max_length=20, blank=True)
+
+    # Status tracking
+    status = models.CharField(max_length=20, choices=INQUIRY_STATUS, default='new')
+    response = models.TextField(blank=True)
+    responded_at = models.DateTimeField(null=True, blank=True)
+
+    # NDA tracking
+    is_nda_signed = models.BooleanField(default=False)
+    nda_signed_at = models.DateTimeField(null=True, blank=True)
+
+    # Timestamps
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'property_inquiries'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['listing', 'status']),
+            models.Index(fields=['inquirer', '-created_at']),
+            models.Index(fields=['status', '-created_at']),
+        ]
+
+    def __str__(self):
+        return f"Inquiry on {self.listing.title} by {self.inquirer.username}"
+
+
+class PropertyWatchlist(models.Model):
+    """User watchlist for property listings"""
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='property_watchlist')
+    listing = models.ForeignKey(PropertyListing, on_delete=models.CASCADE, related_name='watchlisted_by')
+    notes = models.TextField(blank=True, help_text="Personal notes about this listing")
+    price_alert = models.BooleanField(default=False, help_text="Alert on price changes")
+    added_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'property_watchlist'
+        unique_together = ['user', 'listing']
+        ordering = ['-added_at']
+
+    def __str__(self):
+        return f"{self.user.username} watching {self.listing.title}"
+
+
+class SavedPropertySearch(models.Model):
+    """Saved search criteria for property alerts"""
+
+    ALERT_FREQUENCIES = [
+        ('instant', 'Instant'),
+        ('daily', 'Daily'),
+        ('weekly', 'Weekly'),
+    ]
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='saved_property_searches')
+    name = models.CharField(max_length=200)
+    search_criteria = models.JSONField(help_text="Search filter parameters")
+    email_alerts = models.BooleanField(default=True)
+    alert_frequency = models.CharField(max_length=10, choices=ALERT_FREQUENCIES, default='daily')
+
+    # Timestamps
+    created_at = models.DateTimeField(auto_now_add=True)
+    last_alerted_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = 'saved_property_searches'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.user.username} - {self.name}"

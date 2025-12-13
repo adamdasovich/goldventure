@@ -67,7 +67,7 @@ export default function CreateEventPage() {
 
   const fetchCompany = async () => {
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://api.juniorgoldminingintelligence.com/api'}/companies/${params.id}/`);
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || '/api'}/companies/${params.id}/`);
       if (response.ok) {
         const data = await response.json();
         setCompany(data);
@@ -122,7 +122,7 @@ export default function CreateEventPage() {
       const token = localStorage.getItem('accessToken');
 
       // Create the event
-      const eventResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://api.juniorgoldminingintelligence.com/api'}/events/`, {
+      const eventResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL || '/api'}/events/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

@@ -18,7 +18,7 @@ interface AuthContextType {
   isAuthenticated: boolean;
   isLoading: boolean;
   login: (username: string, password: string) => Promise<void>;
-  register: (username: string, email: string, password: string, fullName: string) => Promise<void>;
+  register: (username: string, email: string, password: string, fullName: string, userType: string) => Promise<void>;
   logout: () => void;
 }
 
@@ -103,7 +103,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     username: string,
     email: string,
     password: string,
-    fullName: string
+    fullName: string,
+    userType: string
   ) => {
     // Clear any existing auth data first
     localStorage.removeItem('accessToken');
@@ -122,7 +123,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         email,
         password,
         full_name: fullName,
-        user_type: 'investor',
+        user_type: userType,
       }),
     });
 

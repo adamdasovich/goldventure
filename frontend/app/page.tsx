@@ -22,12 +22,12 @@ export default function Home() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-24">
             <div className="flex items-center space-x-3">
-              <LogoMono className="h-12" />
+              <LogoMono className="h-16" />
             </div>
             <div className="flex items-center space-x-4">
-              <Badge variant="copper">AI-Powered</Badge>
-              <Button variant="ghost" size="sm">Dashboard</Button>
+              <Button variant="ghost" size="sm" onClick={() => window.location.href = '/dashboard'}>Dashboard</Button>
               <Button variant="ghost" size="sm" onClick={() => window.location.href = '/companies'}>Companies</Button>
+              <Button variant="ghost" size="sm" onClick={() => window.location.href = '/properties'}>Prospector's Exchange</Button>
               <Button variant="ghost" size="sm" onClick={() => window.location.href = '/metals'}>Metals</Button>
               <Button variant="ghost" size="sm" onClick={() => window.location.href = '/financial-hub'}>Financial Hub</Button>
 
@@ -84,9 +84,6 @@ export default function Home() {
         }}></div>
 
         <div className="relative max-w-7xl mx-auto text-center">
-          <Badge variant="gold" className="mb-6">
-            Powered by Claude AI
-          </Badge>
           <h2 className="text-5xl md:text-6xl font-bold mb-6 text-gradient-gold animate-fade-in leading-tight pb-2">
             Junior Mining Intelligence
           </h2>
@@ -107,7 +104,6 @@ export default function Home() {
       <section className="py-16 px-4 sm:px-6 lg:px-8 bg-gradient-slate">
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-12">
-            <Badge variant="copper" className="mb-4">Claude AI Integration</Badge>
             <h3 className="text-4xl font-bold text-gold-400 mb-4">Ask Anything About Your Mining Data</h3>
             <p className="text-slate-300 text-lg max-w-2xl mx-auto">
               Natural language access to companies, projects, resources, and economic studies.
@@ -201,7 +197,6 @@ export default function Home() {
             AI-Powered Mining Intelligence Platform
           </p>
           <div className="mt-6 flex justify-center space-x-6">
-            <Badge variant="slate">Powered by Claude</Badge>
             <Badge variant="slate">Next.js</Badge>
             <Badge variant="slate">Django</Badge>
             <Badge variant="slate">PostgreSQL</Badge>

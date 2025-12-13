@@ -88,6 +88,53 @@ export const metadata: Metadata = {
   },
 };
 
+// JSON-LD structured data for rich snippets
+const organizationJsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'Organization',
+  name: 'Junior Gold Mining Intelligence',
+  url: 'https://juniorgoldminingintelligence.com',
+  logo: 'https://juniorgoldminingintelligence.com/logo.png',
+  description: 'AI-powered platform for junior gold mining company analysis, investment research, and precious metals market intelligence.',
+  sameAs: [
+    'https://twitter.com/jrgoldmining'
+  ],
+  contactPoint: {
+    '@type': 'ContactPoint',
+    contactType: 'customer service',
+    availableLanguage: ['English']
+  }
+};
+
+const websiteJsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebSite',
+  name: 'Junior Gold Mining Intelligence',
+  url: 'https://juniorgoldminingintelligence.com',
+  description: 'Discover and analyze junior gold mining companies with AI-powered insights.',
+  potentialAction: {
+    '@type': 'SearchAction',
+    target: {
+      '@type': 'EntryPoint',
+      urlTemplate: 'https://juniorgoldminingintelligence.com/companies?search={search_term_string}'
+    },
+    'query-input': 'required name=search_term_string'
+  }
+};
+
+const financeServiceJsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'FinancialService',
+  name: 'Junior Gold Mining Intelligence',
+  url: 'https://juniorgoldminingintelligence.com',
+  description: 'Mining investment research platform providing company analysis, precious metals pricing, and investment qualification services.',
+  areaServed: {
+    '@type': 'Country',
+    name: ['Canada', 'United States']
+  },
+  serviceType: ['Investment Research', 'Market Analysis', 'Investor Education']
+};
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -103,6 +150,18 @@ export default function RootLayout({
         <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
         <link rel="manifest" href="/manifest.json" />
         <meta name="theme-color" content="#D4AF37" />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationJsonLd) }}
+        />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(websiteJsonLd) }}
+        />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(financeServiceJsonLd) }}
+        />
       </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}

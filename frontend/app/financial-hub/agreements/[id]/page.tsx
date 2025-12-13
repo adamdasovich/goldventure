@@ -102,7 +102,7 @@ export default function AgreementDetail() {
   const fetchAgreement = async (id: string) => {
     try {
       const token = localStorage.getItem('accessToken');
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://api.juniorgoldminingintelligence.com/api'}/agreements/${id}/`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || '/api'}/agreements/${id}/`, {
         headers: {
           'Authorization': `Bearer ${token}`,
         },
@@ -130,7 +130,7 @@ export default function AgreementDetail() {
     setSigning(true);
     try {
       const token = localStorage.getItem('accessToken');
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://api.juniorgoldminingintelligence.com/api'}/agreements/${agreement.id}/sign/`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || '/api'}/agreements/${agreement.id}/sign/`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,

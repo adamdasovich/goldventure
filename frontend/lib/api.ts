@@ -76,13 +76,25 @@ export const financingAPI = {
     apiFetch<Financing>(`/financings/${id}/`),
 };
 
-// Claude Chat API
+// Claude Chat API - Uses local Next.js API route to avoid CORS issues
 export const claudeAPI = {
-  chat: (request: ChatRequest) =>
-    apiFetch<ChatResponse>('/claude/chat/', {
+  chat: async (request: ChatRequest): Promise<ChatResponse> => {
+    // Use local API route to proxy to backend (avoids CORS issues)
+    const response = await fetch('/api/claude/chat/', {
       method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
       body: JSON.stringify(request),
-    }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ error: 'Network error' }));
+      throw new Error(error.error || `API Error: ${response.status}`);
+    }
+
+    return response.json();
+  },
 
   companyChat: (companyId: number, request: ChatRequest) =>
     apiFetch<ChatResponse>(`/companies/${companyId}/chat/`, {

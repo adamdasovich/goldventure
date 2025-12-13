@@ -10,12 +10,20 @@ interface RegisterModalProps {
   onSwitchToLogin: () => void;
 }
 
+const USER_TYPE_OPTIONS = [
+  { value: 'investor', label: 'Investor' },
+  { value: 'mining_company', label: 'Mining Company' },
+  { value: 'prospector', label: 'Prospector' },
+  { value: 'student', label: 'Student' },
+];
+
 export function RegisterModal({ onClose, onSwitchToLogin }: RegisterModalProps) {
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [fullName, setFullName] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [userType, setUserType] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const { register } = useAuth();
@@ -25,6 +33,11 @@ export function RegisterModal({ onClose, onSwitchToLogin }: RegisterModalProps) 
     setError('');
 
     // Validation
+    if (!userType) {
+      setError('Please select a user type');
+      return;
+    }
+
     if (password !== confirmPassword) {
       setError('Passwords do not match');
       return;
@@ -38,7 +51,7 @@ export function RegisterModal({ onClose, onSwitchToLogin }: RegisterModalProps) 
     setLoading(true);
 
     try {
-      await register(username, email, password, fullName);
+      await register(username, email, password, fullName, userType);
       onClose();
     } catch (err: any) {
       setError(err.message || 'Registration failed');
@@ -70,6 +83,34 @@ export function RegisterModal({ onClose, onSwitchToLogin }: RegisterModalProps) 
                 {error}
               </div>
             )}
+
+            <div>
+              <label htmlFor="userType" className="block text-sm font-medium text-slate-300 mb-2">
+                I am a... <span className="text-red-400">*</span>
+              </label>
+              <div className="space-y-2">
+                {USER_TYPE_OPTIONS.map((option) => (
+                  <label
+                    key={option.value}
+                    className={`flex items-center p-3 rounded-lg cursor-pointer transition-all border ${
+                      userType === option.value
+                        ? 'bg-gold-500/20 border-gold-500 text-gold-400'
+                        : 'bg-slate-800/50 border-slate-700 hover:border-slate-600'
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="userType"
+                      value={option.value}
+                      checked={userType === option.value}
+                      onChange={(e) => setUserType(e.target.value)}
+                      className="w-4 h-4 text-gold-500 bg-slate-800 border-slate-700 focus:ring-gold-500 focus:ring-2"
+                    />
+                    <span className="ml-3 text-white">{option.label}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
 
             <div>
               <label htmlFor="fullName" className="block text-sm font-medium text-slate-300 mb-2">

@@ -155,7 +155,7 @@ export default function EventDetailPage() {
         headers['Authorization'] = `Bearer ${token}`;
       }
 
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://api.juniorgoldminingintelligence.com/api'}/events/${params.eventId}/`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || '/api'}/events/${params.eventId}/`, {
         headers,
       });
 
@@ -172,7 +172,7 @@ export default function EventDetailPage() {
 
   const fetchQuestions = async () => {
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://api.juniorgoldminingintelligence.com/api'}/event-questions/?event=${params.eventId}`);
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || '/api'}/event-questions/?event=${params.eventId}`);
       if (response.ok) {
         const data = await response.json();
         // Handle both array response and paginated response
@@ -192,7 +192,7 @@ export default function EventDetailPage() {
 
     try {
       const token = localStorage.getItem('accessToken');
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://api.juniorgoldminingintelligence.com/api'}/events/${params.eventId}/register/`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || '/api'}/events/${params.eventId}/register/`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -210,7 +210,7 @@ export default function EventDetailPage() {
   const handleUnregister = async () => {
     try {
       const token = localStorage.getItem('accessToken');
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://api.juniorgoldminingintelligence.com/api'}/events/${params.eventId}/unregister/`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || '/api'}/events/${params.eventId}/unregister/`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -232,7 +232,7 @@ export default function EventDetailPage() {
 
     try {
       const token = localStorage.getItem('accessToken');
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://api.juniorgoldminingintelligence.com/api'}/events/${params.eventId}/`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || '/api'}/events/${params.eventId}/`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
@@ -299,7 +299,7 @@ export default function EventDetailPage() {
       const embedUrl = `https://www.youtube.com/embed/${videoId}`;
       console.log('[Go Live] Final embed URL:', embedUrl);
 
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://api.juniorgoldminingintelligence.com/api'}/events/${params.eventId}/`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || '/api'}/events/${params.eventId}/`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
@@ -346,7 +346,7 @@ export default function EventDetailPage() {
       } else {
         // Fallback to HTTP if WebSocket not connected
         const token = localStorage.getItem('accessToken');
-        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://api.juniorgoldminingintelligence.com/api'}/event-questions/`, {
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || '/api'}/event-questions/`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -383,7 +383,7 @@ export default function EventDetailPage() {
       } else {
         // Fallback to HTTP if WebSocket not connected
         const token = localStorage.getItem('accessToken');
-        await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://api.juniorgoldminingintelligence.com/api'}/event-questions/${questionId}/upvote/`, {
+        await fetch(`${process.env.NEXT_PUBLIC_API_URL || '/api'}/event-questions/${questionId}/upvote/`, {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${token}`,

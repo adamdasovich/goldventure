@@ -44,7 +44,7 @@ export default function ModuleContent() {
   const fetchModule = async (id: string) => {
     try {
       const token = localStorage.getItem('accessToken');
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://api.juniorgoldminingintelligence.com/api'}/education/modules/${id}/`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || '/api'}/education/modules/${id}/`, {
         headers: {
           'Authorization': `Bearer ${token}`,
         },
@@ -69,7 +69,7 @@ export default function ModuleContent() {
 
     try {
       const token = localStorage.getItem('accessToken');
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://api.juniorgoldminingintelligence.com/api'}/education/modules/${module.id}/complete/`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || '/api'}/education/modules/${module.id}/complete/`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,

@@ -22,6 +22,14 @@ router.register(r'investments/aggregates', views.FinancingAggregateViewSet, base
 router.register(r'investments/payment-instructions', views.PaymentInstructionViewSet, basename='payment-instruction')
 router.register(r'drs/documents', views.DRSDocumentViewSet, basename='drs-document')
 
+# Property Exchange ViewSets
+router.register(r'properties/prospectors', views.ProspectorProfileViewSet, basename='prospector-profile')
+router.register(r'properties/listings', views.PropertyListingViewSet, basename='property-listing')
+router.register(r'properties/media', views.PropertyMediaViewSet, basename='property-media')
+router.register(r'properties/inquiries', views.PropertyInquiryViewSet, basename='property-inquiry')
+router.register(r'properties/watchlist', views.PropertyWatchlistViewSet, basename='property-watchlist')
+router.register(r'properties/saved-searches', views.SavedPropertySearchViewSet, basename='saved-property-search')
+
 urlpatterns = [
     # Authentication endpoints
     path('auth/register/', views.register_user, name='register_user'),

@@ -11,7 +11,10 @@ from .models import (
     # Financial Hub models
     EducationalModule, ModuleCompletion, AccreditedInvestorQualification,
     SubscriptionAgreement, InvestmentTransaction, FinancingAggregate,
-    PaymentInstruction, DRSDocument
+    PaymentInstruction, DRSDocument,
+    # Property Exchange models
+    ProspectorProfile, PropertyListing, PropertyMedia, PropertyInquiry,
+    PropertyWatchlist, SavedPropertySearch, ProspectorCommissionAgreement
 )
 
 
@@ -548,3 +551,312 @@ class DRSDocumentSerializer(serializers.ModelSerializer):
             'delivery_method', 'sent_at', 'delivered_at', 'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
+
+
+# ============================================================================
+# PROSPECTOR PROPERTY EXCHANGE SERIALIZERS
+# ============================================================================
+
+class ProspectorProfileSerializer(serializers.ModelSerializer):
+    """Serializer for prospector profiles"""
+    username = serializers.CharField(source='user.username', read_only=True)
+    email = serializers.EmailField(source='user.email', read_only=True)
+    listings_count = serializers.SerializerMethodField()
+    can_list_properties = serializers.BooleanField(read_only=True)
+
+    class Meta:
+        model = ProspectorProfile
+        fields = [
+            'id', 'user', 'username', 'email', 'display_name', 'company_name',
+            'bio', 'years_experience', 'specializations', 'regions_active',
+            'certifications', 'website_url', 'phone', 'is_verified',
+            'verification_date', 'profile_image_url', 'total_listings',
+            'active_listings', 'successful_transactions', 'average_rating',
+            'listings_count', 'commission_agreement_accepted', 'commission_agreement_date',
+            'can_list_properties', 'created_at', 'updated_at'
+        ]
+        read_only_fields = ['id', 'user', 'is_verified', 'verification_date',
+                          'total_listings', 'active_listings', 'successful_transactions',
+                          'average_rating', 'commission_agreement_accepted',
+                          'commission_agreement_date', 'can_list_properties',
+                          'created_at', 'updated_at']
+
+    def get_listings_count(self, obj):
+        return obj.listings.filter(status='active').count()
+
+
+class ProspectorCommissionAgreementSerializer(serializers.ModelSerializer):
+    """Serializer for commission agreement acceptance"""
+    agreement_text = serializers.SerializerMethodField()
+    prospector_name = serializers.CharField(source='prospector.display_name', read_only=True)
+
+    class Meta:
+        model = ProspectorCommissionAgreement
+        fields = [
+            'id', 'prospector', 'prospector_name', 'version', 'commission_rate',
+            'full_legal_name', 'accepted_at', 'ip_address', 'user_agent',
+            'agreement_text', 'is_active'
+        ]
+        read_only_fields = ['id', 'prospector', 'version', 'commission_rate',
+                          'accepted_at', 'ip_address', 'user_agent', 'is_active']
+
+    def get_agreement_text(self, obj):
+        return obj.agreement_text if obj.pk else ProspectorCommissionAgreement.get_agreement_text()
+
+
+class ProspectorCommissionAgreementCreateSerializer(serializers.Serializer):
+    """Serializer for accepting the commission agreement"""
+    full_legal_name = serializers.CharField(max_length=300, help_text="Your full legal name as electronic signature")
+
+    def validate_full_legal_name(self, value):
+        if len(value.strip()) < 3:
+            raise serializers.ValidationError("Please enter your full legal name")
+        return value.strip()
+
+
+class ProspectorProfileCreateSerializer(serializers.ModelSerializer):
+    """Serializer for creating prospector profiles during registration"""
+
+    class Meta:
+        model = ProspectorProfile
+        fields = [
+            'display_name', 'company_name', 'bio', 'years_experience',
+            'specializations', 'regions_active', 'website_url', 'phone'
+        ]
+
+
+class PropertyMediaSerializer(serializers.ModelSerializer):
+    """Serializer for property media files"""
+    uploaded_by_name = serializers.CharField(source='uploaded_by.username', read_only=True)
+
+    class Meta:
+        model = PropertyMedia
+        fields = [
+            'id', 'listing', 'media_type', 'category', 'title', 'description',
+            'file_url', 'thumbnail_url', 'file_size_mb', 'file_format',
+            'sort_order', 'is_primary', 'uploaded_at', 'uploaded_by', 'uploaded_by_name'
+        ]
+        read_only_fields = ['id', 'uploaded_at', 'uploaded_by']
+
+
+class PropertyListingListSerializer(serializers.ModelSerializer):
+    """Compact serializer for property listing lists/search results"""
+    prospector_name = serializers.CharField(source='prospector.display_name', read_only=True)
+    prospector_verified = serializers.BooleanField(source='prospector.is_verified', read_only=True)
+    primary_mineral_display = serializers.CharField(source='get_primary_mineral_display', read_only=True)
+    property_type_display = serializers.CharField(source='get_property_type_display', read_only=True)
+    listing_type_display = serializers.CharField(source='get_listing_type_display', read_only=True)
+    exploration_stage_display = serializers.CharField(source='get_exploration_stage_display', read_only=True)
+    status_display = serializers.CharField(source='get_status_display', read_only=True)
+    country_display = serializers.CharField(source='get_country_display', read_only=True)
+    hero_image = serializers.SerializerMethodField()
+    is_watchlisted = serializers.SerializerMethodField()
+
+    class Meta:
+        model = PropertyListing
+        fields = [
+            'id', 'slug', 'title', 'summary', 'property_type', 'property_type_display',
+            'country', 'country_display', 'province_state', 'region_district',
+            'primary_mineral', 'primary_mineral_display', 'exploration_stage',
+            'exploration_stage_display', 'listing_type', 'listing_type_display',
+            'asking_price', 'price_currency', 'price_negotiable',
+            'total_hectares', 'total_acres', 'total_claims',
+            'status', 'status_display', 'is_featured',
+            'prospector', 'prospector_name', 'prospector_verified',
+            'views_count', 'inquiries_count', 'watchlist_count',
+            'hero_image', 'is_watchlisted',
+            'created_at', 'published_at'
+        ]
+
+    def get_hero_image(self, obj):
+        hero = obj.media.filter(is_primary=True).first()
+        if hero:
+            return hero.file_url
+        # Fall back to first image
+        first_image = obj.media.filter(media_type='image').first()
+        return first_image.file_url if first_image else None
+
+    def get_is_watchlisted(self, obj):
+        request = self.context.get('request')
+        if request and request.user.is_authenticated:
+            return obj.watchlisted_by.filter(user=request.user).exists()
+        return False
+
+
+class PropertyListingDetailSerializer(serializers.ModelSerializer):
+    """Full serializer for property listing detail view"""
+    prospector = ProspectorProfileSerializer(read_only=True)
+    media = PropertyMediaSerializer(many=True, read_only=True)
+
+    # Display values
+    primary_mineral_display = serializers.CharField(source='get_primary_mineral_display', read_only=True)
+    property_type_display = serializers.CharField(source='get_property_type_display', read_only=True)
+    listing_type_display = serializers.CharField(source='get_listing_type_display', read_only=True)
+    exploration_stage_display = serializers.CharField(source='get_exploration_stage_display', read_only=True)
+    status_display = serializers.CharField(source='get_status_display', read_only=True)
+    country_display = serializers.CharField(source='get_country_display', read_only=True)
+    mineral_rights_type_display = serializers.CharField(source='get_mineral_rights_type_display', read_only=True)
+    deposit_type_display = serializers.CharField(source='get_deposit_type_display', read_only=True)
+    access_type_display = serializers.CharField(source='get_access_type_display', read_only=True)
+
+    is_watchlisted = serializers.SerializerMethodField()
+    is_owner = serializers.SerializerMethodField()
+
+    class Meta:
+        model = PropertyListing
+        fields = '__all__'
+        read_only_fields = ['id', 'slug', 'prospector', 'views_count', 'inquiries_count',
+                          'watchlist_count', 'created_at', 'updated_at', 'published_at']
+
+    def get_is_watchlisted(self, obj):
+        request = self.context.get('request')
+        if request and request.user.is_authenticated:
+            return obj.watchlisted_by.filter(user=request.user).exists()
+        return False
+
+    def get_is_owner(self, obj):
+        request = self.context.get('request')
+        if request and request.user.is_authenticated:
+            try:
+                return obj.prospector.user == request.user
+            except:
+                return False
+        return False
+
+
+class PropertyListingCreateSerializer(serializers.ModelSerializer):
+    """Serializer for creating/updating property listings"""
+    # Allow null for total_claims - will use default value of 1 if not provided
+    total_claims = serializers.IntegerField(required=False, allow_null=True, min_value=1)
+    # Allow empty description
+    description = serializers.CharField(required=False, allow_blank=True)
+    # Allow empty summary
+    summary = serializers.CharField(required=False, allow_blank=True, max_length=500)
+
+    class Meta:
+        model = PropertyListing
+        exclude = ['prospector', 'slug', 'views_count', 'inquiries_count',
+                  'watchlist_count', 'published_at']
+        read_only_fields = ['id', 'created_at', 'updated_at']
+
+    def create(self, validated_data):
+        # Generate slug from title
+        from django.utils.text import slugify
+        import uuid
+        base_slug = slugify(validated_data.get('title', 'property'))
+        unique_slug = f"{base_slug}-{uuid.uuid4().hex[:8]}"
+        validated_data['slug'] = unique_slug
+
+        # Set default for total_claims if null or not provided
+        if validated_data.get('total_claims') is None:
+            validated_data['total_claims'] = 1
+
+        return super().create(validated_data)
+
+
+class PropertyInquirySerializer(serializers.ModelSerializer):
+    """Serializer for property inquiries"""
+    inquirer_name = serializers.CharField(source='inquirer.username', read_only=True)
+    inquirer_email = serializers.EmailField(source='inquirer.email', read_only=True)
+    listing_title = serializers.CharField(source='listing.title', read_only=True)
+    listing_slug = serializers.SlugField(source='listing.slug', read_only=True)
+    inquiry_type_display = serializers.CharField(source='get_inquiry_type_display', read_only=True)
+    status_display = serializers.CharField(source='get_status_display', read_only=True)
+
+    class Meta:
+        model = PropertyInquiry
+        fields = [
+            'id', 'listing', 'listing_title', 'listing_slug',
+            'inquirer', 'inquirer_name', 'inquirer_email',
+            'inquiry_type', 'inquiry_type_display', 'message',
+            'contact_preference', 'phone_number',
+            'status', 'status_display', 'response', 'responded_at',
+            'is_nda_signed', 'nda_signed_at',
+            'created_at', 'updated_at'
+        ]
+        read_only_fields = ['id', 'inquirer', 'status', 'response', 'responded_at',
+                          'created_at', 'updated_at']
+
+
+class PropertyInquiryCreateSerializer(serializers.ModelSerializer):
+    """Serializer for creating new inquiries"""
+
+    class Meta:
+        model = PropertyInquiry
+        fields = ['listing', 'inquiry_type', 'message', 'contact_preference', 'phone_number']
+
+
+class PropertyInquiryResponseSerializer(serializers.Serializer):
+    """Serializer for responding to inquiries"""
+    response = serializers.CharField()
+
+
+class PropertyWatchlistSerializer(serializers.ModelSerializer):
+    """Serializer for watchlist items"""
+    listing = PropertyListingListSerializer(read_only=True)
+
+    class Meta:
+        model = PropertyWatchlist
+        fields = ['id', 'listing', 'notes', 'price_alert', 'added_at']
+        read_only_fields = ['id', 'added_at']
+
+
+class PropertyWatchlistCreateSerializer(serializers.ModelSerializer):
+    """Serializer for adding to watchlist"""
+
+    class Meta:
+        model = PropertyWatchlist
+        fields = ['listing', 'notes', 'price_alert']
+
+
+class SavedPropertySearchSerializer(serializers.ModelSerializer):
+    """Serializer for saved searches"""
+
+    class Meta:
+        model = SavedPropertySearch
+        fields = [
+            'id', 'name', 'search_criteria', 'email_alerts',
+            'alert_frequency', 'created_at', 'last_alerted_at'
+        ]
+        read_only_fields = ['id', 'created_at', 'last_alerted_at']
+
+
+# Choice list serializers for frontend dropdowns
+class PropertyChoicesSerializer(serializers.Serializer):
+    """Returns all choice options for property forms"""
+    property_types = serializers.SerializerMethodField()
+    mineral_types = serializers.SerializerMethodField()
+    mineral_rights_types = serializers.SerializerMethodField()
+    deposit_types = serializers.SerializerMethodField()
+    exploration_stages = serializers.SerializerMethodField()
+    listing_types = serializers.SerializerMethodField()
+    access_types = serializers.SerializerMethodField()
+    countries = serializers.SerializerMethodField()
+    canadian_provinces = serializers.SerializerMethodField()
+
+    def get_property_types(self, obj):
+        return [{'value': k, 'label': v} for k, v in PropertyListing.PROPERTY_TYPES]
+
+    def get_mineral_types(self, obj):
+        return [{'value': k, 'label': v} for k, v in PropertyListing.MINERAL_TYPES]
+
+    def get_mineral_rights_types(self, obj):
+        return [{'value': k, 'label': v} for k, v in PropertyListing.MINERAL_RIGHTS_TYPES]
+
+    def get_deposit_types(self, obj):
+        return [{'value': k, 'label': v} for k, v in PropertyListing.DEPOSIT_TYPES]
+
+    def get_exploration_stages(self, obj):
+        return [{'value': k, 'label': v} for k, v in PropertyListing.EXPLORATION_STAGES]
+
+    def get_listing_types(self, obj):
+        return [{'value': k, 'label': v} for k, v in PropertyListing.LISTING_TYPES]
+
+    def get_access_types(self, obj):
+        return [{'value': k, 'label': v} for k, v in PropertyListing.ACCESS_TYPES]
+
+    def get_countries(self, obj):
+        return [{'value': k, 'label': v} for k, v in PropertyListing.COUNTRIES]
+
+    def get_canadian_provinces(self, obj):
+        return [{'value': k, 'label': v} for k, v in PropertyListing.CANADIAN_PROVINCES]
