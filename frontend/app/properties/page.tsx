@@ -310,7 +310,7 @@ export default function PropertiesPage() {
           </p>
           <div className="flex flex-wrap gap-4 justify-center">
             <Button variant="primary" size="lg" onClick={() => user ? window.location.href = '/properties/new' : setShowRegister(true)}>
-              List Your Property - Free Forever
+              List Your Property
             </Button>
           </div>
           <div className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-6 text-left">
