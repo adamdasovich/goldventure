@@ -30,6 +30,8 @@ from core.models import (
     EventRegistration,
     EventQuestion,
     EventReaction,
+    PropertyInquiry,
+    InquiryMessage,
 )
 
 User = get_user_model()
@@ -1541,6 +1543,351 @@ class SpeakerEventConsumer(AsyncWebsocketConsumer):
                 'user_type': getattr(p.user, 'user_type', 'investor'),
             } for p in participants],
         }
+
+    async def send_error(self, message: str):
+        """Send error message to client."""
+        await self.send(text_data=json.dumps({
+            'type': 'error',
+            'error': message,
+        }))
+
+
+# ============================================================================
+# INQUIRY CONSUMER (Property Inquiries Real-Time Chat)
+# ============================================================================
+
+class InquiryConsumer(AsyncWebsocketConsumer):
+    """
+    WebSocket consumer for real-time property inquiry conversations.
+
+    Enables instant messaging between property buyers and sellers.
+    Each user connects to their own inbox channel to receive messages
+    across all their conversations.
+    """
+
+    async def connect(self):
+        """Handle WebSocket connection."""
+        self.user = self.scope.get('user')
+
+        # Authenticate user
+        if not self.user or not self.user.is_authenticated:
+            logger.warning("Unauthenticated connection attempt to inquiry inbox")
+            await self.close(code=4001)
+            return
+
+        # Create a unique channel group for this user's inbox
+        self.user_inbox_group = f'inbox_{self.user.id}'
+
+        # Accept connection
+        await self.accept()
+
+        # Join user's inbox group
+        await self.channel_layer.group_add(
+            self.user_inbox_group,
+            self.channel_name
+        )
+
+        logger.info(f"User {self.user.id} connected to inbox WebSocket")
+
+        # Send connection confirmation
+        await self.send(text_data=json.dumps({
+            'type': 'connection.established',
+            'user_id': self.user.id,
+        }))
+
+    async def disconnect(self, close_code):
+        """Handle WebSocket disconnection."""
+        if hasattr(self, 'user_inbox_group'):
+            await self.channel_layer.group_discard(
+                self.user_inbox_group,
+                self.channel_name
+            )
+            logger.info(f"User {self.user.id} disconnected from inbox WebSocket")
+
+    async def receive(self, text_data):
+        """Handle incoming WebSocket messages."""
+        try:
+            data = json.loads(text_data)
+            message_type = data.get('type')
+
+            handlers = {
+                'message.send': self.handle_message_send,
+                'message.read': self.handle_message_read,
+                'typing.start': self.handle_typing_start,
+                'typing.stop': self.handle_typing_stop,
+                'presence.update': self.handle_presence_update,
+            }
+
+            handler = handlers.get(message_type)
+            if handler:
+                await handler(data)
+            else:
+                logger.warning(f"Unknown message type: {message_type}")
+                await self.send_error(f"Unknown message type: {message_type}")
+
+        except json.JSONDecodeError as e:
+            logger.error(f"Invalid JSON received: {e}")
+            await self.send_error("Invalid JSON format")
+        except Exception as e:
+            logger.error(f"Error handling message: {e}", exc_info=True)
+            await self.send_error("Internal server error")
+
+    async def handle_message_send(self, data: Dict[str, Any]):
+        """
+        Handle sending a new message in an inquiry conversation.
+        """
+        inquiry_id = data.get('inquiry_id')
+        content = data.get('content', '').strip()
+
+        if not inquiry_id or not content:
+            await self.send_error("Inquiry ID and message content are required")
+            return
+
+        if len(content) > 5000:
+            await self.send_error("Message too long (max 5000 characters)")
+            return
+
+        # Verify access and save message
+        result = await self.save_inquiry_message(inquiry_id, content)
+
+        if result:
+            message_data = result['message']
+            recipient_id = result['recipient_id']
+
+            # Send confirmation to sender
+            await self.send(text_data=json.dumps({
+                'type': 'message.sent',
+                'message': message_data,
+            }))
+
+            # Send to recipient's inbox
+            recipient_group = f'inbox_{recipient_id}'
+            await self.channel_layer.group_send(
+                recipient_group,
+                {
+                    'type': 'message_new',
+                    'message': message_data,
+                }
+            )
+
+            logger.info(f"User {self.user.id} sent message in inquiry {inquiry_id}")
+        else:
+            await self.send_error("Failed to send message. You may not have permission.")
+
+    async def handle_message_read(self, data: Dict[str, Any]):
+        """Handle marking messages as read."""
+        inquiry_id = data.get('inquiry_id')
+        message_ids = data.get('message_ids', [])
+
+        if not inquiry_id:
+            await self.send_error("Inquiry ID is required")
+            return
+
+        # Mark messages as read
+        result = await self.mark_messages_read(inquiry_id, message_ids)
+
+        if result:
+            # Notify the other party that messages were read
+            other_user_id = result['other_user_id']
+            if other_user_id:
+                other_group = f'inbox_{other_user_id}'
+                await self.channel_layer.group_send(
+                    other_group,
+                    {
+                        'type': 'messages_read',
+                        'inquiry_id': inquiry_id,
+                        'read_by': self.user.id,
+                        'message_ids': result['read_message_ids'],
+                    }
+                )
+
+    async def handle_typing_start(self, data: Dict[str, Any]):
+        """Handle typing indicator start."""
+        inquiry_id = data.get('inquiry_id')
+        if not inquiry_id:
+            return
+
+        # Get the other party and notify them
+        other_user_id = await self.get_other_party(inquiry_id)
+        if other_user_id:
+            other_group = f'inbox_{other_user_id}'
+            await self.channel_layer.group_send(
+                other_group,
+                {
+                    'type': 'typing_indicator',
+                    'inquiry_id': inquiry_id,
+                    'user_id': self.user.id,
+                    'is_typing': True,
+                }
+            )
+
+    async def handle_typing_stop(self, data: Dict[str, Any]):
+        """Handle typing indicator stop."""
+        inquiry_id = data.get('inquiry_id')
+        if not inquiry_id:
+            return
+
+        other_user_id = await self.get_other_party(inquiry_id)
+        if other_user_id:
+            other_group = f'inbox_{other_user_id}'
+            await self.channel_layer.group_send(
+                other_group,
+                {
+                    'type': 'typing_indicator',
+                    'inquiry_id': inquiry_id,
+                    'user_id': self.user.id,
+                    'is_typing': False,
+                }
+            )
+
+    async def handle_presence_update(self, data: Dict[str, Any]):
+        """Handle presence heartbeat - keeps connection alive."""
+        pass
+
+    # ========================================================================
+    # CHANNEL LAYER EVENT RECEIVERS
+    # ========================================================================
+
+    async def message_new(self, event):
+        """Broadcast new message to recipient."""
+        await self.send(text_data=json.dumps({
+            'type': 'message.new',
+            'message': event['message'],
+        }))
+
+    async def messages_read(self, event):
+        """Broadcast that messages were read."""
+        await self.send(text_data=json.dumps({
+            'type': 'messages.read',
+            'inquiry_id': event['inquiry_id'],
+            'read_by': event['read_by'],
+            'message_ids': event['message_ids'],
+        }))
+
+    async def typing_indicator(self, event):
+        """Broadcast typing indicator."""
+        await self.send(text_data=json.dumps({
+            'type': 'typing.indicator',
+            'inquiry_id': event['inquiry_id'],
+            'user_id': event['user_id'],
+            'is_typing': event['is_typing'],
+        }))
+
+    # ========================================================================
+    # DATABASE OPERATIONS
+    # ========================================================================
+
+    @database_sync_to_async
+    def save_inquiry_message(self, inquiry_id: int, content: str) -> Optional[Dict[str, Any]]:
+        """Save a message to the inquiry conversation."""
+        try:
+            inquiry = PropertyInquiry.objects.select_related(
+                'listing__prospector__user', 'inquirer'
+            ).get(id=inquiry_id)
+
+            # Verify user is either the inquirer or the listing owner
+            listing_owner = inquiry.listing.prospector.user
+            if self.user.id not in [inquiry.inquirer.id, listing_owner.id]:
+                return None
+
+            # Determine recipient
+            if self.user.id == inquiry.inquirer.id:
+                recipient = listing_owner
+            else:
+                recipient = inquiry.inquirer
+
+            # Create message
+            message = InquiryMessage.objects.create(
+                inquiry=inquiry,
+                sender=self.user,
+                message=content,
+            )
+
+            # Update inquiry status
+            inquiry.status = 'responded'
+            inquiry.updated_at = timezone.now()
+            inquiry.save(update_fields=['status', 'updated_at'])
+
+            return {
+                'message': {
+                    'id': message.id,
+                    'inquiry_id': inquiry.id,
+                    'sender': message.sender.id,
+                    'sender_name': message.sender.get_full_name() or message.sender.username,
+                    'sender_email': message.sender.email,
+                    'message': message.message,
+                    'is_read': message.is_read,
+                    'is_from_prospector': message.sender.id == listing_owner.id,
+                    'created_at': message.created_at.isoformat(),
+                },
+                'recipient_id': recipient.id,
+            }
+
+        except PropertyInquiry.DoesNotExist:
+            return None
+        except Exception as e:
+            logger.error(f"Error saving inquiry message: {e}")
+            return None
+
+    @database_sync_to_async
+    def mark_messages_read(self, inquiry_id: int, message_ids: list) -> Optional[Dict[str, Any]]:
+        """Mark messages as read."""
+        try:
+            inquiry = PropertyInquiry.objects.select_related(
+                'listing__prospector__user', 'inquirer'
+            ).get(id=inquiry_id)
+
+            listing_owner = inquiry.listing.prospector.user
+            if self.user.id not in [inquiry.inquirer.id, listing_owner.id]:
+                return None
+
+            # Get the other party
+            other_user_id = listing_owner.id if self.user.id == inquiry.inquirer.id else inquiry.inquirer.id
+
+            # Mark messages from the other party as read
+            if message_ids:
+                updated = InquiryMessage.objects.filter(
+                    inquiry_id=inquiry_id,
+                    id__in=message_ids,
+                    is_read=False
+                ).exclude(sender=self.user).update(is_read=True)
+            else:
+                # Mark all unread messages from other party as read
+                messages = InquiryMessage.objects.filter(
+                    inquiry_id=inquiry_id,
+                    is_read=False
+                ).exclude(sender=self.user)
+                message_ids = list(messages.values_list('id', flat=True))
+                messages.update(is_read=True)
+
+            return {
+                'other_user_id': other_user_id,
+                'read_message_ids': message_ids,
+            }
+
+        except PropertyInquiry.DoesNotExist:
+            return None
+        except Exception as e:
+            logger.error(f"Error marking messages read: {e}")
+            return None
+
+    @database_sync_to_async
+    def get_other_party(self, inquiry_id: int) -> Optional[int]:
+        """Get the other party's user ID in an inquiry."""
+        try:
+            inquiry = PropertyInquiry.objects.select_related(
+                'listing__prospector__user', 'inquirer'
+            ).get(id=inquiry_id)
+
+            listing_owner = inquiry.listing.prospector.user
+            if self.user.id == inquiry.inquirer.id:
+                return listing_owner.id
+            elif self.user.id == listing_owner.id:
+                return inquiry.inquirer.id
+            return None
+
+        except PropertyInquiry.DoesNotExist:
+            return None
 
     async def send_error(self, message: str):
         """Send error message to client."""

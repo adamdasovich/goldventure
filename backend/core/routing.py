@@ -14,4 +14,7 @@ websocket_urlpatterns = [
 
     # Speaker event WebSocket
     re_path(r'^ws/event/(?P<event_id>\d+)/$', consumers.SpeakerEventConsumer.as_asgi()),
+
+    # Property inquiry inbox WebSocket (real-time messaging)
+    re_path(r'^ws/inbox/$', consumers.InquiryConsumer.as_asgi()),
 ]

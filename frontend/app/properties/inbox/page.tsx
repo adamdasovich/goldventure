@@ -1,12 +1,13 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import LogoMono from '@/components/LogoMono';
 import { LoginModal, RegisterModal } from '@/components/auth';
 import { useAuth } from '@/contexts/AuthContext';
+import { useInquiryWebSocket, InquiryMessage as WSInquiryMessage } from '@/hooks/useInquiryWebSocket';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
@@ -60,7 +61,87 @@ export default function InboxPage() {
   const [newMessage, setNewMessage] = useState('');
   const [sending, setSending] = useState(false);
   const [filter, setFilter] = useState<'all' | 'received' | 'sent'>('all');
+  const [typingInquiryId, setTypingInquiryId] = useState<number | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // WebSocket handlers
+  const handleNewMessage = useCallback((wsMessage: WSInquiryMessage) => {
+    // Add message to conversation if it's the currently selected inquiry
+    if (selectedInquiry && wsMessage.inquiry_id === selectedInquiry.id) {
+      setConversationMessages(prev => [...prev, {
+        id: wsMessage.id,
+        inquiry: wsMessage.inquiry_id,
+        sender: wsMessage.sender,
+        sender_name: wsMessage.sender_name,
+        sender_email: wsMessage.sender_email,
+        message: wsMessage.message,
+        is_read: wsMessage.is_read,
+        is_from_prospector: wsMessage.is_from_prospector,
+        created_at: wsMessage.created_at,
+      }]);
+      // Clear typing indicator when message received
+      setTypingInquiryId(null);
+    }
+
+    // Update inquiry list to show new message indicator
+    setInquiries(prev => prev.map(inq =>
+      inq.id === wsMessage.inquiry_id
+        ? { ...inq, status: 'responded' as const, updated_at: wsMessage.created_at }
+        : inq
+    ));
+  }, [selectedInquiry]);
+
+  const handleMessageSent = useCallback((wsMessage: WSInquiryMessage) => {
+    // Message sent confirmation - add to conversation
+    if (selectedInquiry && wsMessage.inquiry_id === selectedInquiry.id) {
+      setConversationMessages(prev => {
+        // Check if message already exists (avoid duplicates)
+        if (prev.some(m => m.id === wsMessage.id)) return prev;
+        return [...prev, {
+          id: wsMessage.id,
+          inquiry: wsMessage.inquiry_id,
+          sender: wsMessage.sender,
+          sender_name: wsMessage.sender_name,
+          sender_email: wsMessage.sender_email,
+          message: wsMessage.message,
+          is_read: wsMessage.is_read,
+          is_from_prospector: wsMessage.is_from_prospector,
+          created_at: wsMessage.created_at,
+        }];
+      });
+    }
+  }, [selectedInquiry]);
+
+  const handleMessagesRead = useCallback((inquiryId: number, messageIds: number[]) => {
+    if (selectedInquiry && inquiryId === selectedInquiry.id) {
+      setConversationMessages(prev => prev.map(msg =>
+        messageIds.includes(msg.id) ? { ...msg, is_read: true } : msg
+      ));
+    }
+  }, [selectedInquiry]);
+
+  const handleTypingIndicator = useCallback((inquiryId: number, userId: number, isTyping: boolean) => {
+    if (selectedInquiry && inquiryId === selectedInquiry.id && userId !== user?.id) {
+      setTypingInquiryId(isTyping ? inquiryId : null);
+    }
+  }, [selectedInquiry, user?.id]);
+
+  // Initialize WebSocket connection
+  const {
+    isConnected,
+    sendMessage: wsSendMessage,
+    markMessagesRead,
+    startTyping,
+    stopTyping
+  } = useInquiryWebSocket({
+    token: accessToken || '',
+    onNewMessage: handleNewMessage,
+    onMessageSent: handleMessageSent,
+    onMessagesRead: handleMessagesRead,
+    onTypingIndicator: handleTypingIndicator,
+    onError: (error) => console.error('WebSocket error:', error),
+  });
 
   // Check if inquiry was received (user is prospector) or sent (user is inquirer)
   const isReceivedInquiry = (inquiry: Inquiry) => {
@@ -123,6 +204,15 @@ export default function InboxPage() {
         const data = await response.json();
         setSelectedInquiry(data);
         setConversationMessages(data.messages || []);
+
+        // Mark unread messages as read via WebSocket
+        const unreadMessageIds = (data.messages || [])
+          .filter((msg: InquiryMessage) => !msg.is_read && msg.sender !== user?.id)
+          .map((msg: InquiryMessage) => msg.id);
+
+        if (unreadMessageIds.length > 0 && isConnected) {
+          markMessagesRead(inquiry.id, unreadMessageIds);
+        }
       } else {
         console.error('Failed to load conversation:', response.status);
       }
@@ -160,11 +250,31 @@ export default function InboxPage() {
     }
   };
 
-  // Send a new message
+  // Send a new message via WebSocket (with HTTP fallback)
   const handleSendMessage = async () => {
     if (!selectedInquiry || !newMessage.trim()) return;
 
+    const messageText = newMessage.trim();
     setSending(true);
+
+    // Stop typing indicator
+    stopTyping(selectedInquiry.id);
+
+    // Try WebSocket first if connected
+    if (isConnected) {
+      const sent = wsSendMessage(selectedInquiry.id, messageText);
+      if (sent) {
+        setNewMessage('');
+        setSending(false);
+        // Update inquiry status in the list
+        setInquiries(prev => prev.map(i =>
+          i.id === selectedInquiry.id ? { ...i, status: 'responded', status_display: 'Responded' } : i
+        ));
+        return;
+      }
+    }
+
+    // Fallback to HTTP if WebSocket not available
     try {
       const response = await fetch(`${API_URL}/properties/inquiries/${selectedInquiry.id}/send_message/`, {
         method: 'POST',
@@ -172,7 +282,7 @@ export default function InboxPage() {
           'Authorization': `Bearer ${accessToken}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ message: newMessage.trim() }),
+        body: JSON.stringify({ message: messageText }),
       });
 
       if (response.ok) {
@@ -195,6 +305,23 @@ export default function InboxPage() {
       setSending(false);
     }
   };
+
+  // Handle typing indicator
+  const handleTyping = useCallback(() => {
+    if (!selectedInquiry) return;
+
+    startTyping(selectedInquiry.id);
+
+    // Clear existing timeout
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
+
+    // Stop typing after 2 seconds of no input
+    typingTimeoutRef.current = setTimeout(() => {
+      stopTyping(selectedInquiry.id);
+    }, 2000);
+  }, [selectedInquiry, startTyping, stopTyping]);
 
   // Filter inquiries
   const filteredInquiries = inquiries.filter(inquiry => {
@@ -559,12 +686,40 @@ export default function InboxPage() {
                   )}
                 </div>
 
+                {/* Typing Indicator */}
+                {typingInquiryId === selectedInquiry.id && (
+                  <div className="px-4 py-2 border-t border-slate-700/50">
+                    <div className="flex items-center gap-2 text-slate-400 text-sm">
+                      <div className="flex gap-1">
+                        <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></span>
+                        <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></span>
+                        <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></span>
+                      </div>
+                      <span>
+                        {isReceivedInquiry(selectedInquiry)
+                          ? selectedInquiry.inquirer_name
+                          : selectedInquiry.prospector_name || 'Property Owner'} is typing...
+                      </span>
+                    </div>
+                  </div>
+                )}
+
                 {/* Message Input */}
                 <div className="p-4 border-t border-slate-700">
+                  {/* Connection Status */}
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-slate-500'}`}></span>
+                    <span className="text-xs text-slate-500">
+                      {isConnected ? 'Connected - Real-time updates enabled' : 'Connecting...'}
+                    </span>
+                  </div>
                   <div className="flex gap-3">
                     <textarea
                       value={newMessage}
-                      onChange={(e) => setNewMessage(e.target.value)}
+                      onChange={(e) => {
+                        setNewMessage(e.target.value);
+                        handleTyping();
+                      }}
                       onKeyDown={(e) => {
                         if (e.key === 'Enter' && !e.shiftKey) {
                           e.preventDefault();
