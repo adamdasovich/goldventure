@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
@@ -10,6 +10,18 @@ import { useAuth } from '@/contexts/AuthContext';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
+interface InquiryMessage {
+  id: number;
+  inquiry: number;
+  sender: number;
+  sender_name: string;
+  sender_email: string;
+  message: string;
+  is_read: boolean;
+  is_from_prospector: boolean;
+  created_at: string;
+}
+
 interface Inquiry {
   id: number;
   listing: number;
@@ -18,6 +30,7 @@ interface Inquiry {
   inquirer: number;
   inquirer_name: string;
   inquirer_email: string;
+  inquirer_full_name?: string;
   inquiry_type: string;
   inquiry_type_display: string;
   message: string;
@@ -25,6 +38,9 @@ interface Inquiry {
   status_display: string;
   response: string | null;
   responded_at: string | null;
+  prospector_name?: string;
+  messages?: InquiryMessage[];
+  unread_count?: number;
   created_at: string;
   updated_at: string;
 }
@@ -38,14 +54,21 @@ export default function InboxPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedInquiry, setSelectedInquiry] = useState<Inquiry | null>(null);
-  const [responseText, setResponseText] = useState('');
-  const [responding, setResponding] = useState(false);
+  const [conversationMessages, setConversationMessages] = useState<InquiryMessage[]>([]);
+  const [loadingMessages, setLoadingMessages] = useState(false);
+  const [newMessage, setNewMessage] = useState('');
+  const [sending, setSending] = useState(false);
   const [filter, setFilter] = useState<'all' | 'received' | 'sent'>('all');
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Check if inquiry was received (user is prospector) or sent (user is inquirer)
   const isReceivedInquiry = (inquiry: Inquiry) => {
-    // If user sent it, inquirer_name would match user's username
     return inquiry.inquirer_name !== user?.username;
+  };
+
+  // Scroll to bottom of messages
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
   // Fetch inquiries
@@ -80,10 +103,42 @@ export default function InboxPage() {
     fetchInquiries();
   }, [accessToken]);
 
-  // Mark as read when selecting an inquiry
+  // Scroll to bottom when messages change
+  useEffect(() => {
+    scrollToBottom();
+  }, [conversationMessages]);
+
+  // Fetch conversation messages for selected inquiry
+  const fetchConversation = async (inquiry: Inquiry) => {
+    setLoadingMessages(true);
+    try {
+      const response = await fetch(`${API_URL}/properties/inquiries/${inquiry.id}/conversation/`, {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setSelectedInquiry(data);
+        setConversationMessages(data.messages || []);
+      } else {
+        console.error('Failed to load conversation:', response.status);
+      }
+    } catch (err) {
+      console.error('Failed to fetch conversation:', err);
+    } finally {
+      setLoadingMessages(false);
+    }
+  };
+
+  // Handle selecting an inquiry
   const handleSelectInquiry = async (inquiry: Inquiry) => {
     setSelectedInquiry(inquiry);
-    setResponseText(inquiry.response || '');
+    setNewMessage('');
+
+    // Fetch full conversation
+    await fetchConversation(inquiry);
 
     // Mark as read if new and user is the prospector (received inquiry)
     if (inquiry.status === 'new' && isReceivedInquiry(inquiry)) {
@@ -104,36 +159,39 @@ export default function InboxPage() {
     }
   };
 
-  // Send response
-  const handleRespond = async () => {
-    if (!selectedInquiry || !responseText.trim()) return;
+  // Send a new message
+  const handleSendMessage = async () => {
+    if (!selectedInquiry || !newMessage.trim()) return;
 
-    setResponding(true);
+    setSending(true);
     try {
-      const response = await fetch(`${API_URL}/properties/inquiries/${selectedInquiry.id}/respond/`, {
+      const response = await fetch(`${API_URL}/properties/inquiries/${selectedInquiry.id}/send_message/`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${accessToken}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ response: responseText.trim() }),
+        body: JSON.stringify({ message: newMessage.trim() }),
       });
 
       if (response.ok) {
-        const updatedInquiry = await response.json();
+        const newMsg = await response.json();
+        setConversationMessages(prev => [...prev, newMsg]);
+        setNewMessage('');
+
+        // Update inquiry status in the list if needed
         setInquiries(prev => prev.map(i =>
-          i.id === selectedInquiry.id ? updatedInquiry : i
+          i.id === selectedInquiry.id ? { ...i, status: 'responded', status_display: 'Responded' } : i
         ));
-        setSelectedInquiry(updatedInquiry);
       } else {
         const errorData = await response.json();
-        alert(errorData.error || 'Failed to send response');
+        alert(errorData.error || 'Failed to send message');
       }
     } catch (err) {
-      console.error('Failed to respond:', err);
-      alert('Failed to send response');
+      console.error('Failed to send message:', err);
+      alert('Failed to send message');
     } finally {
-      setResponding(false);
+      setSending(false);
     }
   };
 
@@ -160,6 +218,16 @@ export default function InboxPage() {
     return date.toLocaleDateString();
   };
 
+  const formatMessageTime = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  };
+
+  const formatMessageDate = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
+  };
+
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'new':
@@ -173,6 +241,19 @@ export default function InboxPage() {
       default:
         return <Badge variant="slate">{status}</Badge>;
     }
+  };
+
+  // Group messages by date
+  const groupMessagesByDate = (messages: InquiryMessage[]) => {
+    const groups: { [date: string]: InquiryMessage[] } = {};
+    messages.forEach(msg => {
+      const date = new Date(msg.created_at).toLocaleDateString();
+      if (!groups[date]) {
+        groups[date] = [];
+      }
+      groups[date].push(msg);
+    });
+    return groups;
   };
 
   if (isLoading) {
@@ -361,101 +442,160 @@ export default function InboxPage() {
             )}
           </div>
 
-          {/* Inquiry Detail */}
+          {/* Conversation Detail */}
           <div className="lg:w-2/3">
             {selectedInquiry ? (
-              <Card className="p-6">
+              <Card className="flex flex-col h-[calc(100vh-280px)] min-h-[500px]">
                 {/* Header */}
-                <div className="flex items-start justify-between mb-6 pb-4 border-b border-slate-700">
-                  <div>
-                    <div className="flex items-center gap-2 mb-2">
-                      {getStatusBadge(selectedInquiry.status)}
-                      <Badge variant="copper">{selectedInquiry.inquiry_type_display}</Badge>
-                    </div>
-                    <h2 className="text-xl font-semibold text-white">
-                      {isReceivedInquiry(selectedInquiry)
-                        ? `From: ${selectedInquiry.inquirer_name}`
-                        : `To: Property Owner`}
-                    </h2>
-                    <p className="text-slate-400 mt-1">
-                      Regarding: <a href={`/properties/${selectedInquiry.listing_slug}`} className="text-gold-500 hover:underline">{selectedInquiry.listing_title}</a>
-                    </p>
-                    {isReceivedInquiry(selectedInquiry) && (
-                      <p className="text-sm text-slate-500 mt-1">
-                        Contact: {selectedInquiry.inquirer_email}
+                <div className="p-4 border-b border-slate-700">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <div className="flex items-center gap-2 mb-2">
+                        {getStatusBadge(selectedInquiry.status)}
+                        <Badge variant="copper">{selectedInquiry.inquiry_type_display}</Badge>
+                      </div>
+                      <h2 className="text-lg font-semibold text-white">
+                        {isReceivedInquiry(selectedInquiry)
+                          ? `Conversation with ${selectedInquiry.inquirer_full_name || selectedInquiry.inquirer_name}`
+                          : `Conversation with ${selectedInquiry.prospector_name || 'Property Owner'}`}
+                      </h2>
+                      <p className="text-sm text-slate-400">
+                        Regarding: <a href={`/properties/${selectedInquiry.listing_slug}`} className="text-gold-500 hover:underline">{selectedInquiry.listing_title}</a>
                       </p>
-                    )}
-                  </div>
-                  <span className="text-sm text-slate-500">{formatDate(selectedInquiry.created_at)}</span>
-                </div>
-
-                {/* Original Message */}
-                <div className="mb-6">
-                  <h3 className="text-sm font-medium text-slate-300 mb-2">Message:</h3>
-                  <div className="bg-slate-800/50 rounded-lg p-4">
-                    <p className="text-white whitespace-pre-wrap">{selectedInquiry.message}</p>
-                  </div>
-                </div>
-
-                {/* Response Section */}
-                {selectedInquiry.response && (
-                  <div className="mb-6">
-                    <h3 className="text-sm font-medium text-slate-300 mb-2">
-                      Response {selectedInquiry.responded_at && `(${formatDate(selectedInquiry.responded_at)})`}:
-                    </h3>
-                    <div className="bg-gold-500/10 border border-gold-500/30 rounded-lg p-4">
-                      <p className="text-white whitespace-pre-wrap">{selectedInquiry.response}</p>
                     </div>
+                    <span className="text-xs text-slate-500">{formatDate(selectedInquiry.created_at)}</span>
                   </div>
-                )}
+                </div>
 
-                {/* Reply Form (only for received inquiries that haven't been responded to) */}
-                {isReceivedInquiry(selectedInquiry) && selectedInquiry.status !== 'responded' && selectedInquiry.status !== 'closed' && (
-                  <div>
-                    <h3 className="text-sm font-medium text-slate-300 mb-2">Your Response:</h3>
+                {/* Messages Container */}
+                <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                  {loadingMessages ? (
+                    <div className="flex justify-center py-8">
+                      <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-gold-500"></div>
+                    </div>
+                  ) : (
+                    <>
+                      {/* Original Inquiry Message */}
+                      <div className="flex flex-col items-start">
+                        <div className="max-w-[80%]">
+                          <div className="text-xs text-slate-500 mb-1">
+                            {selectedInquiry.inquirer_full_name || selectedInquiry.inquirer_name} • {formatMessageDate(selectedInquiry.created_at)}
+                          </div>
+                          <div className="bg-slate-700 rounded-lg rounded-tl-none p-3">
+                            <p className="text-white whitespace-pre-wrap text-sm">{selectedInquiry.message}</p>
+                          </div>
+                          <div className="text-xs text-slate-500 mt-1">{formatMessageTime(selectedInquiry.created_at)}</div>
+                        </div>
+                      </div>
+
+                      {/* Legacy Response (if exists and no messages yet) */}
+                      {selectedInquiry.response && conversationMessages.length === 0 && (
+                        <div className="flex flex-col items-end">
+                          <div className="max-w-[80%]">
+                            <div className="text-xs text-slate-500 mb-1 text-right">
+                              {selectedInquiry.prospector_name || 'Property Owner'} • {selectedInquiry.responded_at ? formatMessageDate(selectedInquiry.responded_at) : ''}
+                            </div>
+                            <div className="bg-gold-500/20 border border-gold-500/30 rounded-lg rounded-tr-none p-3">
+                              <p className="text-white whitespace-pre-wrap text-sm">{selectedInquiry.response}</p>
+                            </div>
+                            <div className="text-xs text-slate-500 mt-1 text-right">
+                              {selectedInquiry.responded_at ? formatMessageTime(selectedInquiry.responded_at) : ''}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Conversation Messages */}
+                      {Object.entries(groupMessagesByDate(conversationMessages)).map(([date, msgs]) => (
+                        <div key={date}>
+                          <div className="flex items-center justify-center my-4">
+                            <div className="bg-slate-700 px-3 py-1 rounded-full text-xs text-slate-400">
+                              {date === new Date().toLocaleDateString() ? 'Today' : formatMessageDate(msgs[0].created_at)}
+                            </div>
+                          </div>
+                          {msgs.map((msg) => {
+                            const isOwnMessage = msg.sender_name === user?.username ||
+                              msg.sender_name === (user?.full_name || user?.username);
+                            return (
+                              <div
+                                key={msg.id}
+                                className={`flex flex-col mb-3 ${isOwnMessage ? 'items-end' : 'items-start'}`}
+                              >
+                                <div className="max-w-[80%]">
+                                  <div className={`text-xs text-slate-500 mb-1 ${isOwnMessage ? 'text-right' : ''}`}>
+                                    {msg.sender_name}
+                                  </div>
+                                  <div
+                                    className={`rounded-lg p-3 ${
+                                      isOwnMessage
+                                        ? 'bg-gold-500/20 border border-gold-500/30 rounded-tr-none'
+                                        : 'bg-slate-700 rounded-tl-none'
+                                    }`}
+                                  >
+                                    <p className="text-white whitespace-pre-wrap text-sm">{msg.message}</p>
+                                  </div>
+                                  <div className={`text-xs text-slate-500 mt-1 ${isOwnMessage ? 'text-right' : ''}`}>
+                                    {formatMessageTime(msg.created_at)}
+                                    {isOwnMessage && msg.is_read && (
+                                      <span className="ml-2 text-green-500">✓ Read</span>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ))}
+                      <div ref={messagesEndRef} />
+                    </>
+                  )}
+                </div>
+
+                {/* Message Input */}
+                <div className="p-4 border-t border-slate-700">
+                  <div className="flex gap-3">
                     <textarea
-                      value={responseText}
-                      onChange={(e) => setResponseText(e.target.value)}
-                      rows={5}
-                      placeholder="Write your response to this inquiry..."
-                      className="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-3 text-white placeholder-slate-500 focus:ring-2 focus:ring-gold-500 focus:border-transparent resize-none"
+                      value={newMessage}
+                      onChange={(e) => setNewMessage(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && !e.shiftKey) {
+                          e.preventDefault();
+                          handleSendMessage();
+                        }
+                      }}
+                      rows={2}
+                      placeholder="Type your message... (Press Enter to send, Shift+Enter for new line)"
+                      className="flex-1 bg-slate-800 border border-slate-700 rounded-lg px-4 py-2 text-white placeholder-slate-500 focus:ring-2 focus:ring-gold-500 focus:border-transparent resize-none text-sm"
                     />
-                    <div className="flex justify-end mt-4">
-                      <Button
-                        variant="primary"
-                        onClick={handleRespond}
-                        disabled={responding || !responseText.trim()}
-                      >
-                        {responding ? 'Sending...' : 'Send Response'}
-                      </Button>
-                    </div>
-                    <p className="text-xs text-slate-500 mt-2">
-                      Your response will be sent to {selectedInquiry.inquirer_email}
-                    </p>
+                    <Button
+                      variant="primary"
+                      onClick={handleSendMessage}
+                      disabled={sending || !newMessage.trim()}
+                      className="self-end"
+                    >
+                      {sending ? (
+                        <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-black"></div>
+                      ) : (
+                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                        </svg>
+                      )}
+                    </Button>
                   </div>
-                )}
-
-                {/* Already responded message */}
-                {isReceivedInquiry(selectedInquiry) && selectedInquiry.status === 'responded' && (
-                  <div className="bg-green-900/20 border border-green-700 rounded-lg p-4 text-center">
-                    <p className="text-green-400">You have already responded to this inquiry.</p>
-                  </div>
-                )}
-
-                {/* Sent inquiry - waiting for response */}
-                {!isReceivedInquiry(selectedInquiry) && !selectedInquiry.response && (
-                  <div className="bg-slate-800/50 border border-slate-700 rounded-lg p-4 text-center">
-                    <p className="text-slate-400">Waiting for response from the property owner.</p>
-                  </div>
-                )}
+                  <p className="text-xs text-slate-500 mt-2">
+                    {isReceivedInquiry(selectedInquiry)
+                      ? `Replying to ${selectedInquiry.inquirer_email}`
+                      : `Sending to property owner`}
+                  </p>
+                </div>
               </Card>
             ) : (
-              <Card className="p-12 text-center">
-                <svg className="mx-auto h-16 w-16 text-slate-600 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <Card className="p-12 text-center h-[calc(100vh-280px)] min-h-[500px] flex flex-col items-center justify-center">
+                <svg className="h-16 w-16 text-slate-600 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                 </svg>
-                <h3 className="text-lg font-medium text-white mb-2">Select an inquiry</h3>
-                <p className="text-slate-400">Choose an inquiry from the list to view details and respond.</p>
+                <h3 className="text-lg font-medium text-white mb-2">Select a conversation</h3>
+                <p className="text-slate-400">Choose an inquiry from the list to view and continue the conversation.</p>
               </Card>
             )}
           </div>

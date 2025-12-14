@@ -2205,6 +2205,27 @@ class PropertyInquiry(models.Model):
         return f"Inquiry on {self.listing.title} by {self.inquirer.username}"
 
 
+class InquiryMessage(models.Model):
+    """Messages within an inquiry conversation thread"""
+
+    inquiry = models.ForeignKey(PropertyInquiry, on_delete=models.CASCADE, related_name='messages')
+    sender = models.ForeignKey(User, on_delete=models.CASCADE, related_name='inquiry_messages_sent')
+    message = models.TextField()
+    is_read = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'inquiry_messages'
+        ordering = ['created_at']
+        indexes = [
+            models.Index(fields=['inquiry', 'created_at']),
+            models.Index(fields=['sender', '-created_at']),
+        ]
+
+    def __str__(self):
+        return f"Message from {self.sender.username} on inquiry {self.inquiry.id}"
+
+
 class PropertyWatchlist(models.Model):
     """User watchlist for property listings"""
 

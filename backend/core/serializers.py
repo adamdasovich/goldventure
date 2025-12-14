@@ -14,7 +14,8 @@ from .models import (
     PaymentInstruction, DRSDocument,
     # Property Exchange models
     ProspectorProfile, PropertyListing, PropertyMedia, PropertyInquiry,
-    PropertyWatchlist, SavedPropertySearch, ProspectorCommissionAgreement
+    PropertyWatchlist, SavedPropertySearch, ProspectorCommissionAgreement,
+    InquiryMessage
 )
 
 
@@ -860,3 +861,84 @@ class PropertyChoicesSerializer(serializers.Serializer):
 
     def get_canadian_provinces(self, obj):
         return [{'value': k, 'label': v} for k, v in PropertyListing.CANADIAN_PROVINCES]
+
+
+# ============================================================================
+# INQUIRY MESSAGE SERIALIZERS (Conversation Thread)
+# ============================================================================
+
+class InquiryMessageSerializer(serializers.ModelSerializer):
+    """Serializer for inquiry conversation messages"""
+    sender_name = serializers.SerializerMethodField()
+    sender_email = serializers.EmailField(source='sender.email', read_only=True)
+    is_from_prospector = serializers.SerializerMethodField()
+
+    class Meta:
+        model = InquiryMessage
+        fields = [
+            'id', 'inquiry', 'sender', 'sender_name', 'sender_email',
+            'message', 'is_read', 'is_from_prospector', 'created_at'
+        ]
+        read_only_fields = ['id', 'sender', 'created_at']
+
+    def get_sender_name(self, obj):
+        return obj.sender.get_full_name() or obj.sender.username
+
+    def get_is_from_prospector(self, obj):
+        """Check if message is from the property owner (prospector)"""
+        return obj.sender == obj.inquiry.listing.prospector.user
+
+
+class InquiryMessageCreateSerializer(serializers.ModelSerializer):
+    """Serializer for creating new inquiry messages"""
+
+    class Meta:
+        model = InquiryMessage
+        fields = ['message']
+
+    def validate_message(self, value):
+        if not value or not value.strip():
+            raise serializers.ValidationError("Message cannot be empty")
+        return value.strip()
+
+
+class PropertyInquiryWithMessagesSerializer(serializers.ModelSerializer):
+    """Serializer for inquiry detail with full conversation thread"""
+    inquirer_name = serializers.CharField(source='inquirer.username', read_only=True)
+    inquirer_email = serializers.EmailField(source='inquirer.email', read_only=True)
+    inquirer_full_name = serializers.SerializerMethodField()
+    listing_title = serializers.CharField(source='listing.title', read_only=True)
+    listing_slug = serializers.SlugField(source='listing.slug', read_only=True)
+    inquiry_type_display = serializers.CharField(source='get_inquiry_type_display', read_only=True)
+    status_display = serializers.CharField(source='get_status_display', read_only=True)
+    messages = InquiryMessageSerializer(many=True, read_only=True)
+    prospector_name = serializers.SerializerMethodField()
+    unread_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = PropertyInquiry
+        fields = [
+            'id', 'listing', 'listing_title', 'listing_slug',
+            'inquirer', 'inquirer_name', 'inquirer_email', 'inquirer_full_name',
+            'inquiry_type', 'inquiry_type_display', 'message',
+            'contact_preference', 'phone_number',
+            'status', 'status_display', 'response', 'responded_at',
+            'is_nda_signed', 'nda_signed_at',
+            'messages', 'prospector_name', 'unread_count',
+            'created_at', 'updated_at'
+        ]
+        read_only_fields = ['id', 'inquirer', 'status', 'response', 'responded_at',
+                          'created_at', 'updated_at']
+
+    def get_inquirer_full_name(self, obj):
+        return obj.inquirer.get_full_name() or obj.inquirer.username
+
+    def get_prospector_name(self, obj):
+        return obj.listing.prospector.display_name or obj.listing.prospector.user.username
+
+    def get_unread_count(self, obj):
+        """Count unread messages for the current user"""
+        request = self.context.get('request')
+        if request and request.user.is_authenticated:
+            return obj.messages.filter(is_read=False).exclude(sender=request.user).count()
+        return 0

@@ -14,7 +14,8 @@ from .models import (
     SpeakerEvent, EventSpeaker, EventRegistration, EventQuestion, EventReaction,
     # Property Exchange models
     ProspectorProfile, PropertyListing, PropertyMedia, PropertyInquiry,
-    PropertyWatchlist, SavedPropertySearch, ProspectorCommissionAgreement
+    PropertyWatchlist, SavedPropertySearch, ProspectorCommissionAgreement,
+    InquiryMessage
 )
 from .serializers import (
     CompanySerializer, CompanyDetailSerializer,
@@ -29,7 +30,9 @@ from .serializers import (
     PropertyListingDetailSerializer, PropertyListingCreateSerializer,
     PropertyMediaSerializer, PropertyInquirySerializer, PropertyWatchlistSerializer,
     SavedPropertySearchSerializer, PropertyChoicesSerializer,
-    ProspectorCommissionAgreementSerializer, ProspectorCommissionAgreementCreateSerializer
+    ProspectorCommissionAgreementSerializer, ProspectorCommissionAgreementCreateSerializer,
+    # Inquiry message serializers
+    InquiryMessageSerializer, InquiryMessageCreateSerializer, PropertyInquiryWithMessagesSerializer
 )
 from claude_integration.client import ClaudeClient
 import requests
@@ -2010,6 +2013,130 @@ class PropertyInquiryViewSet(viewsets.ModelViewSet):
             inquiry.save()
 
         return Response(PropertyInquirySerializer(inquiry).data)
+
+    @action(detail=True, methods=['get'])
+    def messages(self, request, pk=None):
+        """
+        Get all messages for an inquiry conversation
+        GET /api/properties/inquiries/{id}/messages/
+        """
+        inquiry = self.get_object()
+        user = request.user
+
+        # Check if user is authorized (either inquirer or listing owner)
+        is_inquirer = inquiry.inquirer == user
+        is_prospector = inquiry.listing.prospector.user == user
+
+        if not is_inquirer and not is_prospector:
+            return Response(
+                {'error': 'You are not authorized to view this conversation'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        # Get all messages for this inquiry
+        messages = inquiry.messages.select_related('sender').order_by('created_at')
+
+        # Mark messages from the other party as read
+        messages.exclude(sender=user).filter(is_read=False).update(is_read=True)
+
+        serializer = InquiryMessageSerializer(messages, many=True)
+        return Response({
+            'inquiry_id': inquiry.id,
+            'messages': serializer.data,
+            'total_count': messages.count()
+        })
+
+    @action(detail=True, methods=['post'])
+    def send_message(self, request, pk=None):
+        """
+        Send a new message in an inquiry conversation
+        POST /api/properties/inquiries/{id}/send_message/
+        Body: { "message": "Your message here" }
+        """
+        inquiry = self.get_object()
+        user = request.user
+
+        # Check if user is authorized (either inquirer or listing owner)
+        is_inquirer = inquiry.inquirer == user
+        is_prospector = inquiry.listing.prospector.user == user
+
+        if not is_inquirer and not is_prospector:
+            return Response(
+                {'error': 'You are not authorized to send messages in this conversation'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        serializer = InquiryMessageCreateSerializer(data=request.data)
+        if serializer.is_valid():
+            # Create the message
+            message = InquiryMessage.objects.create(
+                inquiry=inquiry,
+                sender=user,
+                message=serializer.validated_data['message']
+            )
+
+            # Update inquiry status if needed
+            if inquiry.status == 'new':
+                inquiry.status = 'read'
+                inquiry.save(update_fields=['status'])
+
+            return Response(
+                InquiryMessageSerializer(message).data,
+                status=status.HTTP_201_CREATED
+            )
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(detail=True, methods=['get'])
+    def conversation(self, request, pk=None):
+        """
+        Get full inquiry details with conversation thread
+        GET /api/properties/inquiries/{id}/conversation/
+        """
+        inquiry = self.get_object()
+        user = request.user
+
+        # Check if user is authorized (either inquirer or listing owner)
+        is_inquirer = inquiry.inquirer == user
+        is_prospector = inquiry.listing.prospector.user == user
+
+        if not is_inquirer and not is_prospector:
+            return Response(
+                {'error': 'You are not authorized to view this conversation'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        # Mark messages from the other party as read
+        inquiry.messages.exclude(sender=user).filter(is_read=False).update(is_read=True)
+
+        serializer = PropertyInquiryWithMessagesSerializer(inquiry, context={'request': request})
+        return Response(serializer.data)
+
+    @action(detail=True, methods=['post'])
+    def mark_messages_read(self, request, pk=None):
+        """
+        Mark all messages in a conversation as read for the current user
+        POST /api/properties/inquiries/{id}/mark_messages_read/
+        """
+        inquiry = self.get_object()
+        user = request.user
+
+        # Check if user is authorized
+        is_inquirer = inquiry.inquirer == user
+        is_prospector = inquiry.listing.prospector.user == user
+
+        if not is_inquirer and not is_prospector:
+            return Response(
+                {'error': 'You are not authorized to access this conversation'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        # Mark all messages from the other party as read
+        updated = inquiry.messages.exclude(sender=user).filter(is_read=False).update(is_read=True)
+
+        return Response({
+            'marked_read': updated,
+            'message': f'{updated} messages marked as read'
+        })
 
 
 class PropertyWatchlistViewSet(viewsets.ModelViewSet):
