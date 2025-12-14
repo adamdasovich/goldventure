@@ -45,6 +45,10 @@ export function ProfileEditModal({ profileId, onClose, onSave }: ProfileEditModa
     profile_image_url: '',
   });
 
+  // Store raw text for comma-separated fields to allow typing commas
+  const [specializationsText, setSpecializationsText] = useState('');
+  const [regionsText, setRegionsText] = useState('');
+
   // Fetch current profile data
   useEffect(() => {
     const fetchProfile = async () => {
@@ -69,6 +73,9 @@ export function ProfileEditModal({ profileId, onClose, onSave }: ProfileEditModa
             phone: data.phone || '',
             profile_image_url: data.profile_image_url || '',
           });
+          // Initialize text fields from arrays
+          setSpecializationsText((data.specializations || []).join(', '));
+          setRegionsText((data.regions_active || []).join(', '));
         } else {
           setError('Failed to load profile');
         }
@@ -97,6 +104,10 @@ export function ProfileEditModal({ profileId, onClose, onSave }: ProfileEditModa
     setSaving(true);
     setError(null);
 
+    // Convert comma-separated text to arrays
+    const specializations = specializationsText.split(',').map(item => item.trim()).filter(item => item);
+    const regions_active = regionsText.split(',').map(item => item.trim()).filter(item => item);
+
     try {
       const response = await fetch(`${API_URL}/properties/prospectors/${formData.id}/`, {
         method: 'PUT',
@@ -109,8 +120,8 @@ export function ProfileEditModal({ profileId, onClose, onSave }: ProfileEditModa
           company_name: formData.company_name,
           bio: formData.bio,
           years_experience: formData.years_experience,
-          specializations: formData.specializations,
-          regions_active: formData.regions_active,
+          specializations: specializations,
+          regions_active: regions_active,
           website_url: formData.website_url,
           phone: formData.phone,
           profile_image_url: formData.profile_image_url,
@@ -224,8 +235,8 @@ export function ProfileEditModal({ profileId, onClose, onSave }: ProfileEditModa
                 </label>
                 <input
                   type="text"
-                  value={formData.specializations.join(', ')}
-                  onChange={(e) => handleArrayChange('specializations', e.target.value)}
+                  value={specializationsText}
+                  onChange={(e) => setSpecializationsText(e.target.value)}
                   className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white placeholder-slate-500 focus:ring-2 focus:ring-gold-500 focus:border-transparent"
                   placeholder="Gold, Silver, Copper (comma separated)"
                 />
@@ -239,8 +250,8 @@ export function ProfileEditModal({ profileId, onClose, onSave }: ProfileEditModa
                 </label>
                 <input
                   type="text"
-                  value={formData.regions_active.join(', ')}
-                  onChange={(e) => handleArrayChange('regions_active', e.target.value)}
+                  value={regionsText}
+                  onChange={(e) => setRegionsText(e.target.value)}
                   className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white placeholder-slate-500 focus:ring-2 focus:ring-gold-500 focus:border-transparent"
                   placeholder="British Columbia, Ontario (comma separated)"
                 />
