@@ -1926,6 +1926,12 @@ class PropertyInquiryViewSet(viewsets.ModelViewSet):
     serializer_class = PropertyInquirySerializer
     permission_classes = [IsAuthenticated]
 
+    def get_serializer_class(self):
+        from .serializers import PropertyInquiryCreateSerializer
+        if self.action == 'create':
+            return PropertyInquiryCreateSerializer
+        return PropertyInquirySerializer
+
     def get_queryset(self):
         user = self.request.user
 
@@ -1945,18 +1951,30 @@ class PropertyInquiryViewSet(viewsets.ModelViewSet):
             'listing', 'inquirer', 'listing__prospector'
         ).order_by('-created_at')
 
-    def perform_create(self, serializer):
+    def create(self, request, *args, **kwargs):
+        """Create a new inquiry"""
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
         listing = serializer.validated_data.get('listing')
 
         # Can't inquire on own listing
-        if listing.prospector.user == self.request.user:
-            raise serializers.ValidationError("You cannot inquire on your own listing")
+        if listing.prospector.user == request.user:
+            return Response(
+                {'error': 'You cannot inquire on your own listing'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
         # Update listing inquiry count
         listing.inquiries_count += 1
         listing.save(update_fields=['inquiries_count'])
 
-        serializer.save(inquirer=self.request.user)
+        # Save the inquiry
+        inquiry = serializer.save(inquirer=request.user)
+
+        # Return the full inquiry data
+        response_serializer = PropertyInquirySerializer(inquiry)
+        return Response(response_serializer.data, status=status.HTTP_201_CREATED)
 
     def perform_update(self, serializer):
         instance = serializer.instance
