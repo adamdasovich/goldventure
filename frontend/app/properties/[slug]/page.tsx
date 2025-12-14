@@ -344,82 +344,6 @@ export default function PropertyDetailPage() {
               )}
             </Card>
 
-            {/* Technical Data */}
-            <Card className="p-6">
-              <h2 className="text-xl font-semibold text-white mb-6">Technical Data</h2>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                {/* Geology */}
-                <div>
-                  <h3 className="text-sm font-medium text-slate-400 mb-4 uppercase tracking-wider">Geology</h3>
-                  <div className="space-y-4 text-sm">
-                    <div className="grid grid-cols-[140px_1fr] gap-2">
-                      <span className="text-slate-400">Deposit Type:</span>
-                      <span className="text-white">{listing.deposit_type_display || 'N/A'}</span>
-                    </div>
-                    {listing.geological_setting && (
-                      <div className="mt-4">
-                        <h4 className="text-slate-400 text-xs uppercase tracking-wide mb-3">Geological Setting</h4>
-                        <p className="text-white text-sm bg-slate-800/50 rounded-lg p-4 leading-relaxed whitespace-pre-wrap">{listing.geological_setting}</p>
-                      </div>
-                    )}
-                    {listing.mineralization_style && (
-                      <div className="mt-4">
-                        <h4 className="text-slate-400 text-xs uppercase tracking-wide mb-3">Mineralization</h4>
-                        <p className="text-white text-sm bg-slate-800/50 rounded-lg p-4 leading-relaxed whitespace-pre-wrap">{listing.mineralization_style}</p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Exploration */}
-                <div>
-                  <h3 className="text-sm font-medium text-slate-400 mb-4 uppercase tracking-wider">Exploration Status</h3>
-                  <div className="space-y-3 text-sm">
-                    <div className="grid grid-cols-[140px_1fr] gap-2">
-                      <span className="text-slate-400">Stage:</span>
-                      <span className="text-white">{listing.exploration_stage_display}</span>
-                    </div>
-                    <div className="grid grid-cols-[140px_1fr] gap-2">
-                      <span className="text-slate-400">Drilling:</span>
-                      <span className="text-white">{listing.has_drilling ? `${formatNumber(listing.drill_hole_count)} holes / ${formatNumber(listing.total_meters_drilled)}m` : 'No'}</span>
-                    </div>
-                    <div className="grid grid-cols-[140px_1fr] gap-2">
-                      <span className="text-slate-400">NI 43-101:</span>
-                      <span className="text-white">{listing.has_43_101_report ? 'Yes' : 'No'}</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Assay Highlights */}
-              {listing.assay_highlights && listing.assay_highlights.length > 0 && (
-                <div className="mt-6">
-                  <h3 className="text-sm font-medium text-slate-400 mb-2">Assay Highlights</h3>
-                  <div className="bg-slate-800 rounded-lg overflow-hidden">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b border-slate-700">
-                          <th className="px-4 py-2 text-left text-slate-400">Sample</th>
-                          <th className="px-4 py-2 text-left text-slate-400">Mineral</th>
-                          <th className="px-4 py-2 text-right text-slate-400">Grade</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {listing.assay_highlights.map((assay, i) => (
-                          <tr key={i} className="border-b border-slate-700 last:border-0">
-                            <td className="px-4 py-2 text-white">{assay.sample_id}</td>
-                            <td className="px-4 py-2 text-white">{assay.mineral}</td>
-                            <td className="px-4 py-2 text-right text-gold-400 font-medium">{assay.grade} {assay.unit}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
-            </Card>
-
             {/* Resources & Documents */}
             <Card className="p-6">
               <div className="flex items-center justify-between mb-4">
@@ -521,6 +445,82 @@ export default function PropertyDetailPage() {
                   </>
                 );
               })()}
+            </Card>
+
+            {/* Technical Data */}
+            <Card className="p-6">
+              <h2 className="text-xl font-semibold text-white mb-6">Technical Data</h2>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                {/* Geology */}
+                <div>
+                  <h3 className="text-sm font-medium text-slate-400 mb-4 uppercase tracking-wider">Geology</h3>
+                  <div className="space-y-4 text-sm">
+                    <div className="grid grid-cols-[140px_1fr] gap-2">
+                      <span className="text-slate-400">Deposit Type:</span>
+                      <span className="text-white">{listing.deposit_type_display || 'N/A'}</span>
+                    </div>
+                    {listing.geological_setting && (
+                      <div className="mt-4">
+                        <h4 className="text-slate-400 text-xs uppercase tracking-wide mb-3">Geological Setting</h4>
+                        <p className="text-white text-sm bg-slate-800/50 rounded-lg p-4 leading-relaxed whitespace-pre-wrap">{listing.geological_setting}</p>
+                      </div>
+                    )}
+                    {listing.mineralization_style && (
+                      <div className="mt-4">
+                        <h4 className="text-slate-400 text-xs uppercase tracking-wide mb-3">Mineralization</h4>
+                        <p className="text-white text-sm bg-slate-800/50 rounded-lg p-4 leading-relaxed whitespace-pre-wrap">{listing.mineralization_style}</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Exploration */}
+                <div>
+                  <h3 className="text-sm font-medium text-slate-400 mb-4 uppercase tracking-wider">Exploration Status</h3>
+                  <div className="space-y-3 text-sm">
+                    <div className="grid grid-cols-[140px_1fr] gap-2">
+                      <span className="text-slate-400">Stage:</span>
+                      <span className="text-white">{listing.exploration_stage_display}</span>
+                    </div>
+                    <div className="grid grid-cols-[140px_1fr] gap-2">
+                      <span className="text-slate-400">Drilling:</span>
+                      <span className="text-white">{listing.has_drilling ? `${formatNumber(listing.drill_hole_count)} holes / ${formatNumber(listing.total_meters_drilled)}m` : 'No'}</span>
+                    </div>
+                    <div className="grid grid-cols-[140px_1fr] gap-2">
+                      <span className="text-slate-400">NI 43-101:</span>
+                      <span className="text-white">{listing.has_43_101_report ? 'Yes' : 'No'}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Assay Highlights */}
+              {listing.assay_highlights && listing.assay_highlights.length > 0 && (
+                <div className="mt-6">
+                  <h3 className="text-sm font-medium text-slate-400 mb-2">Assay Highlights</h3>
+                  <div className="bg-slate-800 rounded-lg overflow-hidden">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-slate-700">
+                          <th className="px-4 py-2 text-left text-slate-400">Sample</th>
+                          <th className="px-4 py-2 text-left text-slate-400">Mineral</th>
+                          <th className="px-4 py-2 text-right text-slate-400">Grade</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {listing.assay_highlights.map((assay, i) => (
+                          <tr key={i} className="border-b border-slate-700 last:border-0">
+                            <td className="px-4 py-2 text-white">{assay.sample_id}</td>
+                            <td className="px-4 py-2 text-white">{assay.mineral}</td>
+                            <td className="px-4 py-2 text-right text-gold-400 font-medium">{assay.grade} {assay.unit}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
             </Card>
 
             {/* Location & Infrastructure */}
