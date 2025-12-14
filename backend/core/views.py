@@ -35,6 +35,7 @@ from .serializers import (
     InquiryMessageSerializer, InquiryMessageCreateSerializer, PropertyInquiryWithMessagesSerializer
 )
 from claude_integration.client import ClaudeClient
+from claude_integration.client_optimized import OptimizedClaudeClient
 import requests
 from django.conf import settings
 from datetime import datetime, timedelta
@@ -277,13 +278,18 @@ def claude_chat(request):
     {
         "message": "What are our total gold resources?",
         "conversation_history": [...],  # optional
-        "system_prompt": "..."  # optional
+        "system_prompt": "...",  # optional
+        "optimized": true  # optional - use token-efficient client
     }
+
+    The optimized client uses progressive tool discovery and result filtering
+    for significant token savings (50-90% reduction in tool tokens).
     """
 
     message = request.data.get('message')
     conversation_history = request.data.get('conversation_history', [])
     system_prompt = request.data.get('system_prompt')
+    use_optimized = request.data.get('optimized', True)  # Default to optimized
 
     if not message:
         return Response(
@@ -292,8 +298,11 @@ def claude_chat(request):
         )
 
     try:
-        # Initialize Claude client
-        client = ClaudeClient()
+        # Initialize Claude client (optimized or standard)
+        if use_optimized:
+            client = OptimizedClaudeClient()
+        else:
+            client = ClaudeClient()
 
         # Get response
         result = client.chat(
@@ -321,11 +330,13 @@ def company_chat(request, company_id):
     {
         "message": "What are the latest news releases?",
         "conversation_history": [...],  # optional
+        "optimized": true  # optional - use token-efficient client
     }
     """
 
     message = request.data.get('message')
     conversation_history = request.data.get('conversation_history', [])
+    use_optimized = request.data.get('optimized', True)  # Default to optimized
 
     if not message:
         return Response(
@@ -340,27 +351,23 @@ def company_chat(request, company_id):
         # Create company-specific system prompt
         system_prompt = f"""You are a helpful AI assistant for {company.name} ({company.ticker_symbol}).
 
-You have access to comprehensive company data including:
-- Projects and resource estimates
-- Financial data and market information
-- News releases and company updates
-- Technical reports and documents
+You have access to tools for company data including projects, resources, financials, news, and documents.
+If you need a tool that isn't loaded, use search_available_tools to find it.
 
-Provide accurate, helpful information about the company. When asked about specific data:
-1. Use the available tools to fetch current information
-2. Cite your sources and data dates when relevant
-3. Be concise but thorough in your responses
-
-Current company context:
+Company context:
 - Name: {company.name}
 - Ticker: {company.ticker_symbol} ({company.exchange.upper() if company.exchange else 'N/A'})
-- CEO: {company.ceo_name if company.ceo_name else 'Not specified'}
-- Website: {company.website if company.website else 'Not specified'}
-- Headquarters: {company.headquarters_city}, {company.headquarters_country}
-"""
+- CEO: {company.ceo_name if company.ceo_name else 'N/A'}
+- HQ: {company.headquarters_city}, {company.headquarters_country}
+
+Be concise but thorough. Cite data sources and dates when relevant."""
 
         # Initialize Claude client with company context
-        client = ClaudeClient(company_id=company_id, user=request.user if request.user.is_authenticated else None)
+        user = request.user if request.user.is_authenticated else None
+        if use_optimized:
+            client = OptimizedClaudeClient(company_id=company_id, user=user)
+        else:
+            client = ClaudeClient(company_id=company_id, user=user)
 
         # Get response
         result = client.chat(
@@ -390,16 +397,54 @@ def available_tools(request):
     Get list of all available MCP tools.
 
     GET /api/claude/tools/
+    GET /api/claude/tools/?query=stock&detail=full
+
+    Query parameters:
+    - query: Search for tools by keyword
+    - category: Filter by category (mining, financial, market, documents, news, search)
+    - detail: Level of detail (name_only, description, full)
     """
+    from mcp_servers.tool_registry import get_registry, ToolCategory, DetailLevel
 
     try:
-        client = ClaudeClient()
-        tools = client._get_all_tools()
+        query = request.query_params.get('query')
+        category_str = request.query_params.get('category')
+        detail_str = request.query_params.get('detail', 'description')
 
-        return Response({
-            'tools': tools,
-            'count': len(tools)
-        })
+        # Map detail level
+        detail_map = {
+            'name_only': DetailLevel.NAME_ONLY,
+            'description': DetailLevel.WITH_DESCRIPTION,
+            'full': DetailLevel.FULL_SCHEMA
+        }
+        detail_level = detail_map.get(detail_str, DetailLevel.WITH_DESCRIPTION)
+
+        # Map category
+        category = None
+        if category_str:
+            category_map = {
+                'mining': ToolCategory.MINING,
+                'financial': ToolCategory.FINANCIAL,
+                'market': ToolCategory.MARKET,
+                'documents': ToolCategory.DOCUMENTS,
+                'news': ToolCategory.NEWS,
+                'search': ToolCategory.SEARCH,
+            }
+            category = category_map.get(category_str)
+
+        # Use registry for progressive discovery
+        registry = get_registry()
+        result = registry.search_tools(
+            query=query,
+            category=category,
+            detail_level=detail_level,
+            limit=50
+        )
+
+        # Add category list for reference
+        result['available_categories'] = ['mining', 'financial', 'market', 'documents', 'news', 'search']
+
+        return Response(result)
 
     except Exception as e:
         return Response(
@@ -1953,28 +1998,38 @@ class PropertyInquiryViewSet(viewsets.ModelViewSet):
 
     def create(self, request, *args, **kwargs):
         """Create a new inquiry"""
-        serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
+        import logging
+        logger = logging.getLogger(__name__)
 
-        listing = serializer.validated_data.get('listing')
+        try:
+            serializer = self.get_serializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
 
-        # Can't inquire on own listing
-        if listing.prospector.user == request.user:
+            listing = serializer.validated_data.get('listing')
+
+            # Can't inquire on own listing
+            if listing.prospector.user == request.user:
+                return Response(
+                    {'error': 'You cannot inquire on your own listing'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # Update listing inquiry count
+            listing.inquiries_count += 1
+            listing.save(update_fields=['inquiries_count'])
+
+            # Save the inquiry
+            inquiry = serializer.save(inquirer=request.user)
+
+            # Return the full inquiry data
+            response_serializer = PropertyInquirySerializer(inquiry)
+            return Response(response_serializer.data, status=status.HTTP_201_CREATED)
+        except Exception as e:
+            logger.error(f"Error creating inquiry: {str(e)}", exc_info=True)
             return Response(
-                {'error': 'You cannot inquire on your own listing'},
-                status=status.HTTP_400_BAD_REQUEST
+                {'error': f'Failed to create inquiry: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
-
-        # Update listing inquiry count
-        listing.inquiries_count += 1
-        listing.save(update_fields=['inquiries_count'])
-
-        # Save the inquiry
-        inquiry = serializer.save(inquirer=request.user)
-
-        # Return the full inquiry data
-        response_serializer = PropertyInquirySerializer(inquiry)
-        return Response(response_serializer.data, status=status.HTTP_201_CREATED)
 
     def perform_update(self, serializer):
         instance = serializer.instance

@@ -2034,7 +2034,7 @@ class PropertyListing(models.Model):
     secondary_minerals = models.JSONField(default=list, blank=True, help_text="List of secondary minerals")
     deposit_type = models.CharField(max_length=30, choices=DEPOSIT_TYPES, blank=True)
     geological_setting = models.TextField(blank=True)
-    mineralization_style = models.CharField(max_length=200, blank=True)
+    mineralization_style = models.TextField(blank=True)  # Changed from CharField to TextField to allow longer descriptions
 
     # Exploration Status
     exploration_stage = models.CharField(max_length=20, choices=EXPLORATION_STAGES)

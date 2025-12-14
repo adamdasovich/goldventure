@@ -280,11 +280,16 @@ export default function PropertyDetailPage() {
                     className="w-full h-full object-cover"
                   />
                 ) : (
-                  <div className="w-full h-full flex items-center justify-center">
-                    <svg className="w-24 h-24 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                    </svg>
+                  <div className="w-full h-full flex flex-col items-center justify-center p-8 text-center">
+                    <div className="w-20 h-20 rounded-full bg-slate-700/50 flex items-center justify-center mb-4">
+                      <svg className="w-10 h-10 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                      </svg>
+                    </div>
+                    <h3 className="text-lg font-medium text-slate-300 mb-2">Property Images</h3>
+                    <p className="text-sm text-slate-500 max-w-xs">
+                      No images have been uploaded for this property yet. Check back soon for photos and maps of the project area.
+                    </p>
                   </div>
                 )}
 
@@ -341,41 +346,45 @@ export default function PropertyDetailPage() {
 
             {/* Technical Data */}
             <Card className="p-6">
-              <h2 className="text-xl font-semibold text-white mb-4">Technical Data</h2>
+              <h2 className="text-xl font-semibold text-white mb-6">Technical Data</h2>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                 {/* Geology */}
                 <div>
-                  <h3 className="text-sm font-medium text-slate-400 mb-2">Geology</h3>
-                  <div className="space-y-2 text-sm">
-                    <div className="flex justify-between">
+                  <h3 className="text-sm font-medium text-slate-400 mb-4 uppercase tracking-wider">Geology</h3>
+                  <div className="space-y-4 text-sm">
+                    <div className="grid grid-cols-[140px_1fr] gap-2">
                       <span className="text-slate-400">Deposit Type:</span>
                       <span className="text-white">{listing.deposit_type_display || 'N/A'}</span>
                     </div>
-                    <div className="flex justify-between">
-                      <span className="text-slate-400">Geological Setting:</span>
-                      <span className="text-white">{listing.geological_setting || 'N/A'}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-slate-400">Mineralization:</span>
-                      <span className="text-white">{listing.mineralization_style || 'N/A'}</span>
-                    </div>
+                    {listing.geological_setting && (
+                      <div className="mt-4">
+                        <h4 className="text-slate-400 text-xs uppercase tracking-wide mb-3">Geological Setting</h4>
+                        <p className="text-white text-sm bg-slate-800/50 rounded-lg p-4 leading-relaxed whitespace-pre-wrap">{listing.geological_setting}</p>
+                      </div>
+                    )}
+                    {listing.mineralization_style && (
+                      <div className="mt-4">
+                        <h4 className="text-slate-400 text-xs uppercase tracking-wide mb-3">Mineralization</h4>
+                        <p className="text-white text-sm bg-slate-800/50 rounded-lg p-4 leading-relaxed whitespace-pre-wrap">{listing.mineralization_style}</p>
+                      </div>
+                    )}
                   </div>
                 </div>
 
                 {/* Exploration */}
                 <div>
-                  <h3 className="text-sm font-medium text-slate-400 mb-2">Exploration Status</h3>
-                  <div className="space-y-2 text-sm">
-                    <div className="flex justify-between">
+                  <h3 className="text-sm font-medium text-slate-400 mb-4 uppercase tracking-wider">Exploration Status</h3>
+                  <div className="space-y-3 text-sm">
+                    <div className="grid grid-cols-[140px_1fr] gap-2">
                       <span className="text-slate-400">Stage:</span>
                       <span className="text-white">{listing.exploration_stage_display}</span>
                     </div>
-                    <div className="flex justify-between">
+                    <div className="grid grid-cols-[140px_1fr] gap-2">
                       <span className="text-slate-400">Drilling:</span>
                       <span className="text-white">{listing.has_drilling ? `${formatNumber(listing.drill_hole_count)} holes / ${formatNumber(listing.total_meters_drilled)}m` : 'No'}</span>
                     </div>
-                    <div className="flex justify-between">
+                    <div className="grid grid-cols-[140px_1fr] gap-2">
                       <span className="text-slate-400">NI 43-101:</span>
                       <span className="text-white">{listing.has_43_101_report ? 'Yes' : 'No'}</span>
                     </div>
