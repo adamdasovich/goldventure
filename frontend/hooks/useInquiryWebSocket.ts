@@ -45,9 +45,42 @@ export function useInquiryWebSocket({
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined);
   const heartbeatIntervalRef = useRef<NodeJS.Timeout | undefined>(undefined);
 
+  // Store callbacks in refs to prevent reconnection on callback changes
+  const onNewMessageRef = useRef(onNewMessage);
+  const onMessageSentRef = useRef(onMessageSent);
+  const onMessagesReadRef = useRef(onMessagesRead);
+  const onTypingIndicatorRef = useRef(onTypingIndicator);
+  const onErrorRef = useRef(onError);
+
+  // Update refs when callbacks change
+  useEffect(() => {
+    onNewMessageRef.current = onNewMessage;
+  }, [onNewMessage]);
+
+  useEffect(() => {
+    onMessageSentRef.current = onMessageSent;
+  }, [onMessageSent]);
+
+  useEffect(() => {
+    onMessagesReadRef.current = onMessagesRead;
+  }, [onMessagesRead]);
+
+  useEffect(() => {
+    onTypingIndicatorRef.current = onTypingIndicator;
+  }, [onTypingIndicator]);
+
+  useEffect(() => {
+    onErrorRef.current = onError;
+  }, [onError]);
+
   const connect = useCallback(() => {
     if (!token) return;
-    if (wsRef.current?.readyState === WebSocket.OPEN) return;
+
+    // Don't reconnect if already connected or connecting
+    if (wsRef.current?.readyState === WebSocket.OPEN ||
+        wsRef.current?.readyState === WebSocket.CONNECTING) {
+      return;
+    }
 
     const wsUrl = `${process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8000'}/ws/inbox/?token=${token}`;
     const ws = new WebSocket(wsUrl);
@@ -77,32 +110,32 @@ export function useInquiryWebSocket({
             break;
 
           case 'message.new':
-            if (data.message && onNewMessage) {
-              onNewMessage(data.message);
+            if (data.message && onNewMessageRef.current) {
+              onNewMessageRef.current(data.message);
             }
             break;
 
           case 'message.sent':
-            if (data.message && onMessageSent) {
-              onMessageSent(data.message);
+            if (data.message && onMessageSentRef.current) {
+              onMessageSentRef.current(data.message);
             }
             break;
 
           case 'messages.read':
-            if (data.inquiry_id && data.message_ids && onMessagesRead) {
-              onMessagesRead(data.inquiry_id, data.message_ids);
+            if (data.inquiry_id && data.message_ids && onMessagesReadRef.current) {
+              onMessagesReadRef.current(data.inquiry_id, data.message_ids);
             }
             break;
 
           case 'typing.indicator':
-            if (data.inquiry_id !== undefined && data.user_id !== undefined && data.is_typing !== undefined && onTypingIndicator) {
-              onTypingIndicator(data.inquiry_id, data.user_id, data.is_typing);
+            if (data.inquiry_id !== undefined && data.user_id !== undefined && data.is_typing !== undefined && onTypingIndicatorRef.current) {
+              onTypingIndicatorRef.current(data.inquiry_id, data.user_id, data.is_typing);
             }
             break;
 
           case 'error':
             console.error('Inbox WebSocket error:', data.error);
-            onError?.(data.error || 'An error occurred');
+            onErrorRef.current?.(data.error || 'An error occurred');
             break;
 
           default:
@@ -121,6 +154,7 @@ export function useInquiryWebSocket({
     ws.onclose = (event) => {
       console.log('Inbox WebSocket closed:', event.code, event.reason);
       setIsConnected(false);
+      wsRef.current = null;
 
       // Clear heartbeat
       if (heartbeatIntervalRef.current) {
@@ -137,7 +171,7 @@ export function useInquiryWebSocket({
     };
 
     wsRef.current = ws;
-  }, [token, onNewMessage, onMessageSent, onMessagesRead, onTypingIndicator, onError]);
+  }, [token]); // Only depend on token, not callbacks
 
   const disconnect = useCallback(() => {
     if (heartbeatIntervalRef.current) {
@@ -155,7 +189,7 @@ export function useInquiryWebSocket({
 
   const sendMessage = useCallback((inquiryId: number, content: string) => {
     if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
-      onError?.('Not connected to server');
+      onErrorRef.current?.('Not connected to server');
       return false;
     }
 
@@ -167,7 +201,7 @@ export function useInquiryWebSocket({
       })
     );
     return true;
-  }, [onError]);
+  }, []);
 
   const markMessagesRead = useCallback((inquiryId: number, messageIds?: number[]) => {
     if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
