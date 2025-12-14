@@ -2175,6 +2175,7 @@ class PropertyInquiry(models.Model):
     listing = models.ForeignKey(PropertyListing, on_delete=models.CASCADE, related_name='inquiries')
     inquirer = models.ForeignKey(User, on_delete=models.CASCADE, related_name='property_inquiries')
     inquiry_type = models.CharField(max_length=20, choices=INQUIRY_TYPES)
+    subject = models.CharField(max_length=255, blank=True)  # Optional subject line
     message = models.TextField()
     contact_preference = models.CharField(max_length=10, choices=CONTACT_PREFERENCES, default='email')
     phone_number = models.CharField(max_length=20, blank=True)

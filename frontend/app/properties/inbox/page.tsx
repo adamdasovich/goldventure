@@ -33,6 +33,7 @@ interface Inquiry {
   inquirer_full_name?: string;
   inquiry_type: string;
   inquiry_type_display: string;
+  subject?: string;
   message: string;
   status: 'new' | 'read' | 'responded' | 'closed';
   status_display: string;
@@ -431,8 +432,8 @@ export default function InboxPage() {
                           </h4>
                           <p className="text-sm text-slate-400 truncate">
                             {isReceivedInquiry(inquiry)
-                              ? `Re: ${inquiry.listing_title}`
-                              : `To: Property Owner`}
+                              ? `Re: ${inquiry.subject || inquiry.listing_title}`
+                              : `To: ${inquiry.prospector_name || 'Property Owner'}`}
                           </p>
                           <p className="text-xs text-slate-500 mt-1">{formatDate(inquiry.created_at)}</p>
                         </div>

@@ -769,7 +769,7 @@ class PropertyInquirySerializer(serializers.ModelSerializer):
         fields = [
             'id', 'listing', 'listing_title', 'listing_slug',
             'inquirer', 'inquirer_name', 'inquirer_email',
-            'inquiry_type', 'inquiry_type_display', 'message',
+            'inquiry_type', 'inquiry_type_display', 'subject', 'message',
             'contact_preference', 'phone_number',
             'status', 'status_display', 'response', 'responded_at',
             'is_nda_signed', 'nda_signed_at',
@@ -784,7 +784,7 @@ class PropertyInquiryCreateSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = PropertyInquiry
-        fields = ['listing', 'inquiry_type', 'message', 'contact_preference', 'phone_number']
+        fields = ['listing', 'inquiry_type', 'subject', 'message', 'contact_preference', 'phone_number']
 
 
 class PropertyInquiryResponseSerializer(serializers.Serializer):
@@ -920,7 +920,7 @@ class PropertyInquiryWithMessagesSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'listing', 'listing_title', 'listing_slug',
             'inquirer', 'inquirer_name', 'inquirer_email', 'inquirer_full_name',
-            'inquiry_type', 'inquiry_type_display', 'message',
+            'inquiry_type', 'inquiry_type_display', 'subject', 'message',
             'contact_preference', 'phone_number',
             'status', 'status_display', 'response', 'responded_at',
             'is_nda_signed', 'nda_signed_at',
