@@ -410,34 +410,41 @@ export default function InboxPage() {
                 </p>
               </Card>
             ) : (
-              <div className="space-y-2">
-                {filteredInquiries.map((inquiry) => (
-                  <Card
-                    key={inquiry.id}
-                    className={`p-4 cursor-pointer transition-all hover:border-gold-500/50 ${
-                      selectedInquiry?.id === inquiry.id ? 'border-gold-500 bg-slate-800/50' : ''
-                    } ${inquiry.status === 'new' && isReceivedInquiry(inquiry) ? 'border-l-4 border-l-gold-500' : ''}`}
-                    onClick={() => handleSelectInquiry(inquiry)}
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2 mb-1">
-                          {getStatusBadge(inquiry.status)}
-                          <Badge variant="copper" className="text-xs">{inquiry.inquiry_type_display}</Badge>
+              <div className="max-h-[500px] overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-slate-600 scrollbar-track-slate-800">
+                <div className="space-y-2">
+                  {filteredInquiries.map((inquiry) => (
+                    <Card
+                      key={inquiry.id}
+                      className={`p-4 cursor-pointer transition-all hover:border-gold-500/50 ${
+                        selectedInquiry?.id === inquiry.id ? 'border-gold-500 bg-slate-800/50' : ''
+                      } ${inquiry.status === 'new' && isReceivedInquiry(inquiry) ? 'border-l-4 border-l-gold-500' : ''}`}
+                      onClick={() => handleSelectInquiry(inquiry)}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2 mb-1">
+                            {getStatusBadge(inquiry.status)}
+                            <Badge variant="copper" className="text-xs">{inquiry.inquiry_type_display}</Badge>
+                          </div>
+                          <h4 className="font-medium text-white truncate">
+                            {isReceivedInquiry(inquiry) ? inquiry.inquirer_name : inquiry.listing_title}
+                          </h4>
+                          <p className="text-sm text-slate-400 truncate">
+                            {isReceivedInquiry(inquiry)
+                              ? `Re: ${inquiry.listing_title}`
+                              : `To: Property Owner`}
+                          </p>
+                          <p className="text-xs text-slate-500 mt-1">{formatDate(inquiry.created_at)}</p>
                         </div>
-                        <h4 className="font-medium text-white truncate">
-                          {isReceivedInquiry(inquiry) ? inquiry.inquirer_name : inquiry.listing_title}
-                        </h4>
-                        <p className="text-sm text-slate-400 truncate">
-                          {isReceivedInquiry(inquiry)
-                            ? `Re: ${inquiry.listing_title}`
-                            : `To: Property Owner`}
-                        </p>
-                        <p className="text-xs text-slate-500 mt-1">{formatDate(inquiry.created_at)}</p>
                       </div>
-                    </div>
-                  </Card>
-                ))}
+                    </Card>
+                  ))}
+                </div>
+                {filteredInquiries.length > 5 && (
+                  <p className="text-xs text-slate-500 text-center mt-3 pb-1">
+                    Scroll to see {filteredInquiries.length - 5} more conversations
+                  </p>
+                )}
               </div>
             )}
           </div>
