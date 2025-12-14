@@ -208,7 +208,78 @@ export default function PropertiesPage() {
         </div>
       </section>
 
-      {/* Main Content */}
+      {/* Non-logged-in users see login prompt instead of listings */}
+      {!user ? (
+        <>
+          {/* Login Prompt Section */}
+          <section className="py-16 px-4 sm:px-6 lg:px-8">
+            <div className="max-w-2xl mx-auto text-center">
+              <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-8">
+                <svg className="mx-auto h-16 w-16 text-gold-500 mb-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                </svg>
+                <h2 className="text-2xl font-bold text-white mb-4">
+                  Sign In to Browse Properties
+                </h2>
+                <p className="text-slate-400 mb-8">
+                  Create a free account or sign in to browse available mineral properties, connect with prospectors, and manage your watchlist.
+                </p>
+                <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                  <Button variant="primary" size="lg" onClick={() => setShowRegister(true)}>
+                    Create Free Account
+                  </Button>
+                  <Button variant="secondary" size="lg" onClick={() => setShowLogin(true)}>
+                    Sign In
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {/* CTA Section for non-logged-in users */}
+          <section className="py-16 px-4 sm:px-6 lg:px-8 bg-slate-800/50">
+            <div className="max-w-4xl mx-auto text-center">
+              <h2 className="text-3xl font-bold text-white mb-4">
+                Are You a Prospector?
+              </h2>
+              <p className="text-lg text-slate-300 mb-8">
+                List your mineral properties for free on GoldVenture. Reach thousands of investors and mining companies looking for their next project.
+              </p>
+              <div className="flex flex-wrap gap-4 justify-center">
+                <Button variant="primary" size="lg" onClick={() => setShowRegister(true)}>
+                  List Your Property
+                </Button>
+              </div>
+              <div className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-6 text-left">
+                <div className="bg-slate-900/50 p-6 rounded-lg">
+                  <div className="text-gold-500 text-2xl mb-2">1.</div>
+                  <h3 className="font-semibold text-white mb-2">Create Profile</h3>
+                  <p className="text-sm text-slate-400">Set up your prospector profile with your credentials and experience.</p>
+                </div>
+                <div className="bg-slate-900/50 p-6 rounded-lg">
+                  <div className="text-gold-500 text-2xl mb-2">2.</div>
+                  <h3 className="font-semibold text-white mb-2">Add Your Properties</h3>
+                  <p className="text-sm text-slate-400">Upload details, maps, assay results, and photos of your mineral claims.</p>
+                </div>
+                <div className="bg-slate-900/50 p-6 rounded-lg">
+                  <div className="text-gold-500 text-2xl mb-2">3.</div>
+                  <h3 className="font-semibold text-white mb-2">Connect with Buyers</h3>
+                  <p className="text-sm text-slate-400">Receive inquiries directly from qualified investors and mining companies.</p>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {/* Footer */}
+          <footer className="py-8 px-4 border-t border-slate-800">
+            <div className="max-w-7xl mx-auto text-center text-slate-400 text-sm">
+              <p>&copy; {new Date().getFullYear()} GoldVenture. All rights reserved.</p>
+            </div>
+          </footer>
+        </>
+      ) : (
+        <>
+      {/* Main Content - Only shown to logged-in users */}
       <section className="py-12 px-4 sm:px-6 lg:px-8">
         <div className="max-w-7xl mx-auto">
           <div className="flex flex-col lg:flex-row gap-8">
@@ -299,7 +370,7 @@ export default function PropertiesPage() {
         </div>
       </section>
 
-      {/* CTA Section */}
+      {/* CTA Section - for logged-in users */}
       <section className="py-16 px-4 sm:px-6 lg:px-8 bg-slate-800/50">
         <div className="max-w-4xl mx-auto text-center">
           <h2 className="text-3xl font-bold text-white mb-4">
@@ -309,7 +380,7 @@ export default function PropertiesPage() {
             List your mineral properties for free on GoldVenture. Reach thousands of investors and mining companies looking for their next project.
           </p>
           <div className="flex flex-wrap gap-4 justify-center">
-            <Button variant="primary" size="lg" onClick={() => user ? window.location.href = '/properties/new' : setShowRegister(true)}>
+            <Button variant="primary" size="lg" onClick={() => window.location.href = '/properties/new'}>
               List Your Property
             </Button>
           </div>
@@ -339,6 +410,8 @@ export default function PropertiesPage() {
           <p>&copy; {new Date().getFullYear()} GoldVenture. All rights reserved.</p>
         </div>
       </footer>
+        </>
+      )}
     </div>
   );
 }
