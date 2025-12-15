@@ -50,6 +50,11 @@ urlpatterns = [
     path('companies/<int:company_id>/news-releases/', views.company_news_releases, name='company_news_releases'),
     path('tasks/<str:task_id>/status/', views.check_scrape_status, name='check_scrape_status'),
 
+    # Hero Section endpoints (homepage cards)
+    path('hero-section/', views.hero_section_data, name='hero_section_data'),
+    path('hero-section/set-featured/', views.set_featured_property, name='set_featured_property'),
+    path('hero-section/reset-featured/', views.reset_featured_property, name='reset_featured_property'),
+
     # ViewSet routes
     path('', include(router.urls)),
 ]

@@ -2270,3 +2270,83 @@ class SavedPropertySearch(models.Model):
 
     def __str__(self):
         return f"{self.user.username} - {self.name}"
+
+
+class FeaturedPropertyConfig(models.Model):
+    """
+    Configuration for featured property on the homepage.
+    Only one active record should exist at a time.
+    """
+    listing = models.ForeignKey(
+        PropertyListing,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='featured_config'
+    )
+    is_manual_selection = models.BooleanField(
+        default=False,
+        help_text="True if manually selected by admin, False for auto-rotation"
+    )
+    selected_at = models.DateTimeField(auto_now=True)
+    selected_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='featured_property_selections'
+    )
+    next_auto_rotation = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When the next automatic rotation will occur"
+    )
+
+    class Meta:
+        db_table = 'featured_property_config'
+        verbose_name = 'Featured Property Configuration'
+        verbose_name_plural = 'Featured Property Configuration'
+
+    def __str__(self):
+        if self.listing:
+            return f"Featured: {self.listing.title}"
+        return "No featured property"
+
+    @classmethod
+    def get_current_featured(cls):
+        """Get the current featured property configuration"""
+        config = cls.objects.first()
+        if not config:
+            config = cls.objects.create()
+        return config
+
+    @classmethod
+    def rotate_featured_property(cls):
+        """Automatically rotate to a new random property"""
+        from django.utils import timezone
+        from random import choice
+
+        config = cls.get_current_featured()
+
+        # Get all active listings except current one
+        active_listings = PropertyListing.objects.filter(status='active')
+        if config.listing:
+            active_listings = active_listings.exclude(id=config.listing.id)
+
+        if active_listings.exists():
+            new_listing = choice(list(active_listings))
+            config.listing = new_listing
+            config.is_manual_selection = False
+            config.selected_by = None
+            # Next rotation is next Monday at midnight
+            now = timezone.now()
+            days_until_monday = (7 - now.weekday()) % 7
+            if days_until_monday == 0:
+                days_until_monday = 7
+            next_monday = (now + timezone.timedelta(days=days_until_monday)).replace(
+                hour=0, minute=0, second=0, microsecond=0
+            )
+            config.next_auto_rotation = next_monday
+            config.save()
+
+        return config

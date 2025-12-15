@@ -6,7 +6,7 @@ import { Card, CardHeader, CardTitle, CardDescription } from '@/components/ui/Ca
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import LogoMono from '@/components/LogoMono';
-import { UpcomingEvents } from '@/components/events';
+import HeroCards from '@/components/HeroCards';
 import { LoginModal, RegisterModal } from '@/components/auth';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -83,19 +83,33 @@ export default function Home() {
           backgroundImage: 'radial-gradient(circle at 50% 50%, rgba(212, 161, 42, 0.1) 0%, transparent 50%)'
         }}></div>
 
-        <div className="relative max-w-7xl mx-auto text-center">
-          <h2 className="text-5xl md:text-6xl font-bold mb-6 text-gradient-gold animate-fade-in leading-tight pb-2">
-            Junior Gold Mining Intelligence
-          </h2>
-          <h1></h1>
-          <p className="text-xl text-slate-300 max-w-3xl mx-auto mb-12 animate-slide-in-up">
-            AI-powered investor relations platform for junior gold mining investors and companies.
-            Instant access to projects, resources, prospector listings and technical data.
-          </p>
+        <div className="relative max-w-7xl mx-auto">
+          <div className="text-center mb-12">
+            <h2 className="text-5xl md:text-6xl font-bold mb-6 text-gradient-gold animate-fade-in leading-tight pb-2">
+              Junior Gold Mining Intelligence
+            </h2>
+            <p className="text-xl text-slate-300 max-w-3xl mx-auto animate-slide-in-up">
+              AI-powered investor relations platform for junior gold mining investors and companies.
+              Instant access to projects, resources, prospector listings and technical data.
+            </p>
+          </div>
 
+          {/* Three Content Cards */}
+          <div className="mb-12">
+            <HeroCards
+              onLoginClick={() => setShowLogin(true)}
+              onRegisterClick={() => setShowRegister(true)}
+            />
+          </div>
+
+          {/* Navigation Buttons */}
           <div className="flex flex-wrap gap-4 justify-center">
-            <Button variant="primary" size="lg">Explore Companies</Button>
-            <Button variant="secondary" size="lg">Start Chat</Button>
+            <Button variant="primary" size="lg" onClick={() => window.location.href = '/companies'}>
+              Explore All Companies
+            </Button>
+            <Button variant="primary" size="lg" onClick={() => window.location.href = '/properties'}>
+              Prospector's Exchange
+            </Button>
           </div>
         </div>
       </section>
@@ -112,26 +126,6 @@ export default function Home() {
           </div>
 
           <ChatInterface />
-        </div>
-      </section>
-
-      {/* Upcoming Events Section */}
-      <section className="py-16 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-7xl mx-auto">
-          <UpcomingEvents />
-        </div>
-      </section>
-
-      {/* Companies Section */}
-      <section className="py-16 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-7xl mx-auto">
-          <div className="text-center mb-12">
-            <h3 className="text-4xl font-bold text-gold-400 mb-4">Mining Companies</h3>
-            <p className="text-slate-300 text-lg mb-8">
-              Explore our portfolio of junior gold mining companies
-            </p>
-            <Button variant="primary" size="lg" onClick={() => window.location.href = '/companies'}>View All Companies</Button>
-          </div>
         </div>
       </section>
 
