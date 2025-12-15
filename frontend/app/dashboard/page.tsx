@@ -9,6 +9,8 @@ import LogoMono from '@/components/LogoMono';
 import { LoginModal, RegisterModal } from '@/components/auth';
 import { useAuth } from '@/contexts/AuthContext';
 import { PropertyListingListItem } from '@/types/property';
+import { accessRequestAPI } from '@/lib/api';
+import type { CompanyAccessRequest } from '@/types/api';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
@@ -65,6 +67,11 @@ export default function DashboardPage() {
   const [scrapeJob, setScrapeJob] = useState<NewsScrapeJob | null>(null);
   const [scrapeLoading, setScrapeLoading] = useState(false);
   const [scrapeError, setScrapeError] = useState<string | null>(null);
+
+  // Company access requests state (for superusers)
+  const [pendingAccessRequests, setPendingAccessRequests] = useState<CompanyAccessRequest[]>([]);
+  const [accessRequestsLoading, setAccessRequestsLoading] = useState(false);
+  const [processingRequestId, setProcessingRequestId] = useState<number | null>(null);
 
   useEffect(() => {
     const fetchDashboardData = async () => {
@@ -133,10 +140,46 @@ export default function DashboardPage() {
 
     if (!authLoading && accessToken) {
       fetchDashboardData();
+      // Fetch pending access requests for superusers
+      if (user?.is_superuser) {
+        fetchPendingAccessRequests();
+      }
     } else if (!authLoading && !accessToken) {
       setLoading(false);
     }
-  }, [accessToken, authLoading, user?.id]);
+  }, [accessToken, authLoading, user?.id, user?.is_superuser]);
+
+  // Fetch pending company access requests (superuser only)
+  const fetchPendingAccessRequests = async () => {
+    if (!accessToken || !user?.is_superuser) return;
+
+    setAccessRequestsLoading(true);
+    try {
+      const response = await accessRequestAPI.getPending(accessToken);
+      setPendingAccessRequests(response.results || []);
+    } catch (err) {
+      console.error('Failed to fetch pending access requests:', err);
+    } finally {
+      setAccessRequestsLoading(false);
+    }
+  };
+
+  // Handle approve/reject access request
+  const handleAccessRequestReview = async (requestId: number, action: 'approve' | 'reject') => {
+    if (!accessToken) return;
+
+    setProcessingRequestId(requestId);
+    try {
+      await accessRequestAPI.review(accessToken, requestId, action);
+      // Remove from list after successful review
+      setPendingAccessRequests(prev => prev.filter(r => r.id !== requestId));
+    } catch (err) {
+      console.error(`Failed to ${action} access request:`, err);
+      alert(`Failed to ${action} request. Please try again.`);
+    } finally {
+      setProcessingRequestId(null);
+    }
+  };
 
   const formatPrice = (price: number | null, currency: string) => {
     if (!price) return 'Contact for Price';
@@ -544,6 +587,100 @@ export default function DashboardPage() {
                     )}
                   </div>
                 )}
+
+                {/* Pending Company Access Requests */}
+                <div className="mt-6 pt-6 border-t border-slate-700">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+                      <svg className="w-5 h-5 text-gold-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                      </svg>
+                      Company Portal Access Requests
+                      {pendingAccessRequests.length > 0 && (
+                        <Badge variant="copper" className="ml-2">{pendingAccessRequests.length} pending</Badge>
+                      )}
+                    </h3>
+                    <Button variant="ghost" size="sm" onClick={fetchPendingAccessRequests} disabled={accessRequestsLoading}>
+                      {accessRequestsLoading ? 'Refreshing...' : 'Refresh'}
+                    </Button>
+                  </div>
+
+                  {accessRequestsLoading && pendingAccessRequests.length === 0 ? (
+                    <div className="flex justify-center py-6">
+                      <div className="animate-spin rounded-full h-6 w-6 border-t-2 border-b-2 border-gold-500"></div>
+                    </div>
+                  ) : pendingAccessRequests.length === 0 ? (
+                    <div className="text-center py-6 text-slate-400">
+                      <svg className="w-12 h-12 mx-auto mb-2 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      No pending access requests
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {pendingAccessRequests.map((request) => (
+                        <div
+                          key={request.id}
+                          className="p-4 rounded-lg bg-slate-800/50 border border-slate-700"
+                        >
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 mb-1">
+                                <span className="text-white font-medium">{request.user_name || request.user_email}</span>
+                                <Badge variant="slate" className="text-xs">{request.role_display || request.role}</Badge>
+                              </div>
+                              <p className="text-sm text-gold-400 font-medium mb-1">
+                                {request.company_name} {request.company_ticker && `(${request.company_ticker})`}
+                              </p>
+                              <p className="text-sm text-slate-400">
+                                {request.job_title} • {request.work_email}
+                              </p>
+                              {request.justification && (
+                                <p className="text-sm text-slate-500 mt-2 line-clamp-2">
+                                  &quot;{request.justification}&quot;
+                                </p>
+                              )}
+                              <p className="text-xs text-slate-500 mt-2">
+                                Submitted: {new Date(request.created_at).toLocaleDateString()}
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-2 flex-shrink-0">
+                              <Button
+                                variant="primary"
+                                size="sm"
+                                onClick={() => handleAccessRequestReview(request.id, 'approve')}
+                                disabled={processingRequestId === request.id}
+                              >
+                                {processingRequestId === request.id ? (
+                                  <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-white"></div>
+                                ) : (
+                                  <>
+                                    <svg className="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                    </svg>
+                                    Approve
+                                  </>
+                                )}
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleAccessRequestReview(request.id, 'reject')}
+                                disabled={processingRequestId === request.id}
+                                className="text-red-400 hover:text-red-300 hover:bg-red-500/20"
+                              >
+                                <svg className="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                                Reject
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </Card>
             )}
           </>
