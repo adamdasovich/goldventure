@@ -156,7 +156,7 @@ export default function DashboardPage() {
     setScrapeJob(null);
 
     try {
-      const response = await fetch(`${API_URL}/api/news/scrape/`, {
+      const response = await fetch(`${API_URL}/news/scrape/`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${accessToken}`,
@@ -195,7 +195,7 @@ export default function DashboardPage() {
       }
 
       try {
-        const response = await fetch(`${API_URL}/api/news/scrape/status/${jobId}/`, {
+        const response = await fetch(`${API_URL}/news/scrape/status/${jobId}/`, {
           headers: { 'Authorization': `Bearer ${accessToken}` },
         });
 
