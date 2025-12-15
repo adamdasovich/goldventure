@@ -203,9 +203,11 @@ export default function DashboardPage() {
 
         if (response.ok) {
           const data = await response.json();
-          setScrapeJob(data);
+          // API returns job data nested in 'job' object
+          const jobData = data.job || data;
+          setScrapeJob(jobData);
 
-          if (data.status === 'completed' || data.status === 'failed') {
+          if (jobData.status === 'completed' || jobData.status === 'failed') {
             return; // Done polling
           }
         }
