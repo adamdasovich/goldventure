@@ -343,27 +343,98 @@ async def run_scrape_job(job_id: int = None):
 
     from core.models import NewsSource, NewsArticle, NewsScrapeJob
     from django.utils import timezone
+    from asgiref.sync import sync_to_async
+
+    # Wrap all Django ORM operations with sync_to_async
+    @sync_to_async
+    def get_job(job_id):
+        return NewsScrapeJob.objects.get(id=job_id)
+
+    @sync_to_async
+    def create_job():
+        return NewsScrapeJob.objects.create(status='pending', is_scheduled=True)
+
+    @sync_to_async
+    def update_job_running(job):
+        job.status = 'running'
+        job.started_at = timezone.now()
+        job.save()
+
+    @sync_to_async
+    def get_active_sources():
+        return list(NewsSource.objects.filter(is_active=True).values('id', 'name', 'url', 'scrape_selector', 'is_active'))
+
+    @sync_to_async
+    def update_job_no_sources(job):
+        job.status = 'completed'
+        job.completed_at = timezone.now()
+        job.errors = ['No active news sources configured']
+        job.save()
+
+    @sync_to_async
+    def get_source_by_name(name):
+        return NewsSource.objects.filter(name=name).first()
+
+    @sync_to_async
+    def article_exists(url):
+        return NewsArticle.objects.filter(url=url).exists()
+
+    @sync_to_async
+    def create_article(title, url, source, published_at, summary, image_url):
+        NewsArticle.objects.create(
+            title=title[:500],
+            url=url,
+            source=source,
+            published_at=published_at,
+            summary=summary[:1000] if summary else '',
+            image_url=image_url[:500] if image_url else '',
+        )
+
+    @sync_to_async
+    def update_source_stats(source_name, articles_count):
+        source = NewsSource.objects.filter(name=source_name).first()
+        if source:
+            source.last_scraped_at = timezone.now()
+            source.last_scrape_status = 'success'
+            source.articles_found_last_scrape = articles_count
+            source.save()
+
+    @sync_to_async
+    def get_all_active_source_names():
+        return list(NewsSource.objects.filter(is_active=True).values_list('name', flat=True))
+
+    @sync_to_async
+    def update_job_completed(job, sources_processed, articles_found, articles_new, errors):
+        job.status = 'completed'
+        job.completed_at = timezone.now()
+        job.sources_processed = sources_processed
+        job.articles_found = articles_found
+        job.articles_new = articles_new
+        job.errors = errors
+        job.save()
+
+    @sync_to_async
+    def update_job_failed(job, error_msg):
+        job.status = 'failed'
+        job.completed_at = timezone.now()
+        job.errors = [error_msg]
+        job.save()
 
     # Get or create job
     if job_id:
-        job = NewsScrapeJob.objects.get(id=job_id)
+        job = await get_job(job_id)
     else:
-        job = NewsScrapeJob.objects.create(status='pending', is_scheduled=True)
+        job = await create_job()
 
     # Mark job as running
-    job.status = 'running'
-    job.started_at = timezone.now()
-    job.save()
+    await update_job_running(job)
 
     try:
         # Get active sources
-        sources = list(NewsSource.objects.filter(is_active=True).values('id', 'name', 'url', 'scrape_selector', 'is_active'))
+        sources = await get_active_sources()
 
         if not sources:
-            job.status = 'completed'
-            job.completed_at = timezone.now()
-            job.errors = ['No active news sources configured']
-            job.save()
+            await update_job_no_sources(job)
             return {'error': 'No active news sources configured'}
 
         # Run the scraping
@@ -373,12 +444,12 @@ async def run_scrape_job(job_id: int = None):
         articles_new = 0
         for article_data in results['articles']:
             # Find the source
-            source = NewsSource.objects.filter(name=article_data['source_name']).first()
+            source = await get_source_by_name(article_data['source_name'])
             if not source:
                 continue
 
             # Check if article already exists
-            if NewsArticle.objects.filter(url=article_data['url']).exists():
+            if await article_exists(article_data['url']):
                 continue
 
             # Parse the published_at date
@@ -391,34 +462,27 @@ async def run_scrape_job(job_id: int = None):
                     pass
 
             # Create the article
-            NewsArticle.objects.create(
-                title=article_data['title'][:500],
+            await create_article(
+                title=article_data['title'],
                 url=article_data['url'],
                 source=source,
                 published_at=published_at,
-                summary=article_data.get('summary', '')[:1000],
-                image_url=article_data.get('image_url', '')[:500],
+                summary=article_data.get('summary', ''),
+                image_url=article_data.get('image_url', ''),
             )
             articles_new += 1
 
         # Update source statistics
-        for source in NewsSource.objects.filter(is_active=True):
-            source.last_scraped_at = timezone.now()
-            source.last_scrape_status = 'success'
-            source.articles_found_last_scrape = len([
+        source_names = await get_all_active_source_names()
+        for source_name in source_names:
+            articles_count = len([
                 a for a in results['articles']
-                if a['source_name'] == source.name
+                if a['source_name'] == source_name
             ])
-            source.save()
+            await update_source_stats(source_name, articles_count)
 
         # Update job
-        job.status = 'completed'
-        job.completed_at = timezone.now()
-        job.sources_processed = results['sources_processed']
-        job.articles_found = results['articles_found']
-        job.articles_new = articles_new
-        job.errors = results['errors']
-        job.save()
+        await update_job_completed(job, results['sources_processed'], results['articles_found'], articles_new, results['errors'])
 
         return {
             'job_id': job.id,
@@ -430,10 +494,7 @@ async def run_scrape_job(job_id: int = None):
         }
 
     except Exception as e:
-        job.status = 'failed'
-        job.completed_at = timezone.now()
-        job.errors = [str(e)]
-        job.save()
+        await update_job_failed(job, str(e))
         raise
 
 
