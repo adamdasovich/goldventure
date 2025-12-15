@@ -2758,7 +2758,7 @@ def news_scrape_trigger(request):
 
     POST /api/news/scrape/
 
-    This creates a scrape job and triggers the Crawl4AI MCP to scrape all active sources.
+    This creates a scrape job and triggers the Crawl4AI scraper to scrape all active sources.
     """
     if not request.user.is_superuser:
         return Response(
@@ -2767,6 +2767,8 @@ def news_scrape_trigger(request):
         )
 
     from django.utils import timezone
+    import threading
+    import asyncio
 
     # Check if there's already a running job
     running_job = NewsScrapeJob.objects.filter(status='running').first()
@@ -2784,13 +2786,40 @@ def news_scrape_trigger(request):
         is_scheduled=False
     )
 
-    # Note: The actual scraping will be triggered via Crawl4AI MCP
-    # For now, we just return the job ID - the scraping logic will be in a separate module
+    # Run the scraper in a background thread
+    def run_scraper(job_id):
+        """Run the news scraper in a background thread."""
+        try:
+            from mcp_servers.news_scraper import run_scrape_job
+            # Create a new event loop for this thread
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                loop.run_until_complete(run_scrape_job(job_id))
+            finally:
+                loop.close()
+        except Exception as e:
+            # Update job status on failure
+            from core.models import NewsScrapeJob
+            from django.utils import timezone
+            try:
+                job = NewsScrapeJob.objects.get(id=job_id)
+                job.status = 'failed'
+                job.errors = [str(e)]
+                job.completed_at = timezone.now()
+                job.save()
+            except:
+                pass
+
+    # Start the scraper in a background thread
+    thread = threading.Thread(target=run_scraper, args=(job.id,))
+    thread.daemon = True
+    thread.start()
 
     return Response({
-        'message': 'Scrape job created. Use MCP to execute scraping.',
+        'message': 'Scrape job started',
         'job_id': job.id,
-        'status': job.status,
+        'status': 'running',
     }, status=status.HTTP_202_ACCEPTED)
 
 
