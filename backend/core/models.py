@@ -2473,3 +2473,275 @@ class NewsScrapeJob(models.Model):
 
     def __str__(self):
         return f"Scrape Job {self.id} - {self.status}"
+
+
+# ============================================================================
+# COMPANY PORTAL MODELS (Resources, Events, Subscriptions)
+# ============================================================================
+
+class CompanyResource(models.Model):
+    """Resources and documents uploaded by companies (similar to PropertyMedia)"""
+
+    RESOURCE_TYPES = [
+        ('image', 'Image'),
+        ('video', 'Video'),
+        ('document', 'Document'),
+        ('presentation', 'Presentation'),
+        ('spreadsheet', 'Spreadsheet'),
+        ('map', 'Map'),
+    ]
+
+    RESOURCE_CATEGORIES = [
+        ('hero', 'Hero Image'),
+        ('gallery', 'Gallery'),
+        ('logo', 'Company Logo'),
+        ('factsheet', 'Fact Sheet'),
+        ('investor_presentation', 'Investor Presentation'),
+        ('technical_report', 'Technical Report (NI 43-101)'),
+        ('financial_report', 'Financial Report'),
+        ('annual_report', 'Annual Report'),
+        ('news_release', 'News Release'),
+        ('map_geological', 'Geological Map'),
+        ('map_location', 'Location Map'),
+        ('map_claims', 'Claims Map'),
+        ('drilling_results', 'Drilling Results'),
+        ('assay_certificate', 'Assay Certificate'),
+        ('permit', 'Permit/License'),
+        ('corporate', 'Corporate Document'),
+        ('video_corporate', 'Corporate Video'),
+        ('video_site', 'Site Video'),
+        ('other', 'Other'),
+    ]
+
+    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name='resources')
+    resource_type = models.CharField(max_length=20, choices=RESOURCE_TYPES)
+    category = models.CharField(max_length=30, choices=RESOURCE_CATEGORIES)
+    title = models.CharField(max_length=200)
+    description = models.TextField(blank=True)
+    file_url = models.URLField()
+    thumbnail_url = models.URLField(blank=True)
+    file_size_mb = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    file_format = models.CharField(max_length=20, blank=True)
+    sort_order = models.IntegerField(default=0)
+    is_primary = models.BooleanField(default=False, help_text="Primary/hero image for the company")
+    is_public = models.BooleanField(default=True, help_text="Visible to all users or only subscribers")
+
+    # Related project (optional - resource can be company-wide or project-specific)
+    project = models.ForeignKey(
+        Project,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='resources',
+        help_text="If set, this resource is specific to this project"
+    )
+
+    # Audit
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+    uploaded_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='uploaded_company_resources')
+
+    class Meta:
+        db_table = 'company_resources'
+        ordering = ['sort_order', '-uploaded_at']
+        indexes = [
+            models.Index(fields=['company', 'resource_type']),
+            models.Index(fields=['company', 'category']),
+            models.Index(fields=['company', 'is_primary']),
+            models.Index(fields=['project', 'category']),
+        ]
+
+    def __str__(self):
+        return f"{self.company.name} - {self.title}"
+
+
+class SpeakingEvent(models.Model):
+    """Speaking events and conferences for companies"""
+
+    EVENT_TYPES = [
+        ('conference', 'Conference'),
+        ('webinar', 'Webinar'),
+        ('investor_day', 'Investor Day'),
+        ('roadshow', 'Roadshow'),
+        ('agm', 'Annual General Meeting'),
+        ('site_visit', 'Site Visit'),
+        ('panel', 'Panel Discussion'),
+        ('presentation', 'Presentation'),
+        ('interview', 'Interview'),
+        ('podcast', 'Podcast'),
+        ('other', 'Other'),
+    ]
+
+    EVENT_STATUS = [
+        ('upcoming', 'Upcoming'),
+        ('live', 'Live Now'),
+        ('completed', 'Completed'),
+        ('cancelled', 'Cancelled'),
+    ]
+
+    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name='speaking_events')
+    title = models.CharField(max_length=300)
+    event_type = models.CharField(max_length=20, choices=EVENT_TYPES)
+    description = models.TextField(blank=True)
+
+    # Event details
+    event_name = models.CharField(max_length=300, blank=True, help_text="Conference/event name if applicable")
+    location = models.CharField(max_length=300, blank=True, help_text="Physical location or 'Virtual'")
+    is_virtual = models.BooleanField(default=False)
+
+    # Timing
+    start_datetime = models.DateTimeField()
+    end_datetime = models.DateTimeField(null=True, blank=True)
+    timezone = models.CharField(max_length=50, default='America/Toronto')
+
+    # Links
+    registration_url = models.URLField(blank=True, help_text="Link to register for the event")
+    livestream_url = models.URLField(blank=True, help_text="Link to watch live")
+    recording_url = models.URLField(blank=True, help_text="Link to recording after event")
+    presentation_url = models.URLField(blank=True, help_text="Link to presentation slides")
+
+    # Speakers
+    speakers = models.TextField(blank=True, help_text="Names and titles of company speakers")
+
+    # Status
+    status = models.CharField(max_length=20, choices=EVENT_STATUS, default='upcoming')
+    is_featured = models.BooleanField(default=False)
+
+    # Audit
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='created_speaking_events')
+
+    class Meta:
+        db_table = 'speaking_events'
+        ordering = ['-start_datetime']
+        indexes = [
+            models.Index(fields=['company', 'status']),
+            models.Index(fields=['company', '-start_datetime']),
+            models.Index(fields=['status', '-start_datetime']),
+            models.Index(fields=['is_featured', '-start_datetime']),
+        ]
+
+    def __str__(self):
+        return f"{self.company.name} - {self.title}"
+
+
+class CompanySubscription(models.Model):
+    """Stripe subscription for company premium features"""
+
+    SUBSCRIPTION_STATUS = [
+        ('trialing', 'Trial Period'),
+        ('active', 'Active'),
+        ('past_due', 'Past Due'),
+        ('canceled', 'Canceled'),
+        ('unpaid', 'Unpaid'),
+        ('incomplete', 'Incomplete'),
+        ('incomplete_expired', 'Incomplete Expired'),
+        ('paused', 'Paused'),
+    ]
+
+    PLAN_TYPES = [
+        ('monthly', 'Monthly ($20/month)'),
+        ('annual', 'Annual ($200/year)'),
+    ]
+
+    company = models.OneToOneField(Company, on_delete=models.CASCADE, related_name='subscription')
+
+    # Stripe identifiers
+    stripe_customer_id = models.CharField(max_length=255, blank=True)
+    stripe_subscription_id = models.CharField(max_length=255, blank=True)
+    stripe_price_id = models.CharField(max_length=255, blank=True)
+
+    # Subscription details
+    plan_type = models.CharField(max_length=20, choices=PLAN_TYPES, default='monthly')
+    status = models.CharField(max_length=30, choices=SUBSCRIPTION_STATUS, default='trialing')
+    price_cents = models.IntegerField(default=2000, help_text="Price in cents (2000 = $20)")
+
+    # Trial period
+    trial_start = models.DateTimeField(null=True, blank=True)
+    trial_end = models.DateTimeField(null=True, blank=True)
+
+    # Billing period
+    current_period_start = models.DateTimeField(null=True, blank=True)
+    current_period_end = models.DateTimeField(null=True, blank=True)
+
+    # Cancellation
+    cancel_at_period_end = models.BooleanField(default=False)
+    canceled_at = models.DateTimeField(null=True, blank=True)
+
+    # Features enabled (can be extended for tiered plans)
+    features = models.JSONField(default=dict, blank=True, help_text="Enabled features for this subscription")
+
+    # Audit
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'company_subscriptions'
+        indexes = [
+            models.Index(fields=['stripe_customer_id']),
+            models.Index(fields=['stripe_subscription_id']),
+            models.Index(fields=['status']),
+        ]
+
+    def __str__(self):
+        return f"{self.company.name} - {self.get_status_display()}"
+
+    @property
+    def is_active(self):
+        """Check if subscription is active (includes trial)"""
+        return self.status in ['trialing', 'active']
+
+    @property
+    def can_access_premium(self):
+        """Check if company can access premium features"""
+        return self.is_active
+
+
+class SubscriptionInvoice(models.Model):
+    """Track Stripe invoices for subscriptions"""
+
+    INVOICE_STATUS = [
+        ('draft', 'Draft'),
+        ('open', 'Open'),
+        ('paid', 'Paid'),
+        ('void', 'Void'),
+        ('uncollectible', 'Uncollectible'),
+    ]
+
+    subscription = models.ForeignKey(
+        CompanySubscription,
+        on_delete=models.CASCADE,
+        related_name='invoices'
+    )
+
+    # Stripe identifiers
+    stripe_invoice_id = models.CharField(max_length=255, unique=True)
+    stripe_payment_intent_id = models.CharField(max_length=255, blank=True)
+
+    # Invoice details
+    status = models.CharField(max_length=20, choices=INVOICE_STATUS)
+    amount_cents = models.IntegerField(help_text="Amount in cents")
+    currency = models.CharField(max_length=3, default='usd')
+
+    # Dates
+    invoice_date = models.DateTimeField()
+    due_date = models.DateTimeField(null=True, blank=True)
+    paid_at = models.DateTimeField(null=True, blank=True)
+
+    # PDF
+    invoice_pdf_url = models.URLField(blank=True)
+    hosted_invoice_url = models.URLField(blank=True)
+
+    # Audit
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'subscription_invoices'
+        ordering = ['-invoice_date']
+        indexes = [
+            models.Index(fields=['stripe_invoice_id']),
+            models.Index(fields=['subscription', '-invoice_date']),
+        ]
+
+    def __str__(self):
+        return f"{self.subscription.company.name} - ${self.amount_cents/100:.2f} ({self.status})"

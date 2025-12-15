@@ -17,7 +17,9 @@ from .models import (
     PropertyWatchlist, SavedPropertySearch, ProspectorCommissionAgreement,
     InquiryMessage, FeaturedPropertyConfig,
     # News models
-    NewsSource, NewsArticle, NewsScrapeJob
+    NewsSource, NewsArticle, NewsScrapeJob,
+    # Company Portal models
+    CompanyResource, SpeakingEvent, CompanySubscription, SubscriptionInvoice
 )
 from .serializers import (
     CompanySerializer, CompanyDetailSerializer,
@@ -34,7 +36,12 @@ from .serializers import (
     SavedPropertySearchSerializer, PropertyChoicesSerializer,
     ProspectorCommissionAgreementSerializer, ProspectorCommissionAgreementCreateSerializer,
     # Inquiry message serializers
-    InquiryMessageSerializer, InquiryMessageCreateSerializer, PropertyInquiryWithMessagesSerializer
+    InquiryMessageSerializer, InquiryMessageCreateSerializer, PropertyInquiryWithMessagesSerializer,
+    # Company Portal serializers
+    CompanyResourceSerializer, CompanyResourceCreateSerializer, CompanyResourceChoicesSerializer,
+    SpeakingEventSerializer, SpeakingEventCreateSerializer, SpeakingEventListSerializer,
+    SpeakingEventChoicesSerializer, CompanySubscriptionSerializer, CompanySubscriptionStatusSerializer,
+    SubscriptionInvoiceSerializer
 )
 from claude_integration.client import ClaudeClient
 from claude_integration.client_optimized import OptimizedClaudeClient
@@ -2879,3 +2886,646 @@ def news_scrape_status(request, job_id=None):
             for job in jobs
         ]
     })
+
+
+# ============================================================================
+# COMPANY PORTAL VIEWSETS (Resources, Events, Subscriptions)
+# ============================================================================
+
+class CompanyResourceViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for Company Resources (documents, images, videos)
+
+    Endpoints:
+    - GET /api/company-portal/resources/ - List all resources for a company
+    - GET /api/company-portal/resources/{id}/ - Get resource details
+    - POST /api/company-portal/resources/ - Upload a new resource (company rep only)
+    - PUT /api/company-portal/resources/{id}/ - Update resource (company rep only)
+    - DELETE /api/company-portal/resources/{id}/ - Delete resource (company rep only)
+    - POST /api/company-portal/resources/upload/ - Upload file and create resource
+    - GET /api/company-portal/resources/choices/ - Get dropdown choices
+    """
+    serializer_class = CompanyResourceSerializer
+
+    def get_permissions(self):
+        if self.action in ['list', 'retrieve', 'choices']:
+            return [AllowAny()]
+        return [IsAuthenticated()]
+
+    def get_serializer_class(self):
+        if self.action in ['create', 'update', 'partial_update']:
+            return CompanyResourceCreateSerializer
+        return CompanyResourceSerializer
+
+    def get_queryset(self):
+        queryset = CompanyResource.objects.select_related('company', 'project', 'uploaded_by')
+
+        # Filter by company if provided
+        company_id = self.request.query_params.get('company')
+        if company_id:
+            queryset = queryset.filter(company_id=company_id)
+
+        # Filter by project if provided
+        project_id = self.request.query_params.get('project')
+        if project_id:
+            queryset = queryset.filter(project_id=project_id)
+
+        # Filter by category if provided
+        category = self.request.query_params.get('category')
+        if category:
+            queryset = queryset.filter(category=category)
+
+        # Filter by resource type if provided
+        resource_type = self.request.query_params.get('type')
+        if resource_type:
+            queryset = queryset.filter(resource_type=resource_type)
+
+        # Non-public resources only visible to company reps
+        if not self.request.user.is_authenticated:
+            queryset = queryset.filter(is_public=True)
+        elif self.request.user.company_id:
+            queryset = queryset.filter(
+                Q(is_public=True) | Q(company=self.request.user.company)
+            )
+        elif not self.request.user.is_staff:
+            queryset = queryset.filter(is_public=True)
+
+        return queryset.order_by('sort_order', '-uploaded_at')
+
+    def perform_create(self, serializer):
+        # Verify user can add resources to this company
+        company = serializer.validated_data.get('company')
+        if not self.request.user.is_staff:
+            if self.request.user.company != company:
+                raise PermissionError("You can only add resources to your own company")
+        serializer.save(uploaded_by=self.request.user)
+
+    def perform_update(self, serializer):
+        # Verify user can update this resource
+        instance = self.get_object()
+        if not self.request.user.is_staff:
+            if self.request.user.company != instance.company:
+                raise PermissionError("You can only update resources for your own company")
+        serializer.save()
+
+    def perform_destroy(self, instance):
+        # Verify user can delete this resource
+        if not self.request.user.is_staff:
+            if self.request.user.company != instance.company:
+                raise PermissionError("You can only delete resources for your own company")
+        instance.delete()
+
+    @action(detail=False, methods=['get'])
+    def choices(self, request):
+        """Get dropdown choices for resource forms"""
+        serializer = CompanyResourceChoicesSerializer({})
+        return Response(serializer.data)
+
+    @action(detail=False, methods=['post'])
+    def upload(self, request):
+        """
+        Upload a file and create a resource record
+        POST /api/company-portal/resources/upload/
+        """
+        import os
+        import uuid
+        from django.core.files.storage import default_storage
+        from django.conf import settings
+
+        file = request.FILES.get('file')
+        company_id = request.data.get('company')
+        category = request.data.get('category')
+        title = request.data.get('title')
+        description = request.data.get('description', '')
+        resource_type = request.data.get('resource_type', 'document')
+        project_id = request.data.get('project')
+        is_public = request.data.get('is_public', 'true').lower() == 'true'
+
+        if not file:
+            return Response({'error': 'No file provided'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if not company_id or not category or not title:
+            return Response({'error': 'Missing required fields'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Validate company access
+        try:
+            company = Company.objects.get(id=company_id)
+            if not request.user.is_staff and request.user.company != company:
+                return Response(
+                    {'error': 'You can only upload resources for your own company'},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+        except Company.DoesNotExist:
+            return Response({'error': 'Company not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        # Generate unique filename
+        ext = os.path.splitext(file.name)[1].lower()
+        filename = f"company_resources/{company_id}/{uuid.uuid4().hex}{ext}"
+
+        # Save file
+        try:
+            saved_path = default_storage.save(filename, file)
+            file_url = request.build_absolute_uri(settings.MEDIA_URL + saved_path)
+
+            # Calculate file size
+            file_size_mb = file.size / (1024 * 1024)
+
+            # Create resource record
+            resource = CompanyResource.objects.create(
+                company=company,
+                resource_type=resource_type,
+                category=category,
+                title=title,
+                description=description,
+                file_url=file_url,
+                file_size_mb=round(file_size_mb, 2),
+                file_format=ext.lstrip('.').upper(),
+                is_public=is_public,
+                project_id=project_id if project_id else None,
+                uploaded_by=request.user
+            )
+
+            return Response(
+                CompanyResourceSerializer(resource).data,
+                status=status.HTTP_201_CREATED
+            )
+        except Exception as e:
+            return Response(
+                {'error': f'File upload failed: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+class SpeakingEventViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for Speaking Events
+
+    Endpoints:
+    - GET /api/company-portal/events/ - List all events (filterable by company, status, date)
+    - GET /api/company-portal/events/{id}/ - Get event details
+    - POST /api/company-portal/events/ - Create a new event (company rep only)
+    - PUT /api/company-portal/events/{id}/ - Update event (company rep only)
+    - DELETE /api/company-portal/events/{id}/ - Delete event (company rep only)
+    - GET /api/company-portal/events/choices/ - Get dropdown choices
+    - GET /api/company-portal/events/upcoming/ - Get upcoming events across all companies
+    """
+    serializer_class = SpeakingEventSerializer
+
+    def get_permissions(self):
+        if self.action in ['list', 'retrieve', 'choices', 'upcoming']:
+            return [AllowAny()]
+        return [IsAuthenticated()]
+
+    def get_serializer_class(self):
+        if self.action in ['create', 'update', 'partial_update']:
+            return SpeakingEventCreateSerializer
+        if self.action == 'list':
+            return SpeakingEventListSerializer
+        return SpeakingEventSerializer
+
+    def get_queryset(self):
+        queryset = SpeakingEvent.objects.select_related('company', 'created_by')
+
+        # Filter by company if provided
+        company_id = self.request.query_params.get('company')
+        if company_id:
+            queryset = queryset.filter(company_id=company_id)
+
+        # Filter by status if provided
+        event_status = self.request.query_params.get('status')
+        if event_status:
+            queryset = queryset.filter(status=event_status)
+
+        # Filter by event type if provided
+        event_type = self.request.query_params.get('type')
+        if event_type:
+            queryset = queryset.filter(event_type=event_type)
+
+        # Filter by featured
+        featured = self.request.query_params.get('featured')
+        if featured and featured.lower() == 'true':
+            queryset = queryset.filter(is_featured=True)
+
+        # Filter by date range
+        from_date = self.request.query_params.get('from')
+        to_date = self.request.query_params.get('to')
+        if from_date:
+            queryset = queryset.filter(start_datetime__gte=from_date)
+        if to_date:
+            queryset = queryset.filter(start_datetime__lte=to_date)
+
+        return queryset.order_by('-start_datetime')
+
+    def perform_create(self, serializer):
+        # Verify user can add events for this company
+        company = serializer.validated_data.get('company')
+        if not self.request.user.is_staff:
+            if self.request.user.company != company:
+                raise PermissionError("You can only create events for your own company")
+        serializer.save(created_by=self.request.user)
+
+    def perform_update(self, serializer):
+        # Verify user can update this event
+        instance = self.get_object()
+        if not self.request.user.is_staff:
+            if self.request.user.company != instance.company:
+                raise PermissionError("You can only update events for your own company")
+        serializer.save()
+
+    def perform_destroy(self, instance):
+        # Verify user can delete this event
+        if not self.request.user.is_staff:
+            if self.request.user.company != instance.company:
+                raise PermissionError("You can only delete events for your own company")
+        instance.delete()
+
+    @action(detail=False, methods=['get'])
+    def choices(self, request):
+        """Get dropdown choices for event forms"""
+        serializer = SpeakingEventChoicesSerializer({})
+        return Response(serializer.data)
+
+    @action(detail=False, methods=['get'])
+    def upcoming(self, request):
+        """Get upcoming events across all companies"""
+        from django.utils import timezone
+
+        queryset = SpeakingEvent.objects.filter(
+            status__in=['upcoming', 'live'],
+            start_datetime__gte=timezone.now()
+        ).select_related('company').order_by('start_datetime')[:20]
+
+        serializer = SpeakingEventListSerializer(queryset, many=True)
+        return Response(serializer.data)
+
+
+class CompanySubscriptionViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for Company Subscriptions
+
+    Endpoints:
+    - GET /api/company-portal/subscriptions/ - List subscriptions (admin only)
+    - GET /api/company-portal/subscriptions/{id}/ - Get subscription details
+    - GET /api/company-portal/subscriptions/my-subscription/ - Get current user's company subscription
+    - GET /api/company-portal/subscriptions/status/ - Quick subscription status check
+    """
+    serializer_class = CompanySubscriptionSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        if self.request.user.is_staff:
+            return CompanySubscription.objects.all().select_related('company').prefetch_related('invoices')
+
+        # Regular users can only see their own company's subscription
+        if self.request.user.company:
+            return CompanySubscription.objects.filter(
+                company=self.request.user.company
+            ).select_related('company').prefetch_related('invoices')
+
+        return CompanySubscription.objects.none()
+
+    @action(detail=False, methods=['get'])
+    def my_subscription(self, request):
+        """Get subscription for current user's company"""
+        if not request.user.company:
+            return Response(
+                {'error': 'You are not associated with a company'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            subscription = CompanySubscription.objects.get(company=request.user.company)
+            serializer = CompanySubscriptionSerializer(subscription)
+            return Response(serializer.data)
+        except CompanySubscription.DoesNotExist:
+            return Response(
+                {'error': 'No subscription found for your company', 'has_subscription': False},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+    @action(detail=False, methods=['get'])
+    def status(self, request):
+        """Quick subscription status check"""
+        if not request.user.company:
+            return Response({
+                'has_company': False,
+                'has_subscription': False,
+                'is_active': False,
+                'can_access_premium': False
+            })
+
+        try:
+            subscription = CompanySubscription.objects.get(company=request.user.company)
+            return Response({
+                'has_company': True,
+                'has_subscription': True,
+                'is_active': subscription.is_active,
+                'can_access_premium': subscription.can_access_premium,
+                'status': subscription.status,
+                'trial_end': subscription.trial_end,
+                'current_period_end': subscription.current_period_end,
+                'cancel_at_period_end': subscription.cancel_at_period_end
+            })
+        except CompanySubscription.DoesNotExist:
+            return Response({
+                'has_company': True,
+                'has_subscription': False,
+                'is_active': False,
+                'can_access_premium': False
+            })
+
+
+# ============================================================================
+# STRIPE SUBSCRIPTION ENDPOINTS
+# ============================================================================
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def create_checkout_session(request):
+    """
+    Create a Stripe checkout session for a new subscription.
+
+    POST /api/company-portal/subscriptions/create-checkout/
+    Body: {
+        "success_url": "https://...",
+        "cancel_url": "https://..."
+    }
+
+    Returns:
+        checkout_url: URL to redirect user to Stripe Checkout
+        session_id: Stripe session ID
+    """
+    from .stripe_service import StripeService
+
+    if not request.user.company:
+        return Response(
+            {'error': 'You must be associated with a company to subscribe'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    if not StripeService.is_configured():
+        return Response(
+            {'error': 'Payment system is not configured'},
+            status=status.HTTP_503_SERVICE_UNAVAILABLE
+        )
+
+    success_url = request.data.get('success_url')
+    cancel_url = request.data.get('cancel_url')
+
+    if not success_url or not cancel_url:
+        return Response(
+            {'error': 'success_url and cancel_url are required'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    # Check if company already has an active subscription
+    try:
+        existing_sub = CompanySubscription.objects.get(company=request.user.company)
+        if existing_sub.is_active:
+            return Response(
+                {'error': 'Company already has an active subscription'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+    except CompanySubscription.DoesNotExist:
+        pass
+
+    try:
+        session = StripeService.create_checkout_session(
+            company=request.user.company,
+            user=request.user,
+            success_url=success_url,
+            cancel_url=cancel_url
+        )
+        return Response({
+            'checkout_url': session.url,
+            'session_id': session.id
+        })
+    except Exception as e:
+        return Response(
+            {'error': f'Failed to create checkout session: {str(e)}'},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def create_billing_portal(request):
+    """
+    Create a Stripe billing portal session for subscription management.
+
+    POST /api/company-portal/subscriptions/billing-portal/
+    Body: {
+        "return_url": "https://..."
+    }
+
+    Returns:
+        portal_url: URL to redirect user to Stripe Billing Portal
+    """
+    from .stripe_service import StripeService
+
+    if not request.user.company:
+        return Response(
+            {'error': 'You must be associated with a company'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    try:
+        subscription = CompanySubscription.objects.get(company=request.user.company)
+        if not subscription.stripe_customer_id:
+            return Response(
+                {'error': 'No billing account found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+    except CompanySubscription.DoesNotExist:
+        return Response(
+            {'error': 'No subscription found for your company'},
+            status=status.HTTP_404_NOT_FOUND
+        )
+
+    return_url = request.data.get('return_url')
+    if not return_url:
+        return Response(
+            {'error': 'return_url is required'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    try:
+        session = StripeService.create_billing_portal_session(
+            customer_id=subscription.stripe_customer_id,
+            return_url=return_url
+        )
+        return Response({
+            'portal_url': session.url
+        })
+    except Exception as e:
+        return Response(
+            {'error': f'Failed to create billing portal: {str(e)}'},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def cancel_subscription(request):
+    """
+    Cancel the company's subscription.
+
+    POST /api/company-portal/subscriptions/cancel/
+    Body: {
+        "immediate": false  # Optional, defaults to canceling at period end
+    }
+
+    Returns:
+        success: true
+        cancel_at_period_end: boolean
+    """
+    from .stripe_service import StripeService
+
+    if not request.user.company:
+        return Response(
+            {'error': 'You must be associated with a company'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    try:
+        subscription = CompanySubscription.objects.get(company=request.user.company)
+        if not subscription.stripe_subscription_id:
+            return Response(
+                {'error': 'No active subscription found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+    except CompanySubscription.DoesNotExist:
+        return Response(
+            {'error': 'No subscription found for your company'},
+            status=status.HTTP_404_NOT_FOUND
+        )
+
+    immediate = request.data.get('immediate', False)
+
+    try:
+        stripe_sub = StripeService.cancel_subscription(
+            subscription_id=subscription.stripe_subscription_id,
+            at_period_end=not immediate
+        )
+
+        # Update local record
+        if immediate:
+            subscription.status = 'canceled'
+            subscription.canceled_at = timezone.now()
+        else:
+            subscription.cancel_at_period_end = True
+        subscription.save()
+
+        return Response({
+            'success': True,
+            'cancel_at_period_end': not immediate,
+            'status': subscription.status
+        })
+    except Exception as e:
+        return Response(
+            {'error': f'Failed to cancel subscription: {str(e)}'},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def reactivate_subscription(request):
+    """
+    Reactivate a subscription that was set to cancel at period end.
+
+    POST /api/company-portal/subscriptions/reactivate/
+
+    Returns:
+        success: true
+    """
+    from .stripe_service import StripeService
+
+    if not request.user.company:
+        return Response(
+            {'error': 'You must be associated with a company'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    try:
+        subscription = CompanySubscription.objects.get(company=request.user.company)
+        if not subscription.stripe_subscription_id:
+            return Response(
+                {'error': 'No subscription found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        if not subscription.cancel_at_period_end:
+            return Response(
+                {'error': 'Subscription is not set to cancel'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+    except CompanySubscription.DoesNotExist:
+        return Response(
+            {'error': 'No subscription found for your company'},
+            status=status.HTTP_404_NOT_FOUND
+        )
+
+    try:
+        StripeService.reactivate_subscription(subscription.stripe_subscription_id)
+
+        # Update local record
+        subscription.cancel_at_period_end = False
+        subscription.save(update_fields=['cancel_at_period_end'])
+
+        return Response({
+            'success': True,
+            'status': subscription.status
+        })
+    except Exception as e:
+        return Response(
+            {'error': f'Failed to reactivate subscription: {str(e)}'},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def stripe_webhook(request):
+    """
+    Handle Stripe webhook events.
+
+    POST /api/company-portal/webhooks/stripe/
+
+    This endpoint verifies the webhook signature and processes
+    subscription events from Stripe.
+    """
+    from .stripe_service import StripeService, process_subscription_webhook
+    import json
+
+    payload = request.body
+    sig_header = request.META.get('HTTP_STRIPE_SIGNATURE')
+
+    if not sig_header:
+        return Response(
+            {'error': 'Missing Stripe signature'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    try:
+        event = StripeService.construct_webhook_event(payload, sig_header)
+    except ValueError:
+        return Response(
+            {'error': 'Invalid payload'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    except Exception as e:
+        return Response(
+            {'error': f'Webhook verification failed: {str(e)}'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    # Process the event
+    result = process_subscription_webhook(event)
+
+    if result.get('success'):
+        return Response({'received': True, 'event_type': result.get('event_type')})
+    else:
+        return Response(
+            {'error': result.get('error')},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
