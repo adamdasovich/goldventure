@@ -149,7 +149,7 @@ export default function Home() {
           </div>
 
           <div className="backdrop-blur-sm bg-slate-800/30 border border-slate-700/50 rounded-xl p-6">
-            <NewsArticles initialLimit={10} showLoadMore={true} />
+            <NewsArticles initialLimit={50} showLoadMore={true} />
           </div>
         </div>
       </section>
