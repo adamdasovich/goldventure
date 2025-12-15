@@ -2554,12 +2554,12 @@ def news_articles_list(request):
     days = int(request.query_params.get('days', 7))
     source_id = request.query_params.get('source')
 
-    # Filter to visible articles from last N days
+    # Filter to visible articles from last N days (or with no published date - treated as recent)
     cutoff_date = timezone.now() - timedelta(days=days)
+    from django.db.models import Q
     queryset = NewsArticle.objects.filter(
-        is_visible=True,
-        published_at__gte=cutoff_date
-    ).select_related('source')
+        Q(is_visible=True) & (Q(published_at__gte=cutoff_date) | Q(published_at__isnull=True))
+    ).select_related('source').order_by('-created_at')
 
     if source_id:
         queryset = queryset.filter(source_id=source_id)
