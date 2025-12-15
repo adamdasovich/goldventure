@@ -1,13 +1,12 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState } from 'react';
 import ChatInterface from '@/components/ChatInterface';
-import NewsArticles from '@/components/NewsArticles';
+import { UpcomingEvents } from '@/components/events/UpcomingEvents';
 import { Card, CardHeader, CardTitle, CardDescription } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import LogoMono from '@/components/LogoMono';
-import HeroCards from '@/components/HeroCards';
 import { LoginModal, RegisterModal } from '@/components/auth';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -15,11 +14,6 @@ export default function Home() {
   const [showLogin, setShowLogin] = useState(false);
   const [showRegister, setShowRegister] = useState(false);
   const { user, logout } = useAuth();
-  const newsSectionRef = useRef<HTMLElement>(null);
-
-  const scrollToNews = () => {
-    newsSectionRef.current?.scrollIntoView({ behavior: 'smooth' });
-  };
 
   return (
     <div className="min-h-screen">
@@ -89,36 +83,18 @@ export default function Home() {
           backgroundImage: 'radial-gradient(circle at 50% 50%, rgba(212, 161, 42, 0.1) 0%, transparent 50%)'
         }}></div>
 
-        <div className="relative max-w-7xl mx-auto">
-          <div className="text-center mb-12">
-            <h2 className="text-5xl md:text-6xl font-bold mb-6 text-gradient-gold animate-fade-in leading-tight pb-2">
-              Junior Gold Mining Intelligence
-            </h2>
-            <p className="text-xl text-slate-300 max-w-3xl mx-auto animate-slide-in-up">
-              AI-powered investor relations platform for junior gold mining investors and companies.
-              Instant access to projects, resources, prospector listings and technical data.
-            </p>
-          </div>
+        <div className="relative max-w-7xl mx-auto text-center">
+          <h2 className="text-5xl md:text-6xl font-bold mb-6 text-gradient-gold animate-fade-in leading-tight pb-2">
+            Junior Gold Mining Intelligence
+          </h2>
+          <p className="text-xl text-slate-300 max-w-3xl mx-auto mb-12 animate-slide-in-up">
+            AI-powered investor relations platform for junior gold mining investors and companies.
+            Instant access to projects, resources, prospector listings and technical data.
+          </p>
 
-          {/* Three Content Cards */}
-          <div className="mb-12">
-            <HeroCards
-              onLoginClick={() => setShowLogin(true)}
-              onRegisterClick={() => setShowRegister(true)}
-            />
-          </div>
-
-          {/* Navigation Buttons */}
           <div className="flex flex-wrap gap-4 justify-center">
-            <Button variant="primary" size="lg" onClick={() => window.location.href = '/companies'}>
-              Explore All Companies
-            </Button>
-            <Button variant="primary" size="lg" onClick={() => window.location.href = '/properties'}>
-              Prospector's Exchange
-            </Button>
-            <Button variant="secondary" size="lg" onClick={scrollToNews}>
-              Latest News Articles
-            </Button>
+            <Button variant="primary" size="lg">Explore Companies</Button>
+            <Button variant="secondary" size="lg">Start Chat</Button>
           </div>
         </div>
       </section>
@@ -127,7 +103,7 @@ export default function Home() {
       <section className="py-16 px-4 sm:px-6 lg:px-8 bg-gradient-slate">
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-12">
-            <h3 className="text-4xl font-bold text-gold-400 mb-4">Ask Anything About Mining Companies of Properties</h3>
+            <h3 className="text-4xl font-bold text-gold-400 mb-4">Ask Anything About Mining Companies or Properties</h3>
             <p className="text-slate-300 text-lg max-w-2xl mx-auto">
               Natural language access to companies, projects, resources, prospector listings, and economic studies.
               Claude uses MCP servers to query your PostgreSQL database in real-time.
@@ -138,18 +114,22 @@ export default function Home() {
         </div>
       </section>
 
-      {/* News Articles Section */}
-      <section ref={newsSectionRef} id="news-section" className="py-16 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-4xl mx-auto">
-          <div className="text-center mb-8">
-            <h3 className="text-4xl font-bold text-gold-400 mb-4">Latest Mining News</h3>
-            <p className="text-slate-300 text-lg max-w-2xl mx-auto">
-              Stay informed with the latest news and developments from the mining industry.
-            </p>
-          </div>
+      {/* Upcoming Events Section */}
+      <section className="py-16 px-4 sm:px-6 lg:px-8">
+        <div className="max-w-7xl mx-auto">
+          <UpcomingEvents />
+        </div>
+      </section>
 
-          <div className="backdrop-blur-sm bg-slate-800/30 border border-slate-700/50 rounded-xl p-6">
-            <NewsArticles initialLimit={10} showLoadMore={true} />
+      {/* Companies Section */}
+      <section className="py-16 px-4 sm:px-6 lg:px-8">
+        <div className="max-w-7xl mx-auto">
+          <div className="text-center mb-12">
+            <h3 className="text-4xl font-bold text-gold-400 mb-4">Mining Companies</h3>
+            <p className="text-slate-300 text-lg mb-8">
+              Explore our portfolio of junior gold mining companies
+            </p>
+            <Button variant="primary" size="lg" onClick={() => window.location.href = '/companies'}>View All Companies</Button>
           </div>
         </div>
       </section>
