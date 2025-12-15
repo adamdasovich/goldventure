@@ -2981,6 +2981,27 @@ class CompanyResourceViewSet(viewsets.ModelViewSet):
         serializer = CompanyResourceChoicesSerializer({})
         return Response(serializer.data)
 
+    @action(detail=False, methods=['get'])
+    def my_resources(self, request):
+        """Get resources for the current user's company"""
+        if not request.user.is_authenticated:
+            return Response(
+                {'error': 'Authentication required'},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+
+        if not request.user.company:
+            return Response(
+                {'results': [], 'count': 0, 'message': 'You are not associated with a company'}
+            )
+
+        queryset = CompanyResource.objects.filter(
+            company=request.user.company
+        ).select_related('company', 'project', 'uploaded_by').order_by('sort_order', '-uploaded_at')
+
+        serializer = CompanyResourceSerializer(queryset, many=True)
+        return Response({'results': serializer.data, 'count': len(serializer.data)})
+
     @action(detail=False, methods=['post'])
     def upload(self, request):
         """
@@ -3157,6 +3178,27 @@ class SpeakingEventViewSet(viewsets.ModelViewSet):
 
         serializer = SpeakingEventListSerializer(queryset, many=True)
         return Response(serializer.data)
+
+    @action(detail=False, methods=['get'])
+    def my_events(self, request):
+        """Get events for the current user's company"""
+        if not request.user.is_authenticated:
+            return Response(
+                {'error': 'Authentication required'},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+
+        if not request.user.company:
+            return Response(
+                {'results': [], 'count': 0, 'message': 'You are not associated with a company'}
+            )
+
+        queryset = SpeakingEvent.objects.filter(
+            company=request.user.company
+        ).select_related('company', 'created_by').order_by('-start_datetime')
+
+        serializer = SpeakingEventSerializer(queryset, many=True)
+        return Response({'results': serializer.data, 'count': len(serializer.data)})
 
 
 class CompanySubscriptionViewSet(viewsets.ModelViewSet):
