@@ -85,12 +85,12 @@ export default function Home() {
 
         <div className="relative max-w-7xl mx-auto text-center">
           <h2 className="text-5xl md:text-6xl font-bold mb-6 text-gradient-gold animate-fade-in leading-tight pb-2">
-            Junior Mining Intelligence
+            Junior Gold Mining Intelligence
           </h2>
           <h1></h1>
           <p className="text-xl text-slate-300 max-w-3xl mx-auto mb-12 animate-slide-in-up">
-            AI-powered investor relations platform for junior gold mining companies.
-            Instant access to projects, resources, and technical data.
+            AI-powered investor relations platform for junior gold mining investors and companies.
+            Instant access to projects, resources, prospector listings and technical data.
           </p>
 
           <div className="flex flex-wrap gap-4 justify-center">
@@ -104,9 +104,9 @@ export default function Home() {
       <section className="py-16 px-4 sm:px-6 lg:px-8 bg-gradient-slate">
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-12">
-            <h3 className="text-4xl font-bold text-gold-400 mb-4">Ask Anything About Your Mining Data</h3>
+            <h3 className="text-4xl font-bold text-gold-400 mb-4">Ask Anything About Mining Companies of Properties</h3>
             <p className="text-slate-300 text-lg max-w-2xl mx-auto">
-              Natural language access to companies, projects, resources, and economic studies.
+              Natural language access to companies, projects, resources, prospector listings, and economic studies.
               Claude uses MCP servers to query your PostgreSQL database in real-time.
             </p>
           </div>
