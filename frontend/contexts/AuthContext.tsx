@@ -10,6 +10,8 @@ interface User {
   user_type: string;
   is_staff?: boolean;
   is_superuser?: boolean;
+  company_id?: number | null;
+  company_name?: string | null;
 }
 
 interface AuthContextType {

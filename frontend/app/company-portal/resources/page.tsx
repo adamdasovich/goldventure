@@ -24,7 +24,8 @@ import {
   X,
   Download,
   ExternalLink,
-  Star
+  Star,
+  Building2
 } from 'lucide-react';
 
 const RESOURCE_TYPES = [
@@ -57,6 +58,11 @@ export default function ResourcesPage() {
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [uploading, setUploading] = useState(false);
 
+  // Company access state
+  const [hasCompany, setHasCompany] = useState<boolean | null>(null);
+  const [companyId, setCompanyId] = useState<number | null>(null);
+  const [companyName, setCompanyName] = useState<string>('');
+
   // Form state
   const [formData, setFormData] = useState({
     title: '',
@@ -70,12 +76,21 @@ export default function ResourcesPage() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
   useEffect(() => {
-    if (accessToken) {
-      fetchResources();
+    if (accessToken && user) {
+      // Check if user has a company from auth context
+      if (user.company_id) {
+        setHasCompany(true);
+        setCompanyId(user.company_id);
+        setCompanyName(user.company_name || '');
+        fetchResources();
+      } else {
+        setHasCompany(false);
+        setLoading(false);
+      }
     } else {
       setLoading(false);
     }
-  }, [accessToken]);
+  }, [accessToken, user]);
 
   const fetchResources = async () => {
     if (!accessToken) return;
@@ -95,6 +110,13 @@ export default function ResourcesPage() {
     e.preventDefault();
     if (!accessToken) return;
 
+    // Get company ID from editing resource or from state
+    const resourceCompanyId = editingResource?.company || companyId;
+    if (!resourceCompanyId && !editingResource) {
+      alert('Unable to determine company. Please go back to Company Portal and try again.');
+      return;
+    }
+
     try {
       setUploading(true);
       const formPayload = new FormData();
@@ -104,6 +126,11 @@ export default function ResourcesPage() {
       formPayload.append('category', formData.category);
       formPayload.append('is_public', String(formData.is_public));
       formPayload.append('is_featured', String(formData.is_featured));
+
+      // Include company ID for new resources
+      if (!editingResource && resourceCompanyId) {
+        formPayload.append('company', String(resourceCompanyId));
+      }
 
       if (formData.external_url) {
         formPayload.append('external_url', formData.external_url);
@@ -203,6 +230,27 @@ export default function ResourcesPage() {
     return (
       <div className="min-h-screen bg-slate-950 flex items-center justify-center">
         <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-gold-400"></div>
+      </div>
+    );
+  }
+
+  // No company access - redirect to Company Portal
+  if (hasCompany === false) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
+        <Card variant="glass-card" className="max-w-md w-full mx-4">
+          <CardContent className="py-8 text-center">
+            <Building2 className="w-16 h-16 text-gold-400 mx-auto mb-4" />
+            <h2 className="text-2xl font-bold text-white mb-2">Company Access Required</h2>
+            <p className="text-slate-400 mb-6">
+              You need to be associated with a company to manage resources.
+              Please request access from the Company Portal.
+            </p>
+            <Button variant="primary" onClick={() => window.location.href = '/company-portal'}>
+              Go to Company Portal
+            </Button>
+          </CardContent>
+        </Card>
       </div>
     );
   }

@@ -24,7 +24,8 @@ import {
   ExternalLink,
   Clock,
   Globe,
-  Star
+  Star,
+  Building2
 } from 'lucide-react';
 
 const EVENT_TYPES = [
@@ -60,6 +61,10 @@ export default function EventsPage() {
   const [editingEvent, setEditingEvent] = useState<SpeakingEvent | null>(null);
   const [filter, setFilter] = useState<'all' | 'upcoming' | 'past'>('all');
   const [saving, setSaving] = useState(false);
+
+  // Company access state
+  const [hasCompany, setHasCompany] = useState<boolean | null>(null);
+  const [companyId, setCompanyId] = useState<number | null>(null);
 
   // Form state
   const [formData, setFormData] = useState<{
@@ -97,12 +102,20 @@ export default function EventsPage() {
   });
 
   useEffect(() => {
-    if (accessToken) {
-      fetchEvents();
+    if (accessToken && user) {
+      // Check if user has a company from auth context
+      if (user.company_id) {
+        setHasCompany(true);
+        setCompanyId(user.company_id);
+        fetchEvents();
+      } else {
+        setHasCompany(false);
+        setLoading(false);
+      }
     } else {
       setLoading(false);
     }
-  }, [accessToken]);
+  }, [accessToken, user]);
 
   const fetchEvents = async () => {
     if (!accessToken) return;
@@ -122,12 +135,21 @@ export default function EventsPage() {
     e.preventDefault();
     if (!accessToken) return;
 
+    // Get company ID from editing event or from state
+    const eventCompanyId = editingEvent?.company || companyId;
+    if (!eventCompanyId && !editingEvent) {
+      alert('Unable to determine company. Please go back to Company Portal and try again.');
+      return;
+    }
+
     try {
       setSaving(true);
 
       const payload = {
         ...formData,
         event_end_date: formData.event_end_date || undefined,
+        // Include company ID for new events
+        ...((!editingEvent && eventCompanyId) ? { company: eventCompanyId } : {}),
       };
 
       if (editingEvent) {
@@ -263,6 +285,27 @@ export default function EventsPage() {
     return (
       <div className="min-h-screen bg-slate-950 flex items-center justify-center">
         <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-gold-400"></div>
+      </div>
+    );
+  }
+
+  // No company access - redirect to Company Portal
+  if (hasCompany === false) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
+        <Card variant="glass-card" className="max-w-md w-full mx-4">
+          <CardContent className="py-8 text-center">
+            <Building2 className="w-16 h-16 text-gold-400 mx-auto mb-4" />
+            <h2 className="text-2xl font-bold text-white mb-2">Company Access Required</h2>
+            <p className="text-slate-400 mb-6">
+              You need to be associated with a company to manage speaking events.
+              Please request access from the Company Portal.
+            </p>
+            <Button variant="primary" onClick={() => window.location.href = '/company-portal'}>
+              Go to Company Portal
+            </Button>
+          </CardContent>
+        </Card>
       </div>
     );
   }

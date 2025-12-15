@@ -1196,7 +1196,9 @@ def get_current_user(request):
         "username": "string",
         "email": "string",
         "full_name": "string",
-        "user_type": "string"
+        "user_type": "string",
+        "company_id": int | null,
+        "company_name": "string" | null
     }
     """
     user = request.user
@@ -1212,6 +1214,8 @@ def get_current_user(request):
         'user_type': user.user_type,
         'is_staff': user.is_staff,
         'is_superuser': user.is_superuser,
+        'company_id': user.company_id,
+        'company_name': user.company.name if user.company else None,
     }, status=status.HTTP_200_OK)
 
 
