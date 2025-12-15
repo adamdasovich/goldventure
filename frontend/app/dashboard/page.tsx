@@ -170,11 +170,13 @@ export default function DashboardPage() {
       }
 
       const data = await response.json();
-      setScrapeJob(data);
+      // API returns job_id, normalize to id for consistency
+      const jobData = { ...data, id: data.job_id || data.id };
+      setScrapeJob(jobData);
 
       // Poll for status if job is running
-      if (data.status === 'running' || data.status === 'pending') {
-        pollScrapeStatus(data.id);
+      if (jobData.status === 'running' || jobData.status === 'pending') {
+        pollScrapeStatus(jobData.id);
       }
     } catch (err: any) {
       setScrapeError(err.message || 'Failed to trigger news scrape');
