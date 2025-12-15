@@ -121,6 +121,7 @@ export default function CompanyDetailPage() {
               <Button variant="ghost" size="sm" onClick={() => window.location.href = '/'}>Dashboard</Button>
               <Button variant="ghost" size="sm" onClick={() => window.location.href = '/companies'}>Companies</Button>
               <Button variant="ghost" size="sm" onClick={() => window.location.href = '/metals'}>Metals</Button>
+              <Button variant="primary" size="sm" onClick={() => window.location.href = '/company-portal'}>Company Portal</Button>
 
               {user ? (
                 <div className="flex items-center space-x-3">
