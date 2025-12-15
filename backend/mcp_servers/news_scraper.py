@@ -28,25 +28,30 @@ class MiningNewsScraper:
         'northernminer.com': {
             'article_selectors': ['article', '.post', '.news-item', '.article-card'],
             'title_selectors': ['h2 a', 'h3 a', '.entry-title a', '.post-title a'],
-            'date_selectors': ['.date', '.post-date', 'time', '.entry-date', '.published'],
+            'date_selectors': ['.date', '.post-date', 'time', '.entry-date', '.published', '.byline', '.meta', 'span.date'],
             'summary_selectors': ['.excerpt', '.summary', '.entry-excerpt', 'p'],
+            # Selectors to find date on the article detail page
+            'detail_date_selectors': ['time', '.date', '.published', '.entry-date', '.post-date', '.byline time', 'meta[property="article:published_time"]', '.article-date', '.post-meta time'],
         },
         'mining.com': {
             'article_selectors': ['article', '.post', '.news-item', '.story'],
             'title_selectors': ['h2 a', 'h3 a', '.entry-title a', '.story-title a'],
-            'date_selectors': ['.date', '.post-date', 'time', '.entry-date'],
+            'date_selectors': ['.date', '.post-date', 'time', '.entry-date', '.byline', '.meta'],
             'summary_selectors': ['.excerpt', '.summary', '.teaser', 'p'],
+            'detail_date_selectors': ['time', '.date', '.published', 'meta[property="article:published_time"]', '.post-date'],
         },
         'default': {
             'article_selectors': ['article', '.post', '.news-item', '.article', '.story', '.entry'],
             'title_selectors': ['h2 a', 'h3 a', 'h4 a', '.title a', '.entry-title a'],
-            'date_selectors': ['.date', 'time', '.published', '.post-date', '.entry-date'],
+            'date_selectors': ['.date', 'time', '.published', '.post-date', '.entry-date', '.byline', '.meta'],
             'summary_selectors': ['.excerpt', '.summary', '.description', 'p'],
+            'detail_date_selectors': ['time', '.date', '.published', 'meta[property="article:published_time"]', '.entry-date', '.post-date', '.article-date'],
         }
     }
 
     def __init__(self):
         self.articles = []
+        self.crawler = None  # Will be set during scraping
 
     def _get_site_config(self, url: str) -> Dict:
         """Get site-specific configuration or default"""
@@ -88,6 +93,9 @@ class MiningNewsScraper:
         )
 
         async with AsyncWebCrawler(config=browser_config) as crawler:
+            self.crawler = crawler
+            self.crawler_config = crawler_config
+
             # Try common news listing pages
             pages_to_try = [
                 source_url,
@@ -134,7 +142,73 @@ class MiningNewsScraper:
                     print(f"[{source_name}] Error scraping {page_url}: {str(e)}")
                     continue
 
+            # Second pass: fetch dates from article detail pages for articles missing dates
+            articles_missing_dates = [a for a in self.articles if not a.get('published_at')]
+            if articles_missing_dates:
+                print(f"\n[{source_name}] Fetching dates from {len(articles_missing_dates)} article pages...")
+                for article in articles_missing_dates:
+                    try:
+                        date_str = await self._fetch_article_date(article['url'], config)
+                        if date_str:
+                            article['published_at'] = date_str
+                            print(f"  [DATE] {article['title'][:40]}... -> {date_str}")
+                    except Exception as e:
+                        print(f"  [WARN] Could not fetch date for {article['url']}: {str(e)}")
+
         return self.articles
+
+    async def _fetch_article_date(self, article_url: str, config: Dict) -> Optional[str]:
+        """Fetch the publication date from an article's detail page"""
+        if not self.crawler:
+            return None
+
+        try:
+            result = await self.crawler.arun(url=article_url, config=self.crawler_config)
+            if not result.success:
+                return None
+
+            soup = BeautifulSoup(result.html, 'html.parser')
+
+            # Try detail page date selectors
+            detail_selectors = config.get('detail_date_selectors', config['date_selectors'])
+
+            for selector in detail_selectors:
+                # Handle meta tag selectors specially
+                if selector.startswith('meta['):
+                    meta_elem = soup.select_one(selector)
+                    if meta_elem and meta_elem.get('content'):
+                        date_str = self._parse_date(meta_elem['content'])
+                        if date_str:
+                            return date_str
+                else:
+                    date_elem = soup.select_one(selector)
+                    if date_elem:
+                        # Check for datetime attribute first
+                        if date_elem.has_attr('datetime'):
+                            date_str = self._parse_date(date_elem['datetime'])
+                            if date_str:
+                                return date_str
+                        # Then check text content
+                        text = date_elem.get_text(strip=True)
+                        if text:
+                            date_str = self._parse_date(text)
+                            if date_str:
+                                return date_str
+
+            # Try to find any date in the page content as fallback
+            # Look for common date patterns in the article body
+            article_body = soup.select_one('article') or soup.select_one('.entry-content') or soup.select_one('.post-content') or soup.select_one('main')
+            if article_body:
+                text = article_body.get_text()
+                # Try to find dates like "December 15, 2025" or "Dec 15, 2025"
+                date_str = self._parse_date(text[:1000])  # Only check first 1000 chars
+                if date_str:
+                    return date_str
+
+        except Exception as e:
+            print(f"    [DEBUG] Error fetching article date: {str(e)}")
+
+        return None
 
     def _extract_article(
         self,
