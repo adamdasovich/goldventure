@@ -4,7 +4,13 @@ import type {
   ResourceEstimate,
   Financing,
   ChatRequest,
-  ChatResponse
+  ChatResponse,
+  CompanyResource,
+  SpeakingEvent,
+  CompanySubscription,
+  SubscriptionInvoice,
+  CheckoutSessionResponse,
+  BillingPortalResponse
 } from '@/types/api';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api';
@@ -193,6 +199,147 @@ export const newsAPI = {
     }),
 };
 
+// Company Portal - Resources API
+export const companyResourceAPI = {
+  getAll: (accessToken: string, params?: { company?: number; category?: string; is_public?: boolean }) => {
+    const query = params ? new URLSearchParams(params as Record<string, string>).toString() : '';
+    return apiFetch<{ results: CompanyResource[] }>(`/company-portal/resources/${query ? `?${query}` : ''}`, {
+      headers: { 'Authorization': `Bearer ${accessToken}` }
+    });
+  },
+
+  getById: (accessToken: string, id: number) =>
+    apiFetch<CompanyResource>(`/company-portal/resources/${id}/`, {
+      headers: { 'Authorization': `Bearer ${accessToken}` }
+    }),
+
+  create: (accessToken: string, formData: FormData) =>
+    fetch(`${API_BASE_URL}/company-portal/resources/`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${accessToken}` },
+      body: formData, // FormData for file uploads - don't set Content-Type
+    }).then(res => {
+      if (!res.ok) throw new Error('Failed to create resource');
+      return res.json() as Promise<CompanyResource>;
+    }),
+
+  update: (accessToken: string, id: number, formData: FormData) =>
+    fetch(`${API_BASE_URL}/company-portal/resources/${id}/`, {
+      method: 'PATCH',
+      headers: { 'Authorization': `Bearer ${accessToken}` },
+      body: formData,
+    }).then(res => {
+      if (!res.ok) throw new Error('Failed to update resource');
+      return res.json() as Promise<CompanyResource>;
+    }),
+
+  delete: (accessToken: string, id: number) =>
+    apiFetch<void>(`/company-portal/resources/${id}/`, {
+      method: 'DELETE',
+      headers: { 'Authorization': `Bearer ${accessToken}` }
+    }),
+
+  getMyResources: (accessToken: string) =>
+    apiFetch<{ results: CompanyResource[] }>(`/company-portal/resources/my_resources/`, {
+      headers: { 'Authorization': `Bearer ${accessToken}` }
+    }),
+
+  getByCategory: (accessToken: string, category: string) =>
+    apiFetch<{ results: CompanyResource[] }>(`/company-portal/resources/by_category/?category=${category}`, {
+      headers: { 'Authorization': `Bearer ${accessToken}` }
+    }),
+};
+
+// Company Portal - Speaking Events API
+export const speakingEventAPI = {
+  getAll: (params?: { company?: number; event_type?: string; is_published?: boolean }) => {
+    const query = params ? new URLSearchParams(params as Record<string, string>).toString() : '';
+    return apiFetch<{ results: SpeakingEvent[] }>(`/company-portal/events/${query ? `?${query}` : ''}`);
+  },
+
+  getById: (id: number) =>
+    apiFetch<SpeakingEvent>(`/company-portal/events/${id}/`),
+
+  create: (accessToken: string, data: Partial<SpeakingEvent>) =>
+    apiFetch<SpeakingEvent>(`/company-portal/events/`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${accessToken}` },
+      body: JSON.stringify(data),
+    }),
+
+  update: (accessToken: string, id: number, data: Partial<SpeakingEvent>) =>
+    apiFetch<SpeakingEvent>(`/company-portal/events/${id}/`, {
+      method: 'PATCH',
+      headers: { 'Authorization': `Bearer ${accessToken}` },
+      body: JSON.stringify(data),
+    }),
+
+  delete: (accessToken: string, id: number) =>
+    apiFetch<void>(`/company-portal/events/${id}/`, {
+      method: 'DELETE',
+      headers: { 'Authorization': `Bearer ${accessToken}` }
+    }),
+
+  getMyEvents: (accessToken: string) =>
+    apiFetch<{ results: SpeakingEvent[] }>(`/company-portal/events/my_events/`, {
+      headers: { 'Authorization': `Bearer ${accessToken}` }
+    }),
+
+  getUpcoming: () =>
+    apiFetch<{ results: SpeakingEvent[] }>(`/company-portal/events/upcoming/`),
+
+  publish: (accessToken: string, id: number) =>
+    apiFetch<SpeakingEvent>(`/company-portal/events/${id}/publish/`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${accessToken}` }
+    }),
+
+  unpublish: (accessToken: string, id: number) =>
+    apiFetch<SpeakingEvent>(`/company-portal/events/${id}/unpublish/`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${accessToken}` }
+    }),
+};
+
+// Company Portal - Subscription API
+export const subscriptionAPI = {
+  getMySubscription: (accessToken: string) =>
+    apiFetch<CompanySubscription>(`/company-portal/subscriptions/my_subscription/`, {
+      headers: { 'Authorization': `Bearer ${accessToken}` }
+    }),
+
+  getInvoices: (accessToken: string) =>
+    apiFetch<{ results: SubscriptionInvoice[] }>(`/company-portal/subscriptions/invoices/`, {
+      headers: { 'Authorization': `Bearer ${accessToken}` }
+    }),
+
+  createCheckout: (accessToken: string, successUrl: string, cancelUrl: string) =>
+    apiFetch<CheckoutSessionResponse>(`/company-portal/subscriptions/create-checkout/`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${accessToken}` },
+      body: JSON.stringify({ success_url: successUrl, cancel_url: cancelUrl }),
+    }),
+
+  openBillingPortal: (accessToken: string, returnUrl: string) =>
+    apiFetch<BillingPortalResponse>(`/company-portal/subscriptions/billing-portal/`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${accessToken}` },
+      body: JSON.stringify({ return_url: returnUrl }),
+    }),
+
+  cancel: (accessToken: string) =>
+    apiFetch<CompanySubscription>(`/company-portal/subscriptions/cancel/`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${accessToken}` }
+    }),
+
+  reactivate: (accessToken: string) =>
+    apiFetch<CompanySubscription>(`/company-portal/subscriptions/reactivate/`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${accessToken}` }
+    }),
+};
+
 // Re-export types for convenience
 export type {
   Company,
@@ -201,5 +348,11 @@ export type {
   Financing,
   ChatRequest,
   ChatResponse,
-  ChatMessage
+  ChatMessage,
+  CompanyResource,
+  SpeakingEvent,
+  CompanySubscription,
+  SubscriptionInvoice,
+  CheckoutSessionResponse,
+  BillingPortalResponse
 } from '@/types/api';

@@ -133,3 +133,100 @@ export interface ChatRequest {
   conversation_history?: ChatMessage[];
   system_prompt?: string;
 }
+
+// Company Portal Types
+export interface CompanyResource {
+  id: number;
+  company: number;
+  company_name?: string;
+  project?: number;
+  project_name?: string;
+  resource_type: 'image' | 'video' | 'document' | 'presentation' | 'spreadsheet' | 'other';
+  category: 'hero' | 'gallery' | 'investor_presentation' | 'technical_report' | 'map' | 'logo' | 'news_image' | 'other';
+  title: string;
+  description?: string;
+  file?: string;
+  file_url?: string;
+  external_url?: string;
+  thumbnail_url?: string;
+  file_size?: number;
+  mime_type?: string;
+  is_public: boolean;
+  is_featured: boolean;
+  display_order: number;
+  uploaded_by?: number;
+  uploaded_by_name?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SpeakingEvent {
+  id: number;
+  company: number;
+  company_name?: string;
+  event_type: 'conference' | 'webinar' | 'investor_day' | 'site_visit' | 'earnings_call' | 'presentation' | 'interview' | 'other';
+  title: string;
+  description?: string;
+  event_date: string;
+  event_end_date?: string;
+  timezone: string;
+  location?: string;
+  venue_name?: string;
+  is_virtual: boolean;
+  virtual_link?: string;
+  registration_url?: string;
+  presentation_url?: string;
+  speakers?: string;
+  is_published: boolean;
+  is_featured: boolean;
+  created_by?: number;
+  created_by_name?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export type SubscriptionStatus = 'trialing' | 'active' | 'past_due' | 'canceled' | 'unpaid' | 'incomplete' | 'incomplete_expired' | 'paused';
+
+export interface CompanySubscription {
+  id: number;
+  company: number;
+  company_name?: string;
+  stripe_customer_id?: string;
+  stripe_subscription_id?: string;
+  status: SubscriptionStatus;
+  current_period_start?: string;
+  current_period_end?: string;
+  trial_start?: string;
+  trial_end?: string;
+  cancel_at_period_end: boolean;
+  canceled_at?: string;
+  created_at: string;
+  updated_at: string;
+  is_active: boolean;
+  days_until_trial_end?: number;
+}
+
+export interface SubscriptionInvoice {
+  id: number;
+  subscription: number;
+  stripe_invoice_id?: string;
+  amount_due: number;
+  amount_paid: number;
+  currency: string;
+  status: 'draft' | 'open' | 'paid' | 'uncollectible' | 'void';
+  invoice_date: string;
+  due_date?: string;
+  paid_at?: string;
+  invoice_pdf?: string;
+  hosted_invoice_url?: string;
+  created_at: string;
+}
+
+export interface CheckoutSessionResponse {
+  checkout_url: string;
+  session_id: string;
+}
+
+export interface BillingPortalResponse {
+  portal_url: string;
+}
