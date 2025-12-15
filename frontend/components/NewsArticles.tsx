@@ -176,11 +176,15 @@ export default function NewsArticles({ initialLimit = 10, showLoadMore = true }:
 
                 {/* Meta info */}
                 <div className="flex items-center gap-3 mt-2 text-sm text-slate-400">
-                  <span className="inline-flex items-center gap-1">
-                    <Calendar className="w-3.5 h-3.5" />
-                    {formatDate(article.published_at)}
-                  </span>
-                  <span className="text-slate-600">|</span>
+                  {article.published_at && (
+                    <>
+                      <span className="inline-flex items-center gap-1">
+                        <Calendar className="w-3.5 h-3.5" />
+                        {formatDate(article.published_at)}
+                      </span>
+                      <span className="text-slate-600">|</span>
+                    </>
+                  )}
                   <span className="truncate">{article.source_name}</span>
                 </div>
 
