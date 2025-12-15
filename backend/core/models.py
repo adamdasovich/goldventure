@@ -2532,7 +2532,7 @@ class CompanyResource(models.Model):
         on_delete=models.CASCADE,
         null=True,
         blank=True,
-        related_name='resources',
+        related_name='company_resources',
         help_text="If set, this resource is specific to this project"
     )
 
