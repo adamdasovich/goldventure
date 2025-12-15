@@ -62,7 +62,23 @@ export default function EventsPage() {
   const [saving, setSaving] = useState(false);
 
   // Form state
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<{
+    title: string;
+    description: string;
+    event_type: SpeakingEvent['event_type'];
+    event_date: string;
+    event_end_date: string;
+    timezone: string;
+    location: string;
+    venue_name: string;
+    is_virtual: boolean;
+    virtual_link: string;
+    registration_url: string;
+    presentation_url: string;
+    speakers: string;
+    is_published: boolean;
+    is_featured: boolean;
+  }>({
     title: '',
     description: '',
     event_type: 'conference',
@@ -449,7 +465,7 @@ export default function EventsPage() {
                     <label className="block text-sm font-medium text-slate-300 mb-1">Event Type *</label>
                     <select
                       value={formData.event_type}
-                      onChange={(e) => setFormData({ ...formData, event_type: e.target.value })}
+                      onChange={(e) => setFormData({ ...formData, event_type: e.target.value as SpeakingEvent['event_type'] })}
                       className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white focus:border-gold-500 focus:outline-none"
                     >
                       {EVENT_TYPES.map((type) => (
