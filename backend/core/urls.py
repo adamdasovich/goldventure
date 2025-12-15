@@ -34,6 +34,7 @@ router.register(r'properties/saved-searches', views.SavedPropertySearchViewSet, 
 router.register(r'company-portal/resources', views.CompanyResourceViewSet, basename='company-resource')
 router.register(r'company-portal/events', views.SpeakingEventViewSet, basename='speaking-event')
 router.register(r'company-portal/subscriptions', views.CompanySubscriptionViewSet, basename='company-subscription')
+router.register(r'company-portal/access-requests', views.CompanyAccessRequestViewSet, basename='company-access-request')
 
 urlpatterns = [
     # Authentication endpoints

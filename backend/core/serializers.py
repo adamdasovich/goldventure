@@ -1123,3 +1123,96 @@ class CompanySubscriptionStatusSerializer(serializers.ModelSerializer):
             delta = obj.current_period_end - timezone.now()
             return max(0, delta.days)
         return None
+
+
+# ============================================================================
+# COMPANY ACCESS REQUEST SERIALIZERS
+# ============================================================================
+
+class CompanyAccessRequestSerializer(serializers.ModelSerializer):
+    """Full serializer for company access requests"""
+    user_name = serializers.CharField(source='user.get_full_name', read_only=True)
+    user_email = serializers.EmailField(source='user.email', read_only=True)
+    company_name = serializers.CharField(source='company.name', read_only=True)
+    company_ticker = serializers.CharField(source='company.ticker_symbol', read_only=True)
+    status_display = serializers.CharField(source='get_status_display', read_only=True)
+    role_display = serializers.CharField(source='get_role_display', read_only=True)
+    reviewer_name = serializers.CharField(source='reviewer.get_full_name', read_only=True)
+
+    class Meta:
+        from .models import CompanyAccessRequest
+        model = CompanyAccessRequest
+        fields = [
+            'id', 'user', 'user_name', 'user_email',
+            'company', 'company_name', 'company_ticker',
+            'status', 'status_display',
+            'role', 'role_display', 'job_title',
+            'justification', 'work_email',
+            'reviewer', 'reviewer_name', 'review_notes', 'reviewed_at',
+            'created_at', 'updated_at'
+        ]
+        read_only_fields = [
+            'user', 'status', 'reviewer', 'review_notes', 'reviewed_at',
+            'created_at', 'updated_at'
+        ]
+
+
+class CompanyAccessRequestCreateSerializer(serializers.ModelSerializer):
+    """Serializer for creating access requests"""
+
+    class Meta:
+        from .models import CompanyAccessRequest
+        model = CompanyAccessRequest
+        fields = ['company', 'role', 'job_title', 'justification', 'work_email']
+
+    def validate_company(self, value):
+        """Ensure user doesn't already have a pending request for this company"""
+        user = self.context['request'].user
+        from .models import CompanyAccessRequest
+        if CompanyAccessRequest.objects.filter(
+            user=user,
+            company=value,
+            status='pending'
+        ).exists():
+            raise serializers.ValidationError(
+                "You already have a pending request for this company."
+            )
+        return value
+
+    def validate(self, data):
+        """Additional validations"""
+        user = self.context['request'].user
+
+        # Check if user is already associated with a company
+        if user.company:
+            raise serializers.ValidationError(
+                "You are already associated with a company. "
+                "Please contact support if you need to change your company."
+            )
+
+        return data
+
+    def create(self, validated_data):
+        from .models import CompanyAccessRequest
+        validated_data['user'] = self.context['request'].user
+        return CompanyAccessRequest.objects.create(**validated_data)
+
+
+class CompanyAccessRequestReviewSerializer(serializers.Serializer):
+    """Serializer for admin review actions"""
+    action = serializers.ChoiceField(choices=['approve', 'reject'])
+    notes = serializers.CharField(required=False, allow_blank=True, default='')
+
+
+class CompanyAccessRequestChoicesSerializer(serializers.Serializer):
+    """Return dropdown choices for forms"""
+    roles = serializers.SerializerMethodField()
+    statuses = serializers.SerializerMethodField()
+
+    def get_roles(self, obj):
+        from .models import CompanyAccessRequest
+        return [{'value': k, 'label': v} for k, v in CompanyAccessRequest.ROLE_CHOICES]
+
+    def get_statuses(self, obj):
+        from .models import CompanyAccessRequest
+        return [{'value': k, 'label': v} for k, v in CompanyAccessRequest.REQUEST_STATUS]

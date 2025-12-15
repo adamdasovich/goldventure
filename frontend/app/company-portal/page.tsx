@@ -8,8 +8,8 @@ import { Badge } from '@/components/ui/Badge';
 import LogoMono from '@/components/LogoMono';
 import { LoginModal } from '@/components/auth/LoginModal';
 import { RegisterModal } from '@/components/auth/RegisterModal';
-import { subscriptionAPI, companyResourceAPI, speakingEventAPI } from '@/lib/api';
-import type { CompanySubscription, CompanyResource, SpeakingEvent } from '@/types/api';
+import { subscriptionAPI, companyResourceAPI, speakingEventAPI, accessRequestAPI, companyAPI } from '@/lib/api';
+import type { CompanySubscription, CompanyResource, SpeakingEvent, CompanyAccessRequest, Company, AccessRequestRole } from '@/types/api';
 import {
   Building2,
   CreditCard,
@@ -23,8 +23,21 @@ import {
   ArrowRight,
   Sparkles,
   Shield,
-  TrendingUp
+  TrendingUp,
+  Search,
+  Send,
+  XCircle
 } from 'lucide-react';
+
+// Role options for the request form
+const ROLE_OPTIONS: { value: AccessRequestRole; label: string }[] = [
+  { value: 'ir_manager', label: 'IR Manager' },
+  { value: 'ceo', label: 'CEO' },
+  { value: 'cfo', label: 'CFO' },
+  { value: 'marketing', label: 'Marketing' },
+  { value: 'communications', label: 'Communications' },
+  { value: 'other', label: 'Other' },
+];
 
 export default function CompanyPortalPage() {
   const { user, accessToken, isAuthenticated } = useAuth();
@@ -34,6 +47,21 @@ export default function CompanyPortalPage() {
   const [loading, setLoading] = useState(true);
   const [showLogin, setShowLogin] = useState(false);
   const [showRegister, setShowRegister] = useState(false);
+
+  // Company access request state
+  const [hasCompany, setHasCompany] = useState<boolean | null>(null);
+  const [pendingRequest, setPendingRequest] = useState<CompanyAccessRequest | null>(null);
+  const [companies, setCompanies] = useState<Company[]>([]);
+  const [companySearch, setCompanySearch] = useState('');
+  const [selectedCompany, setSelectedCompany] = useState<Company | null>(null);
+  const [requestForm, setRequestForm] = useState({
+    role: 'ir_manager' as AccessRequestRole,
+    job_title: '',
+    work_email: '',
+    justification: '',
+  });
+  const [submitting, setSubmitting] = useState(false);
+  const [requestError, setRequestError] = useState('');
 
   useEffect(() => {
     if (accessToken) {
@@ -48,21 +76,94 @@ export default function CompanyPortalPage() {
 
     try {
       setLoading(true);
-      const [subData, resourceData, eventData] = await Promise.all([
-        subscriptionAPI.getMySubscription(accessToken).catch(() => null),
-        companyResourceAPI.getMyResources(accessToken).catch(() => ({ results: [] })),
-        speakingEventAPI.getMyEvents(accessToken).catch(() => ({ results: [] })),
-      ]);
 
-      setSubscription(subData);
-      setResources(resourceData.results || []);
-      setEvents(eventData.results || []);
+      // First check if user has a company or pending request
+      const requestStatus = await accessRequestAPI.getMyRequest(accessToken).catch(() => null);
+
+      if (requestStatus && 'has_pending_request' in requestStatus) {
+        // User doesn't have a company
+        setHasCompany(requestStatus.has_company);
+        setPendingRequest(null);
+
+        // Load companies for the selection form
+        const companiesData = await companyAPI.getAll().catch(() => ({ results: [] }));
+        setCompanies(companiesData.results || []);
+      } else if (requestStatus && 'id' in requestStatus) {
+        // User has a pending request
+        setHasCompany(false);
+        setPendingRequest(requestStatus as CompanyAccessRequest);
+      } else {
+        // User has a company - load dashboard data
+        setHasCompany(true);
+        const [subData, resourceData, eventData] = await Promise.all([
+          subscriptionAPI.getMySubscription(accessToken).catch(() => null),
+          companyResourceAPI.getMyResources(accessToken).catch(() => ({ results: [] })),
+          speakingEventAPI.getMyEvents(accessToken).catch(() => ({ results: [] })),
+        ]);
+
+        setSubscription(subData);
+        setResources(resourceData.results || []);
+        setEvents(eventData.results || []);
+      }
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
+      // Assume user has company to show dashboard (will show empty state)
+      setHasCompany(true);
     } finally {
       setLoading(false);
     }
   };
+
+  const handleSubmitRequest = async () => {
+    if (!accessToken || !selectedCompany) return;
+
+    if (!requestForm.job_title || !requestForm.work_email || !requestForm.justification) {
+      setRequestError('Please fill in all required fields.');
+      return;
+    }
+
+    try {
+      setSubmitting(true);
+      setRequestError('');
+
+      const newRequest = await accessRequestAPI.create(accessToken, {
+        company: selectedCompany.id,
+        role: requestForm.role,
+        job_title: requestForm.job_title,
+        work_email: requestForm.work_email,
+        justification: requestForm.justification,
+      });
+
+      setPendingRequest(newRequest);
+      setSelectedCompany(null);
+    } catch (error: unknown) {
+      console.error('Error submitting request:', error);
+      setRequestError(error instanceof Error ? error.message : 'Failed to submit request. Please try again.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleCancelRequest = async () => {
+    if (!accessToken || !pendingRequest) return;
+
+    if (!confirm('Are you sure you want to cancel this request?')) return;
+
+    try {
+      await accessRequestAPI.cancel(accessToken, pendingRequest.id);
+      setPendingRequest(null);
+      setHasCompany(false);
+    } catch (error) {
+      console.error('Error canceling request:', error);
+      alert('Failed to cancel request. Please try again.');
+    }
+  };
+
+  const filteredCompanies = companies.filter(
+    (c) =>
+      c.name.toLowerCase().includes(companySearch.toLowerCase()) ||
+      c.ticker_symbol?.toLowerCase().includes(companySearch.toLowerCase())
+  );
 
   const handleStartTrial = async () => {
     if (!accessToken) {
@@ -297,7 +398,267 @@ export default function CompanyPortalPage() {
     );
   }
 
-  // Logged in - show dashboard
+  // User has a pending access request - show status
+  if (pendingRequest) {
+    return (
+      <div className="min-h-screen bg-slate-950">
+        {/* Navigation */}
+        <nav className="glass-nav sticky top-0 z-50 border-b border-gold-500/10">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="flex justify-between items-center h-16">
+              <a href="/" className="flex items-center space-x-3">
+                <LogoMono className="h-8 w-8 text-gold-400" />
+                <span className="text-xl font-bold text-gradient-gold">GoldVenture</span>
+              </a>
+              <div className="flex items-center gap-4">
+                <span className="text-slate-400 text-sm">Welcome, {user?.full_name || user?.username}</span>
+                <Button variant="ghost" onClick={() => window.location.href = '/dashboard'}>Dashboard</Button>
+              </div>
+            </div>
+          </div>
+        </nav>
+
+        <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
+          <Card variant="glass-card" className="border-gold-500/30">
+            <CardHeader className="text-center">
+              <div className="w-16 h-16 bg-gold-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Clock className="w-8 h-8 text-gold-400" />
+              </div>
+              <CardTitle className="text-2xl text-white">Access Request Pending</CardTitle>
+              <CardDescription className="text-slate-300 mt-2">
+                Your request to access the Company Portal is being reviewed.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="bg-slate-800/50 rounded-lg p-4 space-y-3">
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Company</span>
+                  <span className="text-white font-medium">{pendingRequest.company_name}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Role</span>
+                  <span className="text-white font-medium">{pendingRequest.role_display || pendingRequest.role}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Job Title</span>
+                  <span className="text-white font-medium">{pendingRequest.job_title}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Submitted</span>
+                  <span className="text-white font-medium">
+                    {new Date(pendingRequest.created_at).toLocaleDateString()}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Status</span>
+                  <Badge variant="copper" className="flex items-center gap-1">
+                    <Clock className="w-3 h-3" /> Pending Review
+                  </Badge>
+                </div>
+              </div>
+
+              <p className="text-slate-400 text-sm text-center">
+                An administrator will review your request and you&apos;ll be notified once it&apos;s approved.
+                This typically takes 1-2 business days.
+              </p>
+
+              <div className="flex justify-center">
+                <Button variant="secondary" onClick={handleCancelRequest}>
+                  <XCircle className="w-4 h-4 mr-2" /> Cancel Request
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
+  }
+
+  // User not associated with any company - show company selection form
+  if (hasCompany === false) {
+    return (
+      <div className="min-h-screen bg-slate-950">
+        {/* Navigation */}
+        <nav className="glass-nav sticky top-0 z-50 border-b border-gold-500/10">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="flex justify-between items-center h-16">
+              <a href="/" className="flex items-center space-x-3">
+                <LogoMono className="h-8 w-8 text-gold-400" />
+                <span className="text-xl font-bold text-gradient-gold">GoldVenture</span>
+              </a>
+              <div className="flex items-center gap-4">
+                <span className="text-slate-400 text-sm">Welcome, {user?.full_name || user?.username}</span>
+                <Button variant="ghost" onClick={() => window.location.href = '/dashboard'}>Dashboard</Button>
+              </div>
+            </div>
+          </div>
+        </nav>
+
+        <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
+          <div className="text-center mb-8">
+            <h1 className="text-3xl font-bold text-white mb-2">Company Portal Access</h1>
+            <p className="text-slate-400">
+              Select your company and request access to manage your company&apos;s profile.
+            </p>
+          </div>
+
+          {!selectedCompany ? (
+            // Company Selection Step
+            <Card variant="glass-card">
+              <CardHeader>
+                <CardTitle className="text-white flex items-center gap-2">
+                  <Building2 className="w-5 h-5 text-gold-400" />
+                  Select Your Company
+                </CardTitle>
+                <CardDescription>
+                  Search for your company to request access
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                  <input
+                    type="text"
+                    placeholder="Search by company name or ticker..."
+                    value={companySearch}
+                    onChange={(e) => setCompanySearch(e.target.value)}
+                    className="w-full pl-10 pr-4 py-3 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-400 focus:border-gold-500 focus:ring-1 focus:ring-gold-500 outline-none"
+                  />
+                </div>
+
+                <div className="max-h-80 overflow-y-auto space-y-2">
+                  {filteredCompanies.length === 0 ? (
+                    <p className="text-slate-400 text-center py-8">
+                      {companySearch ? 'No companies found matching your search' : 'No companies available'}
+                    </p>
+                  ) : (
+                    filteredCompanies.map((company) => (
+                      <button
+                        key={company.id}
+                        onClick={() => setSelectedCompany(company)}
+                        className="w-full flex items-center justify-between p-4 bg-slate-800/50 hover:bg-slate-800 rounded-lg border border-transparent hover:border-gold-500/30 transition-colors text-left"
+                      >
+                        <div>
+                          <p className="text-white font-medium">{company.name}</p>
+                          <p className="text-slate-400 text-sm">
+                            {company.ticker_symbol} • {company.exchange}
+                          </p>
+                        </div>
+                        <ArrowRight className="w-5 h-5 text-slate-500" />
+                      </button>
+                    ))
+                  )}
+                </div>
+
+                <p className="text-slate-500 text-sm text-center">
+                  Don&apos;t see your company? Contact support to have it added.
+                </p>
+              </CardContent>
+            </Card>
+          ) : (
+            // Request Form Step
+            <Card variant="glass-card">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-white flex items-center gap-2">
+                    <Send className="w-5 h-5 text-gold-400" />
+                    Request Access
+                  </CardTitle>
+                  <Button variant="ghost" size="sm" onClick={() => setSelectedCompany(null)}>
+                    Change Company
+                  </Button>
+                </div>
+                <CardDescription>
+                  Complete your request to manage <span className="text-gold-400 font-medium">{selectedCompany.name}</span>
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {requestError && (
+                  <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3 flex items-center gap-2 text-red-400">
+                    <AlertCircle className="w-5 h-5 flex-shrink-0" />
+                    {requestError}
+                  </div>
+                )}
+
+                <div>
+                  <label htmlFor="role-select" className="block text-sm font-medium text-slate-300 mb-1">Role *</label>
+                  <select
+                    id="role-select"
+                    value={requestForm.role}
+                    onChange={(e) => setRequestForm({ ...requestForm, role: e.target.value as AccessRequestRole })}
+                    className="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-lg text-white focus:border-gold-500 focus:ring-1 focus:ring-gold-500 outline-none"
+                  >
+                    {ROLE_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-300 mb-1">Job Title *</label>
+                  <input
+                    type="text"
+                    placeholder="e.g., Investor Relations Manager"
+                    value={requestForm.job_title}
+                    onChange={(e) => setRequestForm({ ...requestForm, job_title: e.target.value })}
+                    className="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-400 focus:border-gold-500 focus:ring-1 focus:ring-gold-500 outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-300 mb-1">Work Email *</label>
+                  <input
+                    type="email"
+                    placeholder="you@company.com"
+                    value={requestForm.work_email}
+                    onChange={(e) => setRequestForm({ ...requestForm, work_email: e.target.value })}
+                    className="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-400 focus:border-gold-500 focus:ring-1 focus:ring-gold-500 outline-none"
+                  />
+                  <p className="text-slate-500 text-sm mt-1">Please use your official company email address</p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-300 mb-1">
+                    Why do you need access? *
+                  </label>
+                  <textarea
+                    placeholder="Explain your role and why you need access to manage this company's profile..."
+                    value={requestForm.justification}
+                    onChange={(e) => setRequestForm({ ...requestForm, justification: e.target.value })}
+                    rows={4}
+                    className="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-400 focus:border-gold-500 focus:ring-1 focus:ring-gold-500 outline-none resize-none"
+                  />
+                </div>
+
+                <Button
+                  variant="primary"
+                  className="w-full"
+                  size="lg"
+                  onClick={handleSubmitRequest}
+                  disabled={submitting}
+                >
+                  {submitting ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-white mr-2"></div>
+                      Submitting...
+                    </>
+                  ) : (
+                    <>
+                      <Send className="w-4 h-4 mr-2" /> Submit Request
+                    </>
+                  )}
+                </Button>
+              </CardContent>
+            </Card>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // Logged in with company - show dashboard
   return (
     <div className="min-h-screen bg-slate-950">
       {/* Navigation */}

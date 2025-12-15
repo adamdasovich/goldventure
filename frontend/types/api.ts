@@ -230,3 +230,49 @@ export interface CheckoutSessionResponse {
 export interface BillingPortalResponse {
   portal_url: string;
 }
+
+// Company Access Request Types
+export type AccessRequestStatus = 'pending' | 'approved' | 'rejected' | 'cancelled';
+export type AccessRequestRole = 'ir_manager' | 'ceo' | 'cfo' | 'marketing' | 'communications' | 'other';
+
+export interface CompanyAccessRequest {
+  id: number;
+  user: number;
+  user_name?: string;
+  user_email?: string;
+  company: number;
+  company_name?: string;
+  company_ticker?: string;
+  status: AccessRequestStatus;
+  status_display?: string;
+  role: AccessRequestRole;
+  role_display?: string;
+  job_title: string;
+  justification: string;
+  work_email: string;
+  reviewer?: number;
+  reviewer_name?: string;
+  review_notes?: string;
+  reviewed_at?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CompanyAccessRequestCreate {
+  company: number;
+  role: AccessRequestRole;
+  job_title: string;
+  justification: string;
+  work_email: string;
+}
+
+export interface MyRequestResponse {
+  has_pending_request: boolean;
+  has_company: boolean;
+  company_name?: string;
+}
+
+export interface AccessRequestChoices {
+  roles: { value: string; label: string }[];
+  statuses: { value: string; label: string }[];
+}

@@ -19,7 +19,8 @@ from .models import (
     # News models
     NewsSource, NewsArticle, NewsScrapeJob,
     # Company Portal models
-    CompanyResource, SpeakingEvent, CompanySubscription, SubscriptionInvoice
+    CompanyResource, SpeakingEvent, CompanySubscription, SubscriptionInvoice,
+    CompanyAccessRequest
 )
 from .serializers import (
     CompanySerializer, CompanyDetailSerializer,
@@ -41,7 +42,10 @@ from .serializers import (
     CompanyResourceSerializer, CompanyResourceCreateSerializer, CompanyResourceChoicesSerializer,
     SpeakingEventSerializer, SpeakingEventCreateSerializer, SpeakingEventListSerializer,
     SpeakingEventChoicesSerializer, CompanySubscriptionSerializer, CompanySubscriptionStatusSerializer,
-    SubscriptionInvoiceSerializer
+    SubscriptionInvoiceSerializer,
+    # Company Access Request serializers
+    CompanyAccessRequestSerializer, CompanyAccessRequestCreateSerializer,
+    CompanyAccessRequestReviewSerializer, CompanyAccessRequestChoicesSerializer
 )
 from claude_integration.client import ClaudeClient
 from claude_integration.client_optimized import OptimizedClaudeClient
@@ -3275,6 +3279,131 @@ class CompanySubscriptionViewSet(viewsets.ModelViewSet):
                 'is_active': False,
                 'can_access_premium': False
             })
+
+
+class CompanyAccessRequestViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for Company Access Requests
+
+    Endpoints:
+    - GET /api/company-portal/access-requests/ - List requests (own for users, all for admins)
+    - POST /api/company-portal/access-requests/ - Create new request
+    - GET /api/company-portal/access-requests/{id}/ - Get request details
+    - DELETE /api/company-portal/access-requests/{id}/ - Cancel a pending request
+    - GET /api/company-portal/access-requests/my_request/ - Get current user's pending request
+    - GET /api/company-portal/access-requests/choices/ - Get dropdown choices
+    - POST /api/company-portal/access-requests/{id}/review/ - Admin: approve/reject request
+    - GET /api/company-portal/access-requests/pending/ - Admin: list all pending requests
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get_serializer_class(self):
+        if self.action == 'create':
+            return CompanyAccessRequestCreateSerializer
+        if self.action == 'review':
+            return CompanyAccessRequestReviewSerializer
+        if self.action == 'choices':
+            return CompanyAccessRequestChoicesSerializer
+        return CompanyAccessRequestSerializer
+
+    def get_queryset(self):
+        user = self.request.user
+
+        # Staff can see all requests
+        if user.is_staff:
+            return CompanyAccessRequest.objects.all().select_related(
+                'user', 'company', 'reviewer'
+            )
+
+        # Regular users can only see their own requests
+        return CompanyAccessRequest.objects.filter(user=user).select_related(
+            'user', 'company', 'reviewer'
+        )
+
+    def perform_destroy(self, instance):
+        """Users can only cancel their own pending requests"""
+        if instance.user != self.request.user:
+            raise PermissionError("You can only cancel your own requests")
+        if instance.status != 'pending':
+            raise PermissionError("You can only cancel pending requests")
+
+        instance.status = 'cancelled'
+        instance.save()
+
+    @action(detail=False, methods=['get'])
+    def my_request(self, request):
+        """Get current user's pending request if any"""
+        pending_request = CompanyAccessRequest.objects.filter(
+            user=request.user,
+            status='pending'
+        ).select_related('company').first()
+
+        if pending_request:
+            serializer = CompanyAccessRequestSerializer(pending_request)
+            return Response(serializer.data)
+
+        return Response({
+            'has_pending_request': False,
+            'has_company': request.user.company is not None,
+            'company_name': request.user.company.name if request.user.company else None
+        })
+
+    @action(detail=False, methods=['get'])
+    def choices(self, request):
+        """Get dropdown choices for request forms"""
+        serializer = CompanyAccessRequestChoicesSerializer({})
+        return Response(serializer.data)
+
+    @action(detail=False, methods=['get'])
+    def pending(self, request):
+        """Admin: List all pending requests"""
+        if not request.user.is_staff:
+            return Response(
+                {'error': 'Admin access required'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        pending = CompanyAccessRequest.objects.filter(
+            status='pending'
+        ).select_related('user', 'company').order_by('-created_at')
+
+        serializer = CompanyAccessRequestSerializer(pending, many=True)
+        return Response({'results': serializer.data, 'count': len(serializer.data)})
+
+    @action(detail=True, methods=['post'])
+    def review(self, request, pk=None):
+        """Admin: Approve or reject a request"""
+        if not request.user.is_staff:
+            return Response(
+                {'error': 'Admin access required'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        access_request = self.get_object()
+
+        if access_request.status != 'pending':
+            return Response(
+                {'error': 'Only pending requests can be reviewed'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        serializer = CompanyAccessRequestReviewSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        action = serializer.validated_data['action']
+        notes = serializer.validated_data.get('notes', '')
+
+        if action == 'approve':
+            access_request.approve(reviewer=request.user, notes=notes)
+            message = f"Request approved. {access_request.user.username} is now associated with {access_request.company.name}."
+        else:
+            access_request.reject(reviewer=request.user, notes=notes)
+            message = "Request rejected."
+
+        return Response({
+            'message': message,
+            'request': CompanyAccessRequestSerializer(access_request).data
+        })
 
 
 # ============================================================================

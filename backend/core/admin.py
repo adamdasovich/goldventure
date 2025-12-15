@@ -13,7 +13,10 @@ from .models import (
     # Financial Hub models
     EducationalModule, ModuleCompletion, AccreditedInvestorQualification,
     SubscriptionAgreement, InvestmentTransaction, FinancingAggregate,
-    PaymentInstruction, DRSDocument
+    PaymentInstruction, DRSDocument,
+    # Company Portal models
+    CompanyResource, SpeakingEvent, CompanySubscription, SubscriptionInvoice,
+    CompanyAccessRequest
 )
 
 
@@ -547,3 +550,104 @@ class DRSDocumentAdmin(admin.ModelAdmin):
             'fields': ('created_at', 'updated_at')
         }),
     )
+
+
+# ============================================================================
+# COMPANY PORTAL ADMIN
+# ============================================================================
+
+@admin.register(CompanyResource)
+class CompanyResourceAdmin(admin.ModelAdmin):
+    """Admin interface for company resources"""
+    list_display = ['title', 'company', 'resource_type', 'category', 'is_public', 'uploaded_at']
+    list_filter = ['resource_type', 'category', 'is_public', 'company']
+    search_fields = ['title', 'description', 'company__name']
+    readonly_fields = ['uploaded_at', 'uploaded_by']
+
+
+@admin.register(SpeakingEvent)
+class SpeakingEventAdmin(admin.ModelAdmin):
+    """Admin interface for speaking events"""
+    list_display = ['title', 'company', 'event_type', 'start_datetime', 'status', 'is_featured']
+    list_filter = ['event_type', 'status', 'is_featured', 'company']
+    search_fields = ['title', 'description', 'company__name', 'location']
+    readonly_fields = ['created_at', 'updated_at', 'created_by']
+
+
+@admin.register(CompanySubscription)
+class CompanySubscriptionAdmin(admin.ModelAdmin):
+    """Admin interface for company subscriptions"""
+    list_display = ['company', 'status', 'is_active', 'trial_end', 'current_period_end', 'cancel_at_period_end']
+    list_filter = ['status', 'cancel_at_period_end']
+    search_fields = ['company__name', 'stripe_customer_id', 'stripe_subscription_id']
+    readonly_fields = ['created_at', 'updated_at']
+
+
+@admin.register(SubscriptionInvoice)
+class SubscriptionInvoiceAdmin(admin.ModelAdmin):
+    """Admin interface for subscription invoices"""
+    list_display = ['subscription', 'status', 'amount_cents', 'invoice_date', 'paid_at']
+    list_filter = ['status', 'invoice_date']
+    search_fields = ['stripe_invoice_id', 'subscription__company__name']
+    readonly_fields = ['created_at']
+
+
+@admin.register(CompanyAccessRequest)
+class CompanyAccessRequestAdmin(admin.ModelAdmin):
+    """Admin interface for company access requests with approval workflow"""
+    list_display = [
+        'user', 'company', 'status_badge', 'role', 'job_title',
+        'work_email', 'created_at', 'reviewer'
+    ]
+    list_filter = ['status', 'role', 'company', 'created_at']
+    search_fields = ['user__username', 'user__email', 'company__name', 'job_title', 'work_email']
+    readonly_fields = ['user', 'created_at', 'updated_at', 'reviewed_at']
+    actions = ['approve_requests', 'reject_requests']
+
+    fieldsets = (
+        ('Request Details', {
+            'fields': ('user', 'company', 'status', 'role', 'job_title')
+        }),
+        ('Justification', {
+            'fields': ('work_email', 'justification')
+        }),
+        ('Review', {
+            'fields': ('reviewer', 'review_notes', 'reviewed_at')
+        }),
+        ('Audit', {
+            'fields': ('created_at', 'updated_at')
+        }),
+    )
+
+    def status_badge(self, obj):
+        colors = {
+            'pending': '#f59e0b',    # amber
+            'approved': '#10b981',   # green
+            'rejected': '#ef4444',   # red
+            'cancelled': '#6b7280',  # gray
+        }
+        color = colors.get(obj.status, '#6b7280')
+        return format_html(
+            '<span style="background-color:{}; color:white; padding:3px 10px; border-radius:3px;">{}</span>',
+            color, obj.get_status_display()
+        )
+    status_badge.short_description = 'Status'
+
+    @admin.action(description='Approve selected requests')
+    def approve_requests(self, request, queryset):
+        pending = queryset.filter(status='pending')
+        count = 0
+        for access_request in pending:
+            access_request.approve(reviewer=request.user, notes='Bulk approved via admin')
+            count += 1
+        self.message_user(request, f'{count} request(s) approved.')
+
+    @admin.action(description='Reject selected requests')
+    def reject_requests(self, request, queryset):
+        pending = queryset.filter(status='pending')
+        count = pending.update(
+            status='rejected',
+            reviewer=request.user,
+            review_notes='Bulk rejected via admin'
+        )
+        self.message_user(request, f'{count} request(s) rejected.')

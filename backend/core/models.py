@@ -2745,3 +2745,110 @@ class SubscriptionInvoice(models.Model):
 
     def __str__(self):
         return f"{self.subscription.company.name} - ${self.amount_cents/100:.2f} ({self.status})"
+
+
+class CompanyAccessRequest(models.Model):
+    """
+    Track requests from users to be associated with a company.
+    Used for Company Portal onboarding.
+    """
+
+    REQUEST_STATUS = [
+        ('pending', 'Pending Review'),
+        ('approved', 'Approved'),
+        ('rejected', 'Rejected'),
+        ('cancelled', 'Cancelled'),
+    ]
+
+    ROLE_CHOICES = [
+        ('ir_manager', 'IR Manager'),
+        ('ceo', 'CEO'),
+        ('cfo', 'CFO'),
+        ('marketing', 'Marketing'),
+        ('communications', 'Communications'),
+        ('other', 'Other'),
+    ]
+
+    # The user requesting access
+    user = models.ForeignKey(
+        'User',
+        on_delete=models.CASCADE,
+        related_name='company_access_requests'
+    )
+
+    # The company they want to be associated with
+    company = models.ForeignKey(
+        'Company',
+        on_delete=models.CASCADE,
+        related_name='access_requests'
+    )
+
+    # Request details
+    status = models.CharField(max_length=20, choices=REQUEST_STATUS, default='pending')
+    role = models.CharField(max_length=50, choices=ROLE_CHOICES, default='other')
+    job_title = models.CharField(max_length=200)
+    justification = models.TextField(
+        help_text="Why the user should be granted access to this company"
+    )
+    work_email = models.EmailField(
+        help_text="Work email for verification (should match company domain)"
+    )
+
+    # Admin response
+    reviewer = models.ForeignKey(
+        'User',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='reviewed_access_requests'
+    )
+    review_notes = models.TextField(blank=True)
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+
+    # Audit
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'company_access_requests'
+        ordering = ['-created_at']
+        # Prevent duplicate pending requests
+        constraints = [
+            models.UniqueConstraint(
+                fields=['user', 'company'],
+                condition=models.Q(status='pending'),
+                name='unique_pending_request_per_user_company'
+            )
+        ]
+        indexes = [
+            models.Index(fields=['status', '-created_at']),
+            models.Index(fields=['company', 'status']),
+        ]
+
+    def __str__(self):
+        return f"{self.user.username} -> {self.company.name} ({self.status})"
+
+    def approve(self, reviewer, notes=''):
+        """Approve the request and associate user with company"""
+        from django.utils import timezone
+
+        self.status = 'approved'
+        self.reviewer = reviewer
+        self.review_notes = notes
+        self.reviewed_at = timezone.now()
+        self.save()
+
+        # Associate user with company
+        self.user.company = self.company
+        self.user.user_type = 'company'
+        self.user.save()
+
+    def reject(self, reviewer, notes=''):
+        """Reject the request"""
+        from django.utils import timezone
+
+        self.status = 'rejected'
+        self.reviewer = reviewer
+        self.review_notes = notes
+        self.reviewed_at = timezone.now()
+        self.save()

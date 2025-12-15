@@ -340,6 +340,63 @@ export const subscriptionAPI = {
     }),
 };
 
+// Company Portal - Access Request API
+import type {
+  CompanyAccessRequest,
+  CompanyAccessRequestCreate,
+  MyRequestResponse,
+  AccessRequestChoices
+} from '@/types/api';
+
+export const accessRequestAPI = {
+  // Get current user's pending request or status
+  getMyRequest: (accessToken: string) =>
+    apiFetch<CompanyAccessRequest | MyRequestResponse>(`/company-portal/access-requests/my_request/`, {
+      headers: { 'Authorization': `Bearer ${accessToken}` }
+    }),
+
+  // Get all user's requests
+  getAll: (accessToken: string) =>
+    apiFetch<{ results: CompanyAccessRequest[] }>(`/company-portal/access-requests/`, {
+      headers: { 'Authorization': `Bearer ${accessToken}` }
+    }),
+
+  // Create a new access request
+  create: (accessToken: string, data: CompanyAccessRequestCreate) =>
+    apiFetch<CompanyAccessRequest>(`/company-portal/access-requests/`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${accessToken}` },
+      body: JSON.stringify(data),
+    }),
+
+  // Cancel a pending request
+  cancel: (accessToken: string, requestId: number) =>
+    apiFetch<void>(`/company-portal/access-requests/${requestId}/`, {
+      method: 'DELETE',
+      headers: { 'Authorization': `Bearer ${accessToken}` }
+    }),
+
+  // Get dropdown choices
+  getChoices: (accessToken: string) =>
+    apiFetch<AccessRequestChoices>(`/company-portal/access-requests/choices/`, {
+      headers: { 'Authorization': `Bearer ${accessToken}` }
+    }),
+
+  // Admin: Get all pending requests
+  getPending: (accessToken: string) =>
+    apiFetch<{ results: CompanyAccessRequest[]; count: number }>(`/company-portal/access-requests/pending/`, {
+      headers: { 'Authorization': `Bearer ${accessToken}` }
+    }),
+
+  // Admin: Review (approve/reject) a request
+  review: (accessToken: string, requestId: number, action: 'approve' | 'reject', notes?: string) =>
+    apiFetch<{ message: string; request: CompanyAccessRequest }>(`/company-portal/access-requests/${requestId}/review/`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${accessToken}` },
+      body: JSON.stringify({ action, notes: notes || '' }),
+    }),
+};
+
 // Re-export types for convenience
 export type {
   Company,
@@ -354,5 +411,9 @@ export type {
   CompanySubscription,
   SubscriptionInvoice,
   CheckoutSessionResponse,
-  BillingPortalResponse
+  BillingPortalResponse,
+  CompanyAccessRequest,
+  CompanyAccessRequestCreate,
+  MyRequestResponse,
+  AccessRequestChoices
 } from '@/types/api';
