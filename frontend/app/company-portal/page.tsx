@@ -6,8 +6,8 @@ import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/com
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import LogoMono from '@/components/LogoMono';
-import LoginModal from '@/components/auth/LoginModal';
-import RegisterModal from '@/components/auth/RegisterModal';
+import { LoginModal } from '@/components/auth/LoginModal';
+import { RegisterModal } from '@/components/auth/RegisterModal';
 import { subscriptionAPI, companyResourceAPI, speakingEventAPI } from '@/lib/api';
 import type { CompanySubscription, CompanyResource, SpeakingEvent } from '@/types/api';
 import {

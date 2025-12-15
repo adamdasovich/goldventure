@@ -6,7 +6,7 @@ import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/com
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import LogoMono from '@/components/LogoMono';
-import LoginModal from '@/components/auth/LoginModal';
+import { LoginModal } from '@/components/auth/LoginModal';
 import { companyResourceAPI } from '@/lib/api';
 import type { CompanyResource } from '@/types/api';
 import {
