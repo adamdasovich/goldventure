@@ -2559,7 +2559,7 @@ def news_articles_list(request):
     from django.db.models import Q
     queryset = NewsArticle.objects.filter(
         Q(is_visible=True) & (Q(published_at__gte=cutoff_date) | Q(published_at__isnull=True))
-    ).select_related('source').order_by('-created_at')
+    ).select_related('source').order_by('-scraped_at')
 
     if source_id:
         queryset = queryset.filter(source_id=source_id)
