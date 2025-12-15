@@ -115,7 +115,13 @@ export default function CompanyFinancingPage() {
 
   const fetchFinancingAggregate = async (financingId: number) => {
     try {
-      const res = await fetch(`${API_URL}/investments/aggregates/?financing=${financingId}`);
+      const headers: Record<string, string> = {};
+      if (accessToken) {
+        headers['Authorization'] = `Bearer ${accessToken}`;
+      }
+      const res = await fetch(`${API_URL}/investments/aggregates/?financing=${financingId}`, {
+        headers,
+      });
       if (res.ok) {
         const data = await res.json();
         const aggregates = data.results || data;
@@ -343,7 +349,7 @@ export default function CompanyFinancingPage() {
                           <div className="bg-slate-800/50 rounded-lg p-4">
                             <p className="text-sm text-slate-400 mb-1">Price per Share</p>
                             <p className="text-xl font-bold text-white">
-                              ${selectedFinancing.price_per_share.toFixed(3)}
+                              ${Number(selectedFinancing.price_per_share).toFixed(3)}
                             </p>
                           </div>
                         )}
@@ -378,7 +384,7 @@ export default function CompanyFinancingPage() {
                             {selectedFinancing.warrant_strike_price && (
                               <div>
                                 <span className="text-slate-400">Strike Price:</span>
-                                <span className="text-white ml-2">${selectedFinancing.warrant_strike_price.toFixed(3)}</span>
+                                <span className="text-white ml-2">${Number(selectedFinancing.warrant_strike_price).toFixed(3)}</span>
                               </div>
                             )}
                             {selectedFinancing.warrant_expiry_date && (
