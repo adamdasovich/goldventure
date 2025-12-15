@@ -265,6 +265,7 @@ class MiningNewsScraper:
             article['published_at'] = None
 
         # Extract summary/excerpt
+        summary_text = ''
         for selector in config['summary_selectors']:
             summary_elem = container.select_one(selector)
             if summary_elem:
@@ -277,6 +278,23 @@ class MiningNewsScraper:
         if 'summary' not in article:
             article['summary'] = ''
 
+        # If no date found yet, try to extract from summary text or container text
+        if not article.get('published_at'):
+            # First try the summary text
+            if summary_text:
+                parsed_date = self._parse_date(summary_text)
+                if parsed_date:
+                    article['published_at'] = parsed_date
+                    # Remove the date from summary if it's at the start
+                    article['summary'] = self._clean_date_from_summary(summary_text)
+
+            # If still no date, try the entire container text
+            if not article.get('published_at'):
+                container_text = container.get_text(strip=True)
+                parsed_date = self._parse_date(container_text)
+                if parsed_date:
+                    article['published_at'] = parsed_date
+
         # Extract image URL if available
         img_elem = container.find('img')
         if img_elem and img_elem.get('src'):
@@ -285,6 +303,31 @@ class MiningNewsScraper:
             article['image_url'] = ''
 
         return article
+
+    def _clean_date_from_summary(self, summary: str) -> str:
+        """Remove date patterns from the beginning of summary text"""
+        if not summary:
+            return ''
+
+        # Pattern for "Month Day, Year" at start
+        cleaned = re.sub(
+            r'^(January|February|March|April|May|June|July|August|September|October|November|December|'
+            r'Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[.\s]+\d{1,2}[,\s]+\d{4}\s*',
+            '',
+            summary,
+            flags=re.IGNORECASE
+        )
+
+        # Pattern for "Day Month Year" at start
+        cleaned = re.sub(
+            r'^\d{1,2}[.\s]+(January|February|March|April|May|June|July|August|September|October|November|December|'
+            r'Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[.\s]+\d{4}\s*',
+            '',
+            cleaned,
+            flags=re.IGNORECASE
+        )
+
+        return cleaned.strip()[:500]
 
     def _parse_date(self, date_str: str) -> Optional[str]:
         """Parse various date formats and return ISO format"""
