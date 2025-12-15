@@ -1,7 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import ChatInterface from '@/components/ChatInterface';
+import NewsArticles from '@/components/NewsArticles';
 import { Card, CardHeader, CardTitle, CardDescription } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
@@ -14,6 +15,11 @@ export default function Home() {
   const [showLogin, setShowLogin] = useState(false);
   const [showRegister, setShowRegister] = useState(false);
   const { user, logout } = useAuth();
+  const newsSectionRef = useRef<HTMLElement>(null);
+
+  const scrollToNews = () => {
+    newsSectionRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
 
   return (
     <div className="min-h-screen">
@@ -110,6 +116,9 @@ export default function Home() {
             <Button variant="primary" size="lg" onClick={() => window.location.href = '/properties'}>
               Prospector's Exchange
             </Button>
+            <Button variant="secondary" size="lg" onClick={scrollToNews}>
+              Latest News Articles
+            </Button>
           </div>
         </div>
       </section>
@@ -126,6 +135,22 @@ export default function Home() {
           </div>
 
           <ChatInterface />
+        </div>
+      </section>
+
+      {/* News Articles Section */}
+      <section ref={newsSectionRef} id="news-section" className="py-16 px-4 sm:px-6 lg:px-8">
+        <div className="max-w-4xl mx-auto">
+          <div className="text-center mb-8">
+            <h3 className="text-4xl font-bold text-gold-400 mb-4">Latest Mining News</h3>
+            <p className="text-slate-300 text-lg max-w-2xl mx-auto">
+              Stay informed with the latest news and developments from the mining industry.
+            </p>
+          </div>
+
+          <div className="backdrop-blur-sm bg-slate-800/30 border border-slate-700/50 rounded-xl p-6">
+            <NewsArticles initialLimit={10} showLoadMore={true} />
+          </div>
         </div>
       </section>
 

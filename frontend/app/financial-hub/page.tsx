@@ -3,14 +3,15 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  BookOpen,
+  Briefcase,
   Award,
   FileText,
   TrendingUp,
   Shield,
   CheckCircle,
   Clock,
-  ArrowRight
+  ArrowRight,
+  ClipboardList
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
@@ -58,12 +59,12 @@ export default function FinancialHub() {
 
   const modules = [
     {
-      id: 'education',
-      title: 'Educational Hub',
-      description: 'Learn about mining company financing, Canadian regulations, and investor rights',
-      icon: BookOpen,
+      id: 'private-placements',
+      title: 'Private Placements',
+      description: 'Learn how private placements work, their benefits for junior mining companies, and how to participate',
+      icon: Briefcase,
       color: 'bg-blue-500',
-      href: '/financial-hub/education',
+      href: '/financial-hub/private-placements-guide',
       status: 'available'
     },
     {
@@ -101,6 +102,15 @@ export default function FinancialHub() {
       icon: Shield,
       color: 'bg-indigo-500',
       href: '/financial-hub/drs',
+      status: 'available'
+    },
+    {
+      id: 'subscription-guide',
+      title: 'Subscription Agreements Guide',
+      description: 'Learn what subscription agreements are, how they work, and what to expect when investing',
+      icon: ClipboardList,
+      color: 'bg-teal-500',
+      href: '/financial-hub/subscription-agreements-guide',
       status: 'available'
     }
   ];

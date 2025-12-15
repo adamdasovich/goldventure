@@ -2350,3 +2350,126 @@ class FeaturedPropertyConfig(models.Model):
             config.save()
 
         return config
+
+
+# ============================================================================
+# NEWS ARTICLES MODELS
+# ============================================================================
+
+class NewsSource(models.Model):
+    """Configuration for news scraping sources"""
+    name = models.CharField(max_length=200, help_text="Display name for the source")
+    url = models.URLField(unique=True, help_text="Base URL of the news source")
+    is_active = models.BooleanField(default=True, help_text="Whether to include in scraping")
+
+    # Scraping configuration
+    scrape_selector = models.CharField(
+        max_length=500,
+        blank=True,
+        help_text="CSS selector for article links (optional, for advanced configuration)"
+    )
+
+    # Tracking
+    last_scraped_at = models.DateTimeField(null=True, blank=True)
+    last_scrape_status = models.CharField(max_length=50, blank=True)
+    articles_found_last_scrape = models.IntegerField(default=0)
+
+    # Meta
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='created_news_sources'
+    )
+
+    class Meta:
+        db_table = 'news_sources'
+        ordering = ['name']
+
+    def __str__(self):
+        return f"{self.name} ({'Active' if self.is_active else 'Inactive'})"
+
+
+class NewsArticle(models.Model):
+    """Scraped news articles from mining news sources"""
+    title = models.CharField(max_length=500)
+    url = models.URLField(unique=True, help_text="URL to the full article")
+    source = models.ForeignKey(
+        NewsSource,
+        on_delete=models.CASCADE,
+        related_name='articles'
+    )
+
+    # Article metadata
+    published_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Publication date from the source"
+    )
+    author = models.CharField(max_length=200, blank=True)
+    summary = models.TextField(blank=True, help_text="Article excerpt or summary if available")
+    image_url = models.URLField(blank=True, help_text="Featured image URL if available")
+
+    # Categorization (optional)
+    tags = models.JSONField(default=list, blank=True, help_text="Tags or categories from source")
+
+    # Tracking
+    scraped_at = models.DateTimeField(auto_now_add=True)
+    is_visible = models.BooleanField(default=True, help_text="Whether to show in the feed")
+
+    class Meta:
+        db_table = 'news_articles'
+        ordering = ['-published_at', '-scraped_at']
+        indexes = [
+            models.Index(fields=['-published_at']),
+            models.Index(fields=['source', '-published_at']),
+            models.Index(fields=['is_visible', '-published_at']),
+        ]
+
+    def __str__(self):
+        return self.title[:100]
+
+    @property
+    def source_name(self):
+        return self.source.name if self.source else "Unknown"
+
+
+class NewsScrapeJob(models.Model):
+    """Track scraping job execution"""
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('running', 'Running'),
+        ('completed', 'Completed'),
+        ('failed', 'Failed'),
+    ]
+
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    triggered_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        help_text="User who triggered manual scrape, null for scheduled"
+    )
+    is_scheduled = models.BooleanField(default=False, help_text="Whether this was a scheduled job")
+
+    # Results
+    sources_processed = models.IntegerField(default=0)
+    articles_found = models.IntegerField(default=0)
+    articles_new = models.IntegerField(default=0)
+    errors = models.JSONField(default=list, blank=True)
+
+    # Timing
+    created_at = models.DateTimeField(auto_now_add=True)
+    started_at = models.DateTimeField(null=True, blank=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = 'news_scrape_jobs'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"Scrape Job {self.id} - {self.status}"

@@ -55,6 +55,16 @@ urlpatterns = [
     path('hero-section/set-featured/', views.set_featured_property, name='set_featured_property'),
     path('hero-section/reset-featured/', views.reset_featured_property, name='reset_featured_property'),
 
+    # News Articles endpoints
+    path('news/articles/', views.news_articles_list, name='news_articles_list'),
+    path('news/sources/', views.news_sources_list, name='news_sources_list'),
+    path('news/sources/admin/', views.news_sources_admin, name='news_sources_admin'),
+    path('news/sources/admin/<int:source_id>/', views.news_sources_admin, name='news_sources_admin_detail'),
+    path('news/sources/admin/<int:source_id>/update/', views.news_source_update, name='news_source_update'),
+    path('news/scrape/', views.news_scrape_trigger, name='news_scrape_trigger'),
+    path('news/scrape/status/', views.news_scrape_status, name='news_scrape_status'),
+    path('news/scrape/status/<int:job_id>/', views.news_scrape_status, name='news_scrape_status_detail'),
+
     # ViewSet routes
     path('', include(router.urls)),
 ]

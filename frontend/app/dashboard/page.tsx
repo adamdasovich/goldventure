@@ -33,6 +33,16 @@ interface RecentInquiry {
   is_received: boolean;
 }
 
+interface NewsScrapeJob {
+  id: number;
+  status: string;
+  is_scheduled: boolean;
+  triggered_by: string;
+  articles_new: number;
+  created_at: string;
+  completed_at: string | null;
+}
+
 export default function DashboardPage() {
   const router = useRouter();
   const { user, logout, accessToken, isLoading: authLoading } = useAuth();
@@ -50,6 +60,11 @@ export default function DashboardPage() {
   const [recentListings, setRecentListings] = useState<PropertyListingListItem[]>([]);
   const [recentInquiries, setRecentInquiries] = useState<RecentInquiry[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // News scraping state
+  const [scrapeJob, setScrapeJob] = useState<NewsScrapeJob | null>(null);
+  const [scrapeLoading, setScrapeLoading] = useState(false);
+  const [scrapeError, setScrapeError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchDashboardData = async () => {
@@ -130,6 +145,79 @@ export default function DashboardPage() {
       currency: currency || 'CAD',
       maximumFractionDigits: 0,
     }).format(price);
+  };
+
+  // Trigger news scrape
+  const triggerNewsScrape = async () => {
+    if (!accessToken) return;
+
+    setScrapeLoading(true);
+    setScrapeError(null);
+    setScrapeJob(null);
+
+    try {
+      const response = await fetch(`${API_URL}/api/news/scrape/`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to trigger scrape');
+      }
+
+      const data = await response.json();
+      setScrapeJob(data);
+
+      // Poll for status if job is running
+      if (data.status === 'running' || data.status === 'pending') {
+        pollScrapeStatus(data.id);
+      }
+    } catch (err: any) {
+      setScrapeError(err.message || 'Failed to trigger news scrape');
+    } finally {
+      setScrapeLoading(false);
+    }
+  };
+
+  // Poll scrape job status
+  const pollScrapeStatus = async (jobId: number) => {
+    const maxPolls = 60; // Max 5 minutes (60 * 5 seconds)
+    let polls = 0;
+
+    const poll = async () => {
+      if (polls >= maxPolls) {
+        setScrapeError('Scrape job timed out. Check server logs.');
+        return;
+      }
+
+      try {
+        const response = await fetch(`${API_URL}/api/news/scrape/status/${jobId}/`, {
+          headers: { 'Authorization': `Bearer ${accessToken}` },
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          setScrapeJob(data);
+
+          if (data.status === 'completed' || data.status === 'failed') {
+            return; // Done polling
+          }
+        }
+
+        polls++;
+        setTimeout(poll, 5000); // Poll every 5 seconds
+      } catch (err) {
+        console.error('Error polling scrape status:', err);
+        polls++;
+        setTimeout(poll, 5000);
+      }
+    };
+
+    poll();
   };
 
   // Not logged in state
@@ -390,11 +478,68 @@ export default function DashboardPage() {
                   </svg>
                   Admin Actions
                 </h2>
-                <div className="flex flex-wrap gap-3">
+                <div className="flex flex-wrap gap-3 mb-4">
                   <Button variant="secondary" onClick={() => router.push('/properties/review')}>
                     Review Pending Listings
                   </Button>
+                  <Button
+                    variant="primary"
+                    onClick={triggerNewsScrape}
+                    disabled={scrapeLoading || scrapeJob?.status === 'running'}
+                  >
+                    {scrapeLoading || scrapeJob?.status === 'running' ? (
+                      <>
+                        <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white inline" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        Scraping News...
+                      </>
+                    ) : (
+                      <>
+                        <svg className="w-4 h-4 mr-2 inline" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z" />
+                        </svg>
+                        Scrape News Now
+                      </>
+                    )}
+                  </Button>
                 </div>
+
+                {/* Scrape Status Display */}
+                {scrapeError && (
+                  <div className="p-3 rounded-lg bg-red-500/20 border border-red-500/50 text-red-300 text-sm mb-3">
+                    <strong>Error:</strong> {scrapeError}
+                  </div>
+                )}
+
+                {scrapeJob && (
+                  <div className={`p-3 rounded-lg border text-sm ${
+                    scrapeJob.status === 'completed' ? 'bg-green-500/20 border-green-500/50 text-green-300' :
+                    scrapeJob.status === 'failed' ? 'bg-red-500/20 border-red-500/50 text-red-300' :
+                    'bg-blue-500/20 border-blue-500/50 text-blue-300'
+                  }`}>
+                    <div className="flex items-center gap-2 mb-2">
+                      <Badge variant={
+                        scrapeJob.status === 'completed' ? 'gold' :
+                        scrapeJob.status === 'failed' ? 'copper' : 'slate'
+                      }>
+                        {scrapeJob.status.toUpperCase()}
+                      </Badge>
+                      <span className="text-slate-400">Job #{scrapeJob.id}</span>
+                    </div>
+                    {scrapeJob.status === 'completed' && (
+                      <div className="text-sm">
+                        <span className="text-green-400 font-semibold">{scrapeJob.articles_new}</span> new articles saved
+                      </div>
+                    )}
+                    {scrapeJob.status === 'running' && (
+                      <div className="text-sm text-blue-300">
+                        Scraping in progress... This may take a few minutes.
+                      </div>
+                    )}
+                  </div>
+                )}
               </Card>
             )}
           </>
