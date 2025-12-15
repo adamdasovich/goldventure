@@ -253,7 +253,7 @@ export default function EventsPage() {
             <Button variant="primary" onClick={() => setShowLogin(true)}>Sign In</Button>
           </CardContent>
         </Card>
-        {showLogin && <LoginModal onClose={() => setShowLogin(false)} />}
+        {showLogin && <LoginModal onClose={() => setShowLogin(false)} onSwitchToRegister={() => setShowLogin(false)} />}
       </div>
     );
   }
