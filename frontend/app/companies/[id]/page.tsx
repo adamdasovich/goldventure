@@ -712,7 +712,7 @@ export default function CompanyDetailPage() {
                     {companyResources.map((resource) => (
                       <div key={resource.id} className="group relative">
                         <a
-                          href={resource.file || resource.external_url || '#'}
+                          href={resource.file_url || resource.external_url || '#'}
                           target="_blank"
                           rel="noopener noreferrer"
                         >
