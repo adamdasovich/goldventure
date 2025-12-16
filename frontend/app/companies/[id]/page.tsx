@@ -273,22 +273,7 @@ export default function CompanyDetailPage() {
                   <div className="flex items-center gap-4 mb-3">
                     <h1 className="text-4xl font-bold text-gradient-gold">{company.name}</h1>
                     {/* Ticker & Exchange Info */}
-                    <div className="flex items-center gap-2">
-                      <span className="text-xl font-mono text-gold-400 font-semibold">{company.exchange}:{company.ticker_symbol}</span>
-                      {/* Live Stock Price */}
-                      {stockLoading ? (
-                        <span className="text-slate-400 text-sm animate-pulse">Loading...</span>
-                      ) : stockQuote ? (
-                        <div className="flex items-center gap-2 ml-2">
-                          <span className="text-xl font-bold text-white">
-                            ${stockQuote.price.toFixed(2)}
-                          </span>
-                          <span className={`text-sm font-medium ${stockQuote.change >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                            {stockQuote.change >= 0 ? '+' : ''}{stockQuote.change.toFixed(2)} ({stockQuote.change_percent.toFixed(2)}%)
-                          </span>
-                        </div>
-                      ) : null}
-                    </div>
+                    <span className="text-xl font-mono text-gold-400 font-semibold">{company.exchange.toUpperCase()}:{company.ticker_symbol}</span>
                   </div>
                   {company.description && (
                     <p className="text-slate-300 text-lg max-w-3xl">{company.description}</p>
