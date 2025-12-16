@@ -289,31 +289,45 @@ def metal_historical(request, symbol):
 def _get_yahoo_finance_quote(ticker_symbol: str) -> dict:
     """
     Fetch real-time stock quote from Yahoo Finance using yfinance.
+    Uses history() method which is more reliable than info property.
     Returns dict with quote data or error.
     """
     try:
         import yfinance as yf
 
         stock = yf.Ticker(ticker_symbol)
-        info = stock.info
 
-        if not info or 'regularMarketPrice' not in info:
+        # Use history() which is more reliable and less rate-limited
+        # Get last 2 days of data to calculate change
+        hist = stock.history(period='2d')
+
+        if hist.empty:
             return {'error': f'No data found for {ticker_symbol}'}
 
-        price = info.get('regularMarketPrice') or info.get('currentPrice', 0)
-        previous_close = info.get('previousClose', 0)
-        change = price - previous_close if previous_close else 0
-        change_percent = (change / previous_close * 100) if previous_close else 0
+        # Get the most recent data
+        latest = hist.iloc[-1]
+        price = float(latest['Close'])
+        volume = int(latest['Volume'])
+
+        # Calculate change from previous day
+        if len(hist) >= 2:
+            prev = hist.iloc[-2]
+            previous_close = float(prev['Close'])
+            change = price - previous_close
+            change_percent = (change / previous_close * 100) if previous_close else 0
+        else:
+            previous_close = price
+            change = 0
+            change_percent = 0
 
         return {
-            'price': float(price) if price else 0,
-            'previous_close': float(previous_close) if previous_close else 0,
-            'change': round(float(change), 4),
-            'change_percent': round(float(change_percent), 2),
-            'volume': info.get('regularMarketVolume') or info.get('volume', 0),
-            'market_cap': info.get('marketCap', 0),
-            'day_high': info.get('dayHigh', 0),
-            'day_low': info.get('dayLow', 0),
+            'price': round(price, 4),
+            'previous_close': round(previous_close, 4),
+            'change': round(change, 4),
+            'change_percent': round(change_percent, 2),
+            'volume': volume,
+            'day_high': float(latest.get('High', price)),
+            'day_low': float(latest.get('Low', price)),
             'source': 'yahoo_finance'
         }
     except Exception as e:
