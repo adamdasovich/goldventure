@@ -831,6 +831,15 @@ class ResourceEstimateViewSet(viewsets.ModelViewSet):
 
 
 class FinancingViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for managing financings (private placements, etc.)
+
+    - GET /api/financings/ - List all financings (public)
+    - GET /api/financings/{id}/ - Get financing details (public)
+    - POST /api/financings/ - Create financing (superuser or company rep)
+    - PUT/PATCH /api/financings/{id}/ - Update financing (superuser or company rep)
+    - DELETE /api/financings/{id}/ - Delete financing (superuser only)
+    """
     serializer_class = FinancingSerializer
     permission_classes = [AllowAny]
 
@@ -840,7 +849,54 @@ class FinancingViewSet(viewsets.ModelViewSet):
         company_id = self.request.query_params.get('company')
         if company_id:
             queryset = queryset.filter(company_id=company_id)
-        return queryset
+        return queryset.order_by('-announced_date')
+
+    def get_permissions(self):
+        """Allow read for anyone, require auth for write operations"""
+        if self.action in ['create', 'update', 'partial_update', 'destroy']:
+            return [IsAuthenticated()]
+        return [AllowAny()]
+
+    def create(self, request, *args, **kwargs):
+        """Create a new financing - only superuser or company rep can create"""
+        user = request.user
+        company_id = request.data.get('company')
+
+        if not company_id:
+            return Response({'error': 'Company ID is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Check if user has permission (superuser, staff, or company rep)
+        if not user.is_superuser and not user.is_staff:
+            if not hasattr(user, 'company_id') or user.company_id != int(company_id):
+                return Response(
+                    {'error': 'You do not have permission to create financings for this company'},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+
+        return super().create(request, *args, **kwargs)
+
+    def update(self, request, *args, **kwargs):
+        """Update a financing - only superuser or company rep can update"""
+        user = request.user
+        financing = self.get_object()
+
+        if not user.is_superuser and not user.is_staff:
+            if not hasattr(user, 'company_id') or user.company_id != financing.company_id:
+                return Response(
+                    {'error': 'You do not have permission to update this financing'},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+
+        return super().update(request, *args, **kwargs)
+
+    def destroy(self, request, *args, **kwargs):
+        """Delete a financing - only superuser can delete"""
+        if not request.user.is_superuser:
+            return Response(
+                {'error': 'Only administrators can delete financings'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        return super().destroy(request, *args, **kwargs)
 
 
 # ============================================================================

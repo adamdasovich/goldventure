@@ -11,7 +11,7 @@ import CompanyChatbot from '@/components/CompanyChatbot';
 import { CompanyForum } from '@/components/forum';
 import { EventBanner } from '@/components/events';
 import { LoginModal, RegisterModal } from '@/components/auth';
-import { CompanyRepRegistrationModal, CompanyResourceUploadModal } from '@/components/company';
+import { CompanyRepRegistrationModal, CompanyResourceUploadModal, CreateFinancingModal } from '@/components/company';
 import { useAuth } from '@/contexts/AuthContext';
 import type { CompanyResource, CompanyAccessRequest } from '@/types/api';
 
@@ -60,6 +60,7 @@ export default function CompanyDetailPage() {
   const [companyResources, setCompanyResources] = useState<CompanyResource[]>([]);
   const [resourcesLoading, setResourcesLoading] = useState(false);
   const [deletingResourceId, setDeletingResourceId] = useState<number | null>(null);
+  const [showCreateFinancing, setShowCreateFinancing] = useState(false);
 
   const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api';
 
@@ -365,6 +366,19 @@ export default function CompanyDetailPage() {
         />
       )}
 
+      {/* Create Financing Modal */}
+      {showCreateFinancing && company && (
+        <CreateFinancingModal
+          companyId={parseInt(companyId)}
+          companyName={company.name}
+          accessToken={accessToken}
+          onClose={() => setShowCreateFinancing(false)}
+          onCreateComplete={() => {
+            fetchFinancings();
+          }}
+        />
+      )}
+
       {error && (
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <Card variant="glass-card">
@@ -468,79 +482,110 @@ export default function CompanyDetailPage() {
                 </div>
 
                 {/* Active Financing Rounds - Right Column */}
-                {financings.filter(f => f.status === 'announced' || f.status === 'closing' || f.status === 'open').length > 0 && (
+                {(financings.filter(f => f.status === 'announced' || f.status === 'closing' || f.status === 'open').length > 0 || isCompanyRep) && (
                   <div>
-                    <h3 className="text-lg font-semibold text-gold-400 mb-4 flex items-center gap-2">
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                      Active Financing Rounds
-                    </h3>
-                    <div className="space-y-4">
-                      {financings
-                        .filter(f => f.status === 'announced' || f.status === 'closing' || f.status === 'open')
-                        .map(financing => {
-                          const aggregate = interestAggregates[financing.id];
-                          return (
-                            <Card key={financing.id} variant="glass-card" className="border-gold-500/30">
-                              <CardContent className="p-4">
-                                <div className="flex items-center justify-between mb-3">
-                                  <Badge variant="gold">{financing.financing_type_display || financing.financing_type}</Badge>
-                                  <Badge variant="copper">
-                                    {financing.status === 'announced' ? 'Open' :
-                                     financing.status === 'closing' ? 'Closing Soon' : financing.status}
-                                  </Badge>
-                                </div>
-
-                                {/* Investment Interest Stats */}
-                                {aggregate && aggregate.total_interest_count > 0 ? (
-                                  <div className="space-y-3">
-                                    <div className="grid grid-cols-2 gap-3">
-                                      <div className="text-center">
-                                        <p className="text-2xl font-bold text-gold-400">{aggregate.total_interest_count}</p>
-                                        <p className="text-xs text-slate-400">Interested Investors</p>
-                                      </div>
-                                      <div className="text-center">
-                                        <p className="text-2xl font-bold text-white">
-                                          ${Number(aggregate.total_amount_interested).toLocaleString()}
-                                        </p>
-                                        <p className="text-xs text-slate-400">Total Interest</p>
-                                      </div>
-                                    </div>
-
-                                    {/* Progress bar */}
-                                    <div>
-                                      <div className="flex justify-between text-xs mb-1">
-                                        <span className="text-slate-400">Interest Level</span>
-                                        <span className="text-gold-400">{Number(aggregate.percentage_filled).toFixed(0)}%</span>
-                                      </div>
-                                      <div className="h-2 bg-slate-700 rounded-full overflow-hidden">
-                                        <div
-                                          className="h-full bg-gradient-to-r from-gold-500 to-copper-500 rounded-full"
-                                          style={{ width: `${Math.min(Number(aggregate.percentage_filled), 100)}%` }}
-                                        ></div>
-                                      </div>
-                                    </div>
-                                  </div>
-                                ) : (
-                                  <p className="text-sm text-slate-400 text-center py-2">
-                                    No interests registered yet
-                                  </p>
-                                )}
-
-                                <Button
-                                  variant="primary"
-                                  size="sm"
-                                  className="w-full mt-4"
-                                  onClick={() => window.location.href = `/companies/${companyId}/financing`}
-                                >
-                                  View Financing Details
-                                </Button>
-                              </CardContent>
-                            </Card>
-                          );
-                        })}
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-lg font-semibold text-gold-400 flex items-center gap-2">
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        Financing Rounds
+                      </h3>
+                      {isCompanyRep && (
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => setShowCreateFinancing(true)}
+                        >
+                          + New Financing
+                        </Button>
+                      )}
                     </div>
+                    {financings.filter(f => f.status === 'announced' || f.status === 'closing' || f.status === 'open').length > 0 ? (
+                      <div className="space-y-4">
+                        {financings
+                          .filter(f => f.status === 'announced' || f.status === 'closing' || f.status === 'open')
+                          .map(financing => {
+                            const aggregate = interestAggregates[financing.id];
+                            return (
+                              <Card key={financing.id} variant="glass-card" className="border-gold-500/30">
+                                <CardContent className="p-4">
+                                  <div className="flex items-center justify-between mb-3">
+                                    <Badge variant="gold">{financing.financing_type_display || financing.financing_type}</Badge>
+                                    <Badge variant="copper">
+                                      {financing.status === 'announced' ? 'Open' :
+                                       financing.status === 'closing' ? 'Closing Soon' : financing.status}
+                                    </Badge>
+                                  </div>
+
+                                  {/* Investment Interest Stats */}
+                                  {aggregate && aggregate.total_interest_count > 0 ? (
+                                    <div className="space-y-3">
+                                      <div className="grid grid-cols-2 gap-3">
+                                        <div className="text-center">
+                                          <p className="text-2xl font-bold text-gold-400">{aggregate.total_interest_count}</p>
+                                          <p className="text-xs text-slate-400">Interested Investors</p>
+                                        </div>
+                                        <div className="text-center">
+                                          <p className="text-2xl font-bold text-white">
+                                            ${Number(aggregate.total_amount_interested).toLocaleString()}
+                                          </p>
+                                          <p className="text-xs text-slate-400">Total Interest</p>
+                                        </div>
+                                      </div>
+
+                                      {/* Progress bar */}
+                                      <div>
+                                        <div className="flex justify-between text-xs mb-1">
+                                          <span className="text-slate-400">Interest Level</span>
+                                          <span className="text-gold-400">{Number(aggregate.percentage_filled).toFixed(0)}%</span>
+                                        </div>
+                                        <div className="h-2 bg-slate-700 rounded-full overflow-hidden">
+                                          <div
+                                            className="h-full bg-gradient-to-r from-gold-500 to-copper-500 rounded-full"
+                                            style={{ width: `${Math.min(Number(aggregate.percentage_filled), 100)}%` }}
+                                          ></div>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <p className="text-sm text-slate-400 text-center py-2">
+                                      No interests registered yet
+                                    </p>
+                                  )}
+
+                                  <Button
+                                    variant="primary"
+                                    size="sm"
+                                    className="w-full mt-4"
+                                    onClick={() => window.location.href = `/companies/${companyId}/financing`}
+                                  >
+                                    View Financing Details
+                                  </Button>
+                                </CardContent>
+                              </Card>
+                            );
+                          })}
+                      </div>
+                    ) : (
+                      <Card variant="glass-card" className="border-slate-700">
+                        <CardContent className="p-6 text-center">
+                          <svg className="w-12 h-12 text-slate-600 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                          <p className="text-slate-400 text-sm mb-3">No active financing rounds</p>
+                          {isCompanyRep && (
+                            <Button
+                              variant="primary"
+                              size="sm"
+                              onClick={() => setShowCreateFinancing(true)}
+                            >
+                              Create Private Placement
+                            </Button>
+                          )}
+                        </CardContent>
+                      </Card>
+                    )}
                   </div>
                 )}
               </div>
