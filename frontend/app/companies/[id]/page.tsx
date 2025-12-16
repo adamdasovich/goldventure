@@ -104,8 +104,9 @@ export default function CompanyDetailPage() {
       console.log('Checking company rep status:', { userCompanyId: user?.company_id, pageCompanyId: companyIdNum, match: user?.company_id === companyIdNum });
 
       if (user?.company_id === companyIdNum) {
-        console.log('User is company rep for this company');
+        console.log('User is company rep for this company - setting isCompanyRep to TRUE');
         setIsCompanyRep(true);
+        console.log('isCompanyRep state update called');
         return;
       }
 
@@ -766,13 +767,14 @@ export default function CompanyDetailPage() {
                         </a>
                         {isCompanyRep && (
                           <button
+                            type="button"
                             onClick={(e) => {
                               e.preventDefault();
                               e.stopPropagation();
                               handleDeleteResource(resource.id);
                             }}
                             disabled={deletingResourceId === resource.id}
-                            className="absolute top-2 right-2 p-1.5 bg-red-500/80 hover:bg-red-500 text-white rounded-lg opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-50"
+                            className="absolute top-2 right-2 p-1.5 bg-red-500/80 hover:bg-red-500 text-white rounded-lg transition-opacity disabled:opacity-50 z-10"
                             title="Delete resource"
                           >
                             {deletingResourceId === resource.id ? (
