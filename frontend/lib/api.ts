@@ -80,6 +80,16 @@ export const financingAPI = {
 
   getById: (id: number) =>
     apiFetch<Financing>(`/financings/${id}/`),
+
+  delete: (accessToken: string, id: number) =>
+    fetch(`${API_BASE_URL}/financings/${id}/`, {
+      method: 'DELETE',
+      headers: { 'Authorization': `Bearer ${accessToken}` }
+    }).then(res => {
+      if (!res.ok) throw new Error('Failed to delete financing');
+      // DELETE returns 204 No Content - don't try to parse JSON
+      return;
+    }),
 };
 
 // Claude Chat API - Uses local Next.js API route to avoid CORS issues

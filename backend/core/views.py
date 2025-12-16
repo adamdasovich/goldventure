@@ -890,13 +890,22 @@ class FinancingViewSet(viewsets.ModelViewSet):
         return super().update(request, *args, **kwargs)
 
     def destroy(self, request, *args, **kwargs):
-        """Delete a financing - only superuser can delete"""
-        if not request.user.is_superuser:
-            return Response(
-                {'error': 'Only administrators can delete financings'},
-                status=status.HTTP_403_FORBIDDEN
-            )
-        return super().destroy(request, *args, **kwargs)
+        """Delete a financing - only superuser or authorized company rep can delete"""
+        user = request.user
+        financing = self.get_object()
+
+        # Allow superusers and staff
+        if user.is_superuser or user.is_staff:
+            return super().destroy(request, *args, **kwargs)
+
+        # Allow company representatives for their own company
+        if hasattr(user, 'company_id') and user.company_id == financing.company_id:
+            return super().destroy(request, *args, **kwargs)
+
+        return Response(
+            {'error': 'You do not have permission to delete this financing'},
+            status=status.HTTP_403_FORBIDDEN
+        )
 
 
 # ============================================================================
