@@ -84,6 +84,13 @@ export default function CompanyDetailPage() {
     if (!accessToken) return;
 
     try {
+      // Superusers and staff have access to all companies
+      if (user?.is_superuser || user?.is_staff) {
+        setIsCompanyRep(true);
+        setPendingRequest(null);
+        return;
+      }
+
       // Check if user is a representative for this specific company
       if (user?.company_id === parseInt(companyId)) {
         setIsCompanyRep(true);
