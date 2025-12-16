@@ -190,7 +190,7 @@ export default function DashboardPage() {
 
     setInvestmentDashboardLoading(true);
     try {
-      const res = await fetch(`${API_URL}/api/investment-interest/admin/dashboard/`, {
+      const res = await fetch(`${API_URL}/investment-interest/admin/dashboard/`, {
         headers: { 'Authorization': `Bearer ${accessToken}` },
       });
       if (res.ok) {
