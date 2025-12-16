@@ -1316,8 +1316,8 @@ class InvestmentInterestCreateSerializer(serializers.ModelSerializer):
                 "You have already registered interest in this financing round."
             )
 
-        # Verify financing is open
-        if financing.status != 'open':
+        # Verify financing is open (announced or closing status)
+        if financing.status not in ['announced', 'closing']:
             raise serializers.ValidationError(
                 "This financing round is not currently accepting new interests."
             )
@@ -1368,7 +1368,7 @@ class InvestmentInterestAggregateSerializer(serializers.ModelSerializer):
     financing_id = serializers.IntegerField(source='financing.id', read_only=True)
     company_name = serializers.CharField(source='financing.company.name', read_only=True)
     target_amount = serializers.DecimalField(
-        source='financing.target_amount',
+        source='financing.amount_raised_usd',
         max_digits=15,
         decimal_places=2,
         read_only=True

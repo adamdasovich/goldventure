@@ -4074,7 +4074,7 @@ def admin_investment_interest_dashboard(request):
             'financing_id': financing.id,
             'company_name': financing.company.name,
             'financing_type': financing.financing_type,
-            'target_amount': str(financing.target_amount) if financing.target_amount else None,
+            'target_amount': str(financing.amount_raised_usd) if financing.amount_raised_usd else None,
             'total_interests': aggregate.total_interest_count,
             'total_amount': str(aggregate.total_amount_interested),
             'percentage_filled': str(aggregate.percentage_filled),

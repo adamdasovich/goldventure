@@ -3041,10 +3041,10 @@ class InvestmentInterestAggregate(models.Model):
         self.total_shares_requested = stats['total_shares'] or 0
         self.total_amount_interested = stats['total_amount'] or Decimal('0.00')
 
-        # Calculate percentage of financing goal filled
-        if self.financing.target_amount and self.financing.target_amount > 0:
+        # Calculate percentage of financing goal filled (use amount_raised_usd as target)
+        if self.financing.amount_raised_usd and self.financing.amount_raised_usd > 0:
             self.percentage_filled = min(
-                (self.total_amount_interested / self.financing.target_amount) * 100,
+                (self.total_amount_interested / self.financing.amount_raised_usd) * 100,
                 Decimal('100.00')
             )
         else:
