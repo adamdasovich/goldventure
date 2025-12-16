@@ -6,7 +6,7 @@ Handles:
 - Subscription management
 - Webhook processing
 - Trial period handling (1 month free)
-- $20/month pricing
+- $50/month pricing (limited time promotional rate)
 """
 
 import stripe
@@ -26,7 +26,7 @@ def _get_stripe_api_key():
     return key
 
 # Pricing configuration
-SUBSCRIPTION_PRICE_CENTS = 2000  # $20.00
+SUBSCRIPTION_PRICE_CENTS = 5000  # $50.00 (limited time promotional rate)
 TRIAL_DAYS = 30  # 1 month free trial
 
 
@@ -118,7 +118,7 @@ class StripeService:
             # Create price
             price = stripe.Price.create(
                 product=product.id,
-                unit_amount=SUBSCRIPTION_PRICE_CENTS if interval == 'month' else 20000,  # $200/year
+                unit_amount=SUBSCRIPTION_PRICE_CENTS if interval == 'month' else 50000,  # $500/year (limited time promotional rate)
                 currency='usd',
                 recurring={'interval': interval},
                 metadata={'plan_type': 'monthly' if interval == 'month' else 'annual'}

@@ -226,7 +226,7 @@ export function CompanyRepRegistrationModal({
           </div>
 
           {/* Info Box */}
-          <div className="mb-6 p-4 bg-slate-800/50 rounded-lg border border-slate-700">
+          <div className="mb-4 p-4 bg-slate-800/50 rounded-lg border border-slate-700">
             <div className="flex items-start gap-3">
               <svg className="w-5 h-5 text-gold-400 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -236,6 +236,22 @@ export function CompanyRepRegistrationModal({
                 <p>All requests are reviewed by our team. Once approved, you'll be able to upload and manage company resources, including investor presentations, technical reports, and more.</p>
               </div>
             </div>
+          </div>
+
+          {/* Pricing Info */}
+          <div className="mb-6 p-4 bg-gradient-to-r from-gold-500/10 to-copper-500/10 rounded-lg border border-gold-500/30">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm font-semibold text-white">Company Portal Subscription</span>
+              <Badge variant="gold" className="animate-pulse text-xs">Limited Time Offer</Badge>
+            </div>
+            <div className="flex items-baseline gap-1 mb-2">
+              <span className="text-2xl font-bold text-gold-400">$50</span>
+              <span className="text-slate-400 text-sm">/month</span>
+              <span className="text-xs text-slate-500 ml-2">after 30-day free trial</span>
+            </div>
+            <p className="text-xs text-slate-400">
+              Start your 30-day free trial today. No credit card required to register.
+            </p>
           </div>
 
           {/* Actions */}

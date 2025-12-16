@@ -915,10 +915,16 @@ export default function CompanyDetailPage() {
                           </svg>
                         </div>
                         <div className="flex-1">
-                          <h3 className="text-xl font-bold text-white mb-2">Are you a company representative?</h3>
-                          <p className="text-slate-400 mb-4">
+                          <div className="flex items-center gap-3 mb-2">
+                            <h3 className="text-xl font-bold text-white">Are you a company representative?</h3>
+                            <Badge variant="gold" className="animate-pulse">Limited Time: $50/mo</Badge>
+                          </div>
+                          <p className="text-slate-400 mb-2">
                             If you work for {company.name}, register as a company representative to upload investor presentations,
                             technical reports, and other documents to share with investors on this platform.
+                          </p>
+                          <p className="text-sm text-gold-400 mb-4">
+                            Start with a 30-day FREE trial. No credit card required.
                           </p>
                           {pendingRequest ? (
                             <div className="flex items-center gap-3 p-3 bg-gold-500/10 border border-gold-500/30 rounded-lg">
