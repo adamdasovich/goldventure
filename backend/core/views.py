@@ -294,13 +294,13 @@ def stock_quote(request, company_id):
 
     GET /api/companies/<company_id>/stock-quote/
 
-    Efficiently fetches stock data:
-    1. First checks database cache (MarketData from today)
-    2. If no recent data, calls Alpha Vantage API
-    3. Caches result in database for future requests
+    Fetches stock data from Alpha Vantage API with in-memory caching.
+    Always returns fresh real-time data (cached for 5 minutes to respect API limits).
+    Database MarketData is used as fallback only when API is unavailable.
 
     Returns only essential data (ticker, price, change) to minimize payload.
     """
+    from datetime import date
 
     # Get company
     try:
@@ -318,45 +318,9 @@ def stock_quote(request, company_id):
         cached_data['cached'] = True
         return Response(cached_data)
 
-    # Check database for today's market data
-    from datetime import date
     today = date.today()
-    market_data = MarketData.objects.filter(
-        company=company,
-        date=today
-    ).first()
 
-    if market_data:
-        # Calculate change from previous day
-        yesterday_data = MarketData.objects.filter(
-            company=company,
-            date__lt=today
-        ).order_by('-date').first()
-
-        change = 0.0
-        change_percent = 0.0
-        if yesterday_data and yesterday_data.close_price:
-            change = float(market_data.close_price - yesterday_data.close_price)
-            if yesterday_data.close_price > 0:
-                change_percent = (change / float(yesterday_data.close_price)) * 100
-
-        response_data = {
-            'ticker': company.ticker_symbol,
-            'exchange': company.exchange,
-            'price': float(market_data.close_price),
-            'change': round(change, 4),
-            'change_percent': round(change_percent, 2),
-            'volume': market_data.volume,
-            'date': str(market_data.date),
-            'source': 'database',
-            'cached': False
-        }
-
-        # Cache for 5 minutes
-        cache.set(cache_key, response_data, 300)
-        return Response(response_data)
-
-    # No cached data - fetch from Alpha Vantage
+    # Fetch fresh data from Alpha Vantage
     from mcp_servers.alpha_vantage import AlphaVantageServer
 
     alpha_vantage = AlphaVantageServer(company_id=company_id)
@@ -372,11 +336,49 @@ def stock_quote(request, company_id):
     quote_result = alpha_vantage._get_quote(ticker)
 
     if 'error' in quote_result:
+        # API failed - try to use database as fallback
+        market_data = MarketData.objects.filter(
+            company=company,
+            date=today
+        ).first()
+
+        if market_data:
+            # Calculate change from previous day
+            yesterday_data = MarketData.objects.filter(
+                company=company,
+                date__lt=today
+            ).order_by('-date').first()
+
+            change = 0.0
+            change_percent = 0.0
+            if yesterday_data and yesterday_data.close_price:
+                change = float(market_data.close_price - yesterday_data.close_price)
+                if yesterday_data.close_price > 0:
+                    change_percent = (change / float(yesterday_data.close_price)) * 100
+
+            response_data = {
+                'ticker': company.ticker_symbol,
+                'exchange': company.exchange,
+                'price': float(market_data.close_price),
+                'change': round(change, 4),
+                'change_percent': round(change_percent, 2),
+                'volume': market_data.volume,
+                'date': str(market_data.date),
+                'source': 'database_fallback',
+                'cached': False
+            }
+
+            # Cache for 2 minutes (shorter since it's fallback data)
+            cache.set(cache_key, response_data, 120)
+            return Response(response_data)
+
+        # No fallback data available
         return Response(
             {'error': quote_result['error']},
             status=status.HTTP_503_SERVICE_UNAVAILABLE
         )
 
+    # Successfully got fresh data from Alpha Vantage
     response_data = {
         'ticker': company.ticker_symbol,
         'exchange': company.exchange,
