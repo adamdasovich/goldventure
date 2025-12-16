@@ -795,13 +795,28 @@ export default function DashboardPage() {
                               >
                                 <div>
                                   <p className="text-white font-medium">{financing.company_name}</p>
-                                  <p className="text-xs text-slate-400">{financing.financing_type}</p>
-                                </div>
-                                <div className="text-right">
-                                  <p className="text-gold-400 font-semibold">{financing.total_interests} investors</p>
                                   <p className="text-xs text-slate-400">
-                                    ${Number(financing.total_amount || 0).toLocaleString()} ({Number(financing.percentage_filled || 0).toFixed(0)}%)
+                                    {financing.financing_type.replace('_', ' ').toUpperCase()}
                                   </p>
+                                </div>
+                                <div className="flex items-center gap-4">
+                                  <div className="text-right">
+                                    <p className="text-gold-400 font-semibold">{financing.total_interests} investors</p>
+                                    <p className="text-xs text-slate-400">
+                                      ${Number(financing.total_amount || 0).toLocaleString()} ({Number(financing.percentage_filled || 0).toFixed(0)}%)
+                                    </p>
+                                  </div>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => router.push(`/dashboard/investment-interests/${financing.financing_id}`)}
+                                    className="text-gold-400 hover:text-gold-300"
+                                  >
+                                    Details
+                                    <svg className="w-4 h-4 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                    </svg>
+                                  </Button>
                                 </div>
                               </div>
                             ))}

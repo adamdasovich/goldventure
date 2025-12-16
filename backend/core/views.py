@@ -4155,10 +4155,10 @@ def admin_investment_interest_dashboard(request):
 
     from django.db.models import Sum, Count, Avg
 
-    # Get all active financing rounds with interests
+    # Get all active financing rounds with interests (announced or closing status)
     active_financings = Financing.objects.filter(
-        status='open'
-    ).prefetch_related('investment_interests')
+        status__in=['announced', 'closing']
+    ).select_related('company').prefetch_related('investment_interests')
 
     # Overall stats
     total_interests = InvestmentInterest.objects.filter(
