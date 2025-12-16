@@ -831,9 +831,16 @@ class ResourceEstimateViewSet(viewsets.ModelViewSet):
 
 
 class FinancingViewSet(viewsets.ModelViewSet):
-    queryset = Financing.objects.all()
     serializer_class = FinancingSerializer
     permission_classes = [AllowAny]
+
+    def get_queryset(self):
+        """Filter financings by company if company query param is provided"""
+        queryset = Financing.objects.select_related('company').all()
+        company_id = self.request.query_params.get('company')
+        if company_id:
+            queryset = queryset.filter(company_id=company_id)
+        return queryset
 
 
 # ============================================================================
