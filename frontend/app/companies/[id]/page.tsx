@@ -84,7 +84,7 @@ export default function CompanyDetailPage() {
 
     try {
       // Check if user is a representative for this specific company
-      if (user?.company === parseInt(companyId)) {
+      if (user?.company_id === parseInt(companyId)) {
         setIsCompanyRep(true);
         setPendingRequest(null);
         return;
