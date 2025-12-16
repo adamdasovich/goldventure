@@ -234,9 +234,13 @@ export const companyResourceAPI = {
     }),
 
   delete: (accessToken: string, id: number) =>
-    apiFetch<void>(`/company-portal/resources/${id}/`, {
+    fetch(`${API_BASE_URL}/company-portal/resources/${id}/`, {
       method: 'DELETE',
       headers: { 'Authorization': `Bearer ${accessToken}` }
+    }).then(res => {
+      if (!res.ok) throw new Error('Failed to delete resource');
+      // DELETE returns 204 No Content - don't try to parse JSON
+      return;
     }),
 
   getMyResources: (accessToken: string) =>
