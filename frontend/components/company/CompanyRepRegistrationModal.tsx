@@ -232,8 +232,27 @@ export function CompanyRepRegistrationModal({
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
               <div className="text-sm text-slate-400">
-                <p className="font-medium text-slate-300 mb-1">Verification Required</p>
-                <p>All requests are reviewed by our team. Once approved, you'll be able to upload and manage company resources, including investor presentations, technical reports, and more.</p>
+                <p className="font-medium text-slate-300 mb-2">Once approved, you'll be able to:</p>
+                <ul className="space-y-1 text-xs">
+                  <li className="flex items-center gap-1.5">
+                    <svg className="w-3 h-3 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    Upload investor presentations, technical reports & documents
+                  </li>
+                  <li className="flex items-center gap-1.5">
+                    <svg className="w-3 h-3 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    Create & schedule speaking events, webinars & investor days
+                  </li>
+                  <li className="flex items-center gap-1.5">
+                    <svg className="w-3 h-3 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    Manage financing rounds & track investor interest
+                  </li>
+                </ul>
               </div>
             </div>
           </div>

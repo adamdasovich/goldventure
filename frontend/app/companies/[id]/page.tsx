@@ -919,10 +919,29 @@ export default function CompanyDetailPage() {
                             <h3 className="text-xl font-bold text-white">Are you a company representative?</h3>
                             <Badge variant="gold" className="animate-pulse">Limited Time: $50/mo</Badge>
                           </div>
-                          <p className="text-slate-400 mb-2">
-                            If you work for {company.name}, register as a company representative to upload investor presentations,
-                            technical reports, and other documents to share with investors on this platform.
+                          <p className="text-slate-400 mb-3">
+                            If you work for {company.name}, register as a company representative to access premium features:
                           </p>
+                          <ul className="text-sm text-slate-300 mb-3 space-y-1">
+                            <li className="flex items-center gap-2">
+                              <svg className="w-4 h-4 text-green-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                              </svg>
+                              Upload investor presentations, technical reports & documents
+                            </li>
+                            <li className="flex items-center gap-2">
+                              <svg className="w-4 h-4 text-green-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                              </svg>
+                              Create & schedule speaking events, webinars & investor days
+                            </li>
+                            <li className="flex items-center gap-2">
+                              <svg className="w-4 h-4 text-green-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                              </svg>
+                              Manage financing rounds & track investor interest
+                            </li>
+                          </ul>
                           <p className="text-sm text-gold-400 mb-4">
                             Start with a 30-day FREE trial. No credit card required.
                           </p>
