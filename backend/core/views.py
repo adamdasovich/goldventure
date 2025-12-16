@@ -363,9 +363,10 @@ def stock_quote(request, company_id):
 
     # Build ticker symbol for Alpha Vantage
     ticker = company.ticker_symbol
-    if company.exchange == 'TSXV':
+    exchange_upper = company.exchange.upper() if company.exchange else ''
+    if exchange_upper == 'TSXV':
         ticker = f"{ticker}.V"
-    elif company.exchange == 'TSX':
+    elif exchange_upper == 'TSX':
         ticker = f"{ticker}.TO"
 
     quote_result = alpha_vantage._get_quote(ticker)
