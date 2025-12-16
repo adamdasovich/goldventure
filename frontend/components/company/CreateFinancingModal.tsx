@@ -251,7 +251,7 @@ export function CreateFinancingModal({ companyId, companyName, accessToken, onCl
                 {/* Amount Raised */}
                 <div>
                   <label className="block text-sm font-medium text-slate-300 mb-2">
-                    Target Amount (USD) <span className="text-red-400">*</span>
+                    Target Amount (CAD) <span className="text-red-400">*</span>
                   </label>
                   <div className="relative">
                     <span className="absolute left-3 top-2.5 text-slate-400">$</span>
@@ -449,7 +449,7 @@ export function CreateFinancingModal({ companyId, companyName, accessToken, onCl
                   <div className="text-slate-400">Type:</div>
                   <div className="text-white">{FINANCING_TYPES.find(t => t.value === financingType)?.label}</div>
                   <div className="text-slate-400">Amount:</div>
-                  <div className="text-white">${amountRaised || '---'}</div>
+                  <div className="text-white">C${amountRaised || '---'}</div>
                   <div className="text-slate-400">Price:</div>
                   <div className="text-white">${pricePerShare || '---'} per {unitType === 'units' ? 'unit' : 'share'}</div>
                   <div className="text-slate-400">{unitType === 'units' ? 'Units' : 'Shares'}:</div>
