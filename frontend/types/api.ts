@@ -150,6 +150,7 @@ export interface CompanyResource {
   external_url?: string;
   thumbnail_url?: string;
   file_size?: number;
+  file_format?: string;
   mime_type?: string;
   is_public: boolean;
   is_featured: boolean;
