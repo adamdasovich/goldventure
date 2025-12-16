@@ -244,7 +244,7 @@ export function CompanyRepRegistrationModal({
                     <svg className="w-3 h-3 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                     </svg>
-                    Create & schedule speaking events, webinars & investor days
+                    Create & schedule live speaking events, webinars & investor days
                   </li>
                   <li className="flex items-center gap-1.5">
                     <svg className="w-3 h-3 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
