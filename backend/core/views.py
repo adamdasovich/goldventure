@@ -286,6 +286,40 @@ def metal_historical(request, symbol):
 # STOCK QUOTE API
 # ============================================================================
 
+def _get_yahoo_finance_quote(ticker_symbol: str) -> dict:
+    """
+    Fetch real-time stock quote from Yahoo Finance using yfinance.
+    Returns dict with quote data or error.
+    """
+    try:
+        import yfinance as yf
+
+        stock = yf.Ticker(ticker_symbol)
+        info = stock.info
+
+        if not info or 'regularMarketPrice' not in info:
+            return {'error': f'No data found for {ticker_symbol}'}
+
+        price = info.get('regularMarketPrice') or info.get('currentPrice', 0)
+        previous_close = info.get('previousClose', 0)
+        change = price - previous_close if previous_close else 0
+        change_percent = (change / previous_close * 100) if previous_close else 0
+
+        return {
+            'price': float(price) if price else 0,
+            'previous_close': float(previous_close) if previous_close else 0,
+            'change': round(float(change), 4),
+            'change_percent': round(float(change_percent), 2),
+            'volume': info.get('regularMarketVolume') or info.get('volume', 0),
+            'market_cap': info.get('marketCap', 0),
+            'day_high': info.get('dayHigh', 0),
+            'day_low': info.get('dayLow', 0),
+            'source': 'yahoo_finance'
+        }
+    except Exception as e:
+        return {'error': f'Yahoo Finance error: {str(e)}'}
+
+
 @api_view(['GET'])
 @permission_classes([AllowAny])
 def stock_quote(request, company_id):
@@ -294,9 +328,11 @@ def stock_quote(request, company_id):
 
     GET /api/companies/<company_id>/stock-quote/
 
-    Fetches stock data from Alpha Vantage API with in-memory caching.
-    Always returns fresh real-time data (cached for 5 minutes to respect API limits).
-    Database MarketData is used as fallback only when API is unavailable.
+    Fetches stock data with the following priority:
+    1. In-memory cache (5 minute TTL)
+    2. Yahoo Finance (more up-to-date for Canadian stocks)
+    3. Alpha Vantage (fallback)
+    4. Database (last resort fallback)
 
     Returns only essential data (ticker, price, change) to minimize payload.
     """
@@ -320,81 +356,104 @@ def stock_quote(request, company_id):
 
     today = date.today()
 
-    # Fetch fresh data from Alpha Vantage
-    from mcp_servers.alpha_vantage import AlphaVantageServer
-
-    alpha_vantage = AlphaVantageServer(company_id=company_id)
-
-    # Build ticker symbol for Alpha Vantage
+    # Build ticker symbol for Yahoo Finance / Alpha Vantage
     ticker = company.ticker_symbol
     exchange_upper = company.exchange.upper() if company.exchange else ''
     if exchange_upper == 'TSXV':
-        ticker = f"{ticker}.V"
+        yahoo_ticker = f"{ticker}.V"
+        av_ticker = f"{ticker}.V"
     elif exchange_upper == 'TSX':
-        ticker = f"{ticker}.TO"
+        yahoo_ticker = f"{ticker}.TO"
+        av_ticker = f"{ticker}.TO"
+    else:
+        yahoo_ticker = ticker
+        av_ticker = ticker
 
-    quote_result = alpha_vantage._get_quote(ticker)
+    # Try Yahoo Finance first (more up-to-date for Canadian stocks)
+    yahoo_result = _get_yahoo_finance_quote(yahoo_ticker)
 
-    if 'error' in quote_result:
-        # API failed - try to use database as fallback
-        market_data = MarketData.objects.filter(
+    if 'error' not in yahoo_result and yahoo_result.get('price', 0) > 0:
+        response_data = {
+            'ticker': company.ticker_symbol,
+            'exchange': company.exchange,
+            'price': yahoo_result['price'],
+            'change': yahoo_result['change'],
+            'change_percent': yahoo_result['change_percent'],
+            'volume': yahoo_result['volume'],
+            'date': str(today),
+            'source': 'yahoo_finance',
+            'cached': False
+        }
+
+        # Cache for 5 minutes
+        cache.set(cache_key, response_data, 300)
+        return Response(response_data)
+
+    # Yahoo Finance failed - try Alpha Vantage as fallback
+    from mcp_servers.alpha_vantage import AlphaVantageServer
+
+    alpha_vantage = AlphaVantageServer(company_id=company_id)
+    quote_result = alpha_vantage._get_quote(av_ticker)
+
+    if 'error' not in quote_result:
+        response_data = {
+            'ticker': company.ticker_symbol,
+            'exchange': company.exchange,
+            'price': quote_result.get('price', 0),
+            'change': quote_result.get('change', 0),
+            'change_percent': float(quote_result.get('change_percent', '0')),
+            'volume': quote_result.get('volume', 0),
+            'date': quote_result.get('latest_trading_day', str(today)),
+            'source': 'alpha_vantage',
+            'cached': False
+        }
+
+        # Cache for 5 minutes
+        cache.set(cache_key, response_data, 300)
+        return Response(response_data)
+
+    # Both APIs failed - try database as last resort
+    market_data = MarketData.objects.filter(
+        company=company,
+        date=today
+    ).first()
+
+    if market_data:
+        # Calculate change from previous day
+        yesterday_data = MarketData.objects.filter(
             company=company,
-            date=today
-        ).first()
+            date__lt=today
+        ).order_by('-date').first()
 
-        if market_data:
-            # Calculate change from previous day
-            yesterday_data = MarketData.objects.filter(
-                company=company,
-                date__lt=today
-            ).order_by('-date').first()
+        change = 0.0
+        change_percent = 0.0
+        if yesterday_data and yesterday_data.close_price:
+            change = float(market_data.close_price - yesterday_data.close_price)
+            if yesterday_data.close_price > 0:
+                change_percent = (change / float(yesterday_data.close_price)) * 100
 
-            change = 0.0
-            change_percent = 0.0
-            if yesterday_data and yesterday_data.close_price:
-                change = float(market_data.close_price - yesterday_data.close_price)
-                if yesterday_data.close_price > 0:
-                    change_percent = (change / float(yesterday_data.close_price)) * 100
+        response_data = {
+            'ticker': company.ticker_symbol,
+            'exchange': company.exchange,
+            'price': float(market_data.close_price),
+            'change': round(change, 4),
+            'change_percent': round(change_percent, 2),
+            'volume': market_data.volume,
+            'date': str(market_data.date),
+            'source': 'database_fallback',
+            'cached': False
+        }
 
-            response_data = {
-                'ticker': company.ticker_symbol,
-                'exchange': company.exchange,
-                'price': float(market_data.close_price),
-                'change': round(change, 4),
-                'change_percent': round(change_percent, 2),
-                'volume': market_data.volume,
-                'date': str(market_data.date),
-                'source': 'database_fallback',
-                'cached': False
-            }
+        # Cache for 2 minutes (shorter since it's fallback data)
+        cache.set(cache_key, response_data, 120)
+        return Response(response_data)
 
-            # Cache for 2 minutes (shorter since it's fallback data)
-            cache.set(cache_key, response_data, 120)
-            return Response(response_data)
-
-        # No fallback data available
-        return Response(
-            {'error': quote_result['error']},
-            status=status.HTTP_503_SERVICE_UNAVAILABLE
-        )
-
-    # Successfully got fresh data from Alpha Vantage
-    response_data = {
-        'ticker': company.ticker_symbol,
-        'exchange': company.exchange,
-        'price': quote_result.get('price', 0),
-        'change': quote_result.get('change', 0),
-        'change_percent': float(quote_result.get('change_percent', '0')),
-        'volume': quote_result.get('volume', 0),
-        'date': quote_result.get('latest_trading_day', str(today)),
-        'source': 'alpha_vantage',
-        'cached': False
-    }
-
-    # Cache for 5 minutes
-    cache.set(cache_key, response_data, 300)
-
-    return Response(response_data)
+    # No data available from any source
+    error_msg = yahoo_result.get('error', quote_result.get('error', 'Unable to fetch stock data'))
+    return Response(
+        {'error': error_msg},
+        status=status.HTTP_503_SERVICE_UNAVAILABLE
+    )
 
 
 # ============================================================================
