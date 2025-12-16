@@ -46,6 +46,9 @@ urlpatterns = [
     path('metals/prices/', views.metals_prices, name='metals_prices'),
     path('metals/historical/<str:symbol>/', views.metal_historical, name='metal_historical'),
 
+    # Stock Quote endpoint
+    path('companies/<int:company_id>/stock-quote/', views.stock_quote, name='stock_quote'),
+
     # Claude Chat endpoints
     path('claude/chat/', views.claude_chat, name='claude_chat'),
     path('claude/tools/', views.available_tools, name='available_tools'),

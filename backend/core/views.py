@@ -283,6 +283,118 @@ def metal_historical(request, symbol):
 
 
 # ============================================================================
+# STOCK QUOTE API
+# ============================================================================
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def stock_quote(request, company_id):
+    """
+    Get real-time stock quote for a company.
+
+    GET /api/companies/<company_id>/stock-quote/
+
+    Efficiently fetches stock data:
+    1. First checks database cache (MarketData from today)
+    2. If no recent data, calls Alpha Vantage API
+    3. Caches result in database for future requests
+
+    Returns only essential data (ticker, price, change) to minimize payload.
+    """
+
+    # Get company
+    try:
+        company = Company.objects.get(id=company_id)
+    except Company.DoesNotExist:
+        return Response(
+            {'error': 'Company not found'},
+            status=status.HTTP_404_NOT_FOUND
+        )
+
+    # Check in-memory cache first (5 minute TTL)
+    cache_key = f'stock_quote_{company_id}'
+    cached_data = cache.get(cache_key)
+    if cached_data:
+        cached_data['cached'] = True
+        return Response(cached_data)
+
+    # Check database for today's market data
+    from datetime import date
+    today = date.today()
+    market_data = MarketData.objects.filter(
+        company=company,
+        date=today
+    ).first()
+
+    if market_data:
+        # Calculate change from previous day
+        yesterday_data = MarketData.objects.filter(
+            company=company,
+            date__lt=today
+        ).order_by('-date').first()
+
+        change = 0.0
+        change_percent = 0.0
+        if yesterday_data and yesterday_data.close_price:
+            change = float(market_data.close_price - yesterday_data.close_price)
+            if yesterday_data.close_price > 0:
+                change_percent = (change / float(yesterday_data.close_price)) * 100
+
+        response_data = {
+            'ticker': company.ticker_symbol,
+            'exchange': company.exchange,
+            'price': float(market_data.close_price),
+            'change': round(change, 4),
+            'change_percent': round(change_percent, 2),
+            'volume': market_data.volume,
+            'date': str(market_data.date),
+            'source': 'database',
+            'cached': False
+        }
+
+        # Cache for 5 minutes
+        cache.set(cache_key, response_data, 300)
+        return Response(response_data)
+
+    # No cached data - fetch from Alpha Vantage
+    from mcp_servers.alpha_vantage import AlphaVantageServer
+
+    alpha_vantage = AlphaVantageServer(company_id=company_id)
+
+    # Build ticker symbol for Alpha Vantage
+    ticker = company.ticker_symbol
+    if company.exchange == 'TSXV':
+        ticker = f"{ticker}.V"
+    elif company.exchange == 'TSX':
+        ticker = f"{ticker}.TO"
+
+    quote_result = alpha_vantage._get_quote(ticker)
+
+    if 'error' in quote_result:
+        return Response(
+            {'error': quote_result['error']},
+            status=status.HTTP_503_SERVICE_UNAVAILABLE
+        )
+
+    response_data = {
+        'ticker': company.ticker_symbol,
+        'exchange': company.exchange,
+        'price': quote_result.get('price', 0),
+        'change': quote_result.get('change', 0),
+        'change_percent': float(quote_result.get('change_percent', '0')),
+        'volume': quote_result.get('volume', 0),
+        'date': quote_result.get('latest_trading_day', str(today)),
+        'source': 'alpha_vantage',
+        'cached': False
+    }
+
+    # Cache for 5 minutes
+    cache.set(cache_key, response_data, 300)
+
+    return Response(response_data)
+
+
+# ============================================================================
 # CLAUDE CHAT API
 # ============================================================================
 

@@ -13,6 +13,18 @@ import { EventBanner } from '@/components/events';
 import { LoginModal, RegisterModal } from '@/components/auth';
 import { useAuth } from '@/contexts/AuthContext';
 
+interface StockQuote {
+  ticker: string;
+  exchange: string;
+  price: number;
+  change: number;
+  change_percent: number;
+  volume: number;
+  date: string;
+  source: string;
+  cached: boolean;
+}
+
 export default function CompanyDetailPage() {
   const params = useParams();
   const companyId = params.id as string;
@@ -35,6 +47,8 @@ export default function CompanyDetailPage() {
     total_amount_interested: string;
     percentage_filled: string;
   }>>({});
+  const [stockQuote, setStockQuote] = useState<StockQuote | null>(null);
+  const [stockLoading, setStockLoading] = useState(false);
 
   const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api';
 
@@ -43,8 +57,24 @@ export default function CompanyDetailPage() {
       fetchCompanyDetails();
       fetchNewsReleases();
       fetchFinancings();
+      fetchStockQuote();
     }
   }, [companyId]);
+
+  const fetchStockQuote = async () => {
+    try {
+      setStockLoading(true);
+      const res = await fetch(`${API_URL}/companies/${companyId}/stock-quote/`);
+      if (res.ok) {
+        const data = await res.json();
+        setStockQuote(data);
+      }
+    } catch (err) {
+      console.error('Failed to fetch stock quote:', err);
+    } finally {
+      setStockLoading(false);
+    }
+  };
 
   const fetchCompanyDetails = async () => {
     try {
@@ -240,11 +270,25 @@ export default function CompanyDetailPage() {
             <div className="max-w-7xl mx-auto">
               <div className="flex items-start justify-between mb-6">
                 <div>
-                  <div className="flex items-center gap-3 mb-3">
+                  <div className="flex items-center gap-4 mb-3">
                     <h1 className="text-4xl font-bold text-gradient-gold">{company.name}</h1>
-                    <Badge variant={getExchangeBadgeVariant(company.exchange)}>
-                      {company.exchange}: {company.ticker_symbol}
-                    </Badge>
+                    {/* Ticker & Exchange Info */}
+                    <div className="flex items-center gap-2">
+                      <span className="text-xl font-mono text-gold-400 font-semibold">{company.exchange}:{company.ticker_symbol}</span>
+                      {/* Live Stock Price */}
+                      {stockLoading ? (
+                        <span className="text-slate-400 text-sm animate-pulse">Loading...</span>
+                      ) : stockQuote ? (
+                        <div className="flex items-center gap-2 ml-2">
+                          <span className="text-xl font-bold text-white">
+                            ${stockQuote.price.toFixed(2)}
+                          </span>
+                          <span className={`text-sm font-medium ${stockQuote.change >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                            {stockQuote.change >= 0 ? '+' : ''}{stockQuote.change.toFixed(2)} ({stockQuote.change_percent.toFixed(2)}%)
+                          </span>
+                        </div>
+                      ) : null}
+                    </div>
                   </div>
                   {company.description && (
                     <p className="text-slate-300 text-lg max-w-3xl">{company.description}</p>
@@ -260,18 +304,44 @@ export default function CompanyDetailPage() {
                 )}
               </div>
 
-              {/* Quick Stats */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-8">
+              {/* Quick Stats - Now showing Stock Data */}
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-8">
                 <Card variant="glass-card">
                   <CardContent className="py-4">
-                    <div className="text-sm text-slate-400 mb-1">Exchange</div>
-                    <div className="text-2xl font-bold text-white">{company.exchange}</div>
+                    <div className="text-sm text-slate-400 mb-1">Stock Price</div>
+                    {stockLoading ? (
+                      <div className="text-2xl font-bold text-slate-500 animate-pulse">---</div>
+                    ) : stockQuote ? (
+                      <div className="text-2xl font-bold text-gold-400">${stockQuote.price.toFixed(2)}</div>
+                    ) : (
+                      <div className="text-2xl font-bold text-slate-500">N/A</div>
+                    )}
                   </CardContent>
                 </Card>
                 <Card variant="glass-card">
                   <CardContent className="py-4">
-                    <div className="text-sm text-slate-400 mb-1">Ticker</div>
-                    <div className="text-2xl font-bold text-gold-400 font-mono">{company.ticker_symbol}</div>
+                    <div className="text-sm text-slate-400 mb-1">Change</div>
+                    {stockLoading ? (
+                      <div className="text-2xl font-bold text-slate-500 animate-pulse">---</div>
+                    ) : stockQuote ? (
+                      <div className={`text-2xl font-bold ${stockQuote.change >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                        {stockQuote.change >= 0 ? '+' : ''}{stockQuote.change_percent.toFixed(2)}%
+                      </div>
+                    ) : (
+                      <div className="text-2xl font-bold text-slate-500">N/A</div>
+                    )}
+                  </CardContent>
+                </Card>
+                <Card variant="glass-card">
+                  <CardContent className="py-4">
+                    <div className="text-sm text-slate-400 mb-1">Volume</div>
+                    {stockLoading ? (
+                      <div className="text-2xl font-bold text-slate-500 animate-pulse">---</div>
+                    ) : stockQuote ? (
+                      <div className="text-2xl font-bold text-white">{stockQuote.volume.toLocaleString()}</div>
+                    ) : (
+                      <div className="text-2xl font-bold text-slate-500">N/A</div>
+                    )}
                   </CardContent>
                 </Card>
                 <Card variant="glass-card">
