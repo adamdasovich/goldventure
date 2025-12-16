@@ -5,13 +5,15 @@ import { useParams } from 'next/navigation';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
-import { companyAPI, projectAPI, newsAPI, type Company, type Project, type NewsReleasesResponse } from '@/lib/api';
+import { companyAPI, projectAPI, newsAPI, accessRequestAPI, companyResourceAPI, type Company, type Project, type NewsReleasesResponse } from '@/lib/api';
 import LogoMono from '@/components/LogoMono';
 import CompanyChatbot from '@/components/CompanyChatbot';
 import { CompanyForum } from '@/components/forum';
 import { EventBanner } from '@/components/events';
 import { LoginModal, RegisterModal } from '@/components/auth';
+import { CompanyRepRegistrationModal, CompanyResourceUploadModal } from '@/components/company';
 import { useAuth } from '@/contexts/AuthContext';
+import type { CompanyResource, CompanyAccessRequest } from '@/types/api';
 
 interface StockQuote {
   ticker: string;
@@ -28,7 +30,7 @@ interface StockQuote {
 export default function CompanyDetailPage() {
   const params = useParams();
   const companyId = params.id as string;
-  const { user, logout } = useAuth();
+  const { user, accessToken, logout } = useAuth();
 
   const [company, setCompany] = useState<Company | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
@@ -50,6 +52,14 @@ export default function CompanyDetailPage() {
   const [stockQuote, setStockQuote] = useState<StockQuote | null>(null);
   const [stockLoading, setStockLoading] = useState(false);
 
+  // Company representative states
+  const [isCompanyRep, setIsCompanyRep] = useState(false);
+  const [pendingRequest, setPendingRequest] = useState<CompanyAccessRequest | null>(null);
+  const [showRepRegistration, setShowRepRegistration] = useState(false);
+  const [showResourceUpload, setShowResourceUpload] = useState(false);
+  const [companyResources, setCompanyResources] = useState<CompanyResource[]>([]);
+  const [resourcesLoading, setResourcesLoading] = useState(false);
+
   const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api';
 
   useEffect(() => {
@@ -58,8 +68,56 @@ export default function CompanyDetailPage() {
       fetchNewsReleases();
       fetchFinancings();
       fetchStockQuote();
+      fetchCompanyResources();
     }
   }, [companyId]);
+
+  // Check user's representative status for this company
+  useEffect(() => {
+    if (accessToken && companyId && user) {
+      checkRepresentativeStatus();
+    }
+  }, [accessToken, companyId, user]);
+
+  const checkRepresentativeStatus = async () => {
+    if (!accessToken) return;
+
+    try {
+      // Check if user is a representative for this specific company
+      if (user?.company === parseInt(companyId)) {
+        setIsCompanyRep(true);
+        setPendingRequest(null);
+        return;
+      }
+
+      // Check for pending request for this company
+      const response = await accessRequestAPI.getMyRequest(accessToken).catch(() => null);
+      if (response && 'id' in response) {
+        // User has a pending request - check if it's for this company
+        const request = response as CompanyAccessRequest;
+        if (request.company === parseInt(companyId) && request.status === 'pending') {
+          setPendingRequest(request);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to check representative status:', err);
+    }
+  };
+
+  const fetchCompanyResources = async () => {
+    try {
+      setResourcesLoading(true);
+      const res = await fetch(`${API_URL}/company-portal/resources/?company=${companyId}`);
+      if (res.ok) {
+        const data = await res.json();
+        setCompanyResources(data.results || data || []);
+      }
+    } catch (err) {
+      console.error('Failed to fetch company resources:', err);
+    } finally {
+      setResourcesLoading(false);
+    }
+  };
 
   const fetchStockQuote = async () => {
     try {
@@ -193,10 +251,9 @@ export default function CompanyDetailPage() {
             <div className="flex items-center space-x-4">
               <Badge variant="copper">AI-Powered</Badge>
               <Button variant="ghost" size="sm" onClick={() => window.location.href = '/'}>Home</Button>
-              <Button variant="ghost" size="sm" onClick={() => window.location.href = '/'}>Dashboard</Button>
+              <Button variant="ghost" size="sm" onClick={() => window.location.href = '/dashboard'}>Dashboard</Button>
               <Button variant="ghost" size="sm" onClick={() => window.location.href = '/companies'}>Companies</Button>
               <Button variant="ghost" size="sm" onClick={() => window.location.href = '/metals'}>Metals</Button>
-              <Button variant="primary" size="sm" onClick={() => window.location.href = '/company-portal'}>Company Portal</Button>
 
               {user ? (
                 <div className="flex items-center space-x-3">
@@ -238,6 +295,32 @@ export default function CompanyDetailPage() {
           onSwitchToLogin={() => {
             setShowRegister(false);
             setShowLogin(true);
+          }}
+        />
+      )}
+
+      {/* Company Representative Registration Modal */}
+      {showRepRegistration && company && (
+        <CompanyRepRegistrationModal
+          companyId={parseInt(companyId)}
+          companyName={company.name}
+          accessToken={accessToken}
+          onClose={() => setShowRepRegistration(false)}
+          onSubmitSuccess={(request) => {
+            setPendingRequest(request);
+            setShowRepRegistration(false);
+          }}
+        />
+      )}
+
+      {/* Company Resource Upload Modal */}
+      {showResourceUpload && company && (
+        <CompanyResourceUploadModal
+          companyId={parseInt(companyId)}
+          accessToken={accessToken}
+          onClose={() => setShowResourceUpload(false)}
+          onUploadComplete={() => {
+            fetchCompanyResources();
           }}
         />
       )}
@@ -559,6 +642,165 @@ export default function CompanyDetailPage() {
                   </Card>
                 </div>
               </div>
+
+              {/* Resources & Documents Section */}
+              <div className="mb-12">
+                <div className="flex items-center justify-between mb-6">
+                  <div>
+                    <h2 className="text-3xl font-bold text-gold-400 mb-2">Resources & Documents</h2>
+                    <p className="text-slate-400">Investor presentations, technical reports, and company documents</p>
+                  </div>
+                  {isCompanyRep && (
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => setShowResourceUpload(true)}
+                    >
+                      + Add Resource
+                    </Button>
+                  )}
+                </div>
+
+                {resourcesLoading ? (
+                  <Card variant="glass-card">
+                    <CardContent className="py-12 text-center">
+                      <div className="text-slate-400">Loading resources...</div>
+                    </CardContent>
+                  </Card>
+                ) : companyResources.length > 0 ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {companyResources.map((resource) => (
+                      <a
+                        key={resource.id}
+                        href={resource.file || resource.external_url || '#'}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="group"
+                      >
+                        <Card variant="glass-card" className="h-full hover:border-gold-500/50 transition-colors">
+                          <CardContent className="p-4">
+                            <div className="flex items-start gap-3">
+                              <div className="w-10 h-10 rounded-lg bg-slate-700 flex items-center justify-center flex-shrink-0">
+                                {resource.resource_type === 'document' ? (
+                                  <svg className="w-5 h-5 text-gold-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                  </svg>
+                                ) : resource.resource_type === 'presentation' ? (
+                                  <svg className="w-5 h-5 text-gold-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                                  </svg>
+                                ) : resource.resource_type === 'map' ? (
+                                  <svg className="w-5 h-5 text-gold-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+                                  </svg>
+                                ) : (
+                                  <svg className="w-5 h-5 text-gold-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                  </svg>
+                                )}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-white font-medium truncate group-hover:text-gold-400 transition-colors">
+                                  {resource.title}
+                                </p>
+                                {resource.description && (
+                                  <p className="text-sm text-slate-400 truncate">{resource.description}</p>
+                                )}
+                                <div className="flex items-center gap-2 mt-1">
+                                  <Badge variant="slate" className="text-xs">
+                                    {resource.category.replace(/_/g, ' ')}
+                                  </Badge>
+                                  {resource.file_format && (
+                                    <span className="text-xs text-slate-500">{resource.file_format.toUpperCase()}</span>
+                                  )}
+                                </div>
+                              </div>
+                              <svg className="w-5 h-5 text-slate-500 group-hover:text-gold-400 transition-colors flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                              </svg>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      </a>
+                    ))}
+                  </div>
+                ) : (
+                  <Card variant="glass-card">
+                    <CardContent className="py-12 text-center">
+                      <svg className="mx-auto w-12 h-12 text-slate-600 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                      <p className="text-slate-400 mb-2">No resources uploaded yet</p>
+                      {isCompanyRep && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setShowResourceUpload(true)}
+                        >
+                          Upload your first resource
+                        </Button>
+                      )}
+                    </CardContent>
+                  </Card>
+                )}
+              </div>
+
+              {/* Company Representative Registration Section */}
+              {!isCompanyRep && (
+                <div className="mb-12">
+                  <Card variant="glass-card" className="border-gold-500/30">
+                    <CardContent className="p-6">
+                      <div className="flex items-start gap-6">
+                        <div className="w-16 h-16 bg-gradient-to-br from-gold-500/20 to-copper-500/20 rounded-lg flex items-center justify-center flex-shrink-0">
+                          <svg className="w-8 h-8 text-gold-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                          </svg>
+                        </div>
+                        <div className="flex-1">
+                          <h3 className="text-xl font-bold text-white mb-2">Are you a company representative?</h3>
+                          <p className="text-slate-400 mb-4">
+                            If you work for {company.name}, register as a company representative to upload investor presentations,
+                            technical reports, and other documents to share with investors on this platform.
+                          </p>
+                          {pendingRequest ? (
+                            <div className="flex items-center gap-3 p-3 bg-gold-500/10 border border-gold-500/30 rounded-lg">
+                              <svg className="w-5 h-5 text-gold-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                              </svg>
+                              <div>
+                                <p className="text-gold-400 font-medium">Request Pending</p>
+                                <p className="text-sm text-slate-400">
+                                  Your request to represent this company is under review. We'll notify you when it's processed.
+                                </p>
+                              </div>
+                            </div>
+                          ) : user ? (
+                            <Button
+                              variant="primary"
+                              onClick={() => setShowRepRegistration(true)}
+                            >
+                              <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
+                              </svg>
+                              Register as Company Representative
+                            </Button>
+                          ) : (
+                            <Button
+                              variant="primary"
+                              onClick={() => setShowLogin(true)}
+                            >
+                              <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" />
+                              </svg>
+                              Sign In to Register as Representative
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+              )}
 
               {/* Community Forum Section */}
               <div className="mb-12">
