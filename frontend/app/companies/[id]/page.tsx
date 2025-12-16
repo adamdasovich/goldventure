@@ -774,7 +774,7 @@ export default function CompanyDetailPage() {
                               handleDeleteResource(resource.id);
                             }}
                             disabled={deletingResourceId === resource.id}
-                            className="absolute top-2 left-2 p-1.5 bg-red-500/80 hover:bg-red-500 text-white rounded-lg transition-all opacity-0 group-hover:opacity-100 disabled:opacity-50 z-10"
+                            className="absolute top-2 left-2 p-1.5 bg-red-500/80 hover:bg-red-500 text-white rounded-lg transition-all disabled:opacity-50 z-10"
                             title="Delete resource"
                           >
                             {deletingResourceId === resource.id ? (
