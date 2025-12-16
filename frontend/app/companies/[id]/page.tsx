@@ -59,6 +59,7 @@ export default function CompanyDetailPage() {
   const [showResourceUpload, setShowResourceUpload] = useState(false);
   const [companyResources, setCompanyResources] = useState<CompanyResource[]>([]);
   const [resourcesLoading, setResourcesLoading] = useState(false);
+  const [deletingResourceId, setDeletingResourceId] = useState<number | null>(null);
 
   const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api';
 
@@ -219,6 +220,26 @@ export default function CompanyDetailPage() {
       setScrapeError(err instanceof Error ? err.message : 'An unexpected error occurred while scraping news');
     } finally {
       setScrapingNews(false);
+    }
+  };
+
+  const handleDeleteResource = async (resourceId: number) => {
+    if (!accessToken) return;
+
+    if (!confirm('Are you sure you want to delete this resource? This action cannot be undone.')) {
+      return;
+    }
+
+    try {
+      setDeletingResourceId(resourceId);
+      await companyResourceAPI.delete(accessToken, resourceId);
+      // Remove from local state
+      setCompanyResources(prev => prev.filter(r => r.id !== resourceId));
+    } catch (err) {
+      console.error('Failed to delete resource:', err);
+      alert('Failed to delete resource. Please try again.');
+    } finally {
+      setDeletingResourceId(null);
     }
   };
 
@@ -670,62 +691,85 @@ export default function CompanyDetailPage() {
                 ) : companyResources.length > 0 ? (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     {companyResources.map((resource) => (
-                      <a
-                        key={resource.id}
-                        href={resource.file || resource.external_url || '#'}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="group"
-                      >
-                        <Card variant="glass-card" className="h-full hover:border-gold-500/50 transition-colors">
-                          <CardContent className="p-4">
-                            <div className="flex items-start gap-3">
-                              <div className="w-10 h-10 rounded-lg bg-slate-700 flex items-center justify-center flex-shrink-0">
-                                {resource.resource_type === 'document' || resource.category === 'technical_report' ? (
-                                  <svg className="w-5 h-5 text-gold-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                                  </svg>
-                                ) : resource.resource_type === 'presentation' || resource.category === 'investor_presentation' ? (
-                                  <svg className="w-5 h-5 text-gold-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-                                  </svg>
-                                ) : resource.category === 'map' ? (
-                                  <svg className="w-5 h-5 text-gold-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
-                                  </svg>
-                                ) : resource.resource_type === 'image' ? (
-                                  <svg className="w-5 h-5 text-gold-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                                  </svg>
-                                ) : (
-                                  <svg className="w-5 h-5 text-gold-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                                  </svg>
-                                )}
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <p className="text-white font-medium truncate group-hover:text-gold-400 transition-colors">
-                                  {resource.title}
-                                </p>
-                                {resource.description && (
-                                  <p className="text-sm text-slate-400 truncate">{resource.description}</p>
-                                )}
-                                <div className="flex items-center gap-2 mt-1">
-                                  <Badge variant="slate" className="text-xs">
-                                    {resource.category.replace(/_/g, ' ')}
-                                  </Badge>
-                                  {resource.file_format && (
-                                    <span className="text-xs text-slate-500">{resource.file_format.toUpperCase()}</span>
+                      <div key={resource.id} className="group relative">
+                        <a
+                          href={resource.file || resource.external_url || '#'}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          <Card variant="glass-card" className="h-full hover:border-gold-500/50 transition-colors">
+                            <CardContent className="p-4">
+                              <div className="flex items-start gap-3">
+                                <div className="w-10 h-10 rounded-lg bg-slate-700 flex items-center justify-center flex-shrink-0">
+                                  {resource.resource_type === 'document' || resource.category === 'technical_report' ? (
+                                    <svg className="w-5 h-5 text-gold-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                    </svg>
+                                  ) : resource.resource_type === 'presentation' || resource.category === 'investor_presentation' ? (
+                                    <svg className="w-5 h-5 text-gold-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                                    </svg>
+                                  ) : resource.category === 'map' ? (
+                                    <svg className="w-5 h-5 text-gold-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+                                    </svg>
+                                  ) : resource.resource_type === 'image' ? (
+                                    <svg className="w-5 h-5 text-gold-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                    </svg>
+                                  ) : (
+                                    <svg className="w-5 h-5 text-gold-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                    </svg>
                                   )}
                                 </div>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-white font-medium truncate group-hover:text-gold-400 transition-colors">
+                                    {resource.title}
+                                  </p>
+                                  {resource.description && (
+                                    <p className="text-sm text-slate-400 truncate">{resource.description}</p>
+                                  )}
+                                  <div className="flex items-center gap-2 mt-1">
+                                    <Badge variant="slate" className="text-xs">
+                                      {resource.category.replace(/_/g, ' ')}
+                                    </Badge>
+                                    {resource.file_format && (
+                                      <span className="text-xs text-slate-500">{resource.file_format.toUpperCase()}</span>
+                                    )}
+                                  </div>
+                                </div>
+                                <svg className="w-5 h-5 text-slate-500 group-hover:text-gold-400 transition-colors flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                                </svg>
                               </div>
-                              <svg className="w-5 h-5 text-slate-500 group-hover:text-gold-400 transition-colors flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                            </CardContent>
+                          </Card>
+                        </a>
+                        {isCompanyRep && (
+                          <button
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              handleDeleteResource(resource.id);
+                            }}
+                            disabled={deletingResourceId === resource.id}
+                            className="absolute top-2 right-2 p-1.5 bg-red-500/80 hover:bg-red-500 text-white rounded-lg opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-50"
+                            title="Delete resource"
+                          >
+                            {deletingResourceId === resource.id ? (
+                              <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                               </svg>
-                            </div>
-                          </CardContent>
-                        </Card>
-                      </a>
+                            ) : (
+                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              </svg>
+                            )}
+                          </button>
+                        )}
+                      </div>
                     ))}
                   </div>
                 ) : (
