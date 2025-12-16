@@ -247,6 +247,19 @@ class MiningNewsScraper:
         else:
             return None
 
+        # Filter out unwanted article types
+        title_lower = article['title'].lower()
+        unwanted_prefixes = [
+            'the northern miner',
+            'opinion:',
+            'site visit:',
+            'watch latest videos on mining.com',
+            'jv video:',
+            'jv article:',
+        ]
+        if any(title_lower.startswith(prefix) for prefix in unwanted_prefixes):
+            return None
+
         # Extract publication date
         date_str = None
         for selector in config['date_selectors']:

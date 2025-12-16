@@ -73,6 +73,25 @@ export default function DashboardPage() {
   const [accessRequestsLoading, setAccessRequestsLoading] = useState(false);
   const [processingRequestId, setProcessingRequestId] = useState<number | null>(null);
 
+  // Investment interest dashboard state (for superusers)
+  const [investmentDashboard, setInvestmentDashboard] = useState<{
+    total_interests: number;
+    total_shares_requested: number;
+    total_amount_interested: string;
+    recent_interests_7d: number;
+    status_breakdown: { status: string; count: number; total_amount: string | null }[];
+    active_financings: {
+      financing_id: number;
+      company_name: string;
+      financing_type: string;
+      target_amount: string | null;
+      total_interests: number;
+      total_amount: string;
+      percentage_filled: string;
+    }[];
+  } | null>(null);
+  const [investmentDashboardLoading, setInvestmentDashboardLoading] = useState(false);
+
   useEffect(() => {
     const fetchDashboardData = async () => {
       if (!accessToken) return;
@@ -140,9 +159,10 @@ export default function DashboardPage() {
 
     if (!authLoading && accessToken) {
       fetchDashboardData();
-      // Fetch pending access requests for superusers
+      // Fetch pending access requests and investment dashboard for superusers
       if (user?.is_superuser) {
         fetchPendingAccessRequests();
+        fetchInvestmentDashboard();
       }
     } else if (!authLoading && !accessToken) {
       setLoading(false);
@@ -161,6 +181,26 @@ export default function DashboardPage() {
       console.error('Failed to fetch pending access requests:', err);
     } finally {
       setAccessRequestsLoading(false);
+    }
+  };
+
+  // Fetch investment interest dashboard data (superuser only)
+  const fetchInvestmentDashboard = async () => {
+    if (!accessToken || !user?.is_superuser) return;
+
+    setInvestmentDashboardLoading(true);
+    try {
+      const res = await fetch(`${API_URL}/api/investment-interest/admin/dashboard/`, {
+        headers: { 'Authorization': `Bearer ${accessToken}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setInvestmentDashboard(data);
+      }
+    } catch (err) {
+      console.error('Failed to fetch investment dashboard:', err);
+    } finally {
+      setInvestmentDashboardLoading(false);
     }
   };
 
@@ -678,6 +718,103 @@ export default function DashboardPage() {
                           </div>
                         </div>
                       ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Investment Interest Dashboard */}
+                <div className="mt-6 pt-6 border-t border-slate-700">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+                      <svg className="w-5 h-5 text-gold-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      Investment Interest Dashboard
+                    </h3>
+                    <Button variant="ghost" size="sm" onClick={fetchInvestmentDashboard} disabled={investmentDashboardLoading}>
+                      {investmentDashboardLoading ? 'Refreshing...' : 'Refresh'}
+                    </Button>
+                  </div>
+
+                  {investmentDashboardLoading && !investmentDashboard ? (
+                    <div className="flex justify-center py-6">
+                      <div className="animate-spin rounded-full h-6 w-6 border-t-2 border-b-2 border-gold-500"></div>
+                    </div>
+                  ) : investmentDashboard ? (
+                    <div className="space-y-4">
+                      {/* Summary Stats */}
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                        <div className="bg-slate-800/50 rounded-lg p-3 text-center">
+                          <p className="text-2xl font-bold text-gold-400">{investmentDashboard.total_interests}</p>
+                          <p className="text-xs text-slate-400">Total Interests</p>
+                        </div>
+                        <div className="bg-slate-800/50 rounded-lg p-3 text-center">
+                          <p className="text-2xl font-bold text-white">
+                            ${Number(investmentDashboard.total_amount_interested || 0).toLocaleString()}
+                          </p>
+                          <p className="text-xs text-slate-400">Total Amount</p>
+                        </div>
+                        <div className="bg-slate-800/50 rounded-lg p-3 text-center">
+                          <p className="text-2xl font-bold text-white">
+                            {(investmentDashboard.total_shares_requested || 0).toLocaleString()}
+                          </p>
+                          <p className="text-xs text-slate-400">Total Shares</p>
+                        </div>
+                        <div className="bg-slate-800/50 rounded-lg p-3 text-center">
+                          <p className="text-2xl font-bold text-green-400">{investmentDashboard.recent_interests_7d}</p>
+                          <p className="text-xs text-slate-400">Last 7 Days</p>
+                        </div>
+                      </div>
+
+                      {/* Status Breakdown */}
+                      {investmentDashboard.status_breakdown && investmentDashboard.status_breakdown.length > 0 && (
+                        <div className="bg-slate-800/30 rounded-lg p-4">
+                          <h4 className="text-sm font-medium text-white mb-3">By Status</h4>
+                          <div className="flex flex-wrap gap-2">
+                            {investmentDashboard.status_breakdown.map((item) => (
+                              <Badge
+                                key={item.status}
+                                variant={item.status === 'pending' ? 'gold' : item.status === 'converted' ? 'copper' : 'slate'}
+                              >
+                                {item.status}: {item.count}
+                              </Badge>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Active Financings with Interest */}
+                      {investmentDashboard.active_financings && investmentDashboard.active_financings.length > 0 && (
+                        <div className="bg-slate-800/30 rounded-lg p-4">
+                          <h4 className="text-sm font-medium text-white mb-3">Active Financings</h4>
+                          <div className="space-y-3">
+                            {investmentDashboard.active_financings.map((financing) => (
+                              <div
+                                key={financing.financing_id}
+                                className="flex items-center justify-between p-3 bg-slate-800/50 rounded-lg"
+                              >
+                                <div>
+                                  <p className="text-white font-medium">{financing.company_name}</p>
+                                  <p className="text-xs text-slate-400">{financing.financing_type}</p>
+                                </div>
+                                <div className="text-right">
+                                  <p className="text-gold-400 font-semibold">{financing.total_interests} investors</p>
+                                  <p className="text-xs text-slate-400">
+                                    ${Number(financing.total_amount || 0).toLocaleString()} ({Number(financing.percentage_filled || 0).toFixed(0)}%)
+                                  </p>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="text-center py-6 text-slate-400">
+                      <svg className="w-12 h-12 mx-auto mb-2 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                      </svg>
+                      No investment interest data available
                     </div>
                   )}
                 </div>

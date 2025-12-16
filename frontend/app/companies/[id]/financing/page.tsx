@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import LogoMono from '@/components/LogoMono';
 import { LoginModal, RegisterModal } from '@/components/auth';
+import { InvestmentInterestModal } from '@/components/financing';
 import { useAuth } from '@/contexts/AuthContext';
 
 interface Company {
@@ -63,8 +64,20 @@ export default function CompanyFinancingPage() {
   const [error, setError] = useState<string | null>(null);
   const [showLogin, setShowLogin] = useState(false);
   const [showRegister, setShowRegister] = useState(false);
-  const [expressingInterest, setExpressingInterest] = useState(false);
-  const [interestExpressed, setInterestExpressed] = useState(false);
+  const [showInterestModal, setShowInterestModal] = useState(false);
+  const [interestStatus, setInterestStatus] = useState<{
+    has_interest: boolean;
+    interest_id: number | null;
+    status: string | null;
+    shares_requested: number | null;
+    investment_amount: string | null;
+  } | null>(null);
+  const [interestAggregate, setInterestAggregate] = useState<{
+    total_interest_count: number;
+    total_shares_requested: number;
+    total_amount_interested: string;
+    percentage_filled: string;
+  } | null>(null);
 
   useEffect(() => {
     if (!user) {
@@ -134,19 +147,59 @@ export default function CompanyFinancingPage() {
     }
   };
 
+  const fetchMyInterestStatus = async (financingId: number) => {
+    if (!accessToken) return;
+    try {
+      const res = await fetch(`${API_URL}/investment-interest/my-interest/${financingId}/`, {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+        },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setInterestStatus(data);
+      }
+    } catch (err) {
+      console.error('Failed to fetch interest status:', err);
+    }
+  };
+
+  const fetchInterestAggregate = async (financingId: number) => {
+    try {
+      const res = await fetch(`${API_URL}/investment-interest/aggregate/${financingId}/`);
+      if (res.ok) {
+        const data = await res.json();
+        setInterestAggregate(data);
+      }
+    } catch (err) {
+      console.error('Failed to fetch interest aggregate:', err);
+    }
+  };
+
+  // Fetch interest data when financing is selected
+  useEffect(() => {
+    if (selectedFinancing) {
+      fetchInterestAggregate(selectedFinancing.id);
+      if (user && accessToken) {
+        fetchMyInterestStatus(selectedFinancing.id);
+      }
+    }
+  }, [selectedFinancing, user, accessToken]);
+
   const handleExpressInterest = async () => {
     if (!user || !selectedFinancing) {
       setShowLogin(true);
       return;
     }
+    setShowInterestModal(true);
+  };
 
-    setExpressingInterest(true);
-    // In a real implementation, this would POST to an API endpoint
-    // For now, we'll simulate the action
-    setTimeout(() => {
-      setExpressingInterest(false);
-      setInterestExpressed(true);
-    }, 1000);
+  const handleInterestSuccess = () => {
+    setShowInterestModal(false);
+    if (selectedFinancing) {
+      fetchMyInterestStatus(selectedFinancing.id);
+      fetchInterestAggregate(selectedFinancing.id);
+    }
   };
 
   const formatCurrency = (amount: number, currency: string = 'USD') => {
@@ -257,6 +310,16 @@ export default function CompanyFinancingPage() {
             setShowRegister(false);
             setShowLogin(true);
           }}
+        />
+      )}
+
+      {/* Investment Interest Modal */}
+      {showInterestModal && selectedFinancing && company && (
+        <InvestmentInterestModal
+          financing={selectedFinancing}
+          company={company}
+          onClose={() => setShowInterestModal(false)}
+          onSuccess={handleInterestSuccess}
         />
       )}
 
@@ -437,29 +500,29 @@ export default function CompanyFinancingPage() {
               </Card>
 
               {/* Investor Interest Tracker */}
-              {aggregate && (
+              {interestAggregate && (
                 <Card variant="glass-card">
                   <CardHeader>
                     <CardTitle className="text-lg text-gold-400">Investor Interest</CardTitle>
-                    <CardDescription>Real-time investment commitments from platform users</CardDescription>
+                    <CardDescription>Real-time investment interest from platform users</CardDescription>
                   </CardHeader>
                   <CardContent>
                     <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                       <div className="bg-slate-800/50 rounded-lg p-4 text-center">
-                        <p className="text-3xl font-bold text-gold-400">{aggregate.total_subscribers}</p>
+                        <p className="text-3xl font-bold text-gold-400">{interestAggregate.total_interest_count}</p>
                         <p className="text-sm text-slate-400">Interested Investors</p>
                       </div>
                       <div className="bg-slate-800/50 rounded-lg p-4 text-center">
                         <p className="text-3xl font-bold text-white">
-                          {formatCurrency(aggregate.total_committed_amount)}
+                          {interestAggregate.total_shares_requested.toLocaleString()}
                         </p>
-                        <p className="text-sm text-slate-400">Total Committed</p>
+                        <p className="text-sm text-slate-400">Shares Requested</p>
                       </div>
                       <div className="bg-slate-800/50 rounded-lg p-4 text-center">
                         <p className="text-3xl font-bold text-white">
-                          {formatCurrency(aggregate.total_funded_amount)}
+                          {formatCurrency(Number(interestAggregate.total_amount_interested))}
                         </p>
-                        <p className="text-sm text-slate-400">Total Funded</p>
+                        <p className="text-sm text-slate-400">Total Interest</p>
                       </div>
                     </div>
 
@@ -467,16 +530,16 @@ export default function CompanyFinancingPage() {
                     {selectedFinancing && (
                       <div className="mt-6">
                         <div className="flex justify-between text-sm mb-2">
-                          <span className="text-slate-400">Progress</span>
+                          <span className="text-slate-400">Interest Level</span>
                           <span className="text-gold-400">
-                            {((aggregate.total_committed_amount / selectedFinancing.amount_raised_usd) * 100).toFixed(1)}%
+                            {Number(interestAggregate.percentage_filled).toFixed(1)}%
                           </span>
                         </div>
                         <div className="h-3 bg-slate-700 rounded-full overflow-hidden">
                           <div
                             className="h-full bg-gradient-to-r from-gold-500 to-copper-500 rounded-full transition-all duration-500"
                             style={{
-                              width: `${Math.min((aggregate.total_committed_amount / selectedFinancing.amount_raised_usd) * 100, 100)}%`
+                              width: `${Math.min(Number(interestAggregate.percentage_filled), 100)}%`
                             }}
                           ></div>
                         </div>
@@ -560,7 +623,7 @@ export default function CompanyFinancingPage() {
                         Create Account
                       </Button>
                     </div>
-                  ) : interestExpressed ? (
+                  ) : interestStatus?.has_interest ? (
                     <div className="space-y-4">
                       <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-4 text-center">
                         <svg className="w-12 h-12 mx-auto text-green-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -568,22 +631,25 @@ export default function CompanyFinancingPage() {
                         </svg>
                         <p className="text-green-400 font-medium">Interest Registered!</p>
                         <p className="text-sm text-slate-400 mt-1">
-                          The company will contact you with next steps.
+                          {interestStatus.shares_requested?.toLocaleString()} shares ({formatCurrency(Number(interestStatus.investment_amount) || 0)})
+                        </p>
+                        <p className="text-xs text-slate-500 mt-2">
+                          Status: {interestStatus.status === 'pending' ? 'Pending Review' : interestStatus.status}
                         </p>
                       </div>
                     </div>
                   ) : (
                     <div className="space-y-4">
                       <Button
+                        type="button"
                         variant="primary"
                         className="w-full"
                         onClick={handleExpressInterest}
-                        disabled={expressingInterest}
                       >
-                        {expressingInterest ? 'Processing...' : 'Express Interest'}
+                        Participate in this Financing
                       </Button>
                       <p className="text-xs text-slate-500 text-center">
-                        By expressing interest, you agree to be contacted about this opportunity.
+                        Register your interest to receive investment documents and next steps.
                       </p>
                     </div>
                   )}

@@ -2518,13 +2518,15 @@ class CompanyResource(models.Model):
     category = models.CharField(max_length=30, choices=RESOURCE_CATEGORIES)
     title = models.CharField(max_length=200)
     description = models.TextField(blank=True)
-    file_url = models.URLField()
+    file_url = models.URLField(blank=True)
+    external_url = models.URLField(blank=True, help_text="External link to resource")
     thumbnail_url = models.URLField(blank=True)
     file_size_mb = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     file_format = models.CharField(max_length=20, blank=True)
     sort_order = models.IntegerField(default=0)
     is_primary = models.BooleanField(default=False, help_text="Primary/hero image for the company")
     is_public = models.BooleanField(default=True, help_text="Visible to all users or only subscribers")
+    is_featured = models.BooleanField(default=False, help_text="Featured resource shown prominently")
 
     # Related project (optional - resource can be company-wide or project-specific)
     project = models.ForeignKey(
@@ -2548,6 +2550,7 @@ class CompanyResource(models.Model):
             models.Index(fields=['company', 'category']),
             models.Index(fields=['company', 'is_primary']),
             models.Index(fields=['project', 'category']),
+            models.Index(fields=['company', 'is_featured']),
         ]
 
     def __str__(self):
@@ -2852,3 +2855,207 @@ class CompanyAccessRequest(models.Model):
         self.review_notes = notes
         self.reviewed_at = timezone.now()
         self.save()
+
+
+# ============================================================================
+# INVESTMENT INTEREST REGISTRATION
+# ============================================================================
+
+class InvestmentInterest(models.Model):
+    """
+    Tracks investor interest in financing rounds.
+    This is the initial registration step before formal subscription agreements.
+    Used for lead generation and investor qualification.
+    """
+    STATUS_CHOICES = [
+        ('pending', 'Pending Review'),
+        ('qualified', 'Qualified'),
+        ('contacted', 'Contacted'),
+        ('converted', 'Converted to Subscription'),
+        ('rejected', 'Rejected'),
+        ('withdrawn', 'Withdrawn'),
+    ]
+
+    # Core relationships
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='investment_interests')
+    financing = models.ForeignKey(Financing, on_delete=models.CASCADE, related_name='investment_interests')
+    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name='investment_interests')
+
+    # Accreditation
+    is_accredited_investor = models.BooleanField(
+        help_text="User confirmed they are an accredited investor"
+    )
+    accreditation_confirmed_at = models.DateTimeField(auto_now_add=True)
+
+    # Investment details
+    shares_requested = models.BigIntegerField(
+        validators=[MinValueValidator(1)],
+        help_text="Number of shares the investor is interested in"
+    )
+    price_per_share = models.DecimalField(
+        max_digits=10,
+        decimal_places=4,
+        help_text="Price per share at time of interest registration"
+    )
+    investment_amount = models.DecimalField(
+        max_digits=15,
+        decimal_places=2,
+        help_text="Total investment amount (shares * price)"
+    )
+    currency = models.CharField(max_length=3, default='USD')
+
+    # Document confirmations
+    term_sheet_confirmed = models.BooleanField(default=False)
+    term_sheet_confirmed_at = models.DateTimeField(null=True, blank=True)
+    subscription_agreement_confirmed = models.BooleanField(default=False)
+    subscription_agreement_confirmed_at = models.DateTimeField(null=True, blank=True)
+
+    # Contact information
+    contact_email = models.EmailField(
+        help_text="Email for follow-up communications"
+    )
+    contact_phone = models.CharField(
+        max_length=20,
+        blank=True,
+        help_text="Phone number for follow-up"
+    )
+
+    # Risk acknowledgment
+    risk_acknowledged = models.BooleanField(
+        default=False,
+        help_text="User acknowledged investment risks"
+    )
+    risk_acknowledged_at = models.DateTimeField(null=True, blank=True)
+
+    # Processing status
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default='pending'
+    )
+    status_notes = models.TextField(blank=True)
+
+    # Linked subscription agreement (if converted)
+    subscription_agreement = models.ForeignKey(
+        SubscriptionAgreement,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='interest_registrations'
+    )
+
+    # Tracking/audit fields
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    user_agent = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'investment_interests'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['user', 'financing']),
+            models.Index(fields=['financing', 'status']),
+            models.Index(fields=['company', '-created_at']),
+            models.Index(fields=['status', '-created_at']),
+            models.Index(fields=['is_accredited_investor']),
+        ]
+        # Prevent duplicate interests from same user for same financing
+        constraints = [
+            models.UniqueConstraint(
+                fields=['user', 'financing'],
+                name='unique_user_financing_interest'
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.user.username} - {self.company.name} - ${self.investment_amount:,.2f}"
+
+    def save(self, *args, **kwargs):
+        # Auto-calculate investment amount
+        if self.shares_requested and self.price_per_share:
+            self.investment_amount = self.shares_requested * self.price_per_share
+        super().save(*args, **kwargs)
+
+
+class InvestmentInterestAggregate(models.Model):
+    """
+    Aggregated public statistics for investment interests.
+    This is the PUBLIC-FACING data shown on company pages.
+    Contains NO personally identifiable information.
+    """
+    financing = models.OneToOneField(
+        Financing,
+        on_delete=models.CASCADE,
+        related_name='interest_aggregate'
+    )
+
+    # Public metrics (NO PII)
+    total_interest_count = models.IntegerField(
+        default=0,
+        help_text="Number of investors who expressed interest"
+    )
+    total_shares_requested = models.BigIntegerField(
+        default=0,
+        help_text="Total shares requested across all interests"
+    )
+    total_amount_interested = models.DecimalField(
+        max_digits=15,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        help_text="Total investment amount interested"
+    )
+
+    # Percentage metrics
+    percentage_filled = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        help_text="Percentage of financing goal filled by interests"
+    )
+
+    # Last updated
+    last_calculated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'investment_interest_aggregates'
+
+    def __str__(self):
+        return f"{self.financing.company.name} - Interest Aggregate"
+
+    def recalculate(self):
+        """Recalculate aggregate statistics from investment interests"""
+        from django.db.models import Sum, Count
+        from django.utils import timezone
+
+        # Get aggregated data from active interests (not withdrawn/rejected)
+        stats = self.financing.investment_interests.filter(
+            status__in=['pending', 'qualified', 'contacted', 'converted']
+        ).aggregate(
+            count=Count('id'),
+            total_shares=Sum('shares_requested'),
+            total_amount=Sum('investment_amount')
+        )
+
+        self.total_interest_count = stats['count'] or 0
+        self.total_shares_requested = stats['total_shares'] or 0
+        self.total_amount_interested = stats['total_amount'] or Decimal('0.00')
+
+        # Calculate percentage of financing goal filled
+        if self.financing.target_amount and self.financing.target_amount > 0:
+            self.percentage_filled = min(
+                (self.total_amount_interested / self.financing.target_amount) * 100,
+                Decimal('100.00')
+            )
+        else:
+            self.percentage_filled = Decimal('0.00')
+
+        self.last_calculated_at = timezone.now()
+        self.save()
+
+    @classmethod
+    def update_for_financing(cls, financing):
+        """Get or create aggregate and recalculate"""
+        aggregate, created = cls.objects.get_or_create(financing=financing)
+        aggregate.recalculate()
+        return aggregate

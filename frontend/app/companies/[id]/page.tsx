@@ -28,11 +28,21 @@ export default function CompanyDetailPage() {
   const [scrapeError, setScrapeError] = useState<string | null>(null);
   const [showLogin, setShowLogin] = useState(false);
   const [showRegister, setShowRegister] = useState(false);
+  const [financings, setFinancings] = useState<any[]>([]);
+  const [interestAggregates, setInterestAggregates] = useState<Record<number, {
+    total_interest_count: number;
+    total_shares_requested: number;
+    total_amount_interested: string;
+    percentage_filled: string;
+  }>>({});
+
+  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api';
 
   useEffect(() => {
     if (companyId) {
       fetchCompanyDetails();
       fetchNewsReleases();
+      fetchFinancings();
     }
   }, [companyId]);
 
@@ -62,6 +72,41 @@ export default function CompanyDetailPage() {
       console.error('Failed to fetch news releases:', err);
     } finally {
       setNewsLoading(false);
+    }
+  };
+
+  const fetchFinancings = async () => {
+    try {
+      const res = await fetch(`${API_URL}/financings/?company=${companyId}`);
+      if (res.ok) {
+        const data = await res.json();
+        const financingsList = data.results || data;
+        setFinancings(financingsList);
+        // Fetch interest aggregates for open financings
+        const openFinancings = financingsList.filter(
+          (f: any) => f.status === 'announced' || f.status === 'closing' || f.status === 'open'
+        );
+        for (const financing of openFinancings) {
+          fetchInterestAggregate(financing.id);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to fetch financings:', err);
+    }
+  };
+
+  const fetchInterestAggregate = async (financingId: number) => {
+    try {
+      const res = await fetch(`${API_URL}/investment-interest/aggregate/${financingId}/`);
+      if (res.ok) {
+        const data = await res.json();
+        setInterestAggregates(prev => ({
+          ...prev,
+          [financingId]: data
+        }));
+      }
+    } catch (err) {
+      console.error('Failed to fetch interest aggregate:', err);
     }
   };
 
@@ -236,6 +281,83 @@ export default function CompanyDetailPage() {
                   </CardContent>
                 </Card>
               </div>
+
+              {/* Active Financing & Investment Interest Section */}
+              {financings.filter(f => f.status === 'announced' || f.status === 'closing' || f.status === 'open').length > 0 && (
+                <div className="mt-8">
+                  <h3 className="text-lg font-semibold text-gold-400 mb-4 flex items-center gap-2">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    Active Financing Rounds
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {financings
+                      .filter(f => f.status === 'announced' || f.status === 'closing' || f.status === 'open')
+                      .map(financing => {
+                        const aggregate = interestAggregates[financing.id];
+                        return (
+                          <Card key={financing.id} variant="glass-card" className="border-gold-500/30">
+                            <CardContent className="p-4">
+                              <div className="flex items-center justify-between mb-3">
+                                <Badge variant="gold">{financing.financing_type_display || financing.financing_type}</Badge>
+                                <Badge variant="copper">
+                                  {financing.status === 'announced' ? 'Open' :
+                                   financing.status === 'closing' ? 'Closing Soon' : financing.status}
+                                </Badge>
+                              </div>
+
+                              {/* Investment Interest Stats */}
+                              {aggregate && aggregate.total_interest_count > 0 ? (
+                                <div className="space-y-3">
+                                  <div className="grid grid-cols-2 gap-3">
+                                    <div className="text-center">
+                                      <p className="text-2xl font-bold text-gold-400">{aggregate.total_interest_count}</p>
+                                      <p className="text-xs text-slate-400">Interested Investors</p>
+                                    </div>
+                                    <div className="text-center">
+                                      <p className="text-2xl font-bold text-white">
+                                        ${Number(aggregate.total_amount_interested).toLocaleString()}
+                                      </p>
+                                      <p className="text-xs text-slate-400">Total Interest</p>
+                                    </div>
+                                  </div>
+
+                                  {/* Progress bar */}
+                                  <div>
+                                    <div className="flex justify-between text-xs mb-1">
+                                      <span className="text-slate-400">Interest Level</span>
+                                      <span className="text-gold-400">{Number(aggregate.percentage_filled).toFixed(0)}%</span>
+                                    </div>
+                                    <div className="h-2 bg-slate-700 rounded-full overflow-hidden">
+                                      <div
+                                        className="h-full bg-gradient-to-r from-gold-500 to-copper-500 rounded-full"
+                                        style={{ width: `${Math.min(Number(aggregate.percentage_filled), 100)}%` }}
+                                      ></div>
+                                    </div>
+                                  </div>
+                                </div>
+                              ) : (
+                                <p className="text-sm text-slate-400 text-center py-2">
+                                  No interests registered yet
+                                </p>
+                              )}
+
+                              <Button
+                                variant="primary"
+                                size="sm"
+                                className="w-full mt-4"
+                                onClick={() => window.location.href = `/companies/${companyId}/financing`}
+                              >
+                                View Financing Details
+                              </Button>
+                            </CardContent>
+                          </Card>
+                        );
+                      })}
+                  </div>
+                </div>
+              )}
             </div>
           </section>
 
