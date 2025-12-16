@@ -337,82 +337,90 @@ export default function CompanyDetailPage() {
                 </Card>
               </div>
 
-              {/* Active Financing & Investment Interest Section */}
-              {financings.filter(f => f.status === 'announced' || f.status === 'closing' || f.status === 'open').length > 0 && (
-                <div className="mt-8">
-                  <h3 className="text-lg font-semibold text-gold-400 mb-4 flex items-center gap-2">
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    Active Financing Rounds
-                  </h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {financings
-                      .filter(f => f.status === 'announced' || f.status === 'closing' || f.status === 'open')
-                      .map(financing => {
-                        const aggregate = interestAggregates[financing.id];
-                        return (
-                          <Card key={financing.id} variant="glass-card" className="border-gold-500/30">
-                            <CardContent className="p-4">
-                              <div className="flex items-center justify-between mb-3">
-                                <Badge variant="gold">{financing.financing_type_display || financing.financing_type}</Badge>
-                                <Badge variant="copper">
-                                  {financing.status === 'announced' ? 'Open' :
-                                   financing.status === 'closing' ? 'Closing Soon' : financing.status}
-                                </Badge>
-                              </div>
-
-                              {/* Investment Interest Stats */}
-                              {aggregate && aggregate.total_interest_count > 0 ? (
-                                <div className="space-y-3">
-                                  <div className="grid grid-cols-2 gap-3">
-                                    <div className="text-center">
-                                      <p className="text-2xl font-bold text-gold-400">{aggregate.total_interest_count}</p>
-                                      <p className="text-xs text-slate-400">Interested Investors</p>
-                                    </div>
-                                    <div className="text-center">
-                                      <p className="text-2xl font-bold text-white">
-                                        ${Number(aggregate.total_amount_interested).toLocaleString()}
-                                      </p>
-                                      <p className="text-xs text-slate-400">Total Interest</p>
-                                    </div>
-                                  </div>
-
-                                  {/* Progress bar */}
-                                  <div>
-                                    <div className="flex justify-between text-xs mb-1">
-                                      <span className="text-slate-400">Interest Level</span>
-                                      <span className="text-gold-400">{Number(aggregate.percentage_filled).toFixed(0)}%</span>
-                                    </div>
-                                    <div className="h-2 bg-slate-700 rounded-full overflow-hidden">
-                                      <div
-                                        className="h-full bg-gradient-to-r from-gold-500 to-copper-500 rounded-full"
-                                        style={{ width: `${Math.min(Number(aggregate.percentage_filled), 100)}%` }}
-                                      ></div>
-                                    </div>
-                                  </div>
-                                </div>
-                              ) : (
-                                <p className="text-sm text-slate-400 text-center py-2">
-                                  No interests registered yet
-                                </p>
-                              )}
-
-                              <Button
-                                variant="primary"
-                                size="sm"
-                                className="w-full mt-4"
-                                onClick={() => window.location.href = `/companies/${companyId}/financing`}
-                              >
-                                View Financing Details
-                              </Button>
-                            </CardContent>
-                          </Card>
-                        );
-                      })}
-                  </div>
+              {/* Speaking Events & Active Financing Section */}
+              <div className="mt-8 grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Speaking Events - Left Column */}
+                <div>
+                  <EventBanner companyId={parseInt(companyId)} />
                 </div>
-              )}
+
+                {/* Active Financing Rounds - Right Column */}
+                {financings.filter(f => f.status === 'announced' || f.status === 'closing' || f.status === 'open').length > 0 && (
+                  <div>
+                    <h3 className="text-lg font-semibold text-gold-400 mb-4 flex items-center gap-2">
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      Active Financing Rounds
+                    </h3>
+                    <div className="space-y-4">
+                      {financings
+                        .filter(f => f.status === 'announced' || f.status === 'closing' || f.status === 'open')
+                        .map(financing => {
+                          const aggregate = interestAggregates[financing.id];
+                          return (
+                            <Card key={financing.id} variant="glass-card" className="border-gold-500/30">
+                              <CardContent className="p-4">
+                                <div className="flex items-center justify-between mb-3">
+                                  <Badge variant="gold">{financing.financing_type_display || financing.financing_type}</Badge>
+                                  <Badge variant="copper">
+                                    {financing.status === 'announced' ? 'Open' :
+                                     financing.status === 'closing' ? 'Closing Soon' : financing.status}
+                                  </Badge>
+                                </div>
+
+                                {/* Investment Interest Stats */}
+                                {aggregate && aggregate.total_interest_count > 0 ? (
+                                  <div className="space-y-3">
+                                    <div className="grid grid-cols-2 gap-3">
+                                      <div className="text-center">
+                                        <p className="text-2xl font-bold text-gold-400">{aggregate.total_interest_count}</p>
+                                        <p className="text-xs text-slate-400">Interested Investors</p>
+                                      </div>
+                                      <div className="text-center">
+                                        <p className="text-2xl font-bold text-white">
+                                          ${Number(aggregate.total_amount_interested).toLocaleString()}
+                                        </p>
+                                        <p className="text-xs text-slate-400">Total Interest</p>
+                                      </div>
+                                    </div>
+
+                                    {/* Progress bar */}
+                                    <div>
+                                      <div className="flex justify-between text-xs mb-1">
+                                        <span className="text-slate-400">Interest Level</span>
+                                        <span className="text-gold-400">{Number(aggregate.percentage_filled).toFixed(0)}%</span>
+                                      </div>
+                                      <div className="h-2 bg-slate-700 rounded-full overflow-hidden">
+                                        <div
+                                          className="h-full bg-gradient-to-r from-gold-500 to-copper-500 rounded-full"
+                                          style={{ width: `${Math.min(Number(aggregate.percentage_filled), 100)}%` }}
+                                        ></div>
+                                      </div>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <p className="text-sm text-slate-400 text-center py-2">
+                                    No interests registered yet
+                                  </p>
+                                )}
+
+                                <Button
+                                  variant="primary"
+                                  size="sm"
+                                  className="w-full mt-4"
+                                  onClick={() => window.location.href = `/companies/${companyId}/financing`}
+                                >
+                                  View Financing Details
+                                </Button>
+                              </CardContent>
+                            </Card>
+                          );
+                        })}
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           </section>
 
@@ -551,9 +559,6 @@ export default function CompanyDetailPage() {
                   </Card>
                 </div>
               </div>
-
-              {/* Event Banner Section */}
-              <EventBanner companyId={parseInt(companyId)} />
 
               {/* Community Forum Section */}
               <div className="mb-12">
