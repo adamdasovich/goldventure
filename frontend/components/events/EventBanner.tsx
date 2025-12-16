@@ -310,9 +310,9 @@ export function EventBanner({ companyId }: EventBannerProps) {
             <p className="text-slate-400 mb-6">Create a speaker event for this company</p>
             <Link
               href={`/companies/${companyId}/events/create`}
-              className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-gold-500 to-copper-500 text-white font-semibold rounded-lg hover:from-gold-600 hover:to-copper-600 transition-all"
+              className="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-gold-500 to-gold-600 text-white font-semibold rounded-lg hover:from-gold-600 hover:to-gold-700 transition-all"
             >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
               </svg>
               Create Event
@@ -452,33 +452,33 @@ export function EventBanner({ companyId }: EventBannerProps) {
             )}
 
             {/* Action Buttons */}
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-2">
               {event.is_registered ? (
                 <>
-                  <Badge variant="gold" className="px-4 py-2">
-                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <Badge variant="gold" className="px-3 py-1.5 text-sm">
+                    <svg className="w-3 h-3 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                     </svg>
-                    You're Registered
+                    Registered
                   </Badge>
                   <button
                     onClick={handleUnregister}
                     disabled={registering}
-                    className="px-4 py-2 bg-slate-700 text-white font-medium rounded-lg hover:bg-slate-600 transition-all disabled:opacity-50 text-sm"
+                    className="px-3 py-1.5 bg-slate-700 text-slate-300 text-sm font-medium rounded-lg hover:bg-slate-600 transition-all disabled:opacity-50"
                   >
-                    {registering ? 'Cancelling...' : 'Cancel Registration'}
+                    {registering ? 'Cancelling...' : 'Cancel'}
                   </button>
                 </>
               ) : event.can_register ? (
                 <button
                   onClick={handleRegister}
                   disabled={registering}
-                  className="px-6 py-2 bg-gradient-to-r from-gold-500 to-copper-500 text-white font-semibold rounded-lg hover:from-gold-600 hover:to-copper-600 transition-all disabled:opacity-50"
+                  className="px-4 py-1.5 bg-gradient-to-r from-gold-500 to-gold-600 text-white text-sm font-semibold rounded-lg hover:from-gold-600 hover:to-gold-700 transition-all disabled:opacity-50"
                 >
-                  {registering ? 'Registering...' : 'Register for Event'}
+                  {registering ? 'Registering...' : 'Register'}
                 </button>
               ) : (
-                <Badge variant="slate" className="px-4 py-2">
+                <Badge variant="slate" className="px-3 py-1.5 text-sm">
                   Event Full
                 </Badge>
               )}
@@ -486,50 +486,47 @@ export function EventBanner({ companyId }: EventBannerProps) {
               {event.status === 'live' ? (
                 <Link
                   href={`/companies/${companyId}/events/${event.id}`}
-                  className="px-6 py-2 bg-red-500 text-white font-semibold rounded-lg hover:bg-red-600 transition-all flex items-center gap-2 animate-pulse"
+                  className="px-4 py-1.5 bg-gold-500 text-white text-sm font-semibold rounded-lg hover:bg-gold-600 transition-all flex items-center gap-1.5"
                 >
-                  <div className="w-2 h-2 bg-white rounded-full"></div>
-                  Join Live Event
+                  <div className="w-2 h-2 bg-white rounded-full animate-pulse"></div>
+                  Join Live
                 </Link>
               ) : (
                 <Link
                   href={`/companies/${companyId}/events/${event.id}`}
-                  className="px-6 py-2 bg-slate-700 text-white font-semibold rounded-lg hover:bg-slate-600 transition-all flex items-center gap-2"
+                  className="px-4 py-1.5 bg-slate-700 text-slate-200 text-sm font-medium rounded-lg hover:bg-slate-600 transition-all flex items-center gap-1.5"
                 >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                   </svg>
-                  View Event
+                  View
                 </Link>
               )}
 
               {/* Staff: View Registrations Button */}
-              {(() => {
-                console.log('🔍 Button Check:', { hasStaffAccess, user, is_staff: user?.is_staff, is_superuser: user?.is_superuser });
-                return hasStaffAccess && (
-                  <>
-                    <button
-                      onClick={handleViewRegistrations}
-                      className="px-4 py-2 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-all flex items-center gap-2 text-sm"
-                    >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                      </svg>
-                      View Registrations ({event.registered_count})
-                    </button>
-                    <Link
-                      href={`/companies/${companyId}/events/create`}
-                      className="px-4 py-2 bg-purple-600 text-white font-medium rounded-lg hover:bg-purple-700 transition-all flex items-center gap-2 text-sm"
-                    >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                      </svg>
-                      Create Event
-                    </Link>
-                  </>
-                );
-              })()}
+              {hasStaffAccess && (
+                <>
+                  <button
+                    onClick={handleViewRegistrations}
+                    className="px-3 py-1.5 bg-slate-600 text-slate-200 text-sm font-medium rounded-lg hover:bg-slate-500 transition-all flex items-center gap-1.5"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                    </svg>
+                    Registrations ({event.registered_count})
+                  </button>
+                  <Link
+                    href={`/companies/${companyId}/events/create`}
+                    className="px-3 py-1.5 bg-slate-600 text-slate-200 text-sm font-medium rounded-lg hover:bg-slate-500 transition-all flex items-center gap-1.5"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                    </svg>
+                    Create
+                  </Link>
+                </>
+              )}
             </div>
           </div>
         </div>

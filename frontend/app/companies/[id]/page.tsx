@@ -338,9 +338,9 @@ export default function CompanyDetailPage() {
               </div>
 
               {/* Speaking Events & Active Financing Section */}
-              <div className="mt-8 grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* Speaking Events - Left Column */}
-                <div>
+              <div className="mt-8 grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-6">
+                {/* Speaking Events - Left Column (wider) */}
+                <div className="min-w-0">
                   <EventBanner companyId={parseInt(companyId)} />
                 </div>
 
