@@ -81,20 +81,31 @@ export default function CompanyDetailPage() {
   }, [accessToken, companyId, user]);
 
   const checkRepresentativeStatus = async () => {
-    if (!accessToken) return;
+    if (!accessToken) {
+      setIsCompanyRep(false);
+      setPendingRequest(null);
+      return;
+    }
 
     try {
+      // Reset state first
+      setIsCompanyRep(false);
+      setPendingRequest(null);
+
       // Superusers and staff have access to all companies
       if (user?.is_superuser || user?.is_staff) {
+        console.log('User is superuser/staff, granting access');
         setIsCompanyRep(true);
-        setPendingRequest(null);
         return;
       }
 
       // Check if user is a representative for this specific company
-      if (user?.company_id === parseInt(companyId)) {
+      const companyIdNum = parseInt(companyId);
+      console.log('Checking company rep status:', { userCompanyId: user?.company_id, pageCompanyId: companyIdNum, match: user?.company_id === companyIdNum });
+
+      if (user?.company_id === companyIdNum) {
+        console.log('User is company rep for this company');
         setIsCompanyRep(true);
-        setPendingRequest(null);
         return;
       }
 
@@ -103,7 +114,7 @@ export default function CompanyDetailPage() {
       if (response && 'id' in response) {
         // User has a pending request - check if it's for this company
         const request = response as CompanyAccessRequest;
-        if (request.company === parseInt(companyId) && request.status === 'pending') {
+        if (request.company === companyIdNum && request.status === 'pending') {
           setPendingRequest(request);
         }
       }
