@@ -318,6 +318,13 @@ class StoreStripeService:
             # Clear the cart
             cart.items.all().delete()
 
+            # Send order confirmation email
+            try:
+                from .email_service import EmailService
+                EmailService.send_order_confirmation(order)
+            except Exception as email_error:
+                logger.error(f"Failed to send order confirmation email: {str(email_error)}")
+
             logger.info(f"Order {order.id} created from session {session_id}")
 
             return {
