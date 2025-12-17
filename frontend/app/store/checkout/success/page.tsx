@@ -15,8 +15,7 @@ function CheckoutSuccessContent() {
 
   useEffect(() => {
     // Refresh cart to clear it after successful purchase
-    refreshCart();
-    setIsLoading(false);
+    refreshCart().catch(console.error).finally(() => setIsLoading(false));
   }, [refreshCart]);
 
   return (
@@ -91,10 +90,10 @@ function CheckoutSuccessContent() {
 
       {/* Actions */}
       <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-        <Button variant="primary" size="lg" onClick={() => router.push('/store')}>
+        <Button type="button" variant="primary" size="lg" onClick={() => router.push('/store')}>
           Continue Shopping
         </Button>
-        <Button variant="secondary" size="lg" onClick={() => router.push('/account/orders')}>
+        <Button type="button" variant="secondary" size="lg" onClick={() => router.push('/account/orders')}>
           View My Orders
         </Button>
       </div>
