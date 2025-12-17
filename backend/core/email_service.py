@@ -8,6 +8,7 @@ Handles sending transactional emails for:
 """
 
 import logging
+import threading
 from django.conf import settings
 from django.core.mail import EmailMultiAlternatives
 from django.template.loader import render_to_string
@@ -28,6 +29,7 @@ class EmailService:
     def send_order_confirmation(order):
         """
         Send order confirmation email after successful purchase.
+        Runs in a background thread to avoid blocking the webhook response.
 
         Args:
             order: StoreOrder instance with items prefetched
@@ -45,33 +47,42 @@ class EmailService:
             logger.warning(f"No email address for order {order.id}")
             return False
 
+        # Build context before spawning thread (to avoid lazy loading issues)
         try:
-            # Build email context
             context = EmailService._build_order_context(order)
-
-            # Render HTML email
-            html_content = EmailService._render_order_confirmation_html(context)
-            text_content = strip_tags(html_content)
-
-            # Create and send email
-            subject = f"Order Confirmation - #{order.id}"
-            from_email = settings.DEFAULT_FROM_EMAIL
-
-            email = EmailMultiAlternatives(
-                subject=subject,
-                body=text_content,
-                from_email=from_email,
-                to=[recipient_email],
-            )
-            email.attach_alternative(html_content, "text/html")
-            email.send(fail_silently=False)
-
-            logger.info(f"Order confirmation email sent for order {order.id} to {recipient_email}")
-            return True
-
         except Exception as e:
-            logger.error(f"Failed to send order confirmation email for order {order.id}: {str(e)}")
+            logger.error(f"Failed to build email context for order {order.id}: {str(e)}")
             return False
+
+        # Send email in background thread
+        def send_email_thread():
+            try:
+                html_content = EmailService._render_order_confirmation_html(context)
+                text_content = strip_tags(html_content)
+
+                subject = f"Order Confirmation - #{context['order_id']}"
+                from_email = settings.DEFAULT_FROM_EMAIL
+
+                email = EmailMultiAlternatives(
+                    subject=subject,
+                    body=text_content,
+                    from_email=from_email,
+                    to=[recipient_email],
+                )
+                email.attach_alternative(html_content, "text/html")
+                email.send(fail_silently=False)
+
+                logger.info(f"Order confirmation email sent for order {context['order_id']} to {recipient_email}")
+
+            except Exception as e:
+                logger.error(f"Failed to send order confirmation email for order {context['order_id']}: {str(e)}")
+
+        # Start background thread
+        thread = threading.Thread(target=send_email_thread, daemon=True)
+        thread.start()
+
+        logger.info(f"Order confirmation email queued for order {order.id}")
+        return True
 
     @staticmethod
     def _build_order_context(order):
