@@ -9,8 +9,8 @@ import { Button } from '@/components/ui/Button';
 const storeNavItems = [
   { href: '/store', label: 'All Products' },
   { href: '/store/vault', label: 'The Vault' },
-  { href: '/store/gear', label: 'Field Gear' },
-  { href: '/store/library', label: 'Resource Library' },
+  { href: '/store/field-gear', label: 'Field Gear' },
+  { href: '/store/resource-library', label: 'Resource Library' },
 ];
 
 export function StoreHeader() {
