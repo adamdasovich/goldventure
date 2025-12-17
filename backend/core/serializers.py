@@ -1806,3 +1806,209 @@ class CheckoutSerializer(serializers.Serializer):
                 )
 
         return data
+
+
+# ============================================================================
+# Store Admin Serializers
+# ============================================================================
+
+class StoreProductImageAdminSerializer(serializers.ModelSerializer):
+    """Admin serializer for product images - allows full CRUD"""
+
+    class Meta:
+        model = StoreProductImage
+        fields = ['id', 'image_url', 'alt_text', 'display_order', 'is_primary', 'created_at']
+        read_only_fields = ['id', 'created_at']
+
+
+class StoreProductVariantAdminSerializer(serializers.ModelSerializer):
+    """Admin serializer for product variants - allows full CRUD"""
+    effective_price_cents = serializers.SerializerMethodField()
+
+    class Meta:
+        model = StoreProductVariant
+        fields = ['id', 'name', 'sku', 'price_cents_override', 'inventory_count',
+                  'is_active', 'display_order', 'effective_price_cents', 'created_at']
+        read_only_fields = ['id', 'created_at']
+
+    def get_effective_price_cents(self, obj):
+        return obj.price_cents
+
+
+class StoreDigitalAssetAdminSerializer(serializers.ModelSerializer):
+    """Admin serializer for digital assets"""
+    file_size_mb = serializers.SerializerMethodField()
+
+    class Meta:
+        model = StoreDigitalAsset
+        fields = ['id', 'file_url', 'file_name', 'file_size_bytes', 'file_size_mb',
+                  'download_limit', 'expiry_hours', 'created_at']
+        read_only_fields = ['id', 'created_at']
+
+    def get_file_size_mb(self, obj):
+        return round(obj.file_size_bytes / (1024 * 1024), 2) if obj.file_size_bytes else 0
+
+
+class StoreCategoryAdminSerializer(serializers.ModelSerializer):
+    """Admin serializer for categories - allows full CRUD"""
+    product_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = StoreCategory
+        fields = ['id', 'name', 'slug', 'description', 'display_order',
+                  'icon', 'is_active', 'product_count', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'created_at', 'updated_at']
+
+    def get_product_count(self, obj):
+        return obj.products.count()
+
+
+class StoreProductAdminListSerializer(serializers.ModelSerializer):
+    """Admin serializer for product list view"""
+    category_name = serializers.CharField(source='category.name', read_only=True)
+    primary_image = serializers.SerializerMethodField()
+    price_dollars = serializers.SerializerMethodField()
+    variant_count = serializers.SerializerMethodField()
+    image_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = StoreProduct
+        fields = ['id', 'name', 'slug', 'category', 'category_name', 'price_cents',
+                  'price_dollars', 'product_type', 'inventory_count', 'is_active',
+                  'is_featured', 'badges', 'total_sold', 'primary_image',
+                  'variant_count', 'image_count', 'created_at', 'updated_at']
+
+    def get_primary_image(self, obj):
+        primary = obj.images.filter(is_primary=True).first()
+        if not primary:
+            primary = obj.images.first()
+        return primary.image_url if primary else None
+
+    def get_price_dollars(self, obj):
+        return obj.price_cents / 100
+
+    def get_variant_count(self, obj):
+        return obj.variants.count()
+
+    def get_image_count(self, obj):
+        return obj.images.count()
+
+
+class StoreProductAdminDetailSerializer(serializers.ModelSerializer):
+    """Admin serializer for product detail/edit view"""
+    category_name = serializers.CharField(source='category.name', read_only=True)
+    images = StoreProductImageAdminSerializer(many=True, read_only=True)
+    variants = StoreProductVariantAdminSerializer(many=True, read_only=True)
+    digital_assets = StoreDigitalAssetAdminSerializer(many=True, read_only=True)
+    price_dollars = serializers.SerializerMethodField()
+    compare_at_price_dollars = serializers.SerializerMethodField()
+
+    class Meta:
+        model = StoreProduct
+        fields = ['id', 'name', 'slug', 'description', 'short_description',
+                  'category', 'category_name', 'price_cents', 'price_dollars',
+                  'compare_at_price_cents', 'compare_at_price_dollars',
+                  'product_type', 'sku', 'inventory_count', 'weight_grams',
+                  'is_active', 'is_featured', 'badges', 'provenance_info',
+                  'authentication_docs', 'min_price_for_inquiry', 'total_sold',
+                  'images', 'variants', 'digital_assets', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'total_sold', 'created_at', 'updated_at']
+
+    def get_price_dollars(self, obj):
+        return obj.price_cents / 100
+
+    def get_compare_at_price_dollars(self, obj):
+        return obj.compare_at_price_cents / 100 if obj.compare_at_price_cents else None
+
+
+class StoreProductAdminCreateSerializer(serializers.ModelSerializer):
+    """Admin serializer for creating/updating products"""
+    images = StoreProductImageAdminSerializer(many=True, required=False)
+    variants = StoreProductVariantAdminSerializer(many=True, required=False)
+
+    class Meta:
+        model = StoreProduct
+        fields = ['id', 'name', 'slug', 'description', 'short_description',
+                  'category', 'price_cents', 'compare_at_price_cents',
+                  'product_type', 'sku', 'inventory_count', 'weight_grams',
+                  'is_active', 'is_featured', 'badges', 'provenance_info',
+                  'authentication_docs', 'min_price_for_inquiry',
+                  'images', 'variants']
+        read_only_fields = ['id']
+
+    def create(self, validated_data):
+        images_data = validated_data.pop('images', [])
+        variants_data = validated_data.pop('variants', [])
+
+        product = StoreProduct.objects.create(**validated_data)
+
+        # Create images
+        for idx, image_data in enumerate(images_data):
+            StoreProductImage.objects.create(
+                product=product,
+                display_order=idx,
+                **image_data
+            )
+
+        # Create variants
+        for idx, variant_data in enumerate(variants_data):
+            StoreProductVariant.objects.create(
+                product=product,
+                display_order=idx,
+                **variant_data
+            )
+
+        return product
+
+    def update(self, instance, validated_data):
+        # Remove nested data - these are handled separately
+        validated_data.pop('images', None)
+        validated_data.pop('variants', None)
+
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+
+        return instance
+
+
+class StoreOrderAdminSerializer(serializers.ModelSerializer):
+    """Admin serializer for viewing orders"""
+    user_email = serializers.CharField(source='user.email', read_only=True)
+    user_name = serializers.CharField(source='user.full_name', read_only=True)
+    items = serializers.SerializerMethodField()
+    subtotal_dollars = serializers.SerializerMethodField()
+    shipping_dollars = serializers.SerializerMethodField()
+    tax_dollars = serializers.SerializerMethodField()
+    total_dollars = serializers.SerializerMethodField()
+
+    class Meta:
+        model = StoreOrder
+        fields = ['id', 'user', 'user_email', 'user_name', 'status',
+                  'subtotal_cents', 'subtotal_dollars', 'shipping_cents',
+                  'shipping_dollars', 'tax_cents', 'tax_dollars',
+                  'total_cents', 'total_dollars', 'shipping_address',
+                  'customer_email', 'tracking_number', 'shipped_at',
+                  'delivered_at', 'paid_at', 'items', 'created_at', 'updated_at']
+
+    def get_items(self, obj):
+        return [{
+            'id': item.id,
+            'product_name': item.product_name,
+            'variant_name': item.variant_name,
+            'quantity': item.quantity,
+            'price_cents': item.price_cents,
+            'price_dollars': item.price_cents / 100,
+        } for item in obj.items.all()]
+
+    def get_subtotal_dollars(self, obj):
+        return obj.subtotal_cents / 100
+
+    def get_shipping_dollars(self, obj):
+        return obj.shipping_cents / 100
+
+    def get_tax_dollars(self, obj):
+        return obj.tax_cents / 100
+
+    def get_total_dollars(self, obj):
+        return obj.total_cents / 100

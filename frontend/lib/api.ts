@@ -598,6 +598,309 @@ export const storeAPI = {
   },
 };
 
+// ============================================================================
+// Store Admin API
+// ============================================================================
+
+export interface StoreProductAdmin {
+  id: number;
+  name: string;
+  slug: string;
+  description: string;
+  short_description: string;
+  category: number | null;
+  category_name?: string;
+  price_cents: number;
+  price_dollars?: number;
+  compare_at_price_cents: number | null;
+  compare_at_price_dollars?: number | null;
+  product_type: 'physical' | 'digital';
+  sku: string | null;
+  inventory_count: number;
+  weight_grams: number;
+  is_active: boolean;
+  is_featured: boolean;
+  badges: string[];
+  provenance_info: string;
+  authentication_docs: string[];
+  min_price_for_inquiry: number;
+  total_sold: number;
+  primary_image?: string;
+  variant_count?: number;
+  image_count?: number;
+  images?: StoreProductImage[];
+  variants?: StoreProductVariant[];
+  digital_assets?: StoreDigitalAsset[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface StoreDigitalAsset {
+  id: number;
+  file_url: string;
+  file_name: string;
+  file_size_bytes: number;
+  file_size_mb: number;
+  download_limit: number;
+  expiry_hours: number;
+  created_at: string;
+}
+
+export interface StoreCategoryAdmin {
+  id: number;
+  name: string;
+  slug: string;
+  description: string;
+  display_order: number;
+  icon: string;
+  is_active: boolean;
+  product_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface StoreOrderAdmin {
+  id: number;
+  user: number | null;
+  user_email: string;
+  user_name: string;
+  status: string;
+  subtotal_cents: number;
+  subtotal_dollars: number;
+  shipping_cents: number;
+  shipping_dollars: number;
+  tax_cents: number;
+  tax_dollars: number;
+  total_cents: number;
+  total_dollars: number;
+  shipping_address: ShippingAddress | null;
+  customer_email: string;
+  tracking_number: string | null;
+  shipped_at: string | null;
+  delivered_at: string | null;
+  paid_at: string | null;
+  items: {
+    id: number;
+    product_name: string;
+    variant_name: string;
+    quantity: number;
+    price_cents: number;
+    price_dollars: number;
+  }[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface StoreOrderStats {
+  total_orders: number;
+  pending_orders: number;
+  processing_orders: number;
+  shipped_orders: number;
+  delivered_orders: number;
+  total_revenue_cents: number;
+  total_revenue_dollars: number;
+  last_30_days_orders: number;
+  last_30_days_revenue_cents: number;
+  last_30_days_revenue_dollars: number;
+}
+
+export const storeAdminAPI = {
+  // Categories
+  categories: {
+    getAll: (accessToken: string) =>
+      apiFetch<StoreCategoryAdmin[]>('/admin/store/categories/', {
+        headers: { 'Authorization': `Bearer ${accessToken}` },
+      }),
+
+    getById: (accessToken: string, id: number) =>
+      apiFetch<StoreCategoryAdmin>(`/admin/store/categories/${id}/`, {
+        headers: { 'Authorization': `Bearer ${accessToken}` },
+      }),
+
+    create: (accessToken: string, data: Partial<StoreCategoryAdmin>) =>
+      apiFetch<StoreCategoryAdmin>('/admin/store/categories/', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${accessToken}` },
+        body: JSON.stringify(data),
+      }),
+
+    update: (accessToken: string, id: number, data: Partial<StoreCategoryAdmin>) =>
+      apiFetch<StoreCategoryAdmin>(`/admin/store/categories/${id}/`, {
+        method: 'PUT',
+        headers: { 'Authorization': `Bearer ${accessToken}` },
+        body: JSON.stringify(data),
+      }),
+
+    delete: (accessToken: string, id: number) =>
+      apiFetch<void>(`/admin/store/categories/${id}/`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${accessToken}` },
+      }),
+  },
+
+  // Products
+  products: {
+    getAll: (accessToken: string, params?: {
+      search?: string;
+      category?: number;
+      is_active?: boolean;
+      type?: string;
+      in_stock?: boolean;
+    }) => {
+      const query = new URLSearchParams();
+      if (params?.search) query.set('search', params.search);
+      if (params?.category) query.set('category', String(params.category));
+      if (params?.is_active !== undefined) query.set('is_active', String(params.is_active));
+      if (params?.type) query.set('type', params.type);
+      if (params?.in_stock !== undefined) query.set('in_stock', String(params.in_stock));
+      const queryString = query.toString();
+      return apiFetch<StoreProductAdmin[]>(`/admin/store/products/${queryString ? `?${queryString}` : ''}`, {
+        headers: { 'Authorization': `Bearer ${accessToken}` },
+      });
+    },
+
+    getById: (accessToken: string, id: number) =>
+      apiFetch<StoreProductAdmin>(`/admin/store/products/${id}/`, {
+        headers: { 'Authorization': `Bearer ${accessToken}` },
+      }),
+
+    create: (accessToken: string, data: Partial<StoreProductAdmin>) =>
+      apiFetch<StoreProductAdmin>('/admin/store/products/', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${accessToken}` },
+        body: JSON.stringify(data),
+      }),
+
+    update: (accessToken: string, id: number, data: Partial<StoreProductAdmin>) =>
+      apiFetch<StoreProductAdmin>(`/admin/store/products/${id}/`, {
+        method: 'PUT',
+        headers: { 'Authorization': `Bearer ${accessToken}` },
+        body: JSON.stringify(data),
+      }),
+
+    patch: (accessToken: string, id: number, data: Partial<StoreProductAdmin>) =>
+      apiFetch<StoreProductAdmin>(`/admin/store/products/${id}/`, {
+        method: 'PATCH',
+        headers: { 'Authorization': `Bearer ${accessToken}` },
+        body: JSON.stringify(data),
+      }),
+
+    delete: (accessToken: string, id: number) =>
+      apiFetch<void>(`/admin/store/products/${id}/`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${accessToken}` },
+      }),
+
+    duplicate: (accessToken: string, id: number) =>
+      apiFetch<StoreProductAdmin>(`/admin/store/products/${id}/duplicate/`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${accessToken}` },
+      }),
+
+    // Images
+    addImage: (accessToken: string, productId: number, data: Partial<StoreProductImage>) =>
+      apiFetch<StoreProductImage>(`/admin/store/products/${productId}/images/`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${accessToken}` },
+        body: JSON.stringify(data),
+      }),
+
+    // Variants
+    addVariant: (accessToken: string, productId: number, data: Partial<StoreProductVariant>) =>
+      apiFetch<StoreProductVariant>(`/admin/store/products/${productId}/variants/`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${accessToken}` },
+        body: JSON.stringify(data),
+      }),
+
+    // Digital Assets
+    addDigitalAsset: (accessToken: string, productId: number, data: Partial<StoreDigitalAsset>) =>
+      apiFetch<StoreDigitalAsset>(`/admin/store/products/${productId}/digital_assets/`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${accessToken}` },
+        body: JSON.stringify(data),
+      }),
+  },
+
+  // Images
+  images: {
+    update: (accessToken: string, id: number, data: Partial<StoreProductImage>) =>
+      apiFetch<StoreProductImage>(`/admin/store/images/${id}/`, {
+        method: 'PUT',
+        headers: { 'Authorization': `Bearer ${accessToken}` },
+        body: JSON.stringify(data),
+      }),
+
+    delete: (accessToken: string, id: number) =>
+      apiFetch<void>(`/admin/store/images/${id}/`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${accessToken}` },
+      }),
+  },
+
+  // Variants
+  variants: {
+    update: (accessToken: string, id: number, data: Partial<StoreProductVariant>) =>
+      apiFetch<StoreProductVariant>(`/admin/store/variants/${id}/`, {
+        method: 'PUT',
+        headers: { 'Authorization': `Bearer ${accessToken}` },
+        body: JSON.stringify(data),
+      }),
+
+    delete: (accessToken: string, id: number) =>
+      apiFetch<void>(`/admin/store/variants/${id}/`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${accessToken}` },
+      }),
+  },
+
+  // Digital Assets
+  digitalAssets: {
+    update: (accessToken: string, id: number, data: Partial<StoreDigitalAsset>) =>
+      apiFetch<StoreDigitalAsset>(`/admin/store/digital-assets/${id}/`, {
+        method: 'PUT',
+        headers: { 'Authorization': `Bearer ${accessToken}` },
+        body: JSON.stringify(data),
+      }),
+
+    delete: (accessToken: string, id: number) =>
+      apiFetch<void>(`/admin/store/digital-assets/${id}/`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${accessToken}` },
+      }),
+  },
+
+  // Orders
+  orders: {
+    getAll: (accessToken: string, params?: { status?: string; search?: string }) => {
+      const query = new URLSearchParams();
+      if (params?.status) query.set('status', params.status);
+      if (params?.search) query.set('search', params.search);
+      const queryString = query.toString();
+      return apiFetch<StoreOrderAdmin[]>(`/admin/store/orders/${queryString ? `?${queryString}` : ''}`, {
+        headers: { 'Authorization': `Bearer ${accessToken}` },
+      });
+    },
+
+    getById: (accessToken: string, id: number) =>
+      apiFetch<StoreOrderAdmin>(`/admin/store/orders/${id}/`, {
+        headers: { 'Authorization': `Bearer ${accessToken}` },
+      }),
+
+    update: (accessToken: string, id: number, data: Partial<StoreOrderAdmin>) =>
+      apiFetch<StoreOrderAdmin>(`/admin/store/orders/${id}/`, {
+        method: 'PATCH',
+        headers: { 'Authorization': `Bearer ${accessToken}` },
+        body: JSON.stringify(data),
+      }),
+
+    getStats: (accessToken: string) =>
+      apiFetch<StoreOrderStats>('/admin/store/orders/stats/', {
+        headers: { 'Authorization': `Bearer ${accessToken}` },
+      }),
+  },
+};
+
 // Re-export types for convenience
 export type {
   Company,

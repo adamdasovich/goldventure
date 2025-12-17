@@ -43,6 +43,14 @@ router.register(r'store/cart', views.StoreCartViewSet, basename='store-cart')
 router.register(r'store/orders', views.StoreOrderViewSet, basename='store-order')
 router.register(r'store/shipping-rates', views.StoreShippingRateViewSet, basename='store-shipping-rate')
 
+# Store Admin ViewSets
+router.register(r'admin/store/categories', views.StoreAdminCategoryViewSet, basename='admin-store-category')
+router.register(r'admin/store/products', views.StoreAdminProductViewSet, basename='admin-store-product')
+router.register(r'admin/store/images', views.StoreAdminImageViewSet, basename='admin-store-image')
+router.register(r'admin/store/variants', views.StoreAdminVariantViewSet, basename='admin-store-variant')
+router.register(r'admin/store/digital-assets', views.StoreAdminDigitalAssetViewSet, basename='admin-store-digital-asset')
+router.register(r'admin/store/orders', views.StoreAdminOrderViewSet, basename='admin-store-order')
+
 urlpatterns = [
     # Authentication endpoints
     path('auth/register/', views.register_user, name='register_user'),
