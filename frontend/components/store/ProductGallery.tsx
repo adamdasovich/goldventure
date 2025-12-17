@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useState } from 'react';
-import Image from 'next/image';
 import type { StoreProductImage } from '@/types/api';
 
 interface ProductGalleryProps {
@@ -37,13 +36,10 @@ export function ProductGallery({ images, productName }: ProductGalleryProps) {
         className="relative aspect-square bg-slate-800/50 rounded-xl overflow-hidden cursor-zoom-in"
         onClick={() => setIsZoomed(true)}
       >
-        <Image
+        <img
           src={currentImage.image_url}
           alt={currentImage.alt_text || productName}
-          fill
-          className="object-cover transition-transform duration-300 hover:scale-105"
-          sizes="(max-width: 768px) 100vw, 50vw"
-          priority
+          className="absolute inset-0 w-full h-full object-cover transition-transform duration-300 hover:scale-105"
         />
       </div>
 
@@ -60,12 +56,10 @@ export function ProductGallery({ images, productName }: ProductGalleryProps) {
                   : 'border-slate-700 hover:border-slate-500'
               }`}
             >
-              <Image
+              <img
                 src={image.image_url}
                 alt={image.alt_text || `${productName} thumbnail ${index + 1}`}
-                fill
-                className="object-cover"
-                sizes="80px"
+                className="absolute inset-0 w-full h-full object-cover"
               />
             </button>
           ))}
@@ -86,13 +80,11 @@ export function ProductGallery({ images, productName }: ProductGalleryProps) {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
-          <div className="relative w-full h-full max-w-4xl max-h-[90vh]">
-            <Image
+          <div className="relative w-full h-full max-w-4xl max-h-[90vh] flex items-center justify-center">
+            <img
               src={currentImage.image_url}
               alt={currentImage.alt_text || productName}
-              fill
-              className="object-contain"
-              sizes="100vw"
+              className="max-w-full max-h-full object-contain"
             />
           </div>
 

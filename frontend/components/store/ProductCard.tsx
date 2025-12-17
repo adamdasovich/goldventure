@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useState } from 'react';
-import Image from 'next/image';
 import Link from 'next/link';
 import { useCart } from '@/contexts/CartContext';
 import { Button } from '@/components/ui/Button';
@@ -49,12 +48,10 @@ export function ProductCard({ product, showQuickAdd = true }: ProductCardProps) 
       <div className="glass-card rounded-xl overflow-hidden transition-all duration-300 hover:shadow-gold hover:border-gold-500/30">
         {/* Image Container */}
         <div className="relative aspect-square overflow-hidden bg-slate-800/50">
-          <Image
+          <img
             src={imageUrl}
             alt={product.name}
-            fill
-            className="object-cover transition-transform duration-500 group-hover:scale-105"
-            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
+            className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
           />
 
           {/* Badges Overlay */}
