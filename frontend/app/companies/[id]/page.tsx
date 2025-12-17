@@ -455,7 +455,7 @@ export default function CompanyDetailPage() {
                     {stockLoading ? (
                       <div className="text-2xl font-bold text-slate-500 animate-pulse">---</div>
                     ) : stockQuote ? (
-                      <div className="text-2xl font-bold text-gold-400">${stockQuote.price.toFixed(2)}</div>
+                      <div className="text-2xl font-bold text-gold-400">${stockQuote.price.toFixed(3)}</div>
                     ) : (
                       <div className="text-2xl font-bold text-slate-500">N/A</div>
                     )}
