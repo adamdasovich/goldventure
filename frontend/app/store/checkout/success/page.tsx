@@ -1,12 +1,12 @@
 'use client';
 
 import React, { Suspense, useEffect, useState } from 'react';
-import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { useCart } from '@/contexts/CartContext';
 import { Button } from '@/components/ui/Button';
 
 function CheckoutSuccessContent() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const sessionId = searchParams.get('session_id');
   const { refreshCart } = useCart();
@@ -91,16 +91,12 @@ function CheckoutSuccessContent() {
 
       {/* Actions */}
       <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-        <Link href="/store">
-          <Button variant="primary" size="lg">
-            Continue Shopping
-          </Button>
-        </Link>
-        <Link href="/account/orders">
-          <Button variant="secondary" size="lg">
-            View My Orders
-          </Button>
-        </Link>
+        <Button variant="primary" size="lg" onClick={() => router.push('/store')}>
+          Continue Shopping
+        </Button>
+        <Button variant="secondary" size="lg" onClick={() => router.push('/account/orders')}>
+          View My Orders
+        </Button>
       </div>
 
       {/* Session ID for reference */}
