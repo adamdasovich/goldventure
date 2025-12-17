@@ -21,7 +21,11 @@ export default function CartPage() {
   if (items.length === 0) {
     return (
       <div className="max-w-4xl mx-auto text-center py-16">
-        <div className="text-6xl mb-4">🛒</div>
+        <div className="mb-4 flex justify-center">
+          <svg className="w-16 h-16 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
+          </svg>
+        </div>
         <h1 className="text-3xl font-bold text-slate-100 mb-4">Your Cart is Empty</h1>
         <p className="text-slate-400 mb-8">
           Looks like you haven't added anything to your cart yet.
@@ -183,13 +187,19 @@ export default function CartPage() {
             {/* Cart Type Info */}
             <div className="mt-6 pt-4 border-t border-slate-700 text-xs text-slate-500 space-y-1">
               {hasPhysicalItems && (
-                <p className="flex items-center gap-1">
-                  <span>📦</span> Includes physical items (shipping required)
+                <p className="flex items-center gap-1.5">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                  </svg>
+                  Includes physical items (shipping required)
                 </p>
               )}
               {hasDigitalItems && (
-                <p className="flex items-center gap-1">
-                  <span>⬇️</span> Includes digital downloads
+                <p className="flex items-center gap-1.5">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                  </svg>
+                  Includes digital downloads
                 </p>
               )}
             </div>

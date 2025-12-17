@@ -42,7 +42,11 @@ export default function GearPage() {
       {/* Hero Section */}
       <section className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-copper-900/50 via-slate-900 to-slate-900 border border-copper-500/20 p-8 lg:p-12">
         <div className="relative z-10">
-          <span className="text-5xl mb-4 block">⛏️</span>
+          <div className="mb-4">
+            <svg className="w-12 h-12 text-copper-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+            </svg>
+          </div>
           <h1 className="text-4xl lg:text-5xl font-bold text-slate-100 mb-4">
             Field Gear
           </h1>

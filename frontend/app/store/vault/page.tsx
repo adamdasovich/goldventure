@@ -45,7 +45,11 @@ export default function VaultPage() {
         {/* Hero Section */}
         <section className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-purple-900/50 via-slate-900 to-slate-900 border border-purple-500/20 p-8 lg:p-12">
           <div className="relative z-10">
-            <span className="text-5xl mb-4 block">💎</span>
+            <div className="mb-4">
+              <svg className="w-12 h-12 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+              </svg>
+            </div>
             <h1 className="text-4xl lg:text-5xl font-bold text-slate-100 mb-4">
               The Vault
             </h1>
@@ -72,15 +76,23 @@ export default function VaultPage() {
               variant={filterBadge === 'rare' ? 'primary' : 'ghost'}
               size="sm"
               onClick={() => setFilterBadge('rare')}
+              className="inline-flex items-center gap-1.5"
             >
-              💎 Rare
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+              </svg>
+              Rare
             </Button>
             <Button
               variant={filterBadge === 'limited_edition' ? 'primary' : 'ghost'}
               size="sm"
               onClick={() => setFilterBadge('limited_edition')}
+              className="inline-flex items-center gap-1.5"
             >
-              ⭐ Limited Edition
+              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+              </svg>
+              Limited Edition
             </Button>
           </div>
 
