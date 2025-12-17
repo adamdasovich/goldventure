@@ -10,7 +10,32 @@ import type {
   CompanySubscription,
   SubscriptionInvoice,
   CheckoutSessionResponse,
-  BillingPortalResponse
+  BillingPortalResponse,
+  // Store types
+  StoreCategory,
+  StoreProductList,
+  StoreProductDetail,
+  StoreProductImage,
+  StoreProductVariant,
+  StoreCart,
+  StoreCartItem,
+  StoreOrder,
+  StoreOrderItem,
+  StoreShippingRate,
+  StoreRecentPurchase,
+  StoreProductShare,
+  StoreProductInquiry,
+  UserStoreBadge,
+  ProductBadge,
+  OrderStatus,
+  InquiryStatus,
+  StoreBadgeType,
+  ShippingAddress,
+  AddToCartRequest,
+  UpdateCartItemRequest,
+  StoreCheckoutRequest,
+  StoreCheckoutResponse,
+  CalculateShippingResponse,
 } from '@/types/api';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api';
@@ -411,6 +436,166 @@ export const accessRequestAPI = {
     }),
 };
 
+// ============================================================================
+// STORE API
+// ============================================================================
+
+export interface StoreProductFilters {
+  category?: string;
+  product_type?: 'physical' | 'digital';
+  badge?: string;
+  min_price?: number;
+  max_price?: number;
+  ordering?: 'price_cents' | '-price_cents' | '-created_at' | '-total_sold';
+  search?: string;
+}
+
+export const storeAPI = {
+  // Categories
+  categories: {
+    getAll: () =>
+      apiFetch<{ results: StoreCategory[] }>('/store/categories/'),
+
+    getBySlug: (slug: string) =>
+      apiFetch<StoreCategory>(`/store/categories/${slug}/`),
+  },
+
+  // Products
+  products: {
+    getAll: (filters?: StoreProductFilters) => {
+      const params = new URLSearchParams();
+      if (filters) {
+        Object.entries(filters).forEach(([key, value]) => {
+          if (value !== undefined) params.append(key, String(value));
+        });
+      }
+      const query = params.toString();
+      return apiFetch<{ results: StoreProductList[]; count: number }>(`/store/products/${query ? `?${query}` : ''}`);
+    },
+
+    getBySlug: (slug: string) =>
+      apiFetch<StoreProductDetail>(`/store/products/${slug}/`),
+
+    getFeatured: () =>
+      apiFetch<{ results: StoreProductList[] }>('/store/products/featured/'),
+
+    getByCategory: (categorySlug: string) =>
+      apiFetch<{ results: StoreProductList[] }>(`/store/products/by_category/?category=${categorySlug}`),
+
+    share: (accessToken: string, productId: number, sharedTo: 'forum' | 'inquiry' | 'direct_message', destinationId: string) =>
+      apiFetch<{ id: number; message: string }>(`/store/products/${productId}/share/`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${accessToken}` },
+        body: JSON.stringify({ shared_to: sharedTo, destination_id: destinationId }),
+      }),
+
+    inquire: (accessToken: string, productId: number, message: string, phone?: string, preferredContact?: 'email' | 'phone') =>
+      apiFetch<StoreProductInquiry>(`/store/products/${productId}/inquire/`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${accessToken}` },
+        body: JSON.stringify({ message, phone, preferred_contact: preferredContact || 'email' }),
+      }),
+  },
+
+  // Cart
+  cart: {
+    get: (accessToken?: string) => {
+      const headers: Record<string, string> = {};
+      if (accessToken) headers['Authorization'] = `Bearer ${accessToken}`;
+      return apiFetch<StoreCart>('/store/cart/', { headers });
+    },
+
+    add: (accessToken: string | undefined, item: AddToCartRequest) => {
+      const headers: Record<string, string> = {};
+      if (accessToken) headers['Authorization'] = `Bearer ${accessToken}`;
+      return apiFetch<StoreCart>('/store/cart/add/', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(item),
+      });
+    },
+
+    updateItem: (accessToken: string | undefined, itemId: number, data: UpdateCartItemRequest) => {
+      const headers: Record<string, string> = {};
+      if (accessToken) headers['Authorization'] = `Bearer ${accessToken}`;
+      return apiFetch<StoreCart>(`/store/cart/${itemId}/update_item/`, {
+        method: 'PATCH',
+        headers,
+        body: JSON.stringify(data),
+      });
+    },
+
+    removeItem: (accessToken: string | undefined, itemId: number) => {
+      const headers: Record<string, string> = {};
+      if (accessToken) headers['Authorization'] = `Bearer ${accessToken}`;
+      return apiFetch<StoreCart>(`/store/cart/${itemId}/remove_item/`, {
+        method: 'DELETE',
+        headers,
+      });
+    },
+
+    clear: (accessToken: string | undefined) => {
+      const headers: Record<string, string> = {};
+      if (accessToken) headers['Authorization'] = `Bearer ${accessToken}`;
+      return apiFetch<{ message: string }>('/store/cart/clear/', {
+        method: 'POST',
+        headers,
+      });
+    },
+  },
+
+  // Orders
+  orders: {
+    getAll: (accessToken: string) =>
+      apiFetch<{ results: StoreOrder[] }>('/store/orders/', {
+        headers: { 'Authorization': `Bearer ${accessToken}` },
+      }),
+
+    getById: (accessToken: string, orderId: number) =>
+      apiFetch<StoreOrder>(`/store/orders/${orderId}/`, {
+        headers: { 'Authorization': `Bearer ${accessToken}` },
+      }),
+  },
+
+  // Shipping
+  shipping: {
+    getRates: () =>
+      apiFetch<{ results: StoreShippingRate[] }>('/store/shipping-rates/'),
+
+    calculate: (accessToken: string | undefined, country: string) => {
+      const headers: Record<string, string> = {};
+      if (accessToken) headers['Authorization'] = `Bearer ${accessToken}`;
+      return apiFetch<CalculateShippingResponse>(`/store/shipping-rates/calculate/?country=${country}`, {
+        headers,
+      });
+    },
+  },
+
+  // Checkout
+  checkout: (accessToken: string, data: StoreCheckoutRequest) =>
+    apiFetch<StoreCheckoutResponse>('/store/checkout/', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${accessToken}` },
+      body: JSON.stringify(data),
+    }),
+
+  // Ticker (recent purchases)
+  ticker: {
+    getRecent: (limit?: number) => {
+      const query = limit ? `?limit=${limit}` : '';
+      return apiFetch<{ results: StoreRecentPurchase[] }>(`/store/ticker/${query}`);
+    },
+  },
+
+  // User badges
+  badges: {
+    getMy: (accessToken: string) =>
+      apiFetch<{ results: UserStoreBadge[] }>('/store/badges/', {
+        headers: { 'Authorization': `Bearer ${accessToken}` },
+      }),
+  },
+};
+
 // Re-export types for convenience
 export type {
   Company,
@@ -429,5 +614,30 @@ export type {
   CompanyAccessRequest,
   CompanyAccessRequestCreate,
   MyRequestResponse,
-  AccessRequestChoices
+  AccessRequestChoices,
+  // Store types
+  StoreCategory,
+  StoreProductList,
+  StoreProductDetail,
+  StoreProductImage,
+  StoreProductVariant,
+  StoreCart,
+  StoreCartItem,
+  StoreOrder,
+  StoreOrderItem,
+  StoreShippingRate,
+  StoreRecentPurchase,
+  StoreProductShare,
+  StoreProductInquiry,
+  UserStoreBadge,
+  ProductBadge,
+  OrderStatus,
+  InquiryStatus,
+  StoreBadgeType,
+  ShippingAddress,
+  AddToCartRequest,
+  UpdateCartItemRequest,
+  StoreCheckoutRequest,
+  StoreCheckoutResponse,
+  CalculateShippingResponse,
 } from '@/types/api';

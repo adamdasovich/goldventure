@@ -10,6 +10,7 @@ import LogoMono from '@/components/LogoMono';
 import HeroCards from '@/components/HeroCards';
 import { LoginModal, RegisterModal } from '@/components/auth';
 import { useAuth } from '@/contexts/AuthContext';
+import { CartButton } from '@/components/store';
 
 export default function Home() {
   const [showLogin, setShowLogin] = useState(false);
@@ -36,6 +37,8 @@ export default function Home() {
               <Button variant="ghost" size="sm" onClick={() => window.location.href = '/properties'}>Prospector's Exchange</Button>
               <Button variant="ghost" size="sm" onClick={() => window.location.href = '/metals'}>Metals</Button>
               <Button variant="ghost" size="sm" onClick={() => window.location.href = '/financial-hub'}>Financial Hub</Button>
+              <Button variant="ghost" size="sm" onClick={() => window.location.href = '/store'}>Store</Button>
+              <CartButton />
 
               {user ? (
                 <div className="flex items-center space-x-3">

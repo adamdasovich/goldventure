@@ -23,6 +23,11 @@ from .models import (
     CompanyAccessRequest,
     # Investment Interest models
     InvestmentInterest, InvestmentInterestAggregate,
+    # Store models
+    StoreCategory, StoreProduct, StoreProductImage, StoreProductVariant,
+    StoreDigitalAsset, StoreCart, StoreCartItem, StoreOrder, StoreOrderItem,
+    StoreShippingRate, StoreProductShare, StoreRecentPurchase,
+    StoreProductInquiry, UserStoreBadge,
 )
 from .serializers import (
     CompanySerializer, CompanyDetailSerializer,
@@ -51,6 +56,13 @@ from .serializers import (
     # Investment Interest serializers
     InvestmentInterestSerializer, InvestmentInterestCreateSerializer,
     InvestmentInterestAggregateSerializer, InvestmentInterestStatusSerializer,
+    # Store serializers
+    StoreCategorySerializer, StoreProductListSerializer, StoreProductDetailSerializer,
+    StoreCartSerializer, StoreCartItemSerializer, StoreOrderSerializer,
+    StoreShippingRateSerializer, StoreRecentPurchaseSerializer,
+    StoreProductShareSerializer, StoreProductInquirySerializer,
+    StoreProductInquiryCreateSerializer, UserStoreBadgeSerializer,
+    AddToCartSerializer, UpdateCartItemSerializer, CheckoutSerializer,
 )
 from claude_integration.client import ClaudeClient
 from claude_integration.client_optimized import OptimizedClaudeClient
@@ -4348,3 +4360,464 @@ def admin_investment_interest_dashboard(request):
         'status_breakdown': list(status_breakdown),
         'active_financings': financing_summaries,
     })
+
+
+# ============================================================================
+# STORE MODULE API
+# ============================================================================
+
+class StoreCategoryViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    API for store categories.
+
+    GET /api/store/categories/           - List all active categories
+    GET /api/store/categories/{slug}/    - Get category by slug
+    """
+    queryset = StoreCategory.objects.filter(is_active=True)
+    serializer_class = StoreCategorySerializer
+    permission_classes = [AllowAny]
+    lookup_field = 'slug'
+
+
+class StoreProductViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    API for store products.
+
+    GET /api/store/products/            - List all active products
+    GET /api/store/products/{slug}/     - Get product by slug
+    GET /api/store/products/featured/   - Get featured products
+    GET /api/store/products/by-category/{category_slug}/ - Get products by category
+    """
+    queryset = StoreProduct.objects.filter(is_active=True).select_related(
+        'category'
+    ).prefetch_related('images', 'variants')
+    permission_classes = [AllowAny]
+    lookup_field = 'slug'
+
+    def get_serializer_class(self):
+        if self.action == 'retrieve':
+            return StoreProductDetailSerializer
+        return StoreProductListSerializer
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+
+        # Filter by category
+        category = self.request.query_params.get('category')
+        if category:
+            queryset = queryset.filter(category__slug=category)
+
+        # Filter by product type
+        product_type = self.request.query_params.get('type')
+        if product_type in ['physical', 'digital']:
+            queryset = queryset.filter(product_type=product_type)
+
+        # Filter by badge
+        badge = self.request.query_params.get('badge')
+        if badge:
+            queryset = queryset.filter(badges__contains=[badge])
+
+        # Price range
+        min_price = self.request.query_params.get('min_price')
+        if min_price:
+            queryset = queryset.filter(price_cents__gte=int(float(min_price) * 100))
+
+        max_price = self.request.query_params.get('max_price')
+        if max_price:
+            queryset = queryset.filter(price_cents__lte=int(float(max_price) * 100))
+
+        # Sorting
+        sort = self.request.query_params.get('sort', '-created_at')
+        if sort == 'price_asc':
+            queryset = queryset.order_by('price_cents')
+        elif sort == 'price_desc':
+            queryset = queryset.order_by('-price_cents')
+        elif sort == 'popular':
+            queryset = queryset.order_by('-total_sold')
+        elif sort == 'newest':
+            queryset = queryset.order_by('-created_at')
+        else:
+            queryset = queryset.order_by('-is_featured', '-created_at')
+
+        return queryset
+
+    @action(detail=False, methods=['get'])
+    def featured(self, request):
+        """Get featured products"""
+        products = self.get_queryset().filter(is_featured=True)[:8]
+        serializer = StoreProductListSerializer(products, many=True)
+        return Response(serializer.data)
+
+    @action(detail=False, methods=['get'], url_path='by-category/(?P<category_slug>[^/.]+)')
+    def by_category(self, request, category_slug=None):
+        """Get products by category slug"""
+        products = self.get_queryset().filter(category__slug=category_slug)
+        page = self.paginate_queryset(products)
+        if page is not None:
+            serializer = StoreProductListSerializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+        serializer = StoreProductListSerializer(products, many=True)
+        return Response(serializer.data)
+
+    @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
+    def share(self, request, slug=None):
+        """Track product share to chat"""
+        product = self.get_object()
+        shared_to = request.data.get('shared_to', 'forum')
+        destination_id = request.data.get('destination_id', '')
+
+        share = StoreProductShare.objects.create(
+            user=request.user,
+            product=product,
+            shared_to=shared_to,
+            destination_id=destination_id
+        )
+
+        return Response({
+            'success': True,
+            'share_id': share.id,
+            'message': f'Product shared successfully'
+        })
+
+    @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
+    def inquire(self, request, slug=None):
+        """Create inquiry for high-value product"""
+        product = self.get_object()
+
+        if not product.requires_inquiry:
+            return Response(
+                {'error': 'This product does not require an inquiry'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        serializer = StoreProductInquiryCreateSerializer(
+            data={**request.data, 'product': product.id},
+            context={'request': request}
+        )
+
+        if serializer.is_valid():
+            inquiry = serializer.save()
+            return Response(
+                StoreProductInquirySerializer(inquiry).data,
+                status=status.HTTP_201_CREATED
+            )
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class StoreCartViewSet(viewsets.ViewSet):
+    """
+    API for shopping cart management.
+    Supports both authenticated users and guest carts (via session).
+
+    GET  /api/store/cart/           - Get current user's cart
+    POST /api/store/cart/add/       - Add item to cart
+    PUT  /api/store/cart/items/{id}/ - Update cart item quantity
+    DELETE /api/store/cart/items/{id}/ - Remove item from cart
+    POST /api/store/cart/clear/     - Clear entire cart
+    """
+    permission_classes = [AllowAny]
+
+    def get_or_create_cart(self, request):
+        """Get or create cart for user or guest session"""
+        if request.user.is_authenticated:
+            cart, created = StoreCart.objects.get_or_create(user=request.user)
+        else:
+            # Guest cart using session
+            if not request.session.session_key:
+                request.session.create()
+            session_key = request.session.session_key
+            cart, created = StoreCart.objects.get_or_create(session_key=session_key, user=None)
+        return cart
+
+    def list(self, request):
+        """Get current cart"""
+        cart = self.get_or_create_cart(request)
+        serializer = StoreCartSerializer(cart)
+        return Response(serializer.data)
+
+    @action(detail=False, methods=['post'])
+    def add(self, request):
+        """Add item to cart"""
+        serializer = AddToCartSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        cart = self.get_or_create_cart(request)
+        product_id = serializer.validated_data['product_id']
+        variant_id = serializer.validated_data.get('variant_id')
+        quantity = serializer.validated_data['quantity']
+
+        product = StoreProduct.objects.get(id=product_id)
+        variant = None
+        if variant_id:
+            variant = StoreProductVariant.objects.get(id=variant_id)
+
+        # Check if item already in cart
+        existing_item = cart.items.filter(product=product, variant=variant).first()
+        if existing_item:
+            existing_item.quantity += quantity
+            existing_item.save()
+            item = existing_item
+        else:
+            item = StoreCartItem.objects.create(
+                cart=cart,
+                product=product,
+                variant=variant,
+                quantity=quantity
+            )
+
+        # Update cart timestamp
+        cart.save()
+
+        return Response({
+            'success': True,
+            'cart': StoreCartSerializer(cart).data
+        })
+
+    @action(detail=False, methods=['put'], url_path='items/(?P<item_id>[^/.]+)')
+    def update_item(self, request, item_id=None):
+        """Update cart item quantity"""
+        serializer = UpdateCartItemSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        cart = self.get_or_create_cart(request)
+        try:
+            item = cart.items.get(id=item_id)
+        except StoreCartItem.DoesNotExist:
+            return Response(
+                {'error': 'Item not found in cart'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        quantity = serializer.validated_data['quantity']
+        if quantity == 0:
+            item.delete()
+        else:
+            item.quantity = quantity
+            item.save()
+
+        cart.save()  # Update timestamp
+        return Response({
+            'success': True,
+            'cart': StoreCartSerializer(cart).data
+        })
+
+    @action(detail=False, methods=['delete'], url_path='items/(?P<item_id>[^/.]+)')
+    def remove_item(self, request, item_id=None):
+        """Remove item from cart"""
+        cart = self.get_or_create_cart(request)
+        try:
+            item = cart.items.get(id=item_id)
+            item.delete()
+        except StoreCartItem.DoesNotExist:
+            return Response(
+                {'error': 'Item not found in cart'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        cart.save()
+        return Response({
+            'success': True,
+            'cart': StoreCartSerializer(cart).data
+        })
+
+    @action(detail=False, methods=['post'])
+    def clear(self, request):
+        """Clear entire cart"""
+        cart = self.get_or_create_cart(request)
+        cart.items.all().delete()
+        cart.save()
+        return Response({
+            'success': True,
+            'cart': StoreCartSerializer(cart).data
+        })
+
+
+class StoreOrderViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    API for viewing user orders.
+
+    GET /api/store/orders/          - List user's orders
+    GET /api/store/orders/{id}/     - Get order details
+    """
+    serializer_class = StoreOrderSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return StoreOrder.objects.filter(
+            user=self.request.user
+        ).prefetch_related('items')
+
+
+class StoreShippingRateViewSet(viewsets.ViewSet):
+    """
+    API for shipping rates.
+
+    GET /api/store/shipping-rates/  - Get available shipping rates
+    """
+    permission_classes = [AllowAny]
+
+    def list(self, request):
+        """Get all active shipping rates"""
+        country = request.query_params.get('country', 'US')
+        rates = StoreShippingRate.objects.filter(
+            is_active=True,
+            countries__contains=[country]
+        )
+        serializer = StoreShippingRateSerializer(rates, many=True)
+        return Response(serializer.data)
+
+    @action(detail=False, methods=['post'])
+    def calculate(self, request):
+        """Calculate shipping rate based on cart contents"""
+        if not request.user.is_authenticated:
+            return Response(
+                {'error': 'Authentication required'},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+
+        cart = StoreCart.objects.filter(user=request.user).first()
+        if not cart or not cart.items.exists():
+            return Response({'error': 'Cart is empty'}, status=status.HTTP_400_BAD_REQUEST)
+
+        country = request.data.get('country', 'US')
+        if country not in ['US', 'CA']:
+            return Response(
+                {'error': 'Shipping only available to US and Canada'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Calculate total weight
+        total_weight = sum(
+            item.product.weight_grams * item.quantity
+            for item in cart.items.filter(product__product_type='physical')
+        )
+
+        # Get applicable rates
+        rates = StoreShippingRate.objects.filter(
+            is_active=True,
+            countries__contains=[country],
+            min_weight_grams__lte=total_weight,
+            max_weight_grams__gte=total_weight
+        )
+
+        serializer = StoreShippingRateSerializer(rates, many=True)
+        return Response({
+            'total_weight_grams': total_weight,
+            'rates': serializer.data
+        })
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def store_ticker(request):
+    """
+    Get recent purchases for The Ticker social proof feed.
+
+    GET /api/store/ticker/
+
+    Only returns purchases over $100 threshold.
+    """
+    # Get recent purchases above threshold (10000 cents = $100)
+    recent = StoreRecentPurchase.objects.filter(
+        amount_cents__gte=10000
+    ).select_related('product').order_by('-created_at')[:20]
+
+    serializer = StoreRecentPurchaseSerializer(recent, many=True)
+    return Response(serializer.data)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def user_store_badges(request):
+    """
+    Get current user's store badges.
+
+    GET /api/store/badges/
+    """
+    badges = UserStoreBadge.objects.filter(user=request.user)
+    serializer = UserStoreBadgeSerializer(badges, many=True)
+    return Response(serializer.data)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def store_checkout(request):
+    """
+    Create Stripe checkout session for store purchase.
+
+    POST /api/store/checkout/
+    {
+        "shipping_address": {...},  // Required for physical items
+        "shipping_rate_id": 1,      // Required for physical items
+        "success_url": "https://...",
+        "cancel_url": "https://..."
+    }
+    """
+    serializer = CheckoutSerializer(data=request.data, context={'request': request})
+    if not serializer.is_valid():
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    cart = StoreCart.objects.filter(user=request.user).first()
+    if not cart or not cart.items.exists():
+        return Response({'error': 'Cart is empty'}, status=status.HTTP_400_BAD_REQUEST)
+
+    # Import the store stripe service (will be created next)
+    from .store_stripe_service import StoreStripeService
+
+    try:
+        checkout_data = StoreStripeService.create_checkout_session(
+            cart=cart,
+            user=request.user,
+            shipping_address=serializer.validated_data.get('shipping_address'),
+            shipping_rate_id=serializer.validated_data.get('shipping_rate_id'),
+            success_url=serializer.validated_data['success_url'],
+            cancel_url=serializer.validated_data['cancel_url']
+        )
+
+        return Response(checkout_data)
+
+    except Exception as e:
+        return Response(
+            {'error': str(e)},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def store_webhook(request):
+    """
+    Handle Stripe webhooks for store purchases.
+
+    POST /api/store/webhook/
+    """
+    import stripe
+    from django.conf import settings
+
+    payload = request.body
+    sig_header = request.META.get('HTTP_STRIPE_SIGNATURE')
+    webhook_secret = getattr(settings, 'STRIPE_STORE_WEBHOOK_SECRET',
+                            getattr(settings, 'STRIPE_WEBHOOK_SECRET', ''))
+
+    try:
+        event = stripe.Webhook.construct_event(
+            payload, sig_header, webhook_secret
+        )
+    except ValueError:
+        return Response({'error': 'Invalid payload'}, status=status.HTTP_400_BAD_REQUEST)
+    except stripe.error.SignatureVerificationError:
+        return Response({'error': 'Invalid signature'}, status=status.HTTP_400_BAD_REQUEST)
+
+    # Import the store stripe service
+    from .store_stripe_service import StoreStripeService
+
+    try:
+        result = StoreStripeService.process_webhook(event)
+        return Response(result)
+    except Exception as e:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"Store webhook error: {str(e)}")
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

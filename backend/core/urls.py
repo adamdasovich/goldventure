@@ -36,6 +36,13 @@ router.register(r'company-portal/events', views.SpeakingEventViewSet, basename='
 router.register(r'company-portal/subscriptions', views.CompanySubscriptionViewSet, basename='company-subscription')
 router.register(r'company-portal/access-requests', views.CompanyAccessRequestViewSet, basename='company-access-request')
 
+# Store ViewSets
+router.register(r'store/categories', views.StoreCategoryViewSet, basename='store-category')
+router.register(r'store/products', views.StoreProductViewSet, basename='store-product')
+router.register(r'store/cart', views.StoreCartViewSet, basename='store-cart')
+router.register(r'store/orders', views.StoreOrderViewSet, basename='store-order')
+router.register(r'store/shipping-rates', views.StoreShippingRateViewSet, basename='store-shipping-rate')
+
 urlpatterns = [
     # Authentication endpoints
     path('auth/register/', views.register_user, name='register_user'),
@@ -90,6 +97,12 @@ urlpatterns = [
     path('investment-interest/<int:interest_id>/withdraw/', views.withdraw_investment_interest, name='withdraw_investment_interest'),
     path('investment-interest/export/<int:financing_id>/', views.export_investment_interests, name='export_investment_interests'),
     path('investment-interest/admin/dashboard/', views.admin_investment_interest_dashboard, name='admin_investment_interest_dashboard'),
+
+    # Store endpoints
+    path('store/ticker/', views.store_ticker, name='store_ticker'),
+    path('store/badges/', views.user_store_badges, name='user_store_badges'),
+    path('store/checkout/', views.store_checkout, name='store_checkout'),
+    path('store/webhook/', views.store_webhook, name='store_webhook'),
 
     # ViewSet routes
     path('', include(router.urls)),

@@ -244,6 +244,19 @@ body {
   animation: pulseGlow 2s ease-in-out infinite;
 }
 
+@keyframes slideInRight {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+.animate-slide-in-right {
+  animation: slideInRight var(--duration-base) cubic-bezier(0, 0, 0.2, 1);
+}
+
 /* ============================================================================
    GRADIENTS
    ============================================================================ */
