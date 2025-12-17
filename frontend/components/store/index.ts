@@ -8,3 +8,4 @@ export { CartSidebar } from './CartSidebar';
 export { CartButton } from './CartButton';
 export { TheTicker } from './TheTicker';
 export { ShareToChat } from './ShareToChat';
+export { StoreHeader } from './StoreHeader';

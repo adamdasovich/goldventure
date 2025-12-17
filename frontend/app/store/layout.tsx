@@ -1,6 +1,6 @@
 import { Metadata } from 'next';
-import { CartSidebar } from '@/components/store';
 import { TheTicker } from '@/components/store/TheTicker';
+import { StoreHeader } from '@/components/store/StoreHeader';
 
 export const metadata: Metadata = {
   title: 'Store',
@@ -14,6 +14,9 @@ export default function StoreLayout({
 }) {
   return (
     <div className="min-h-screen bg-slate-900">
+      {/* Store Header with Navigation */}
+      <StoreHeader />
+
       {/* The Ticker Banner */}
       <TheTicker variant="banner" />
 
@@ -21,9 +24,6 @@ export default function StoreLayout({
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {children}
       </div>
-
-      {/* Cart Sidebar */}
-      <CartSidebar />
     </div>
   );
 }
