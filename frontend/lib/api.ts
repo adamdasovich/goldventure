@@ -508,39 +508,39 @@ export const storeAPI = {
     add: (accessToken: string | undefined, item: AddToCartRequest) => {
       const headers: Record<string, string> = {};
       if (accessToken) headers['Authorization'] = `Bearer ${accessToken}`;
-      return apiFetch<StoreCart>('/store/cart/add/', {
+      return apiFetch<{ success: boolean; cart: StoreCart }>('/store/cart/add/', {
         method: 'POST',
         headers,
         body: JSON.stringify(item),
-      });
+      }).then(res => res.cart);
     },
 
     updateItem: (accessToken: string | undefined, itemId: number, data: UpdateCartItemRequest) => {
       const headers: Record<string, string> = {};
       if (accessToken) headers['Authorization'] = `Bearer ${accessToken}`;
-      return apiFetch<StoreCart>(`/store/cart/${itemId}/update_item/`, {
-        method: 'PATCH',
+      return apiFetch<{ success: boolean; cart: StoreCart }>(`/store/cart/items/${itemId}/`, {
+        method: 'PUT',
         headers,
         body: JSON.stringify(data),
-      });
+      }).then(res => res.cart);
     },
 
     removeItem: (accessToken: string | undefined, itemId: number) => {
       const headers: Record<string, string> = {};
       if (accessToken) headers['Authorization'] = `Bearer ${accessToken}`;
-      return apiFetch<StoreCart>(`/store/cart/${itemId}/remove_item/`, {
+      return apiFetch<{ success: boolean; cart: StoreCart }>(`/store/cart/items/${itemId}/`, {
         method: 'DELETE',
         headers,
-      });
+      }).then(res => res.cart);
     },
 
     clear: (accessToken: string | undefined) => {
       const headers: Record<string, string> = {};
       if (accessToken) headers['Authorization'] = `Bearer ${accessToken}`;
-      return apiFetch<{ message: string }>('/store/cart/clear/', {
+      return apiFetch<{ success: boolean; cart: StoreCart }>('/store/cart/clear/', {
         method: 'POST',
         headers,
-      });
+      }).then(res => res.cart);
     },
   },
 

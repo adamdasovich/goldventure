@@ -171,8 +171,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
       setIsLoading(true);
       setError(null);
 
-      await storeAPI.cart.clear(accessToken || undefined);
-      setCart(null);
+      const updatedCart = await storeAPI.cart.clear(accessToken || undefined);
+      setCart(updatedCart);
     } catch (err) {
       console.error('Failed to clear cart:', err);
       setError('Failed to clear cart');
