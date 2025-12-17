@@ -10,7 +10,19 @@ const nextConfig: NextConfig = {
     remotePatterns: [
       {
         protocol: 'https',
-        hostname: '**',
+        hostname: 'placehold.co',
+      },
+      {
+        protocol: 'https',
+        hostname: '*.amazonaws.com',
+      },
+      {
+        protocol: 'https',
+        hostname: 'juniorgoldminingintelligence.com',
+      },
+      {
+        protocol: 'https',
+        hostname: 'api.juniorgoldminingintelligence.com',
       },
     ],
   },
