@@ -126,8 +126,9 @@ class StoreStripeService:
             'customer_email': user.email,
         }
 
-        # Enable Stripe Tax for automatic tax calculation
-        checkout_params['automatic_tax'] = {'enabled': True}
+        # Stripe Tax disabled - requires origin address configuration
+        # To enable: visit https://dashboard.stripe.com/settings/tax
+        # checkout_params['automatic_tax'] = {'enabled': True}
 
         # Handle shipping for physical goods
         if has_physical:
