@@ -1,6 +1,6 @@
 'use client';
 
-import React, { Suspense, useEffect, useState } from 'react';
+import React, { Suspense, useEffect, useState, useRef } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useCart } from '@/contexts/CartContext';
 import { Button } from '@/components/ui/Button';
@@ -10,10 +10,15 @@ function CheckoutSuccessContent() {
   const searchParams = useSearchParams();
   const sessionId = searchParams.get('session_id');
   const { refreshCart } = useCart();
+  const hasRefreshed = useRef(false);
 
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
+    // Only refresh once to prevent infinite loop
+    if (hasRefreshed.current) return;
+    hasRefreshed.current = true;
+
     // Refresh cart to clear it after successful purchase
     refreshCart().catch(console.error).finally(() => setIsLoading(false));
   }, [refreshCart]);
