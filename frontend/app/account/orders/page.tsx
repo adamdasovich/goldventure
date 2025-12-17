@@ -119,77 +119,134 @@ export default function OrdersPage() {
     <div className="max-w-4xl mx-auto py-8">
       <h1 className="text-3xl font-bold text-slate-100 mb-8">My Orders</h1>
 
-      <div className="space-y-4">
+      <div className="space-y-6">
         {orders.map((order) => (
-          <div key={order.id} className="glass rounded-xl p-6">
-            <div className="flex flex-wrap items-start justify-between gap-4 mb-4">
-              <div>
-                <p className="text-sm text-slate-400">
-                  Order #{order.id} &bull; {new Date(order.created_at).toLocaleDateString('en-US', {
-                    year: 'numeric',
-                    month: 'long',
-                    day: 'numeric',
-                  })}
-                </p>
-                <p className="text-lg font-semibold text-gold-400 mt-1">
-                  ${order.total_dollars.toFixed(2)}
-                </p>
-              </div>
-              <span className={`px-3 py-1 text-xs font-medium rounded-full border ${statusColors[order.status] || statusColors.pending}`}>
-                {statusLabels[order.status] || order.status}
-              </span>
-            </div>
-
-            {/* Order Items Summary */}
-            <div className="border-t border-slate-700 pt-4">
-              <p className="text-sm text-slate-400 mb-2">
-                {order.items?.length || 0} item{(order.items?.length || 0) !== 1 ? 's' : ''}
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {order.items?.slice(0, 3).map((item) => (
-                  <span key={item.id} className="text-sm text-slate-300">
-                    {item.product_name} x{item.quantity}
-                  </span>
-                ))}
-                {(order.items?.length || 0) > 3 && (
-                  <span className="text-sm text-slate-500">
-                    +{(order.items?.length || 0) - 3} more
-                  </span>
-                )}
+          <div key={order.id} className="glass rounded-xl overflow-hidden">
+            {/* Order Header */}
+            <div className="bg-slate-800/50 px-6 py-4 border-b border-slate-700">
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <div className="flex items-center gap-4">
+                  <div>
+                    <p className="text-sm text-slate-400">Order placed</p>
+                    <p className="text-slate-200 font-medium">
+                      {new Date(order.created_at).toLocaleDateString('en-US', {
+                        year: 'numeric',
+                        month: 'long',
+                        day: 'numeric',
+                      })}
+                    </p>
+                  </div>
+                  <div className="hidden sm:block w-px h-10 bg-slate-700" />
+                  <div className="hidden sm:block">
+                    <p className="text-sm text-slate-400">Order #</p>
+                    <p className="text-slate-200 font-medium">{order.id}</p>
+                  </div>
+                </div>
+                <span className={`px-3 py-1.5 text-xs font-medium rounded-full border ${statusColors[order.status] || statusColors.pending}`}>
+                  {statusLabels[order.status] || order.status}
+                </span>
               </div>
             </div>
 
-            {/* Tracking Info */}
-            {order.tracking_number && (
-              <div className="border-t border-slate-700 pt-4 mt-4">
-                <p className="text-sm text-slate-400">
-                  Tracking: <span className="text-slate-200">{order.tracking_number}</span>
-                </p>
-              </div>
-            )}
-
-            {/* Digital Downloads */}
-            {order.items?.some(item => item.digital_download_url) && (
-              <div className="border-t border-slate-700 pt-4 mt-4">
-                <p className="text-sm font-medium text-slate-300 mb-2">Digital Downloads</p>
-                <div className="space-y-2">
-                  {order.items?.filter(item => item.digital_download_url).map((item) => (
-                    <a
-                      key={item.id}
-                      href={item.digital_download_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-2 text-sm text-gold-400 hover:text-gold-300"
-                    >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+            {/* Order Items */}
+            <div className="p-6">
+              <div className="space-y-4">
+                {order.items?.map((item) => (
+                  <div key={item.id} className="flex items-start gap-4 pb-4 border-b border-slate-700/50 last:border-0 last:pb-0">
+                    {/* Item Icon */}
+                    <div className="w-12 h-12 bg-slate-800 rounded-lg flex items-center justify-center flex-shrink-0">
+                      <svg className="w-6 h-6 text-gold-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
                       </svg>
-                      Download {item.product_name}
-                    </a>
-                  ))}
+                    </div>
+                    {/* Item Details */}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-slate-100 font-medium truncate">
+                        {item.product_name}
+                        {item.variant_name && (
+                          <span className="text-slate-400 font-normal"> - {item.variant_name}</span>
+                        )}
+                      </p>
+                      <p className="text-sm text-slate-400 mt-0.5">
+                        Qty: {item.quantity} × ${item.price_dollars.toFixed(2)}
+                      </p>
+                      {/* Digital Download Link */}
+                      {item.digital_download_url && (
+                        <a
+                          href={item.digital_download_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1.5 text-sm text-gold-400 hover:text-gold-300 mt-2"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                          </svg>
+                          Download
+                        </a>
+                      )}
+                    </div>
+                    {/* Item Total */}
+                    <div className="text-right flex-shrink-0">
+                      <p className="text-slate-100 font-medium">
+                        ${item.line_total_dollars.toFixed(2)}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Order Summary */}
+              <div className="mt-6 pt-4 border-t border-slate-700">
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between text-slate-400">
+                    <span>Subtotal</span>
+                    <span>${order.subtotal_dollars.toFixed(2)}</span>
+                  </div>
+                  {order.shipping_dollars > 0 && (
+                    <div className="flex justify-between text-slate-400">
+                      <span>Shipping{order.shipping_rate_name && ` (${order.shipping_rate_name})`}</span>
+                      <span>${order.shipping_dollars.toFixed(2)}</span>
+                    </div>
+                  )}
+                  {order.tax_dollars > 0 && (
+                    <div className="flex justify-between text-slate-400">
+                      <span>Tax</span>
+                      <span>${order.tax_dollars.toFixed(2)}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between text-lg font-semibold pt-2 border-t border-slate-700">
+                    <span className="text-slate-200">Total</span>
+                    <span className="text-gold-400">${order.total_dollars.toFixed(2)}</span>
+                  </div>
                 </div>
               </div>
-            )}
+
+              {/* Shipping Address */}
+              {order.shipping_address && order.shipping_address.line1 && (
+                <div className="mt-6 pt-4 border-t border-slate-700">
+                  <p className="text-sm font-medium text-slate-300 mb-2">Shipping Address</p>
+                  <div className="text-sm text-slate-400">
+                    <p>{order.shipping_address.name}</p>
+                    <p>{order.shipping_address.line1}</p>
+                    {order.shipping_address.line2 && <p>{order.shipping_address.line2}</p>}
+                    <p>
+                      {order.shipping_address.city}, {order.shipping_address.state} {order.shipping_address.postal_code}
+                    </p>
+                    <p>{order.shipping_address.country}</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Tracking Info */}
+              {order.tracking_number && (
+                <div className="mt-6 pt-4 border-t border-slate-700">
+                  <p className="text-sm font-medium text-slate-300 mb-2">Tracking</p>
+                  <p className="text-sm text-slate-200 font-mono bg-slate-800 px-3 py-2 rounded inline-block">
+                    {order.tracking_number}
+                  </p>
+                </div>
+              )}
+            </div>
           </div>
         ))}
       </div>
