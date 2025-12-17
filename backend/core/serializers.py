@@ -1989,7 +1989,7 @@ class StoreOrderAdminSerializer(serializers.ModelSerializer):
                   'shipping_dollars', 'tax_cents', 'tax_dollars',
                   'total_cents', 'total_dollars', 'shipping_address',
                   'customer_email', 'tracking_number', 'shipped_at',
-                  'delivered_at', 'paid_at', 'items', 'created_at', 'updated_at']
+                  'delivered_at', 'paid_at', 'items', 'created_at']
 
     def get_items(self, obj):
         return [{
