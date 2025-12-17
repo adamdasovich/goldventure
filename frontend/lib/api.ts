@@ -704,13 +704,23 @@ export interface StoreOrderStats {
   last_30_days_revenue_dollars: number;
 }
 
+// Helper type for paginated responses
+interface PaginatedResponse<T> {
+  count: number;
+  next: string | null;
+  previous: string | null;
+  results: T[];
+}
+
 export const storeAdminAPI = {
   // Categories
   categories: {
-    getAll: (accessToken: string) =>
-      apiFetch<StoreCategoryAdmin[]>('/admin/store/categories/', {
+    getAll: async (accessToken: string): Promise<StoreCategoryAdmin[]> => {
+      const response = await apiFetch<PaginatedResponse<StoreCategoryAdmin>>('/admin/store/categories/', {
         headers: { 'Authorization': `Bearer ${accessToken}` },
-      }),
+      });
+      return response.results;
+    },
 
     getById: (accessToken: string, id: number) =>
       apiFetch<StoreCategoryAdmin>(`/admin/store/categories/${id}/`, {
@@ -740,13 +750,13 @@ export const storeAdminAPI = {
 
   // Products
   products: {
-    getAll: (accessToken: string, params?: {
+    getAll: async (accessToken: string, params?: {
       search?: string;
       category?: number;
       is_active?: boolean;
       type?: string;
       in_stock?: boolean;
-    }) => {
+    }): Promise<StoreProductAdmin[]> => {
       const query = new URLSearchParams();
       if (params?.search) query.set('search', params.search);
       if (params?.category) query.set('category', String(params.category));
@@ -754,9 +764,10 @@ export const storeAdminAPI = {
       if (params?.type) query.set('type', params.type);
       if (params?.in_stock !== undefined) query.set('in_stock', String(params.in_stock));
       const queryString = query.toString();
-      return apiFetch<StoreProductAdmin[]>(`/admin/store/products/${queryString ? `?${queryString}` : ''}`, {
+      const response = await apiFetch<PaginatedResponse<StoreProductAdmin>>(`/admin/store/products/${queryString ? `?${queryString}` : ''}`, {
         headers: { 'Authorization': `Bearer ${accessToken}` },
       });
+      return response.results;
     },
 
     getById: (accessToken: string, id: number) =>
@@ -872,14 +883,15 @@ export const storeAdminAPI = {
 
   // Orders
   orders: {
-    getAll: (accessToken: string, params?: { status?: string; search?: string }) => {
+    getAll: async (accessToken: string, params?: { status?: string; search?: string }): Promise<StoreOrderAdmin[]> => {
       const query = new URLSearchParams();
       if (params?.status) query.set('status', params.status);
       if (params?.search) query.set('search', params.search);
       const queryString = query.toString();
-      return apiFetch<StoreOrderAdmin[]>(`/admin/store/orders/${queryString ? `?${queryString}` : ''}`, {
+      const response = await apiFetch<PaginatedResponse<StoreOrderAdmin>>(`/admin/store/orders/${queryString ? `?${queryString}` : ''}`, {
         headers: { 'Authorization': `Bearer ${accessToken}` },
       });
+      return response.results;
     },
 
     getById: (accessToken: string, id: number) =>
