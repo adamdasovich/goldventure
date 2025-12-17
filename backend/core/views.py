@@ -4784,20 +4784,30 @@ def store_webhook(request):
     POST /api/store/webhook/
     """
     import stripe
+    import logging
     from django.conf import settings
+
+    logger = logging.getLogger(__name__)
 
     payload = request.body
     sig_header = request.META.get('HTTP_STRIPE_SIGNATURE')
-    webhook_secret = getattr(settings, 'STRIPE_STORE_WEBHOOK_SECRET',
-                            getattr(settings, 'STRIPE_WEBHOOK_SECRET', ''))
+    webhook_secret = getattr(settings, 'STRIPE_STORE_WEBHOOK_SECRET', None)
+
+    logger.info(f"Store webhook received. Secret configured: {bool(webhook_secret)}, Sig header: {bool(sig_header)}")
+
+    if not webhook_secret:
+        logger.error("STRIPE_STORE_WEBHOOK_SECRET not configured")
+        return Response({'error': 'Webhook secret not configured'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     try:
         event = stripe.Webhook.construct_event(
             payload, sig_header, webhook_secret
         )
-    except ValueError:
+    except ValueError as e:
+        logger.error(f"Store webhook invalid payload: {str(e)}")
         return Response({'error': 'Invalid payload'}, status=status.HTTP_400_BAD_REQUEST)
-    except stripe.error.SignatureVerificationError:
+    except stripe.error.SignatureVerificationError as e:
+        logger.error(f"Store webhook signature verification failed: {str(e)}")
         return Response({'error': 'Invalid signature'}, status=status.HTTP_400_BAD_REQUEST)
 
     # Import the store stripe service
