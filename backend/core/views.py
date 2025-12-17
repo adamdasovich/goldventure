@@ -4574,13 +4574,13 @@ class StoreCartViewSet(viewsets.ViewSet):
             'cart': StoreCartSerializer(cart).data
         })
 
-    @action(detail=False, methods=['put'], url_path='items/(?P<item_id>[^/.]+)')
-    def update_item(self, request, item_id=None):
-        """Update cart item quantity"""
-        serializer = UpdateCartItemSerializer(data=request.data)
-        if not serializer.is_valid():
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    @action(detail=False, methods=['put', 'delete'], url_path='items/(?P<item_id>[^/.]+)')
+    def item(self, request, item_id=None):
+        """Update or remove cart item.
 
+        PUT: Update cart item quantity
+        DELETE: Remove item from cart
+        """
         cart = self.get_or_create_cart(request)
         try:
             item = cart.items.get(id=item_id)
@@ -4590,33 +4590,23 @@ class StoreCartViewSet(viewsets.ViewSet):
                 status=status.HTTP_404_NOT_FOUND
             )
 
-        quantity = serializer.validated_data['quantity']
-        if quantity == 0:
+        if request.method == 'DELETE':
+            # Remove item
             item.delete()
         else:
-            item.quantity = quantity
-            item.save()
+            # Update quantity (PUT)
+            serializer = UpdateCartItemSerializer(data=request.data)
+            if not serializer.is_valid():
+                return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+            quantity = serializer.validated_data['quantity']
+            if quantity == 0:
+                item.delete()
+            else:
+                item.quantity = quantity
+                item.save()
 
         cart.save()  # Update timestamp
-        return Response({
-            'success': True,
-            'cart': StoreCartSerializer(cart).data
-        })
-
-    @action(detail=False, methods=['delete'], url_path='items/(?P<item_id>[^/.]+)')
-    def remove_item(self, request, item_id=None):
-        """Remove item from cart"""
-        cart = self.get_or_create_cart(request)
-        try:
-            item = cart.items.get(id=item_id)
-            item.delete()
-        except StoreCartItem.DoesNotExist:
-            return Response(
-                {'error': 'Item not found in cart'},
-                status=status.HTTP_404_NOT_FOUND
-            )
-
-        cart.save()
         return Response({
             'success': True,
             'cart': StoreCartSerializer(cart).data
