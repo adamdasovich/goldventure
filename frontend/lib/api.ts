@@ -480,7 +480,7 @@ export const storeAPI = {
       apiFetch<{ results: StoreProductList[] }>('/store/products/featured/'),
 
     getByCategory: (categorySlug: string) =>
-      apiFetch<{ results: StoreProductList[] }>(`/store/products/by_category/?category=${categorySlug}`),
+      apiFetch<{ results: StoreProductList[] }>(`/store/products/?category=${categorySlug}`),
 
     share: (accessToken: string, productId: number, sharedTo: 'forum' | 'inquiry' | 'direct_message', destinationId: string) =>
       apiFetch<{ id: number; message: string }>(`/store/products/${productId}/share/`, {
