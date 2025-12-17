@@ -5,31 +5,41 @@ Handles sending transactional emails for:
 - Order confirmations
 - Shipping notifications
 - Digital download links
+
+Uses SendGrid Web API for reliable email delivery.
 """
 
 import logging
-import threading
+import os
 from django.conf import settings
-from django.core.mail import EmailMultiAlternatives
-from django.template.loader import render_to_string
 from django.utils.html import strip_tags
 
 logger = logging.getLogger(__name__)
 
 
+def _get_sendgrid_api_key():
+    """Get SendGrid API key from settings or environment"""
+    # Check settings first (EMAIL_HOST_PASSWORD stores the API key)
+    api_key = getattr(settings, 'EMAIL_HOST_PASSWORD', None)
+    if not api_key:
+        api_key = os.getenv('SENDGRID_API_KEY') or os.getenv('EMAIL_HOST_PASSWORD')
+    return api_key
+
+
 class EmailService:
-    """Service class for sending transactional emails"""
+    """Service class for sending transactional emails using SendGrid Web API"""
 
     @staticmethod
     def is_configured():
-        """Check if email is properly configured"""
-        return bool(settings.EMAIL_HOST_USER and settings.EMAIL_HOST_PASSWORD)
+        """Check if SendGrid is properly configured"""
+        api_key = _get_sendgrid_api_key()
+        return api_key and api_key.startswith('SG.')
 
     @staticmethod
     def send_order_confirmation(order):
         """
         Send order confirmation email after successful purchase.
-        Runs in a background thread to avoid blocking the webhook response.
+        Uses SendGrid Web API for reliable delivery.
 
         Args:
             order: StoreOrder instance with items prefetched
@@ -47,42 +57,48 @@ class EmailService:
             logger.warning(f"No email address for order {order.id}")
             return False
 
-        # Build context before spawning thread (to avoid lazy loading issues)
+        # Build context
         try:
             context = EmailService._build_order_context(order)
         except Exception as e:
             logger.error(f"Failed to build email context for order {order.id}: {str(e)}")
             return False
 
-        # Send email in background thread
-        def send_email_thread():
-            try:
-                html_content = EmailService._render_order_confirmation_html(context)
-                text_content = strip_tags(html_content)
+        try:
+            from sendgrid import SendGridAPIClient
+            from sendgrid.helpers.mail import Mail, Email, To, Content, HtmlContent
 
-                subject = f"Order Confirmation - #{context['order_id']}"
-                from_email = settings.DEFAULT_FROM_EMAIL
+            html_content = EmailService._render_order_confirmation_html(context)
+            text_content = strip_tags(html_content)
 
-                email = EmailMultiAlternatives(
-                    subject=subject,
-                    body=text_content,
-                    from_email=from_email,
-                    to=[recipient_email],
-                )
-                email.attach_alternative(html_content, "text/html")
-                email.send(fail_silently=False)
+            # Parse from_email - handle "Name <email>" format
+            from_email_setting = getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@juniorgoldminingintelligence.com')
+            if '<' in from_email_setting and '>' in from_email_setting:
+                # Extract just the email address
+                from_email = from_email_setting.split('<')[1].split('>')[0].strip()
+                from_name = from_email_setting.split('<')[0].strip()
+            else:
+                from_email = from_email_setting
+                from_name = 'Junior Gold Mining Intelligence'
 
-                logger.info(f"Order confirmation email sent for order {context['order_id']} to {recipient_email}")
+            message = Mail(
+                from_email=Email(from_email, from_name),
+                to_emails=To(recipient_email),
+                subject=f"Order Confirmation - #{context['order_id']}",
+                plain_text_content=Content("text/plain", text_content),
+                html_content=HtmlContent(html_content)
+            )
 
-            except Exception as e:
-                logger.error(f"Failed to send order confirmation email for order {context['order_id']}: {str(e)}")
+            api_key = _get_sendgrid_api_key()
+            sg = SendGridAPIClient(api_key)
+            response = sg.send(message)
 
-        # Start background thread
-        thread = threading.Thread(target=send_email_thread, daemon=True)
-        thread.start()
+            logger.info(f"Order confirmation email sent for order {context['order_id']} to {recipient_email} (status: {response.status_code})")
+            return True
 
-        logger.info(f"Order confirmation email queued for order {order.id}")
-        return True
+        except Exception as e:
+            logger.error(f"Failed to send order confirmation email for order {order.id}: {str(e)}")
+            return False
 
     @staticmethod
     def _build_order_context(order):
@@ -332,6 +348,7 @@ class EmailService:
     def send_shipping_notification(order):
         """
         Send shipping notification email when order is shipped.
+        Uses SendGrid Web API for reliable delivery.
 
         Args:
             order: StoreOrder instance with tracking information
@@ -349,8 +366,8 @@ class EmailService:
             return False
 
         try:
-            subject = f"Your Order #{order.id} Has Shipped!"
-            from_email = settings.DEFAULT_FROM_EMAIL
+            from sendgrid import SendGridAPIClient
+            from sendgrid.helpers.mail import Mail, Email, To, Content, HtmlContent
 
             # Simple shipping notification
             html_content = f'''
@@ -393,16 +410,28 @@ class EmailService:
 
             text_content = strip_tags(html_content)
 
-            email = EmailMultiAlternatives(
-                subject=subject,
-                body=text_content,
-                from_email=from_email,
-                to=[recipient_email],
-            )
-            email.attach_alternative(html_content, "text/html")
-            email.send(fail_silently=False)
+            # Parse from_email - handle "Name <email>" format
+            from_email_setting = getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@juniorgoldminingintelligence.com')
+            if '<' in from_email_setting and '>' in from_email_setting:
+                from_email = from_email_setting.split('<')[1].split('>')[0].strip()
+                from_name = from_email_setting.split('<')[0].strip()
+            else:
+                from_email = from_email_setting
+                from_name = 'Junior Gold Mining Intelligence'
 
-            logger.info(f"Shipping notification email sent for order {order.id}")
+            message = Mail(
+                from_email=Email(from_email, from_name),
+                to_emails=To(recipient_email),
+                subject=f"Your Order #{order.id} Has Shipped!",
+                plain_text_content=Content("text/plain", text_content),
+                html_content=HtmlContent(html_content)
+            )
+
+            api_key = _get_sendgrid_api_key()
+            sg = SendGridAPIClient(api_key)
+            response = sg.send(message)
+
+            logger.info(f"Shipping notification email sent for order {order.id} (status: {response.status_code})")
             return True
 
         except Exception as e:
