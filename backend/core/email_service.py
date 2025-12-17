@@ -437,3 +437,194 @@ class EmailService:
         except Exception as e:
             logger.error(f"Failed to send shipping notification for order {order.id}: {str(e)}")
             return False
+
+    @staticmethod
+    def send_subscription_confirmation(subscription, user, company):
+        """
+        Send subscription confirmation email when user becomes a company representative.
+        Uses SendGrid Web API for reliable delivery.
+
+        Args:
+            subscription: CompanySubscription instance
+            user: User who subscribed
+            company: Company being represented
+        """
+        if not EmailService.is_configured():
+            logger.warning("Email not configured, skipping subscription confirmation email")
+            return False
+
+        recipient_email = user.email
+        if not recipient_email:
+            logger.warning(f"No email address for user {user.id}")
+            return False
+
+        try:
+            from sendgrid import SendGridAPIClient
+            from sendgrid.helpers.mail import Mail, Email, To, Content, HtmlContent
+
+            # Calculate trial end date for display
+            trial_end_str = ""
+            if subscription.trial_end:
+                trial_end_str = subscription.trial_end.strftime("%B %d, %Y")
+
+            html_content = f'''
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Welcome to GoldVenture Company Portal</title>
+</head>
+<body style="margin: 0; padding: 0; background-color: #0F172A; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color: #0F172A;">
+        <tr>
+            <td align="center" style="padding: 40px 20px;">
+                <table role="presentation" width="600" cellspacing="0" cellpadding="0" style="max-width: 600px;">
+
+                    <!-- Header -->
+                    <tr>
+                        <td style="text-align: center; padding-bottom: 32px;">
+                            <div style="font-size: 24px; font-weight: 700; color: #D4AF37; letter-spacing: 1px;">
+                                JUNIOR GOLD MINING INTELLIGENCE
+                            </div>
+                        </td>
+                    </tr>
+
+                    <!-- Main Card -->
+                    <tr>
+                        <td style="background: linear-gradient(135deg, #1E293B 0%, #0F172A 100%); border: 1px solid #334155; border-radius: 16px; padding: 32px;">
+
+                            <!-- Success Icon -->
+                            <div style="text-align: center; margin-bottom: 24px;">
+                                <div style="display: inline-block; width: 64px; height: 64px; background: linear-gradient(135deg, #D4AF37 0%, #B8860B 100%); border-radius: 50%; line-height: 64px; font-size: 32px;">
+                                    🏢
+                                </div>
+                            </div>
+
+                            <!-- Title -->
+                            <h1 style="color: #F1F5F9; font-size: 28px; text-align: center; margin: 0 0 8px 0;">
+                                Welcome, Company Representative!
+                            </h1>
+                            <p style="color: #94A3B8; text-align: center; margin: 0 0 32px 0;">
+                                You are now the official representative for <strong style="color: #D4AF37;">{company.name}</strong>
+                            </p>
+
+                            <!-- Subscription Details -->
+                            <div style="background: #0F172A; border: 1px solid #334155; border-radius: 12px; padding: 24px; margin-bottom: 24px;">
+                                <h3 style="color: #D4AF37; font-size: 16px; margin: 0 0 16px 0; text-transform: uppercase; letter-spacing: 1px;">
+                                    Subscription Details
+                                </h3>
+                                <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+                                    <tr>
+                                        <td style="padding: 8px 0; color: #94A3B8; font-size: 14px;">Plan</td>
+                                        <td style="padding: 8px 0; text-align: right; color: #F1F5F9; font-size: 14px; font-weight: 500;">Company Portal Access</td>
+                                    </tr>
+                                    <tr>
+                                        <td style="padding: 8px 0; color: #94A3B8; font-size: 14px;">Price</td>
+                                        <td style="padding: 8px 0; text-align: right; color: #F1F5F9; font-size: 14px; font-weight: 500;">$50/month</td>
+                                    </tr>
+                                    {f'<tr><td style="padding: 8px 0; color: #94A3B8; font-size: 14px;">Free Trial Until</td><td style="padding: 8px 0; text-align: right; color: #22C55E; font-size: 14px; font-weight: 500;">{trial_end_str}</td></tr>' if trial_end_str else ''}
+                                </table>
+                            </div>
+
+                            <!-- What You Can Do -->
+                            <div style="margin-bottom: 24px;">
+                                <h3 style="color: #D4AF37; font-size: 16px; margin: 0 0 16px 0;">
+                                    What You Can Do Now
+                                </h3>
+                                <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+                                    <tr>
+                                        <td style="padding: 12px 0; border-bottom: 1px solid #334155;">
+                                            <div style="display: flex; align-items: center;">
+                                                <span style="color: #22C55E; margin-right: 12px; font-size: 18px;">✓</span>
+                                                <span style="color: #F1F5F9; font-size: 14px;">Upload company resources (reports, presentations, documents)</span>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td style="padding: 12px 0; border-bottom: 1px solid #334155;">
+                                            <div style="display: flex; align-items: center;">
+                                                <span style="color: #22C55E; margin-right: 12px; font-size: 18px;">✓</span>
+                                                <span style="color: #F1F5F9; font-size: 14px;">Create investor financing opportunities</span>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td style="padding: 12px 0; border-bottom: 1px solid #334155;">
+                                            <div style="display: flex; align-items: center;">
+                                                <span style="color: #22C55E; margin-right: 12px; font-size: 18px;">✓</span>
+                                                <span style="color: #F1F5F9; font-size: 14px;">Manage company profile and information</span>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td style="padding: 12px 0;">
+                                            <div style="display: flex; align-items: center;">
+                                                <span style="color: #22C55E; margin-right: 12px; font-size: 18px;">✓</span>
+                                                <span style="color: #F1F5F9; font-size: 14px;">Engage with the investor community</span>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                </table>
+                            </div>
+
+                            <!-- CTA Button -->
+                            <div style="text-align: center; margin-top: 32px;">
+                                <a href="https://juniorgoldminingintelligence.com/companies/{company.id}"
+                                   style="display: inline-block; background: linear-gradient(135deg, #D4AF37 0%, #B8860B 100%); color: #0F172A; text-decoration: none; padding: 14px 32px; border-radius: 8px; font-weight: 600; font-size: 16px;">
+                                    Go to Company Portal
+                                </a>
+                            </div>
+
+                        </td>
+                    </tr>
+
+                    <!-- Footer -->
+                    <tr>
+                        <td style="text-align: center; padding-top: 32px;">
+                            <p style="color: #64748B; font-size: 14px; margin: 0 0 8px 0;">
+                                Need help? Contact us at support@juniorgoldminingintelligence.com
+                            </p>
+                            <p style="color: #475569; font-size: 12px; margin: 0;">
+                                © 2025 Junior Gold Mining Intelligence. All rights reserved.
+                            </p>
+                        </td>
+                    </tr>
+
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>
+            '''
+
+            text_content = strip_tags(html_content)
+
+            # Parse from_email - handle "Name <email>" format
+            from_email_setting = getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@juniorgoldminingintelligence.com')
+            if '<' in from_email_setting and '>' in from_email_setting:
+                from_email = from_email_setting.split('<')[1].split('>')[0].strip()
+                from_name = from_email_setting.split('<')[0].strip()
+            else:
+                from_email = from_email_setting
+                from_name = 'Junior Gold Mining Intelligence'
+
+            message = Mail(
+                from_email=Email(from_email, from_name),
+                to_emails=To(recipient_email),
+                subject=f"Welcome! You're Now the Representative for {company.name}",
+                plain_text_content=Content("text/plain", text_content),
+                html_content=HtmlContent(html_content)
+            )
+
+            api_key = _get_sendgrid_api_key()
+            sg = SendGridAPIClient(api_key)
+            response = sg.send(message)
+
+            logger.info(f"Subscription confirmation email sent for company {company.id} to {recipient_email} (status: {response.status_code})")
+            return True
+
+        except Exception as e:
+            logger.error(f"Failed to send subscription confirmation email for company {company.id}: {str(e)}")
+            return False

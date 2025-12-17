@@ -455,10 +455,14 @@ def process_subscription_webhook(event):
         elif event_type == 'checkout.session.completed':
             # Checkout completed - link customer and subscription to company
             company_id = data.metadata.get('company_id')
+            user_id = data.metadata.get('user_id')
             if company_id and data.subscription:
+                from .models import User
+                from .email_service import EmailService
+
                 company = Company.objects.get(id=company_id)
                 stripe_sub = stripe.Subscription.retrieve(data.subscription)
-                CompanySubscription.objects.update_or_create(
+                subscription, created = CompanySubscription.objects.update_or_create(
                     company=company,
                     defaults={
                         'stripe_customer_id': data.customer,
@@ -472,6 +476,17 @@ def process_subscription_webhook(event):
                     }
                 )
                 logger.info(f"Checkout completed for company {company_id}")
+
+                # Send confirmation email to the user who subscribed
+                if user_id:
+                    try:
+                        user = User.objects.get(id=user_id)
+                        EmailService.send_subscription_confirmation(subscription, user, company)
+                        logger.info(f"Sent subscription confirmation email to user {user_id}")
+                    except User.DoesNotExist:
+                        logger.warning(f"User {user_id} not found for subscription email")
+                    except Exception as e:
+                        logger.error(f"Failed to send subscription email: {str(e)}")
 
         return {'success': True, 'event_type': event_type}
 
