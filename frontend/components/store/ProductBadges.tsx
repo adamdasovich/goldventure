@@ -42,7 +42,7 @@ const DownloadIcon = () => (
 const badgeConfig: Record<ProductBadge, { label: string; className: string; icon: React.ReactNode }> = {
   rare: {
     label: 'Rare',
-    className: 'bg-purple-500/20 text-purple-300 border-purple-500/40',
+    className: 'bg-gold-500/20 text-gold-300 border-gold-500/40',
     icon: <DiamondIcon />,
   },
   limited_edition: {
@@ -52,17 +52,17 @@ const badgeConfig: Record<ProductBadge, { label: string; className: string; icon
   },
   community_favorite: {
     label: 'Community Favorite',
-    className: 'bg-copper-500/20 text-copper-300 border-copper-500/40',
+    className: 'bg-gold-500/20 text-gold-300 border-gold-500/40',
     icon: <HeartIcon />,
   },
   new_arrival: {
     label: 'New',
-    className: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40',
+    className: 'bg-gold-500/20 text-gold-300 border-gold-500/40',
     icon: <SparkleIcon />,
   },
   instant_download: {
     label: 'Instant Download',
-    className: 'bg-blue-500/20 text-blue-300 border-blue-500/40',
+    className: 'bg-gold-500/20 text-gold-300 border-gold-500/40',
     icon: <DownloadIcon />,
   },
 };
