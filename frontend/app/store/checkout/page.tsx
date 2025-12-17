@@ -39,13 +39,11 @@ export default function CheckoutPage() {
 
       setIsLoadingRates(true);
       try {
-        const response = await storeAPI.shipping.calculate(
-          accessToken || undefined,
-          shippingAddress.country
-        );
-        setShippingRates(response.rates);
-        if (response.rates.length > 0 && !selectedRateId) {
-          setSelectedRateId(response.rates[0].id);
+        // Fetch rates filtered by country from the backend
+        const rates = await storeAPI.shipping.getRates(shippingAddress.country);
+        setShippingRates(rates);
+        if (rates.length > 0 && !selectedRateId) {
+          setSelectedRateId(rates[0].id);
         }
       } catch (err) {
         console.error('Failed to fetch shipping rates:', err);
@@ -55,7 +53,7 @@ export default function CheckoutPage() {
     };
 
     fetchRates();
-  }, [shippingAddress.country, hasPhysicalItems, accessToken]);
+  }, [shippingAddress.country, hasPhysicalItems]);
 
   const selectedRate = shippingRates.find((r) => r.id === selectedRateId);
   const shippingCost = selectedRate?.price_dollars || 0;

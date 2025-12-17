@@ -559,8 +559,10 @@ export const storeAPI = {
 
   // Shipping
   shipping: {
-    getRates: () =>
-      apiFetch<{ results: StoreShippingRate[] }>('/store/shipping-rates/'),
+    getRates: (country?: string) => {
+      const query = country ? `?country=${country}` : '';
+      return apiFetch<StoreShippingRate[]>(`/store/shipping-rates/${query}`);
+    },
 
     calculate: (accessToken: string | undefined, country: string) => {
       const headers: Record<string, string> = {};
