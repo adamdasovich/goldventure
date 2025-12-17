@@ -7,7 +7,7 @@ import { TheTicker } from '@/components/store/TheTicker';
 import { Button } from '@/components/ui/Button';
 import type { StoreProductList } from '@/types/api';
 
-const CATEGORY_SLUG = 'the-vault';
+const CATEGORY_SLUG = 'vault';
 
 export default function VaultPage() {
   const [products, setProducts] = useState<StoreProductList[]>([]);

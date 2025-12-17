@@ -36,7 +36,7 @@ const LibraryIcon = () => (
 
 const sections: SectionConfig[] = [
   {
-    slug: 'the-vault',
+    slug: 'vault',
     title: 'The Vault',
     description: 'Rare specimens, collectible bullion, and premium geological artifacts',
     href: '/store/vault',
