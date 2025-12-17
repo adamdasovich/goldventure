@@ -173,6 +173,9 @@ STRIPE_PUBLISHABLE_KEY = os.getenv('STRIPE_PUBLISHABLE_KEY', '')
 STRIPE_WEBHOOK_SECRET = os.getenv('STRIPE_WEBHOOK_SECRET', '')
 STRIPE_PRICE_ID = os.getenv('STRIPE_PRICE_ID', '')  # Optional: Pre-configured price ID from Stripe Dashboard
 
+# Stripe Store Webhook (separate webhook for e-commerce store)
+STRIPE_STORE_WEBHOOK_SECRET = os.getenv('STRIPE_STORE_WEBHOOK_SECRET', '')
+
 # ============================================================================
 # DJANGO CHANNELS & WEBSOCKET CONFIGURATION
 # ============================================================================
