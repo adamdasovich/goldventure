@@ -78,6 +78,10 @@ export default function CompanyFinancingPage() {
     total_amount_interested: string;
     percentage_filled: string;
   } | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editAmount, setEditAmount] = useState('');
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [isCancelling, setIsCancelling] = useState(false);
 
   useEffect(() => {
     if (!user) {
@@ -199,6 +203,107 @@ export default function CompanyFinancingPage() {
     if (selectedFinancing) {
       fetchMyInterestStatus(selectedFinancing.id);
       fetchInterestAggregate(selectedFinancing.id);
+    }
+  };
+
+  const handleCancelInterest = async () => {
+    if (!interestStatus?.interest_id || !accessToken) return;
+
+    if (!confirm('Are you sure you want to cancel your interest in this financing?')) {
+      return;
+    }
+
+    setIsCancelling(true);
+    try {
+      const res = await fetch(`${API_URL}/investment-interest/${interestStatus.interest_id}/withdraw/`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+        },
+      });
+
+      if (res.ok) {
+        // Reset interest status
+        setInterestStatus({
+          has_interest: false,
+          interest_id: null,
+          status: null,
+          shares_requested: null,
+          investment_amount: null,
+        });
+        // Refresh aggregate
+        if (selectedFinancing) {
+          fetchInterestAggregate(selectedFinancing.id);
+        }
+      } else {
+        const data = await res.json();
+        alert(data.error || 'Failed to cancel interest');
+      }
+    } catch (err) {
+      console.error('Failed to cancel interest:', err);
+      alert('Failed to cancel interest');
+    } finally {
+      setIsCancelling(false);
+    }
+  };
+
+  const handleStartEdit = () => {
+    setEditAmount(interestStatus?.investment_amount || '');
+    setIsEditing(true);
+  };
+
+  const handleCancelEdit = () => {
+    setIsEditing(false);
+    setEditAmount('');
+  };
+
+  const handleUpdateInterest = async () => {
+    if (!interestStatus?.interest_id || !accessToken || !selectedFinancing) return;
+
+    const amount = parseFloat(editAmount);
+    if (isNaN(amount) || amount <= 0) {
+      alert('Please enter a valid amount');
+      return;
+    }
+
+    // Calculate shares based on price per share
+    const pricePerShare = selectedFinancing.price_per_share || 0;
+    const sharesRequested = pricePerShare > 0 ? Math.floor(amount / pricePerShare) : 0;
+
+    setIsUpdating(true);
+    try {
+      const res = await fetch(`${API_URL}/investment-interest/${interestStatus.interest_id}/update/`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          investment_amount: amount,
+          shares_requested: sharesRequested,
+        }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        // Update local state
+        setInterestStatus({
+          ...interestStatus,
+          shares_requested: data.shares_requested,
+          investment_amount: data.investment_amount,
+        });
+        setIsEditing(false);
+        // Refresh aggregate
+        fetchInterestAggregate(selectedFinancing.id);
+      } else {
+        const data = await res.json();
+        alert(data.error || 'Failed to update interest');
+      }
+    } catch (err) {
+      console.error('Failed to update interest:', err);
+      alert('Failed to update interest');
+    } finally {
+      setIsUpdating(false);
     }
   };
 
@@ -625,17 +730,94 @@ export default function CompanyFinancingPage() {
                     </div>
                   ) : interestStatus?.has_interest ? (
                     <div className="space-y-4">
-                      <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-4 text-center">
-                        <svg className="w-12 h-12 mx-auto text-green-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                        <p className="text-green-400 font-medium">Interest Registered!</p>
-                        <p className="text-sm text-slate-400 mt-1">
-                          {interestStatus.shares_requested?.toLocaleString()} shares ({formatCurrency(Number(interestStatus.investment_amount) || 0)})
-                        </p>
-                        <p className="text-xs text-slate-500 mt-2">
-                          Status: {interestStatus.status === 'pending' ? 'Pending Review' : interestStatus.status}
-                        </p>
+                      <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-4">
+                        <div className="text-center">
+                          <svg className="w-12 h-12 mx-auto text-green-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                          <p className="text-green-400 font-medium">Interest Registered!</p>
+
+                          {isEditing ? (
+                            <div className="mt-3 space-y-3">
+                              <div>
+                                <label className="block text-sm text-slate-400 mb-1">Investment Amount (USD)</label>
+                                <input
+                                  type="number"
+                                  value={editAmount}
+                                  onChange={(e) => setEditAmount(e.target.value)}
+                                  className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white text-center focus:outline-none focus:border-gold-400"
+                                  placeholder="Enter amount"
+                                  min="0"
+                                  step="100"
+                                />
+                              </div>
+                              <div className="flex gap-2">
+                                <Button
+                                  variant="primary"
+                                  size="sm"
+                                  className="flex-1"
+                                  onClick={handleUpdateInterest}
+                                  disabled={isUpdating}
+                                >
+                                  {isUpdating ? 'Saving...' : 'Save'}
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="flex-1"
+                                  onClick={handleCancelEdit}
+                                  disabled={isUpdating}
+                                >
+                                  Cancel
+                                </Button>
+                              </div>
+                            </div>
+                          ) : (
+                            <>
+                              <p className="text-sm text-slate-400 mt-1">
+                                {interestStatus.shares_requested?.toLocaleString()} shares ({formatCurrency(Number(interestStatus.investment_amount) || 0)})
+                              </p>
+                              <p className="text-xs text-slate-500 mt-2">
+                                Status: {interestStatus.status === 'pending' ? 'Pending Review' : interestStatus.status}
+                              </p>
+                            </>
+                          )}
+                        </div>
+
+                        {/* Edit and Cancel buttons - only show if status is pending and not editing */}
+                        {interestStatus.status === 'pending' && !isEditing && (
+                          <div className="flex gap-2 mt-4 pt-4 border-t border-green-500/20">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="flex-1 text-slate-300 hover:text-white"
+                              onClick={handleStartEdit}
+                            >
+                              <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                              </svg>
+                              Edit Amount
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="flex-1 text-red-400 hover:text-red-300 hover:bg-red-500/10"
+                              onClick={handleCancelInterest}
+                              disabled={isCancelling}
+                            >
+                              {isCancelling ? (
+                                'Cancelling...'
+                              ) : (
+                                <>
+                                  <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                  </svg>
+                                  Cancel Interest
+                                </>
+                              )}
+                            </Button>
+                          </div>
+                        )}
                       </div>
                     </div>
                   ) : (

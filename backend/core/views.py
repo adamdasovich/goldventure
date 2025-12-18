@@ -4237,6 +4237,58 @@ def withdraw_investment_interest(request, interest_id):
     return Response({'message': 'Investment interest withdrawn successfully'})
 
 
+@api_view(['PATCH'])
+@permission_classes([IsAuthenticated])
+def update_my_investment_interest(request, interest_id):
+    """
+    Update investment interest (user can update their own if status is pending).
+
+    PATCH /api/investment-interest/<interest_id>/update/
+
+    Body:
+    - shares_requested: number of shares (optional)
+    - investment_amount: amount in USD (optional)
+    """
+    try:
+        interest = InvestmentInterest.objects.get(id=interest_id, user=request.user)
+    except InvestmentInterest.DoesNotExist:
+        return Response(
+            {'error': 'Investment interest not found'},
+            status=status.HTTP_404_NOT_FOUND
+        )
+
+    # Only allow updates if status is pending
+    if interest.status != 'pending':
+        return Response(
+            {'error': 'Cannot update interest at this stage. Please contact support.'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    # Update fields
+    shares_requested = request.data.get('shares_requested')
+    investment_amount = request.data.get('investment_amount')
+
+    if shares_requested is not None:
+        interest.shares_requested = int(shares_requested)
+
+    if investment_amount is not None:
+        from decimal import Decimal
+        interest.investment_amount = Decimal(str(investment_amount))
+
+    interest.save()
+
+    # Recalculate aggregate
+    InvestmentInterestAggregate.update_for_financing(interest.financing)
+
+    return Response({
+        'message': 'Investment interest updated successfully',
+        'interest_id': interest.id,
+        'shares_requested': interest.shares_requested,
+        'investment_amount': str(interest.investment_amount),
+        'status': interest.status
+    })
+
+
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def export_investment_interests(request, financing_id):

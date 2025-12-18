@@ -103,6 +103,7 @@ urlpatterns = [
     path('investment-interest/list/<int:financing_id>/', views.list_investment_interests, name='list_investment_interests'),
     path('investment-interest/<int:interest_id>/status/', views.update_investment_interest_status, name='update_investment_interest_status'),
     path('investment-interest/<int:interest_id>/withdraw/', views.withdraw_investment_interest, name='withdraw_investment_interest'),
+    path('investment-interest/<int:interest_id>/update/', views.update_my_investment_interest, name='update_my_investment_interest'),
     path('investment-interest/export/<int:financing_id>/', views.export_investment_interests, name='export_investment_interests'),
     path('investment-interest/admin/dashboard/', views.admin_investment_interest_dashboard, name='admin_investment_interest_dashboard'),
 
