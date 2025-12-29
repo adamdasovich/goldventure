@@ -274,6 +274,47 @@ class CompanyDataScraper:
             # Extract social media links
             self._extract_social_media(soup)
 
+            # Extract flagship project from homepage (many mining companies feature their main project)
+            page_text = soup.get_text()
+            project_keywords = ['deposit', 'mine', 'project', 'property']
+
+            # Look for project mentions in headers
+            for header in soup.find_all(['h1', 'h2', 'h3']):
+                header_text = header.get_text(strip=True)
+                header_lower = header_text.lower()
+
+                # Check if header mentions a project
+                if any(kw in header_lower for kw in project_keywords):
+                    # Get description from following content
+                    description = ''
+                    for sibling in header.find_next_siblings(['p', 'div'])[:2]:
+                        sib_text = sibling.get_text(strip=True)
+                        if sib_text and len(sib_text) > 30:
+                            description = sib_text[:500]
+                            break
+
+                    # Determine location
+                    location = None
+                    locations = ['Canada', 'USA', 'United States', 'Mexico', 'Peru', 'Chile',
+                                'Australia', 'Nevada', 'Ontario', 'Quebec', 'British Columbia',
+                                'Puebla', 'Sonora', 'Durango', 'Yukon', 'Alaska']
+                    combined = header_text + ' ' + description
+                    for loc in locations:
+                        if loc.lower() in combined.lower():
+                            location = loc
+                            break
+
+                    project = {
+                        'name': header_text[:200],
+                        'description': description,
+                        'location': location,
+                        'source_url': self.base_url
+                    }
+
+                    # Avoid duplicates
+                    if not any(p.get('name') == project['name'] for p in self.extracted_data['projects']):
+                        self.extracted_data['projects'].append(project)
+
             print(f"[OK] Homepage scraped: {self.extracted_data['company'].get('name', 'Unknown')}")
 
         except Exception as e:
@@ -580,11 +621,12 @@ class CompanyDataScraper:
 
             self.visited_urls.add(url)
             soup = BeautifulSoup(result.html, 'html.parser')
+            projects_found = []
 
-            # Find project containers
+            # Find project containers using CSS selectors
             project_selectors = [
                 '.project', '.property', '[class*="project"]',
-                '[class*="property"]', '.asset'
+                '[class*="property"]', '.asset', 'article'
             ]
 
             for selector in project_selectors:
@@ -593,10 +635,75 @@ class CompanyDataScraper:
                     for proj in projects:
                         project = self._extract_project_from_element(proj, url)
                         if project and project.get('name'):
-                            self.extracted_data['projects'].append(project)
+                            projects_found.append(project)
                     break
 
-            print(f"[OK] Projects page scraped: {len(self.extracted_data['projects'])} projects found")
+            # If no projects found via CSS, try to extract from page content
+            if not projects_found:
+                # Look for project names in headers
+                headers = soup.find_all(['h1', 'h2', 'h3'])
+                page_text = soup.get_text()
+
+                # Mining project keywords that often appear in project names
+                project_keywords = ['deposit', 'mine', 'project', 'property', 'claim', 'prospect']
+
+                for header in headers:
+                    header_text = header.get_text(strip=True)
+                    header_lower = header_text.lower()
+
+                    # Check if header looks like a project name
+                    if any(kw in header_lower for kw in project_keywords):
+                        # Get description from following sibling paragraphs
+                        description = ''
+                        for sibling in header.find_next_siblings(['p', 'div'])[:3]:
+                            sib_text = sibling.get_text(strip=True)
+                            if sib_text and len(sib_text) > 20:
+                                description = sib_text[:500]
+                                break
+
+                        # Extract location
+                        location = None
+                        locations = ['Canada', 'USA', 'United States', 'Mexico', 'Peru', 'Chile',
+                                    'Australia', 'Nevada', 'Ontario', 'Quebec', 'British Columbia',
+                                    'Puebla', 'Sonora', 'Durango', 'Yukon', 'Alaska']
+                        combined_text = header_text + ' ' + description
+                        for loc in locations:
+                            if loc.lower() in combined_text.lower():
+                                location = loc
+                                break
+
+                        project = {
+                            'name': header_text[:200],
+                            'description': description,
+                            'location': location,
+                            'source_url': url
+                        }
+
+                        # Avoid duplicates
+                        if not any(p.get('name') == project['name'] for p in projects_found):
+                            projects_found.append(project)
+
+                # Also look for links to project subpages
+                for link in soup.find_all('a', href=True):
+                    href = link.get('href', '').lower()
+                    text = link.get_text(strip=True)
+
+                    # Links that look like project pages
+                    if any(kw in href for kw in ['/project', '/property', '/asset', '/deposit', '/mine']):
+                        if text and len(text) > 3 and len(text) < 100:
+                            # Skip navigation items
+                            if text.lower() not in ['projects', 'properties', 'assets', 'home', 'about']:
+                                project = {
+                                    'name': text[:200],
+                                    'source_url': urljoin(url, link['href'])
+                                }
+                                if not any(p.get('name') == project['name'] for p in projects_found):
+                                    projects_found.append(project)
+
+            # Add found projects
+            self.extracted_data['projects'].extend(projects_found)
+
+            print(f"[OK] Projects page scraped: {len(projects_found)} projects found")
 
         except Exception as e:
             self.errors.append(f"Projects page error ({url}): {str(e)}")
