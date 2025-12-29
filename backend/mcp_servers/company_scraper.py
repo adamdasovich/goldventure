@@ -278,10 +278,26 @@ class CompanyDataScraper:
             page_text = soup.get_text()
             project_keywords = ['deposit', 'mine', 'project', 'property']
 
+            # Invalid project names to skip (too generic or just keywords)
+            invalid_project_names = [
+                'deposit', 'mine', 'project', 'property', 'claim', 'prospect',
+                'the project', 'the deposit', 'the mine', 'our project', 'our projects',
+                'projects', 'properties', 'operations', 'assets', 'home', 'about',
+                'about us', 'contact', 'news', 'investors', 'team', 'management'
+            ]
+
             # Look for project mentions in headers
             for header in soup.find_all(['h1', 'h2', 'h3']):
                 header_text = header.get_text(strip=True)
-                header_lower = header_text.lower()
+                header_lower = header_text.lower().strip()
+
+                # Skip invalid/generic names
+                if header_lower in invalid_project_names or len(header_text) < 5:
+                    continue
+
+                # Skip all-caps short headers (likely company name)
+                if header_text.isupper() and len(header_text.split()) <= 3:
+                    continue
 
                 # Check if header mentions a project
                 if any(kw in header_lower for kw in project_keywords):
@@ -311,8 +327,8 @@ class CompanyDataScraper:
                         'source_url': self.base_url
                     }
 
-                    # Avoid duplicates
-                    if not any(p.get('name') == project['name'] for p in self.extracted_data['projects']):
+                    # Avoid duplicates (case-insensitive)
+                    if not any(p.get('name', '').lower() == project['name'].lower() for p in self.extracted_data['projects']):
                         self.extracted_data['projects'].append(project)
 
             print(f"[OK] Homepage scraped: {self.extracted_data['company'].get('name', 'Unknown')}")
@@ -647,9 +663,25 @@ class CompanyDataScraper:
                 # Mining project keywords that often appear in project names
                 project_keywords = ['deposit', 'mine', 'project', 'property', 'claim', 'prospect']
 
+                # Invalid project names to skip (too generic or just keywords)
+                invalid_names = [
+                    'deposit', 'mine', 'project', 'property', 'claim', 'prospect',
+                    'the project', 'the deposit', 'the mine', 'our project', 'our projects',
+                    'projects', 'properties', 'operations', 'assets', 'home', 'about',
+                    'about us', 'contact', 'news', 'investors', 'team', 'management'
+                ]
+
                 for header in headers:
                     header_text = header.get_text(strip=True)
-                    header_lower = header_text.lower()
+                    header_lower = header_text.lower().strip()
+
+                    # Skip if the header is just a generic keyword or too short
+                    if header_lower in invalid_names or len(header_text) < 5:
+                        continue
+
+                    # Skip if header looks like company name (all caps, contains "minerals", "mining", "resources")
+                    if header_text.isupper() and len(header_text.split()) <= 3:
+                        continue
 
                     # Check if header looks like a project name
                     if any(kw in header_lower for kw in project_keywords):
@@ -679,25 +711,26 @@ class CompanyDataScraper:
                             'source_url': url
                         }
 
-                        # Avoid duplicates
-                        if not any(p.get('name') == project['name'] for p in projects_found):
+                        # Avoid duplicates (case-insensitive)
+                        if not any(p.get('name', '').lower() == project['name'].lower() for p in projects_found):
                             projects_found.append(project)
 
                 # Also look for links to project subpages
                 for link in soup.find_all('a', href=True):
                     href = link.get('href', '').lower()
                     text = link.get_text(strip=True)
+                    text_lower = text.lower()
 
                     # Links that look like project pages
                     if any(kw in href for kw in ['/project', '/property', '/asset', '/deposit', '/mine']):
-                        if text and len(text) > 3 and len(text) < 100:
-                            # Skip navigation items
-                            if text.lower() not in ['projects', 'properties', 'assets', 'home', 'about']:
+                        if text and len(text) > 5 and len(text) < 100:
+                            # Skip navigation items and generic terms
+                            if text_lower not in invalid_names and not text.isupper():
                                 project = {
                                     'name': text[:200],
                                     'source_url': urljoin(url, link['href'])
                                 }
-                                if not any(p.get('name') == project['name'] for p in projects_found):
+                                if not any(p.get('name', '').lower() == project['name'].lower() for p in projects_found):
                                     projects_found.append(project)
 
             # Add found projects
