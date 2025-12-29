@@ -71,6 +71,11 @@ export default function UpdateCompanyPage() {
       return;
     }
 
+    if (!accessToken) {
+      setError('You are not logged in. Please refresh the page and log in again.');
+      return;
+    }
+
     setIsUpdating(true);
     setError(null);
     setUpdateResult(null);
@@ -89,8 +94,17 @@ export default function UpdateCompanyPage() {
       });
 
       if (!response.ok) {
+        // Handle authentication errors
+        if (response.status === 401) {
+          setError('Your session has expired. Please refresh the page and log in again.');
+          return;
+        }
+        if (response.status === 403) {
+          setError('You do not have permission to update companies. Admin access required.');
+          return;
+        }
         const errData = await response.json();
-        throw new Error(errData.error || 'Failed to update company');
+        throw new Error(errData.error || errData.detail || 'Failed to update company');
       }
 
       const data = await response.json();
