@@ -638,11 +638,12 @@ class CompanyDataScraper:
 
             self.visited_urls.add(url)
             soup = BeautifulSoup(result.html, 'html.parser')
+            news_found = []
 
-            # Find news items
+            # Find news items using various selectors
             news_selectors = [
                 '.news-item', '.press-release', '.news', '[class*="news"]',
-                '[class*="release"]', 'article'
+                '[class*="release"]', 'article', '.post', '.entry'
             ]
 
             for selector in news_selectors:
@@ -650,27 +651,85 @@ class CompanyDataScraper:
                 if items:
                     for item in items[:20]:  # Limit to 20 news items
                         news = self._extract_news_from_element(item, url)
-                        if news and news.get('title'):
-                            self.extracted_data['news'].append(news)
+                        if news and news.get('title') and len(news['title']) > 10:
+                            news_found.append(news)
                     break
 
-            # Also find news links
+            # Find news links - look for links that appear to be news items
+            # Common patterns: links with dates, links in list items, links with news-like URLs
             for link in soup.find_all('a', href=True):
-                href = link.get('href', '').lower()
+                href = link.get('href', '')
+                href_lower = href.lower()
                 text = link.get_text(strip=True)
-                if ('/news/' in href or '/press' in href) and text and len(text) > 20:
+
+                # Skip navigation, form elements, and short text
+                if not text or len(text) < 15 or len(text) > 300:
+                    continue
+
+                # Skip common non-news patterns
+                skip_patterns = ['email', 'subscribe', 'sign up', 'contact', 'login',
+                                'register', 'search', 'menu', 'home', 'about']
+                if any(p in text.lower() for p in skip_patterns):
+                    continue
+
+                # Check if this looks like a news link
+                is_news_link = False
+
+                # Pattern 1: URL contains news-related paths
+                if any(p in href_lower for p in ['/news', '/press', '/release', '/announcement', '/update']):
+                    is_news_link = True
+
+                # Pattern 2: Link text contains a date pattern (e.g., "October 3rd, 2025")
+                date_text_pattern = r'(January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2}'
+                if re.search(date_text_pattern, text, re.IGNORECASE):
+                    is_news_link = True
+
+                # Pattern 3: URL contains date pattern
+                if re.search(r'20\d{2}[/-]\d{2}[/-]\d{2}', href):
+                    is_news_link = True
+
+                # Pattern 4: Parent element suggests news context
+                parent = link.parent
+                if parent and parent.name in ['li', 'p', 'div']:
+                    parent_text = parent.get_text(strip=True)
+                    if re.search(date_text_pattern, parent_text, re.IGNORECASE):
+                        is_news_link = True
+
+                if is_news_link:
                     news = {
                         'title': text,
-                        'source_url': urljoin(url, link['href']),
+                        'source_url': urljoin(url, href),
                         'extracted_at': datetime.utcnow().isoformat(),
                     }
+
                     # Extract date from URL or text
+                    # Try ISO format first (2025-10-03)
                     date_match = re.search(r'(20\d{2})[/-](\d{2})[/-](\d{2})', href + text)
                     if date_match:
                         news['publication_date'] = f"{date_match.group(1)}-{date_match.group(2)}-{date_match.group(3)}"
-                    self.extracted_data['news'].append(news)
+                    else:
+                        # Try text date format (October 3rd, 2025)
+                        month_match = re.search(
+                            r'(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{1,2})\w*,?\s*(20\d{2})',
+                            text, re.IGNORECASE
+                        )
+                        if month_match:
+                            month_map = {'january': '01', 'february': '02', 'march': '03', 'april': '04',
+                                        'may': '05', 'june': '06', 'july': '07', 'august': '08',
+                                        'september': '09', 'october': '10', 'november': '11', 'december': '12'}
+                            month = month_map.get(month_match.group(1).lower(), '01')
+                            day = month_match.group(2).zfill(2)
+                            year = month_match.group(3)
+                            news['publication_date'] = f"{year}-{month}-{day}"
 
-            print(f"[OK] News page scraped: {len(self.extracted_data['news'])} items found")
+                    # Avoid duplicates
+                    if not any(n.get('source_url') == news['source_url'] for n in news_found):
+                        news_found.append(news)
+
+            # Add found news to extracted data
+            self.extracted_data['news'].extend(news_found[:50])  # Limit to 50 items
+
+            print(f"[OK] News page scraped: {len(news_found)} items found")
 
         except Exception as e:
             self.errors.append(f"News page error ({url}): {str(e)}")
