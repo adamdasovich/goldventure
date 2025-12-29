@@ -5596,7 +5596,7 @@ def _save_scraped_company_data(data: dict, source_url: str, update_existing: boo
 
     # Save documents and create processing jobs for key document types
     from core.models import DocumentProcessingJob
-    processing_job_types = ['ni43101', 'presentation', 'fact_sheet']
+    processing_job_types = ['ni43101', 'pea', 'presentation', 'fact_sheet']
     processing_jobs_created = []
 
     for doc_data in data.get('documents', []):

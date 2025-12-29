@@ -526,6 +526,8 @@ class CompanyDataScraper:
         # Classify document type
         if any(kw in combined for kw in ['ni 43-101', 'ni43-101', '43-101', 'technical report']):
             doc['document_type'] = 'ni43101'
+        elif any(kw in combined for kw in ['preliminary economic assessment', 'pea report', 'pea study', ' pea ']):
+            doc['document_type'] = 'pea'
         elif any(kw in combined for kw in ['presentation', 'corporate presentation']):
             doc['document_type'] = 'presentation'
         elif any(kw in combined for kw in ['fact sheet', 'factsheet']):

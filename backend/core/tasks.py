@@ -48,6 +48,7 @@ def process_general_document(document_url: str, document_type: str,
             'fact_sheet': 'Fact Sheet',
             'news_release': 'News Release',
             'financial_statement': 'Financial Statement',
+            'pea': 'Preliminary Economic Assessment',
         }
 
         document = Document.objects.create(
@@ -124,6 +125,17 @@ def process_single_job(job: DocumentProcessingJob):
         # Process based on document type
         if job.document_type == 'ni43101':
             job.progress_message = "Processing NI 43-101 report (this may take 30-90 minutes)..."
+            job.save()
+
+            result = processor._process_ni43101_hybrid(
+                document_url=job.url,
+                company_name=company_name,
+                project_name=project_name
+            )
+
+        elif job.document_type == 'pea':
+            # PEA reports use the same hybrid processor as NI 43-101 (they contain economic data)
+            job.progress_message = "Processing PEA report (this may take 30-90 minutes)..."
             job.save()
 
             result = processor._process_ni43101_hybrid(

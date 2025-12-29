@@ -746,6 +746,7 @@ class DocumentProcessingJob(models.Model):
 
     DOCUMENT_TYPE_CHOICES = [
         ('ni43101', 'NI 43-101 Technical Report'),
+        ('pea', 'Preliminary Economic Assessment'),
         ('news_release', 'News Release'),
         ('financial_statement', 'Financial Statement'),
         ('presentation', 'Presentation'),
