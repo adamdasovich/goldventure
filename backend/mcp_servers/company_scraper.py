@@ -222,22 +222,42 @@ class CompanyDataScraper:
                 self.extracted_data['company']['description'] = meta_desc['content']
 
             # Extract ticker symbol (often in header)
+            # Note: Be careful with OTC patterns - "OTCQB" and "OTCQX" are market tiers, not exchanges
             ticker_patterns = [
-                r'\b(TSX[V]?|TSXV|CSE|OTC|ASX|AIM)[:\s-]*([A-Z]{2,5})\b',
-                r'\b([A-Z]{2,5})[:\s-]*(TSX[V]?|TSXV|CSE|OTC|ASX|AIM)\b',
+                # TSX patterns: "TSX: AMM", "TSX-V: AMM", "TSXV: AMM"
+                r'\b(TSX[-\s]?V|TSXV)[:\s]+([A-Z]{2,5})\b',
+                r'\b(TSX)[:\s]+([A-Z]{2,5})\b',
+                # CSE patterns: "CSE: AMM"
+                r'\b(CSE)[:\s]+([A-Z]{2,5})\b',
+                # ASX/AIM patterns
+                r'\b(ASX|AIM)[:\s]+([A-Z]{2,5})\b',
+                # OTC patterns - specifically look for OTCQB/OTCQX followed by ticker
+                r'\b(?:OTCQB|OTCQX)[:\s]+([A-Z]{3,5})\b',
+                # Reverse patterns: "AMM: TSX"
+                r'\b([A-Z]{2,5})[:\s]+(TSX[-\s]?V|TSXV|TSX|CSE|ASX|AIM)\b',
             ]
             page_text = soup.get_text()
             for pattern in ticker_patterns:
                 match = re.search(pattern, page_text, re.IGNORECASE)
                 if match:
                     groups = match.groups()
+                    # Handle OTCQB/OTCQX pattern (only has ticker, no exchange group)
+                    if len(groups) == 1:
+                        self.extracted_data['company']['ticker_symbol'] = groups[0].upper()
+                        self.extracted_data['company']['exchange'] = 'OTC'
                     # Determine which group is exchange vs ticker
-                    if groups[0].upper() in ['TSX', 'TSXV', 'CSE', 'OTC', 'ASX', 'AIM']:
-                        self.extracted_data['company']['exchange'] = groups[0].upper()
+                    elif groups[0].upper() in ['TSX', 'TSXV', 'TSX-V', 'TSX V', 'CSE', 'ASX', 'AIM']:
+                        exchange = groups[0].upper().replace(' ', '').replace('-', '')
+                        if exchange == 'TSXV':
+                            exchange = 'TSXV'
+                        self.extracted_data['company']['exchange'] = exchange
                         self.extracted_data['company']['ticker_symbol'] = groups[1].upper()
                     else:
                         self.extracted_data['company']['ticker_symbol'] = groups[0].upper()
-                        self.extracted_data['company']['exchange'] = groups[1].upper()
+                        exchange = groups[1].upper().replace(' ', '').replace('-', '')
+                        if exchange == 'TSXV':
+                            exchange = 'TSXV'
+                        self.extracted_data['company']['exchange'] = exchange
                     break
 
             # Extract navigation links for later use
