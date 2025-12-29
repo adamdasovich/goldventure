@@ -5444,6 +5444,17 @@ def scrape_company_save(request):
             job.error_messages = errors
             job.save()
 
+            # Get processing jobs that were created
+            processing_jobs = data.get('_processing_jobs_created', [])
+
+            # Optionally trigger document processing in background
+            process_documents = request.data.get('process_documents', True)
+            if process_documents and processing_jobs:
+                # Start document processing in background thread
+                import threading
+                from core.tasks import process_document_queue
+                threading.Thread(target=process_document_queue, daemon=True).start()
+
             return Response({
                 'success': True,
                 'company_id': company.id,
@@ -5453,6 +5464,8 @@ def scrape_company_save(request):
                 'documents_count': len(data.get('documents', [])),
                 'news_count': len(data.get('news', [])),
                 'errors': errors,
+                'processing_jobs': processing_jobs,
+                'processing_started': process_documents and len(processing_jobs) > 0,
             })
         else:
             raise Exception("Failed to create company record")
@@ -5581,18 +5594,47 @@ def _save_scraped_company_data(data: dict, source_url: str, update_existing: boo
             }
         )
 
-    # Save documents
+    # Save documents and create processing jobs for key document types
+    from core.models import DocumentProcessingJob
+    processing_job_types = ['ni43101', 'presentation', 'fact_sheet']
+    processing_jobs_created = []
+
     for doc_data in data.get('documents', []):
+        doc_type = doc_data.get('document_type', 'other')
+        source_url = doc_data.get('source_url', '')
+
+        # Save document record
         CompanyDocument.objects.update_or_create(
             company=company,
-            source_url=doc_data.get('source_url'),
+            source_url=source_url,
             defaults={
-                'document_type': doc_data.get('document_type', 'other'),
+                'document_type': doc_type,
                 'title': doc_data.get('title', 'Untitled'),
                 'year': doc_data.get('year'),
                 'extracted_at': timezone.now(),
             }
         )
+
+        # Create document processing job for key document types (if PDF)
+        if doc_type in processing_job_types and source_url and '.pdf' in source_url.lower():
+            # Check if job already exists for this URL
+            existing_job = DocumentProcessingJob.objects.filter(url=source_url).first()
+            if not existing_job:
+                job = DocumentProcessingJob.objects.create(
+                    url=source_url,
+                    document_type=doc_type,
+                    company_name=company.name,
+                    status='pending',
+                    created_by=user,
+                )
+                processing_jobs_created.append({
+                    'id': job.id,
+                    'type': doc_type,
+                    'url': source_url
+                })
+
+    # Store processing jobs info for later use
+    data['_processing_jobs_created'] = processing_jobs_created
 
     # Save news
     from datetime import datetime

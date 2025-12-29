@@ -6,10 +6,85 @@ Processes document queue jobs sequentially
 from celery import shared_task
 from django.utils import timezone
 from datetime import datetime
-from .models import DocumentProcessingJob, Company, NewsRelease
+from .models import DocumentProcessingJob, Company, NewsRelease, Document
 from mcp_servers.document_processor_hybrid import HybridDocumentProcessor
 from mcp_servers.website_crawler import crawl_news_releases
+from django.db.models import Q
 import asyncio
+
+
+def process_general_document(document_url: str, document_type: str,
+                            company_name: str, processor: HybridDocumentProcessor) -> dict:
+    """
+    Process general documents (presentations, fact sheets, etc.) using Docling.
+    Extracts text and stores it in RAG for chatbot access.
+
+    Args:
+        document_url: URL to the PDF document
+        document_type: Type of document (presentation, fact_sheet, etc.)
+        company_name: Name of the company
+        processor: HybridDocumentProcessor instance
+
+    Returns:
+        dict with success status and processing stats
+    """
+    try:
+        # Find company
+        company = Company.objects.filter(
+            Q(name__icontains=company_name) | Q(ticker_symbol__iexact=company_name)
+        ).first() if company_name else None
+
+        if not company:
+            return {"error": f"Company '{company_name}' not found"}
+
+        # Download and process with Docling
+        pdf_path = processor._download_pdf(document_url)
+        docling_data = processor._process_with_docling(pdf_path)
+        pdf_path.unlink()
+
+        # Create document record
+        doc_title_map = {
+            'presentation': 'Corporate Presentation',
+            'fact_sheet': 'Fact Sheet',
+            'news_release': 'News Release',
+            'financial_statement': 'Financial Statement',
+        }
+
+        document = Document.objects.create(
+            company=company,
+            title=doc_title_map.get(document_type, 'Document'),
+            document_type=document_type,
+            document_date=datetime.now().date(),
+            file_url=document_url,
+            description=f"Auto-processed on {datetime.now().strftime('%Y-%m-%d')}"
+        )
+
+        # Store document chunks for RAG/semantic search
+        chunks_stored = 0
+        try:
+            from mcp_servers.rag_utils import RAGManager
+            rag_manager = RAGManager()
+            full_text = docling_data['text']
+            chunks_stored = rag_manager.store_document_chunks(document, full_text)
+            print(f"Stored {chunks_stored} chunks for semantic search")
+        except Exception as e:
+            print(f"Error storing document chunks for RAG: {str(e)}")
+
+        return {
+            "success": True,
+            "method": "Docling extraction + RAG storage",
+            "document_id": document.id,
+            "company": company.name,
+            "processing_stats": {
+                "pages_processed": docling_data.get('page_count', 0),
+                "tables_extracted": len(docling_data.get('tables', [])),
+                "document_chunks_stored": chunks_stored
+            },
+            "message": f"{document_type} processed successfully"
+        }
+
+    except Exception as e:
+        return {"error": f"Document processing failed: {str(e)}"}
 
 
 def process_document_queue():
@@ -57,13 +132,30 @@ def process_single_job(job: DocumentProcessingJob):
                 project_name=project_name
             )
 
+        elif job.document_type in ['presentation', 'fact_sheet']:
+            # Process presentations and fact sheets using simpler approach
+            job.progress_message = f"Processing {job.get_document_type_display()}..."
+            job.save()
+
+            result = process_general_document(
+                document_url=job.url,
+                document_type=job.document_type,
+                company_name=company_name,
+                processor=processor
+            )
+
         else:
             # For other document types, use basic processing
             job.progress_message = f"Processing {job.get_document_type_display()}..."
             job.save()
 
-            # TODO: Add support for other document types
-            raise NotImplementedError(f"Document type {job.document_type} not yet supported")
+            # Fall back to general processing
+            result = process_general_document(
+                document_url=job.url,
+                document_type=job.document_type,
+                company_name=company_name,
+                processor=processor
+            )
 
         # Check result
         if result.get('success'):

@@ -749,6 +749,7 @@ class DocumentProcessingJob(models.Model):
         ('news_release', 'News Release'),
         ('financial_statement', 'Financial Statement'),
         ('presentation', 'Presentation'),
+        ('fact_sheet', 'Fact Sheet'),
         ('other', 'Other'),
     ]
 
