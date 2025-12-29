@@ -87,6 +87,34 @@ class Company(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    # Auto-population fields
+    tagline = models.CharField(max_length=500, blank=True, help_text="Company tagline or slogan")
+    logo_file = models.ImageField(upload_to='company_logos/', blank=True, null=True)
+    source_website_url = models.URLField(blank=True, help_text="Original website URL used for scraping")
+    auto_populated = models.BooleanField(default=False, help_text="Was this company auto-populated via scraping?")
+    last_scraped_at = models.DateTimeField(null=True, blank=True, help_text="Last time data was scraped")
+    data_completeness_score = models.IntegerField(
+        default=0,
+        validators=[MinValueValidator(0), MaxValueValidator(100)],
+        help_text="0-100 score indicating data completeness"
+    )
+    requires_manual_review = models.BooleanField(default=False, help_text="Flagged for manual review")
+
+    # Additional contact fields
+    general_email = models.EmailField(blank=True)
+    media_email = models.EmailField(blank=True)
+    general_phone = models.CharField(max_length=30, blank=True)
+
+    # Social media
+    linkedin_url = models.URLField(blank=True)
+    twitter_url = models.URLField(blank=True)
+    facebook_url = models.URLField(blank=True)
+    youtube_url = models.URLField(blank=True)
+
+    # Address
+    street_address = models.CharField(max_length=300, blank=True)
+    postal_code = models.CharField(max_length=20, blank=True)
+
     class Meta:
         db_table = 'companies'
         verbose_name_plural = 'companies'
@@ -94,6 +122,41 @@ class Company(models.Model):
 
     def __str__(self):
         return f"{self.name} ({self.ticker_symbol})" if self.ticker_symbol else self.name
+
+    def calculate_completeness_score(self):
+        """Calculate data completeness score based on filled fields"""
+        fields_weights = {
+            'name': 10,
+            'ticker_symbol': 8,
+            'exchange': 5,
+            'website': 8,
+            'description': 10,
+            'ceo_name': 5,
+            'ir_contact_email': 5,
+            'headquarters_city': 3,
+            'headquarters_country': 3,
+            'logo_url': 5,
+            'market_cap_usd': 5,
+            'shares_outstanding': 5,
+            'linkedin_url': 3,
+            'twitter_url': 2,
+        }
+        # Check projects exist
+        has_projects = self.projects.exists() if self.pk else False
+
+        score = 0
+        total_weight = sum(fields_weights.values()) + 13  # +13 for projects
+
+        for field, weight in fields_weights.items():
+            value = getattr(self, field, None)
+            if value:
+                score += weight
+
+        if has_projects:
+            score += 13
+
+        self.data_completeness_score = int((score / total_weight) * 100)
+        return self.data_completeness_score
 
 
 # ============================================================================
@@ -3674,3 +3737,291 @@ class UserStoreBadge(models.Model):
 
     def __str__(self):
         return f"{self.user.username} - {self.get_badge_type_display()}"
+
+
+# ============================================================================
+# COMPANY AUTO-POPULATION & SCRAPING MODELS
+# ============================================================================
+
+class CompanyPerson(models.Model):
+    """
+    Board members, executives, and technical team members for companies.
+    Extracted during auto-population process.
+    """
+    ROLE_TYPES = [
+        ('board_director', 'Board Director'),
+        ('executive', 'Executive'),
+        ('technical_team', 'Technical Team'),
+        ('advisor', 'Advisor'),
+    ]
+
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.CASCADE,
+        related_name='people'
+    )
+    full_name = models.CharField(max_length=200)
+    role_type = models.CharField(max_length=30, choices=ROLE_TYPES)
+    title = models.CharField(max_length=200, blank=True, help_text="Job title, e.g., 'CEO', 'VP Exploration'")
+    biography = models.TextField(blank=True)
+    photo_url = models.URLField(blank=True)
+    photo_file = models.ImageField(upload_to='company_people/', blank=True, null=True)
+    linkedin_url = models.URLField(blank=True)
+    email = models.EmailField(blank=True)
+
+    # Extraction metadata
+    source_url = models.URLField(blank=True, help_text="URL where this data was found")
+    extraction_confidence = models.FloatField(
+        default=1.0,
+        validators=[MinValueValidator(0.0), MaxValueValidator(1.0)],
+        help_text="Confidence score of extraction (0.0-1.0)"
+    )
+    extracted_at = models.DateTimeField(null=True, blank=True)
+    last_verified_at = models.DateTimeField(null=True, blank=True)
+
+    # Ordering
+    display_order = models.IntegerField(default=0)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'company_people'
+        ordering = ['company', 'role_type', 'display_order', 'full_name']
+        verbose_name_plural = 'Company People'
+
+    def __str__(self):
+        return f"{self.full_name} - {self.title} ({self.company.name})"
+
+
+class CompanyDocument(models.Model):
+    """
+    Documents discovered and processed for companies.
+    Stores PDFs, presentations, reports with processing status.
+    """
+    DOCUMENT_TYPES = [
+        ('presentation', 'Corporate Presentation'),
+        ('fact_sheet', 'Fact Sheet'),
+        ('ni43101', 'NI 43-101 Technical Report'),
+        ('financial_report', 'Financial Report'),
+        ('annual_report', 'Annual Report'),
+        ('quarterly_report', 'Quarterly Report'),
+        ('news_release', 'News Release'),
+        ('other', 'Other'),
+    ]
+
+    PROCESSING_STATUS = [
+        ('pending', 'Pending'),
+        ('processing', 'Processing'),
+        ('completed', 'Completed'),
+        ('failed', 'Failed'),
+    ]
+
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.CASCADE,
+        related_name='scraped_documents'
+    )
+    document_type = models.CharField(max_length=30, choices=DOCUMENT_TYPES)
+    title = models.CharField(max_length=500)
+    description = models.TextField(blank=True)
+
+    # File storage
+    source_url = models.URLField(help_text="Original URL where document was found")
+    file_path = models.FileField(upload_to='company_documents/', blank=True, null=True)
+    file_size_bytes = models.BigIntegerField(null=True, blank=True)
+    file_format = models.CharField(max_length=20, blank=True, help_text="e.g., pdf, pptx")
+
+    # Metadata
+    publication_date = models.DateField(null=True, blank=True)
+    year = models.IntegerField(null=True, blank=True)
+    page_count = models.IntegerField(null=True, blank=True)
+    is_latest = models.BooleanField(default=True, help_text="Is this the latest version of this document type?")
+
+    # Processing
+    processing_status = models.CharField(max_length=20, choices=PROCESSING_STATUS, default='pending')
+    processing_error = models.TextField(blank=True)
+    processed_at = models.DateTimeField(null=True, blank=True)
+
+    # Extracted content (for search/indexing)
+    extracted_text = models.TextField(blank=True, help_text="Extracted text content for search")
+    thumbnail_url = models.URLField(blank=True)
+
+    # Extraction metadata
+    relevance_score = models.FloatField(default=0.0)
+    extracted_at = models.DateTimeField(null=True, blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'company_documents'
+        ordering = ['-publication_date', '-created_at']
+        indexes = [
+            models.Index(fields=['company', 'document_type']),
+            models.Index(fields=['company', 'is_latest']),
+        ]
+
+    def __str__(self):
+        return f"{self.title} ({self.company.name})"
+
+
+class CompanyNews(models.Model):
+    """
+    News releases and press releases scraped from company websites.
+    """
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.CASCADE,
+        related_name='scraped_news'
+    )
+    title = models.CharField(max_length=500)
+    content = models.TextField(blank=True, help_text="Full text content of news release")
+    summary = models.TextField(blank=True, help_text="AI-generated summary")
+
+    # Source
+    source_url = models.URLField(help_text="URL of the news release")
+    is_pdf = models.BooleanField(default=False, help_text="Is the source a PDF file?")
+
+    # Dates
+    publication_date = models.DateField(null=True, blank=True)
+    publication_datetime = models.DateTimeField(null=True, blank=True)
+
+    # Categorization
+    categories = models.JSONField(default=list, blank=True, help_text="Auto-detected categories")
+    keywords = models.JSONField(default=list, blank=True, help_text="Extracted keywords")
+
+    # Extraction metadata
+    extracted_at = models.DateTimeField(auto_now_add=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'company_news'
+        ordering = ['-publication_date', '-created_at']
+        verbose_name_plural = 'Company News'
+        indexes = [
+            models.Index(fields=['company', 'publication_date']),
+        ]
+
+    def __str__(self):
+        return f"{self.title} ({self.company.name})"
+
+
+class ScrapingJob(models.Model):
+    """
+    Tracks scraping jobs for company auto-population.
+    Provides audit trail and status tracking.
+    """
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('running', 'Running'),
+        ('success', 'Success'),
+        ('partial', 'Partial Success'),
+        ('failed', 'Failed'),
+        ('cancelled', 'Cancelled'),
+    ]
+
+    # Target
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='scraping_jobs'
+    )
+    company_name_input = models.CharField(max_length=300, help_text="Original company name or URL input")
+    website_url = models.URLField(blank=True, help_text="Target website URL")
+
+    # Status
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+
+    # Progress tracking
+    sections_to_process = models.JSONField(default=list, help_text="List of sections to scrape")
+    sections_completed = models.JSONField(default=list)
+    sections_failed = models.JSONField(default=list)
+
+    # Results
+    data_extracted = models.JSONField(default=dict, help_text="Extracted data before saving to models")
+    documents_found = models.IntegerField(default=0)
+    people_found = models.IntegerField(default=0)
+    news_found = models.IntegerField(default=0)
+
+    # Errors
+    error_messages = models.JSONField(default=list)
+    error_traceback = models.TextField(blank=True)
+
+    # Timing
+    started_at = models.DateTimeField(null=True, blank=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+
+    # User tracking
+    initiated_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='scraping_jobs'
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'scraping_jobs'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"Scraping: {self.company_name_input} ({self.status})"
+
+    @property
+    def duration_seconds(self):
+        if self.started_at and self.completed_at:
+            return (self.completed_at - self.started_at).total_seconds()
+        return None
+
+
+class FailedCompanyDiscovery(models.Model):
+    """
+    Tracks failed attempts to discover/scrape companies.
+    Useful for retry logic and manual intervention.
+    """
+    company_name = models.CharField(max_length=300)
+    website_url = models.URLField(blank=True)
+
+    # Failure details
+    failure_reason = models.TextField()
+    attempts = models.IntegerField(default=1)
+    last_attempted_at = models.DateTimeField(auto_now=True)
+
+    # Resolution
+    resolved = models.BooleanField(default=False)
+    resolved_at = models.DateTimeField(null=True, blank=True)
+    resolved_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='resolved_discoveries'
+    )
+    resolution_notes = models.TextField(blank=True)
+
+    # Link to successful company if resolved
+    resolved_company = models.ForeignKey(
+        Company,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='failed_discoveries'
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'failed_company_discoveries'
+        ordering = ['-last_attempted_at']
+        verbose_name_plural = 'Failed Company Discoveries'
+
+    def __str__(self):
+        return f"Failed: {self.company_name} ({self.attempts} attempts)"

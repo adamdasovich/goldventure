@@ -5223,3 +5223,521 @@ class StoreAdminOrderViewSet(viewsets.ModelViewSet):
         stats['last_30_days_revenue_dollars'] = stats['last_30_days_revenue_cents'] / 100
 
         return Response(stats)
+
+
+# ============================================================================
+# COMPANY AUTO-ONBOARDING ENDPOINTS
+# ============================================================================
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def scrape_company_preview(request):
+    """
+    Preview company data scraped from a website (dry run).
+    Does not save to database.
+
+    POST /api/admin/companies/scrape-preview/
+
+    Body:
+    - url: Company website URL
+    - sections: Optional list of sections to scrape
+    """
+    if not (request.user.is_superuser or request.user.is_staff):
+        return Response(
+            {'error': 'Admin access required'},
+            status=status.HTTP_403_FORBIDDEN
+        )
+
+    url = request.data.get('url')
+    if not url:
+        return Response(
+            {'error': 'URL is required'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    sections = request.data.get('sections')
+
+    import asyncio
+    from mcp_servers.company_scraper import scrape_company_website
+
+    try:
+        # Run the scraper
+        result = asyncio.run(scrape_company_website(url, sections=sections))
+
+        return Response({
+            'success': True,
+            'data': result['data'],
+            'errors': result['errors'],
+            'urls_visited': result['urls_visited'],
+        })
+
+    except Exception as e:
+        return Response(
+            {'error': str(e)},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def scrape_company_save(request):
+    """
+    Scrape and save company data from a website.
+
+    POST /api/admin/companies/scrape-save/
+
+    Body:
+    - url: Company website URL
+    - sections: Optional list of sections to scrape
+    - update_existing: Boolean, whether to update if company exists
+    """
+    if not (request.user.is_superuser or request.user.is_staff):
+        return Response(
+            {'error': 'Admin access required'},
+            status=status.HTTP_403_FORBIDDEN
+        )
+
+    url = request.data.get('url')
+    if not url:
+        return Response(
+            {'error': 'URL is required'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    sections = request.data.get('sections')
+    update_existing = request.data.get('update_existing', False)
+
+    import asyncio
+    from mcp_servers.company_scraper import scrape_company_website
+    from core.models import (
+        Company, Project, CompanyPerson, CompanyDocument,
+        CompanyNews, ScrapingJob, FailedCompanyDiscovery
+    )
+
+    # Create scraping job
+    job = ScrapingJob.objects.create(
+        company_name_input=url,
+        website_url=url,
+        status='running',
+        started_at=timezone.now(),
+        sections_to_process=sections or ['all'],
+        initiated_by=request.user
+    )
+
+    try:
+        # Run the scraper
+        result = asyncio.run(scrape_company_website(url, sections=sections))
+
+        data = result['data']
+        errors = result['errors']
+
+        # Save to database
+        company = _save_scraped_company_data(data, url, update_existing, request.user)
+
+        if company:
+            # Update job with success
+            job.company = company
+            job.status = 'success'
+            job.completed_at = timezone.now()
+            job.data_extracted = data
+            job.documents_found = len(data.get('documents', []))
+            job.people_found = len(data.get('people', []))
+            job.news_found = len(data.get('news', []))
+            job.sections_completed = sections or ['all']
+            job.error_messages = errors
+            job.save()
+
+            return Response({
+                'success': True,
+                'company_id': company.id,
+                'company_name': company.name,
+                'completeness_score': company.data_completeness_score,
+                'people_count': len(data.get('people', [])),
+                'documents_count': len(data.get('documents', [])),
+                'news_count': len(data.get('news', [])),
+                'errors': errors,
+            })
+        else:
+            raise Exception("Failed to create company record")
+
+    except Exception as e:
+        job.status = 'failed'
+        job.completed_at = timezone.now()
+        job.error_messages = [str(e)]
+        job.error_traceback = str(e)
+        job.save()
+
+        # Record failed discovery
+        FailedCompanyDiscovery.objects.update_or_create(
+            website_url=url,
+            defaults={
+                'company_name': url,
+                'failure_reason': str(e),
+            }
+        )
+
+        return Response(
+            {'error': str(e)},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+def _save_scraped_company_data(data: dict, source_url: str, update_existing: bool, user) -> 'Company':
+    """Helper function to save scraped data to database."""
+    from core.models import (
+        Company, Project, CompanyPerson, CompanyDocument, CompanyNews
+    )
+
+    company_data = data.get('company', {})
+
+    if not company_data.get('name'):
+        raise Exception("No company name extracted - cannot create record")
+
+    # Check for existing company
+    existing_company = None
+    if company_data.get('ticker_symbol'):
+        existing_company = Company.objects.filter(
+            ticker_symbol__iexact=company_data['ticker_symbol']
+        ).first()
+
+    if not existing_company:
+        existing_company = Company.objects.filter(
+            name__iexact=company_data['name']
+        ).first()
+
+    if existing_company and not update_existing:
+        return existing_company
+
+    # Prepare company fields
+    company_fields = {
+        'name': company_data.get('name'),
+        'legal_name': company_data.get('legal_name', company_data.get('name')),
+        'ticker_symbol': company_data.get('ticker_symbol', ''),
+        'description': company_data.get('description', '')[:2000] if company_data.get('description') else '',
+        'tagline': company_data.get('tagline', ''),
+        'logo_url': company_data.get('logo_url', ''),
+        'website': source_url,
+        'source_website_url': source_url,
+        'auto_populated': True,
+        'last_scraped_at': timezone.now(),
+        # Contact info
+        'ir_contact_email': company_data.get('ir_contact_email', ''),
+        'general_email': company_data.get('general_email', ''),
+        'media_email': company_data.get('media_email', ''),
+        'general_phone': company_data.get('general_phone', ''),
+        'street_address': company_data.get('street_address', ''),
+        # Social media
+        'linkedin_url': company_data.get('linkedin_url', ''),
+        'twitter_url': company_data.get('twitter_url', ''),
+        'facebook_url': company_data.get('facebook_url', ''),
+        'youtube_url': company_data.get('youtube_url', ''),
+    }
+
+    # Map exchange
+    exchange_map = {
+        'TSX': 'tsx', 'TSXV': 'tsxv', 'TSX-V': 'tsxv',
+        'CSE': 'cse', 'OTC': 'otc', 'ASX': 'asx', 'AIM': 'aim',
+    }
+    if company_data.get('exchange'):
+        company_fields['exchange'] = exchange_map.get(company_data['exchange'].upper(), 'other')
+
+    # Market data
+    if company_data.get('market_cap_usd'):
+        company_fields['market_cap_usd'] = company_data['market_cap_usd']
+    if company_data.get('shares_outstanding'):
+        company_fields['shares_outstanding'] = company_data['shares_outstanding']
+
+    # Set status
+    if company_fields.get('ticker_symbol') and company_fields.get('exchange'):
+        company_fields['status'] = 'public'
+    else:
+        company_fields['status'] = 'private'
+
+    # Create or update company
+    if existing_company:
+        for field, value in company_fields.items():
+            if value:
+                setattr(existing_company, field, value)
+        existing_company.save()
+        company = existing_company
+    else:
+        company = Company.objects.create(**company_fields)
+
+    # Calculate completeness score
+    company.calculate_completeness_score()
+    company.save()
+
+    # Save people
+    for i, person_data in enumerate(data.get('people', [])):
+        CompanyPerson.objects.update_or_create(
+            company=company,
+            full_name=person_data.get('full_name'),
+            defaults={
+                'role_type': person_data.get('role_type', 'executive'),
+                'title': person_data.get('title', ''),
+                'biography': person_data.get('biography', ''),
+                'photo_url': person_data.get('photo_url', ''),
+                'linkedin_url': person_data.get('linkedin_url', ''),
+                'source_url': person_data.get('source_url', ''),
+                'extracted_at': timezone.now(),
+                'display_order': i,
+            }
+        )
+
+    # Save documents
+    for doc_data in data.get('documents', []):
+        CompanyDocument.objects.update_or_create(
+            company=company,
+            source_url=doc_data.get('source_url'),
+            defaults={
+                'document_type': doc_data.get('document_type', 'other'),
+                'title': doc_data.get('title', 'Untitled'),
+                'year': doc_data.get('year'),
+                'extracted_at': timezone.now(),
+            }
+        )
+
+    # Save news
+    from datetime import datetime
+    for news_item in data.get('news', [])[:50]:
+        pub_date = None
+        if news_item.get('publication_date'):
+            try:
+                pub_date = datetime.strptime(news_item['publication_date'], '%Y-%m-%d').date()
+            except:
+                pass
+
+        CompanyNews.objects.update_or_create(
+            company=company,
+            source_url=news_item.get('source_url', ''),
+            defaults={
+                'title': news_item.get('title', 'Untitled'),
+                'publication_date': pub_date,
+                'is_pdf': '.pdf' in news_item.get('source_url', '').lower(),
+            }
+        )
+
+    # Save projects
+    for project_data in data.get('projects', []):
+        if project_data.get('name'):
+            Project.objects.update_or_create(
+                company=company,
+                name=project_data.get('name'),
+                defaults={
+                    'description': project_data.get('description', ''),
+                    'country': project_data.get('location', ''),
+                    'project_stage': 'early_exploration',
+                    'primary_commodity': 'gold',
+                }
+            )
+
+    return company
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def list_scraping_jobs(request):
+    """
+    List scraping jobs with pagination.
+
+    GET /api/admin/companies/scraping-jobs/
+    """
+    if not (request.user.is_superuser or request.user.is_staff):
+        return Response(
+            {'error': 'Admin access required'},
+            status=status.HTTP_403_FORBIDDEN
+        )
+
+    from core.models import ScrapingJob
+
+    jobs = ScrapingJob.objects.select_related('company', 'initiated_by').order_by('-created_at')[:50]
+
+    results = []
+    for job in jobs:
+        results.append({
+            'id': job.id,
+            'company_name_input': job.company_name_input,
+            'website_url': job.website_url,
+            'status': job.status,
+            'company_id': job.company_id,
+            'company_name': job.company.name if job.company else None,
+            'documents_found': job.documents_found,
+            'people_found': job.people_found,
+            'news_found': job.news_found,
+            'started_at': job.started_at,
+            'completed_at': job.completed_at,
+            'duration_seconds': job.duration_seconds,
+            'initiated_by': job.initiated_by.username if job.initiated_by else None,
+            'error_messages': job.error_messages,
+        })
+
+    return Response({'results': results})
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def list_failed_discoveries(request):
+    """
+    List failed company discoveries.
+
+    GET /api/admin/companies/failed-discoveries/
+    """
+    if not (request.user.is_superuser or request.user.is_staff):
+        return Response(
+            {'error': 'Admin access required'},
+            status=status.HTTP_403_FORBIDDEN
+        )
+
+    from core.models import FailedCompanyDiscovery
+
+    failures = FailedCompanyDiscovery.objects.filter(resolved=False).order_by('-last_attempted_at')[:50]
+
+    results = []
+    for f in failures:
+        results.append({
+            'id': f.id,
+            'company_name': f.company_name,
+            'website_url': f.website_url,
+            'failure_reason': f.failure_reason,
+            'attempts': f.attempts,
+            'last_attempted_at': f.last_attempted_at,
+            'resolved': f.resolved,
+        })
+
+    return Response({'results': results})
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_scraping_job(request, job_id):
+    """
+    Get details of a specific scraping job.
+
+    GET /api/admin/companies/scraping-jobs/<job_id>/
+    """
+    if not (request.user.is_superuser or request.user.is_staff):
+        return Response(
+            {'error': 'Admin access required'},
+            status=status.HTTP_403_FORBIDDEN
+        )
+
+    from core.models import ScrapingJob
+
+    try:
+        job = ScrapingJob.objects.get(id=job_id)
+    except ScrapingJob.DoesNotExist:
+        return Response(
+            {'error': 'Scraping job not found'},
+            status=status.HTTP_404_NOT_FOUND
+        )
+
+    return Response({
+        'id': job.id,
+        'company_name_input': job.company_name_input,
+        'website_url': job.website_url,
+        'status': job.status,
+        'started_at': job.started_at,
+        'completed_at': job.completed_at,
+        'company_id': job.company_id,
+        'company_name': job.company.name if job.company else None,
+        'data_extracted': job.data_extracted,
+        'documents_found': job.documents_found,
+        'people_found': job.people_found,
+        'news_found': job.news_found,
+        'sections_to_process': job.sections_to_process,
+        'sections_completed': job.sections_completed,
+        'initiated_by': job.initiated_by.username if job.initiated_by else None,
+        'error_messages': job.error_messages,
+        'error_traceback': job.error_traceback,
+    })
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def retry_failed_discovery(request, discovery_id):
+    """
+    Retry a failed company discovery.
+
+    POST /api/admin/companies/failed-discoveries/<discovery_id>/retry/
+    """
+    if not (request.user.is_superuser or request.user.is_staff):
+        return Response(
+            {'error': 'Admin access required'},
+            status=status.HTTP_403_FORBIDDEN
+        )
+
+    from core.models import FailedCompanyDiscovery, ScrapingJob
+    from mcp_servers.company_scraper import scrape_company_website
+    import asyncio
+
+    try:
+        discovery = FailedCompanyDiscovery.objects.get(id=discovery_id)
+    except FailedCompanyDiscovery.DoesNotExist:
+        return Response(
+            {'error': 'Failed discovery not found'},
+            status=status.HTTP_404_NOT_FOUND
+        )
+
+    # Create a new scraping job
+    job = ScrapingJob.objects.create(
+        company_name_input=discovery.company_name,
+        website_url=discovery.website_url,
+        status='running',
+        started_at=timezone.now(),
+        initiated_by=request.user
+    )
+
+    # Increment attempt count
+    discovery.attempts += 1
+    discovery.last_attempted_at = timezone.now()
+    discovery.save()
+
+    try:
+        # Run the scraper
+        result = asyncio.run(scrape_company_website(discovery.website_url))
+
+        data = result['data']
+        errors = result['errors']
+
+        # Save the company
+        from core.management.commands.onboard_company import Command
+        cmd = Command()
+        company = cmd._save_company_data(data, discovery.website_url, update_existing=True)
+
+        if company:
+            job.company = company
+            job.status = 'success'
+            job.completed_at = timezone.now()
+            job.data_extracted = data
+            job.documents_found = len(data.get('documents', []))
+            job.people_found = len(data.get('people', []))
+            job.news_found = len(data.get('news', []))
+            job.sections_completed = ['all']
+            job.error_messages = errors
+            job.save()
+
+            # Mark discovery as resolved
+            discovery.resolved = True
+            discovery.save()
+
+            return Response({
+                'success': True,
+                'company_id': company.id,
+                'company_name': company.name,
+                'job_id': job.id,
+            })
+
+    except Exception as e:
+        job.status = 'failed'
+        job.completed_at = timezone.now()
+        job.error_messages = [str(e)]
+        job.error_traceback = str(e)
+        job.save()
+
+        discovery.failure_reason = str(e)
+        discovery.save()
+
+        return Response(
+            {'error': str(e)},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )

@@ -569,6 +569,12 @@ export default function DashboardPage() {
                   <Button variant="secondary" onClick={() => router.push('/properties/review')}>
                     Review Pending Listings
                   </Button>
+                  <Button variant="secondary" onClick={() => router.push('/admin/companies')}>
+                    <svg className="w-4 h-4 mr-2 inline" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                    </svg>
+                    Onboard Company
+                  </Button>
                   <Button
                     variant="primary"
                     onClick={triggerNewsScrape}

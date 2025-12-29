@@ -113,6 +113,14 @@ urlpatterns = [
     path('store/checkout/', views.store_checkout, name='store_checkout'),
     path('store/webhook/', views.store_webhook, name='store_webhook'),
 
+    # Company Scraping/Onboarding endpoints
+    path('admin/companies/scrape-preview/', views.scrape_company_preview, name='scrape_company_preview'),
+    path('admin/companies/scrape-save/', views.scrape_company_save, name='scrape_company_save'),
+    path('admin/companies/scraping-jobs/', views.list_scraping_jobs, name='list_scraping_jobs'),
+    path('admin/companies/scraping-jobs/<int:job_id>/', views.get_scraping_job, name='get_scraping_job'),
+    path('admin/companies/failed-discoveries/', views.list_failed_discoveries, name='list_failed_discoveries'),
+    path('admin/companies/failed-discoveries/<int:discovery_id>/retry/', views.retry_failed_discovery, name='retry_failed_discovery'),
+
     # ViewSet routes
     path('', include(router.urls)),
 ]

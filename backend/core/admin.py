@@ -16,7 +16,9 @@ from .models import (
     PaymentInstruction, DRSDocument,
     # Company Portal models
     CompanyResource, SpeakingEvent, CompanySubscription, SubscriptionInvoice,
-    CompanyAccessRequest
+    CompanyAccessRequest,
+    # Company Onboarding models
+    CompanyPerson, CompanyDocument, CompanyNews, ScrapingJob, FailedCompanyDiscovery
 )
 
 
@@ -651,3 +653,114 @@ class CompanyAccessRequestAdmin(admin.ModelAdmin):
             review_notes='Bulk rejected via admin'
         )
         self.message_user(request, f'{count} request(s) rejected.')
+
+
+# ============================================================================
+# COMPANY ONBOARDING ADMIN
+# ============================================================================
+
+@admin.register(CompanyPerson)
+class CompanyPersonAdmin(admin.ModelAdmin):
+    """Admin interface for company people (scraped)"""
+    list_display = ['full_name', 'company', 'role_type', 'title', 'display_order', 'extracted_at']
+    list_filter = ['role_type', 'company', 'extracted_at']
+    search_fields = ['full_name', 'title', 'company__name']
+    readonly_fields = ['extracted_at']
+
+
+@admin.register(CompanyDocument)
+class CompanyDocumentAdmin(admin.ModelAdmin):
+    """Admin interface for company documents (scraped)"""
+    list_display = ['title', 'company', 'document_type', 'year', 'extracted_at']
+    list_filter = ['document_type', 'company', 'year']
+    search_fields = ['title', 'company__name']
+    readonly_fields = ['extracted_at']
+
+
+@admin.register(CompanyNews)
+class CompanyNewsAdmin(admin.ModelAdmin):
+    """Admin interface for company news (scraped)"""
+    list_display = ['title', 'company', 'publication_date', 'is_pdf', 'extracted_at']
+    list_filter = ['company', 'is_pdf', 'publication_date']
+    search_fields = ['title', 'company__name']
+    readonly_fields = ['extracted_at']
+
+
+@admin.register(ScrapingJob)
+class ScrapingJobAdmin(admin.ModelAdmin):
+    """Admin interface for scraping jobs"""
+    list_display = [
+        'company_name_input', 'status_badge', 'company',
+        'people_found', 'documents_found', 'news_found',
+        'started_at', 'initiated_by'
+    ]
+    list_filter = ['status', 'started_at']
+    search_fields = ['company_name_input', 'website_url', 'company__name']
+    readonly_fields = [
+        'started_at', 'completed_at', 'company',
+        'data_extracted', 'error_traceback'
+    ]
+
+    fieldsets = (
+        ('Job Details', {
+            'fields': ('company_name_input', 'website_url', 'status')
+        }),
+        ('Timing', {
+            'fields': ('started_at', 'completed_at')
+        }),
+        ('Results', {
+            'fields': ('company', 'people_found', 'documents_found', 'news_found')
+        }),
+        ('Sections', {
+            'fields': ('sections_to_process', 'sections_completed')
+        }),
+        ('Errors', {
+            'fields': ('error_messages', 'error_traceback'),
+            'classes': ('collapse',)
+        }),
+        ('Raw Data', {
+            'fields': ('data_extracted',),
+            'classes': ('collapse',)
+        }),
+        ('Metadata', {
+            'fields': ('initiated_by',)
+        }),
+    )
+
+    def status_badge(self, obj):
+        colors = {
+            'pending': '#6b7280',
+            'running': '#3b82f6',
+            'success': '#10b981',
+            'failed': '#ef4444',
+        }
+        color = colors.get(obj.status, '#6b7280')
+        return format_html(
+            '<span style="background-color:{}; color:white; padding:3px 10px; border-radius:3px;">{}</span>',
+            color, obj.status.title()
+        )
+    status_badge.short_description = 'Status'
+
+
+@admin.register(FailedCompanyDiscovery)
+class FailedCompanyDiscoveryAdmin(admin.ModelAdmin):
+    """Admin interface for failed company discoveries"""
+    list_display = ['company_name', 'website_url', 'attempts', 'resolved', 'last_attempted_at']
+    list_filter = ['resolved', 'last_attempted_at']
+    search_fields = ['company_name', 'website_url']
+    readonly_fields = ['created_at', 'last_attempted_at']
+
+    fieldsets = (
+        ('Company Details', {
+            'fields': ('company_name', 'website_url')
+        }),
+        ('Failure Info', {
+            'fields': ('failure_reason', 'attempts')
+        }),
+        ('Resolution', {
+            'fields': ('resolved', 'resolved_at', 'resolution_notes')
+        }),
+        ('Timestamps', {
+            'fields': ('created_at', 'last_attempted_at')
+        }),
+    )
