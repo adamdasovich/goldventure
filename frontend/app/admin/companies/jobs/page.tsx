@@ -29,7 +29,7 @@ export default function ScrapingJobsPage() {
     try {
       const response = await fetch('/api/admin/companies/scraping-jobs/', {
         headers: {
-          'Authorization': `Token ${accessToken}`,
+          'Authorization': `Bearer ${accessToken}`,
         },
       });
 

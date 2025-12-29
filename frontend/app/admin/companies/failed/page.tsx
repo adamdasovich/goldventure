@@ -24,7 +24,7 @@ export default function FailedDiscoveriesPage() {
     try {
       const response = await fetch('/api/admin/companies/failed-discoveries/', {
         headers: {
-          'Authorization': `Token ${accessToken}`,
+          'Authorization': `Bearer ${accessToken}`,
         },
       });
 
@@ -55,7 +55,7 @@ export default function FailedDiscoveriesPage() {
       const response = await fetch(`/api/admin/companies/failed-discoveries/${discovery.id}/retry/`, {
         method: 'POST',
         headers: {
-          'Authorization': `Token ${accessToken}`,
+          'Authorization': `Bearer ${accessToken}`,
         },
       });
 

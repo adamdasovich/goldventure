@@ -89,7 +89,7 @@ export default function CompanyOnboardingPage() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Token ${accessToken}`,
+          'Authorization': `Bearer ${accessToken}`,
         },
         body: JSON.stringify({ url: url.trim() }),
       });
@@ -119,7 +119,7 @@ export default function CompanyOnboardingPage() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Token ${accessToken}`,
+          'Authorization': `Bearer ${accessToken}`,
         },
         body: JSON.stringify({ url: url.trim() }),
       });
