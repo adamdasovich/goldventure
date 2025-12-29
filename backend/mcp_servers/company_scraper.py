@@ -1022,6 +1022,38 @@ class CompanyDataScraper:
                 unique_news.append(news)
         self.extracted_data['news'] = unique_news
 
+        # Deduplicate and filter projects by name
+        seen_project_names = set()
+        unique_projects = []
+
+        # Invalid patterns for project names
+        invalid_patterns = [
+            'what makes', 'why', 'how', 'learn more', 'read more', 'click here',
+            'view', 'explore', 'discover', 'see our', 'about the'
+        ]
+
+        for project in self.extracted_data['projects']:
+            name = project.get('name', '').strip()
+            name_lower = name.lower()
+
+            # Skip if name is empty or too short
+            if not name or len(name) < 5:
+                continue
+
+            # Skip if name matches invalid patterns (questions, CTAs, etc.)
+            if any(pattern in name_lower for pattern in invalid_patterns):
+                continue
+
+            # Skip if already seen (case-insensitive, normalized)
+            normalized_name = name_lower.replace('-', ' ').replace('_', ' ')
+            if normalized_name in seen_project_names:
+                continue
+
+            seen_project_names.add(normalized_name)
+            unique_projects.append(project)
+
+        self.extracted_data['projects'] = unique_projects
+
         # Merge contacts into company
         contacts = self.extracted_data.get('contacts', {})
         if contacts.get('ir_email'):
