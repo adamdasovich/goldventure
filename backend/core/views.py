@@ -5518,29 +5518,29 @@ def _save_scraped_company_data(data: dict, source_url: str, update_existing: boo
     if existing_company and not update_existing:
         return existing_company
 
-    # Prepare company fields
+    # Prepare company fields with length truncation to prevent DB errors
     company_fields = {
-        'name': company_data.get('name'),
-        'legal_name': company_data.get('legal_name', company_data.get('name')),
-        'ticker_symbol': company_data.get('ticker_symbol', ''),
-        'description': company_data.get('description', '')[:2000] if company_data.get('description') else '',
-        'tagline': company_data.get('tagline', ''),
-        'logo_url': company_data.get('logo_url', ''),
-        'website': source_url,
-        'source_website_url': source_url,
+        'name': (company_data.get('name') or '')[:200],
+        'legal_name': (company_data.get('legal_name') or company_data.get('name') or '')[:200],
+        'ticker_symbol': (company_data.get('ticker_symbol') or '')[:10],
+        'description': (company_data.get('description') or '')[:2000],
+        'tagline': (company_data.get('tagline') or '')[:500],
+        'logo_url': (company_data.get('logo_url') or '')[:200],
+        'website': source_url[:200],
+        'source_website_url': source_url[:200],
         'auto_populated': True,
         'last_scraped_at': timezone.now(),
         # Contact info
-        'ir_contact_email': company_data.get('ir_contact_email', ''),
-        'general_email': company_data.get('general_email', ''),
-        'media_email': company_data.get('media_email', ''),
-        'general_phone': company_data.get('general_phone', ''),
-        'street_address': company_data.get('street_address', ''),
+        'ir_contact_email': (company_data.get('ir_contact_email') or '')[:254],
+        'general_email': (company_data.get('general_email') or '')[:254],
+        'media_email': (company_data.get('media_email') or '')[:254],
+        'general_phone': (company_data.get('general_phone') or '')[:30],
+        'street_address': (company_data.get('street_address') or '')[:300],
         # Social media
-        'linkedin_url': company_data.get('linkedin_url', ''),
-        'twitter_url': company_data.get('twitter_url', ''),
-        'facebook_url': company_data.get('facebook_url', ''),
-        'youtube_url': company_data.get('youtube_url', ''),
+        'linkedin_url': (company_data.get('linkedin_url') or '')[:200],
+        'twitter_url': (company_data.get('twitter_url') or '')[:200],
+        'facebook_url': (company_data.get('facebook_url') or '')[:200],
+        'youtube_url': (company_data.get('youtube_url') or '')[:200],
     }
 
     # Map exchange
@@ -5581,14 +5581,14 @@ def _save_scraped_company_data(data: dict, source_url: str, update_existing: boo
     for i, person_data in enumerate(data.get('people', [])):
         CompanyPerson.objects.update_or_create(
             company=company,
-            full_name=person_data.get('full_name'),
+            full_name=person_data.get('full_name', '')[:200],
             defaults={
                 'role_type': person_data.get('role_type', 'executive'),
-                'title': person_data.get('title', ''),
+                'title': person_data.get('title', '')[:200],
                 'biography': person_data.get('biography', ''),
-                'photo_url': person_data.get('photo_url', ''),
-                'linkedin_url': person_data.get('linkedin_url', ''),
-                'source_url': person_data.get('source_url', ''),
+                'photo_url': person_data.get('photo_url', '')[:200],
+                'linkedin_url': person_data.get('linkedin_url', '')[:200],
+                'source_url': person_data.get('source_url', '')[:200],
                 'extracted_at': timezone.now(),
                 'display_order': i,
             }
@@ -5603,13 +5603,17 @@ def _save_scraped_company_data(data: dict, source_url: str, update_existing: boo
         doc_type = doc_data.get('document_type', 'other')
         source_url = doc_data.get('source_url', '')
 
+        # Skip documents with URLs that are too long (max 200 chars for source_url field)
+        if len(source_url) > 200:
+            continue
+
         # Save document record
         CompanyDocument.objects.update_or_create(
             company=company,
             source_url=source_url,
             defaults={
                 'document_type': doc_type,
-                'title': doc_data.get('title', 'Untitled'),
+                'title': doc_data.get('title', 'Untitled')[:500],  # Truncate title to max length
                 'year': doc_data.get('year'),
                 'extracted_at': timezone.now(),
             }
@@ -5646,13 +5650,18 @@ def _save_scraped_company_data(data: dict, source_url: str, update_existing: boo
             except:
                 pass
 
+        news_url = news_item.get('source_url', '')
+        # Skip news items with URLs that are too long (max 200 chars for source_url field)
+        if len(news_url) > 200:
+            continue
+
         CompanyNews.objects.update_or_create(
             company=company,
-            source_url=news_item.get('source_url', ''),
+            source_url=news_url,
             defaults={
-                'title': news_item.get('title', 'Untitled'),
+                'title': news_item.get('title', 'Untitled')[:500],  # Truncate title to max length
                 'publication_date': pub_date,
-                'is_pdf': '.pdf' in news_item.get('source_url', '').lower(),
+                'is_pdf': '.pdf' in news_url.lower(),
             }
         )
 
@@ -5661,10 +5670,10 @@ def _save_scraped_company_data(data: dict, source_url: str, update_existing: boo
         if project_data.get('name'):
             Project.objects.update_or_create(
                 company=company,
-                name=project_data.get('name'),
+                name=project_data.get('name', '')[:200],
                 defaults={
-                    'description': project_data.get('description', ''),
-                    'country': project_data.get('location', ''),
+                    'description': project_data.get('description', '')[:2000],
+                    'country': project_data.get('location', '')[:100],
                     'project_stage': 'early_exploration',
                     'primary_commodity': 'gold',
                 }
