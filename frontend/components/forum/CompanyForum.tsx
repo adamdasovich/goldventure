@@ -11,6 +11,8 @@ import { Button } from '@/components/ui/Button';
 import { useAuth } from '@/contexts/AuthContext';
 import { LoginModal, RegisterModal } from '@/components/auth';
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api';
+
 interface CompanyForumProps {
   companyId: number;
   companyName: string;
@@ -23,12 +25,41 @@ export function CompanyForum({ companyId, companyName }: CompanyForumProps) {
   const [replyToUserName, setReplyToUserName] = useState<string | undefined>();
   const [showLogin, setShowLogin] = useState(false);
   const [showRegister, setShowRegister] = useState(false);
+  const [discussionId, setDiscussionId] = useState<number | null>(null);
+  const [loadingDiscussion, setLoadingDiscussion] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { user, accessToken } = useAuth();
 
-  // IMPORTANT: This assumes discussion ID 1 exists for company 2
-  // In production, you'd fetch the discussion ID for this company from your API
-  const DISCUSSION_ID = 1;
+  // Fetch the correct discussion ID for this company
+  useEffect(() => {
+    const fetchDiscussion = async () => {
+      if (!accessToken || !companyId) {
+        setLoadingDiscussion(false);
+        return;
+      }
+
+      try {
+        const response = await fetch(`${API_URL}/companies/${companyId}/discussion/`, {
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+          },
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          setDiscussionId(data.discussion_id);
+        } else {
+          console.error('Failed to fetch discussion');
+        }
+      } catch (err) {
+        console.error('Error fetching discussion:', err);
+      } finally {
+        setLoadingDiscussion(false);
+      }
+    };
+
+    fetchDiscussion();
+  }, [companyId, accessToken]);
 
   const {
     isConnected,
@@ -41,7 +72,7 @@ export function CompanyForum({ companyId, companyName }: CompanyForumProps) {
     startTyping,
     stopTyping,
   } = useForumWebSocket({
-    discussionId: DISCUSSION_ID,
+    discussionId: discussionId || 0,
     token: accessToken || '',
     onError: setError,
   });

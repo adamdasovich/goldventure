@@ -396,6 +396,15 @@ def stock_quote(request, company_id):
     elif exchange_upper == 'TSX':
         yahoo_ticker = f"{ticker}.TO"
         av_ticker = f"{ticker}.TO"
+    elif exchange_upper == 'CSE':
+        yahoo_ticker = f"{ticker}.CN"
+        av_ticker = f"{ticker}.CN"
+    elif exchange_upper == 'ASX':
+        yahoo_ticker = f"{ticker}.AX"
+        av_ticker = f"{ticker}.AX"
+    elif exchange_upper == 'AIM' or exchange_upper == 'LSE':
+        yahoo_ticker = f"{ticker}.L"
+        av_ticker = f"{ticker}.L"
     else:
         yahoo_ticker = ticker
         av_ticker = ticker
@@ -806,7 +815,11 @@ def company_news_releases(request, company_id):
             "non_financial": [...5 most recent non-financial releases...],
             "last_updated": "2025-01-15T10:30:00Z"
         }
+
+    Falls back to scraped CompanyNews if no NewsRelease records exist.
     """
+    from core.models import CompanyNews
+
     try:
         company = Company.objects.get(id=company_id, is_active=True)
     except Company.DoesNotExist:
@@ -832,12 +845,48 @@ def company_news_releases(request, company_id):
     last_scrape_data = cache.get(cache_key)
     last_updated = last_scrape_data.get('timestamp') if last_scrape_data else None
 
+    financial_data = NewsReleaseSerializer(financial_releases, many=True).data
+    non_financial_data = NewsReleaseSerializer(non_financial_releases, many=True).data
+
+    # If no NewsRelease records, fall back to scraped CompanyNews
+    if not financial_data and not non_financial_data:
+        scraped_news = CompanyNews.objects.filter(company=company).order_by('-publication_date', '-extracted_at')[:10]
+
+        # Classify scraped news as financial or non-financial based on title keywords
+        financial_keywords = ['financial', 'earnings', 'quarter', 'annual', 'revenue', 'profit', 'loss', 'fiscal']
+
+        for news in scraped_news:
+            news_item = {
+                'id': news.id,
+                'title': news.title,
+                'release_date': str(news.publication_date) if news.publication_date else None,
+                'release_type': 'corporate',
+                'summary': news.summary or '',
+                'url': news.source_url,
+                'is_material': False,
+            }
+
+            # Check if financial news
+            title_lower = news.title.lower()
+            is_financial = any(keyword in title_lower for keyword in financial_keywords)
+
+            if is_financial and len(financial_data) < 5:
+                news_item['is_material'] = True
+                financial_data.append(news_item)
+            elif len(non_financial_data) < 5:
+                non_financial_data.append(news_item)
+
+        # Update last_updated from scraped news if available
+        if scraped_news.exists():
+            latest_scraped = scraped_news.first()
+            last_updated = str(latest_scraped.extracted_at) if latest_scraped else last_updated
+
     return Response({
-        'financial': NewsReleaseSerializer(financial_releases, many=True).data,
-        'non_financial': NewsReleaseSerializer(non_financial_releases, many=True).data,
+        'financial': financial_data,
+        'non_financial': non_financial_data,
         'last_updated': last_updated,
-        'financial_count': financial_releases.count(),
-        'non_financial_count': non_financial_releases.count()
+        'financial_count': len(financial_data),
+        'non_financial_count': len(non_financial_data)
     })
 
 
@@ -4786,6 +4835,54 @@ def user_store_badges(request):
     badges = UserStoreBadge.objects.filter(user=request.user)
     serializer = UserStoreBadgeSerializer(badges, many=True)
     return Response(serializer.data)
+
+
+# ============================================================================
+# COMPANY FORUM DISCUSSION
+# ============================================================================
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_company_discussion(request, company_id):
+    """
+    Get or create the main forum discussion for a company.
+
+    GET /api/companies/<company_id>/discussion/
+
+    Returns the discussion ID for the company's main forum thread.
+    Creates one if it doesn't exist.
+    """
+    from core.models import Company, ForumDiscussion
+
+    try:
+        company = Company.objects.get(id=company_id)
+    except Company.DoesNotExist:
+        return Response(
+            {'error': 'Company not found'},
+            status=status.HTTP_404_NOT_FOUND
+        )
+
+    # Get or create the main discussion for this company
+    discussion, created = ForumDiscussion.objects.get_or_create(
+        company=company,
+        is_archived=False,
+        defaults={
+            'title': f'{company.name} Community Discussion',
+            'description': f'Main discussion thread for {company.name} investors and analysts.',
+            'created_by': request.user,
+            'is_active': True,
+            'is_pinned': True,
+        }
+    )
+
+    return Response({
+        'discussion_id': discussion.id,
+        'title': discussion.title,
+        'description': discussion.description,
+        'message_count': discussion.message_count,
+        'participant_count': discussion.participant_count,
+        'created': created,
+    })
 
 
 @api_view(['POST'])
