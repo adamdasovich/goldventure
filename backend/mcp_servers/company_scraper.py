@@ -696,8 +696,29 @@ class CompanyDataScraper:
                         is_news_link = True
 
                 if is_news_link:
+                    # Get title - try parent element if link text is just a date
+                    title = text
+                    parent = link.parent
+                    if parent and re.match(r'^(January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2}', text, re.IGNORECASE):
+                        # Link text is just a date, get title from parent or sibling
+                        parent_text = parent.get_text(strip=True)
+                        # Remove the date portion to get the headline
+                        title_match = re.sub(
+                            r'(January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2}\w*,?\s*\d{4}\s*[—–-]*\s*',
+                            '', parent_text, flags=re.IGNORECASE
+                        ).strip()
+                        if title_match and len(title_match) > 10:
+                            title = title_match
+                        else:
+                            # Try next sibling
+                            next_sib = link.next_sibling
+                            if next_sib and hasattr(next_sib, 'strip'):
+                                sib_text = next_sib.strip().lstrip('—–- ')
+                                if sib_text and len(sib_text) > 10:
+                                    title = sib_text
+
                     news = {
-                        'title': text,
+                        'title': title[:500],  # Truncate to max field length
                         'source_url': urljoin(url, href),
                         'extracted_at': datetime.utcnow().isoformat(),
                     }
