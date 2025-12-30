@@ -127,6 +127,53 @@ class Command(BaseCommand):
         # Default to gold for mining companies
         return 'gold'
 
+    def _infer_project_stage_from_name(self, name: str) -> str:
+        """
+        Infer the project stage from a project name.
+        Looks for stage-related keywords in the name.
+        Defaults to 'early_exploration' if no stage is detected.
+        """
+        name_lower = name.lower()
+
+        # Production/Operating indicators
+        if any(kw in name_lower for kw in ['mine', 'operation', 'operating', 'producer', 'producing', 'mill']):
+            return 'production'
+
+        # Development indicators
+        if any(kw in name_lower for kw in ['development', 'construction', 'building']):
+            return 'development'
+
+        # Permitting indicators
+        if any(kw in name_lower for kw in ['permitting', 'permitted']):
+            return 'permitting'
+
+        # Feasibility indicators
+        if any(kw in name_lower for kw in ['feasibility', 'fs ']):
+            return 'fs'
+
+        # PFS indicators
+        if 'pfs' in name_lower or 'pre-feasibility' in name_lower or 'prefeasibility' in name_lower:
+            return 'pfs'
+
+        # PEA indicators
+        if 'pea' in name_lower or 'preliminary economic' in name_lower:
+            return 'pea'
+
+        # Resource stage indicators
+        if any(kw in name_lower for kw in ['resource', 'deposit']):
+            return 'resource'
+
+        # Advanced exploration indicators
+        if any(kw in name_lower for kw in ['advanced', 'drill', 'drilling']):
+            return 'advanced_exploration'
+
+        # Grassroots indicators
+        if any(kw in name_lower for kw in ['grassroots', 'greenfield', 'early stage']):
+            return 'grassroots'
+
+        # Default - most scraped projects are exploration stage
+        return 'early_exploration'
+
     async def _process_company(self, url: str, options: dict):
         """Process a single company URL."""
         from mcp_servers.company_scraper import scrape_company_website
@@ -417,15 +464,16 @@ class Command(BaseCommand):
         for project_data in projects_data:
             if project_data.get('name'):
                 project_name = project_data.get('name')
-                # Infer commodity from project name
+                # Infer commodity and stage from project name
                 commodity = self._infer_commodity_from_name(project_name)
+                stage = self._infer_project_stage_from_name(project_name)
                 Project.objects.update_or_create(
                     company=company,
                     name=project_name,
                     defaults={
                         'description': project_data.get('description', ''),
                         'country': project_data.get('location', ''),
-                        'project_stage': 'early_exploration',  # Default stage
+                        'project_stage': stage,
                         'primary_commodity': commodity,
                     }
                 )

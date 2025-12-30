@@ -5816,6 +5816,57 @@ def _infer_commodity_from_name(name: str) -> str:
     return 'gold'
 
 
+def _infer_project_stage_from_name(name: str) -> str:
+    """
+    Infer the project stage from a project name.
+    Looks for stage-related keywords in the name.
+    Defaults to 'early_exploration' if no stage is detected.
+
+    Stages: grassroots, early_exploration, advanced_exploration, resource,
+            pea, pfs, fs, permitting, development, production
+    """
+    name_lower = name.lower()
+
+    # Production/Operating indicators
+    if any(kw in name_lower for kw in ['mine', 'operation', 'operating', 'producer', 'producing', 'mill']):
+        return 'production'
+
+    # Development indicators
+    if any(kw in name_lower for kw in ['development', 'construction', 'building']):
+        return 'development'
+
+    # Permitting indicators
+    if any(kw in name_lower for kw in ['permitting', 'permitted']):
+        return 'permitting'
+
+    # Feasibility indicators
+    if any(kw in name_lower for kw in ['feasibility', 'fs ']):
+        return 'fs'
+
+    # PFS indicators
+    if 'pfs' in name_lower or 'pre-feasibility' in name_lower or 'prefeasibility' in name_lower:
+        return 'pfs'
+
+    # PEA indicators
+    if 'pea' in name_lower or 'preliminary economic' in name_lower:
+        return 'pea'
+
+    # Resource stage indicators
+    if any(kw in name_lower for kw in ['resource', 'deposit']):
+        return 'resource'
+
+    # Advanced exploration indicators
+    if any(kw in name_lower for kw in ['advanced', 'drill', 'drilling']):
+        return 'advanced_exploration'
+
+    # Grassroots indicators
+    if any(kw in name_lower for kw in ['grassroots', 'greenfield', 'early stage']):
+        return 'grassroots'
+
+    # Default - most scraped projects are exploration stage
+    return 'early_exploration'
+
+
 def _save_scraped_company_data(data: dict, source_url: str, update_existing: bool, user) -> 'Company':
     """Helper function to save scraped data to database."""
     from core.models import (
@@ -5993,15 +6044,16 @@ def _save_scraped_company_data(data: dict, source_url: str, update_existing: boo
     for project_data in data.get('projects', []):
         if project_data.get('name'):
             project_name = project_data.get('name', '')[:200]
-            # Infer commodity from project name
+            # Infer commodity and stage from project name
             commodity = _infer_commodity_from_name(project_name)
+            stage = _infer_project_stage_from_name(project_name)
             Project.objects.update_or_create(
                 company=company,
                 name=project_name,
                 defaults={
                     'description': (project_data.get('description') or '')[:2000],
                     'country': (project_data.get('location') or '')[:100],
-                    'project_stage': 'early_exploration',
+                    'project_stage': stage,
                     'primary_commodity': commodity,
                 }
             )
