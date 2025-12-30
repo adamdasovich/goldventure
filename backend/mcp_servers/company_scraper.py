@@ -199,6 +199,10 @@ class CompanyDataScraper:
                 # Clean up common suffixes
                 for suffix in [' - Home', ' | Home', ' - Official', ' | Official', ' - Mining', ' | Mining']:
                     title_text = title_text.replace(suffix, '')
+                # Clean up common prefixes like "Welcome to"
+                for prefix in ['Welcome to ', 'Welcome To ', 'Home - ', 'Home | ']:
+                    if title_text.startswith(prefix):
+                        title_text = title_text[len(prefix):]
                 self.extracted_data['company']['name'] = title_text.strip()
 
             # Extract tagline/slogan (usually in hero section)
@@ -1097,6 +1101,31 @@ class CompanyDataScraper:
             # Date/time patterns that indicate news items
             'january', 'february', 'march', 'april', 'may', 'june',
             'july', 'august', 'september', 'october', 'november', 'december',
+            # Page section names that aren't projects
+            'geology and mineralization', 'geology', 'mineralization',
+            'photo gallery', 'gallery', 'photos', 'images', 'media',
+            'technical reports', 'technical report', 'reports',
+            'news releases', 'press releases', 'news', 'press',
+            'investor relations', 'investors', 'corporate',
+            'about us', 'about', 'overview', 'history', 'team', 'management',
+            'contact us', 'contact', 'subscribe', 'sign up',
+            'home', 'welcome', 'introduction',
+        ]
+
+        # Exact match invalid names (location-only names, generic terms)
+        invalid_exact_names = [
+            # Locations without project context
+            'canada', 'usa', 'united states', 'mexico', 'peru', 'chile', 'australia',
+            'nunavut', 'ontario', 'quebec', 'british columbia', 'alberta', 'saskatchewan',
+            'manitoba', 'yukon', 'northwest territories', 'newfoundland', 'nova scotia',
+            'nevada', 'alaska', 'arizona', 'california', 'colorado', 'idaho', 'montana',
+            'oregon', 'utah', 'washington', 'wyoming', 'virginia', 'west virginia',
+            # Location patterns like "Nunavut, Canada" or "Virginia, USA"
+            'nunavut, canada', 'virginia, usa', 'nevada, usa', 'ontario, canada',
+            'quebec, canada', 'british columbia, canada', 'yukon, canada',
+            # Generic section names
+            'overview', 'summary', 'details', 'information', 'data',
+            'epworth', 'epworth, canada',  # Specific case from Aston Bay
         ]
 
         for project in self.extracted_data['projects']:
@@ -1114,6 +1143,16 @@ class CompanyDataScraper:
             # Skip if name matches invalid patterns (questions, CTAs, news titles, taglines)
             if any(pattern in name_lower for pattern in invalid_patterns):
                 continue
+
+            # Skip if name exactly matches invalid names (locations, generic terms)
+            if name_lower in invalid_exact_names:
+                continue
+
+            # Skip if name looks like "Location, Country" pattern (e.g., "Nunavut, Canada")
+            if re.match(r'^[A-Za-z\s]+,\s*[A-Za-z\s]+$', name) and len(name) < 30:
+                # Check if it's just a location without "project", "property", "mine" etc.
+                if not any(kw in name_lower for kw in ['project', 'property', 'mine', 'deposit', 'claim']):
+                    continue
 
             # Skip if name looks like concatenated text (contains "&" followed by uppercase)
             if re.search(r'&[A-Z]', name):
