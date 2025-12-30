@@ -13,6 +13,8 @@ export interface Company {
   created_at: string;
   updated_at: string;
   project_count?: number;
+  presentation_url?: string | null;
+  fact_sheet_url?: string | null;
 }
 
 // Project Types

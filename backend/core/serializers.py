@@ -147,10 +147,26 @@ class CompanyDetailSerializer(serializers.ModelSerializer):
     """Detailed company serializer with nested projects"""
     projects = ProjectSerializer(many=True, read_only=True)
     financings = FinancingSerializer(many=True, read_only=True)
+    presentation_url = serializers.SerializerMethodField()
+    fact_sheet_url = serializers.SerializerMethodField()
 
     class Meta:
         model = Company
         fields = '__all__'
+
+    def get_presentation_url(self, obj):
+        """Get the latest corporate presentation URL"""
+        doc = obj.scraped_documents.filter(
+            document_type='presentation'
+        ).order_by('-year', '-created_at').first()
+        return doc.source_url if doc else None
+
+    def get_fact_sheet_url(self, obj):
+        """Get the latest fact sheet URL"""
+        doc = obj.scraped_documents.filter(
+            document_type='fact_sheet'
+        ).order_by('-year', '-created_at').first()
+        return doc.source_url if doc else None
 
 
 class ProjectDetailSerializer(serializers.ModelSerializer):
