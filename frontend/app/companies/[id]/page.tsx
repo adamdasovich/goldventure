@@ -63,6 +63,13 @@ export default function CompanyDetailPage() {
   const [showCreateFinancing, setShowCreateFinancing] = useState(false);
   const [deletingFinancingId, setDeletingFinancingId] = useState<number | null>(null);
 
+  // Editable description states
+  const [canEditCompany, setCanEditCompany] = useState(false);
+  const [isEditingDescription, setIsEditingDescription] = useState(false);
+  const [editedDescription, setEditedDescription] = useState('');
+  const [savingDescription, setSavingDescription] = useState(false);
+  const [descriptionError, setDescriptionError] = useState<string | null>(null);
+
   const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api';
 
   useEffect(() => {
@@ -86,6 +93,7 @@ export default function CompanyDetailPage() {
     if (!accessToken) {
       setIsCompanyRep(false);
       setPendingRequest(null);
+      setCanEditCompany(false);
       return;
     }
 
@@ -93,11 +101,13 @@ export default function CompanyDetailPage() {
       // Reset state first
       setIsCompanyRep(false);
       setPendingRequest(null);
+      setCanEditCompany(false);
 
       // Superusers and staff have access to all companies
       if (user?.is_superuser || user?.is_staff) {
         console.log('User is superuser/staff, granting access');
         setIsCompanyRep(true);
+        setCanEditCompany(true);
         return;
       }
 
@@ -108,6 +118,7 @@ export default function CompanyDetailPage() {
       if (user?.company_id === companyIdNum) {
         console.log('User is company rep for this company - setting isCompanyRep to TRUE');
         setIsCompanyRep(true);
+        setCanEditCompany(true);
         console.log('isCompanyRep state update called');
         return;
       }
@@ -299,6 +310,46 @@ export default function CompanyDetailPage() {
     return num.toLocaleString('en-US');
   };
 
+  // Description editing handlers
+  const handleEditDescription = () => {
+    setEditedDescription(company?.description || '');
+    setIsEditingDescription(true);
+    setDescriptionError(null);
+  };
+
+  const handleCancelEditDescription = () => {
+    setIsEditingDescription(false);
+    setEditedDescription('');
+    setDescriptionError(null);
+  };
+
+  const handleSaveDescription = async () => {
+    if (!accessToken || !company) return;
+
+    setSavingDescription(true);
+    setDescriptionError(null);
+
+    try {
+      const result = await companyAPI.updateDescription(
+        parseInt(companyId),
+        editedDescription,
+        accessToken
+      );
+
+      if (result.success) {
+        // Update local company state with new description
+        setCompany({ ...company, description: result.description });
+        setIsEditingDescription(false);
+        setEditedDescription('');
+      }
+    } catch (err) {
+      console.error('Failed to save description:', err);
+      setDescriptionError(err instanceof Error ? err.message : 'Failed to save description');
+    } finally {
+      setSavingDescription(false);
+    }
+  };
+
   return (
     <div className="min-h-screen">
       {/* Navigation */}
@@ -427,14 +478,64 @@ export default function CompanyDetailPage() {
           <section className="relative py-12 px-4 sm:px-6 lg:px-8 bg-gradient-slate">
             <div className="max-w-7xl mx-auto">
               <div className="flex items-start justify-between mb-6">
-                <div>
+                <div className="flex-1">
                   <div className="flex items-center gap-4 mb-3">
                     <h1 className="text-4xl font-bold text-gradient-gold">{company.name}</h1>
                     {/* Ticker & Exchange Info */}
                     <span className="text-xl font-mono text-gold-400 font-semibold">{company.exchange.toUpperCase()}:{company.ticker_symbol}</span>
                   </div>
-                  {company.description && (
-                    <p className="text-slate-300 text-lg max-w-3xl">{company.description}</p>
+                  {/* Editable Description */}
+                  {isEditingDescription ? (
+                    <div className="max-w-3xl">
+                      <textarea
+                        value={editedDescription}
+                        onChange={(e) => setEditedDescription(e.target.value)}
+                        className="w-full h-32 px-4 py-3 bg-slate-800/50 border border-slate-600 rounded-lg text-slate-200 text-lg resize-none focus:outline-none focus:border-gold-400 focus:ring-1 focus:ring-gold-400"
+                        placeholder="Enter company description..."
+                        disabled={savingDescription}
+                      />
+                      {descriptionError && (
+                        <p className="text-red-400 text-sm mt-2">{descriptionError}</p>
+                      )}
+                      <div className="flex gap-2 mt-3">
+                        <Button
+                          variant="primary"
+                          size="sm"
+                          onClick={handleSaveDescription}
+                          disabled={savingDescription}
+                        >
+                          {savingDescription ? 'Saving...' : 'Save'}
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={handleCancelEditDescription}
+                          disabled={savingDescription}
+                        >
+                          Cancel
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex items-start gap-2 max-w-3xl">
+                      {company.description ? (
+                        <p className="text-slate-300 text-lg flex-1">{company.description}</p>
+                      ) : canEditCompany ? (
+                        <p className="text-slate-500 text-lg italic flex-1">No description yet. Click the edit button to add one.</p>
+                      ) : null}
+                      {canEditCompany && (
+                        <button
+                          type="button"
+                          onClick={handleEditDescription}
+                          className="p-2 text-slate-400 hover:text-gold-400 hover:bg-slate-700/50 rounded-lg transition-colors"
+                          title="Edit description"
+                        >
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                          </svg>
+                        </button>
+                      )}
+                    </div>
                   )}
                 </div>
                 <div className="flex items-center gap-3">

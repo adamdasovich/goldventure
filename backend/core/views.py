@@ -1067,6 +1067,94 @@ class CompanyViewSet(viewsets.ModelViewSet):
         serializer = ProjectSerializer(projects, many=True)
         return Response(serializer.data)
 
+    @action(detail=True, methods=['patch'], permission_classes=[IsAuthenticated])
+    def update_description(self, request, pk=None):
+        """
+        Update company description.
+
+        PATCH /api/companies/{id}/update_description/
+
+        Only allowed for:
+        - Superusers (is_superuser=True)
+        - Company representatives (user.company == this company)
+
+        Request body:
+        {
+            "description": "New company description text..."
+        }
+        """
+        company = self.get_object()
+        user = request.user
+
+        # Check authorization
+        is_authorized = (
+            user.is_superuser or
+            (user.company and user.company.id == company.id)
+        )
+
+        if not is_authorized:
+            return Response(
+                {'error': 'You do not have permission to edit this company description.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        # Validate request data
+        description = request.data.get('description')
+        if description is None:
+            return Response(
+                {'error': 'Description field is required.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Update the description
+        company.description = description
+        company.save(update_fields=['description', 'updated_at'])
+
+        return Response({
+            'success': True,
+            'description': company.description,
+            'message': 'Company description updated successfully.'
+        })
+
+    @action(detail=True, methods=['get'])
+    def can_edit(self, request, pk=None):
+        """
+        Check if the current user can edit this company.
+
+        GET /api/companies/{id}/can_edit/
+
+        Returns:
+        {
+            "can_edit": true/false,
+            "reason": "superuser" | "company_representative" | null
+        }
+        """
+        company = self.get_object()
+        user = request.user
+
+        if not user.is_authenticated:
+            return Response({
+                'can_edit': False,
+                'reason': None
+            })
+
+        if user.is_superuser:
+            return Response({
+                'can_edit': True,
+                'reason': 'superuser'
+            })
+
+        if user.company and user.company.id == company.id:
+            return Response({
+                'can_edit': True,
+                'reason': 'company_representative'
+            })
+
+        return Response({
+            'can_edit': False,
+            'reason': None
+        })
+
 
 # ============================================================================
 # PROJECT VIEWSET

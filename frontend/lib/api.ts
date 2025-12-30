@@ -76,6 +76,20 @@ export const companyAPI = {
 
   getProjects: (companyId: number) =>
     apiFetch<Project[]>(`/companies/${companyId}/projects/`),
+
+  updateDescription: (companyId: number, description: string, accessToken: string) =>
+    apiFetch<{ success: boolean; description: string; message: string }>(`/companies/${companyId}/update_description/`, {
+      method: 'PATCH',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({ description }),
+    }),
+
+  canEdit: (companyId: number, accessToken?: string) =>
+    apiFetch<{ can_edit: boolean; reason: string | null }>(`/companies/${companyId}/can_edit/`, {
+      headers: accessToken ? { 'Authorization': `Bearer ${accessToken}` } : {},
+    }),
 };
 
 // Project API
