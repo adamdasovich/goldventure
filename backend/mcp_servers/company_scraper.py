@@ -1161,6 +1161,17 @@ class CompanyDataScraper:
             if re.match(r'^[A-Z][a-z]+\s+(Silver|Gold|Mining|Resources|Corp).*:', name):
                 continue
 
+            # Skip if name looks like geochemistry/assay data labels
+            # e.g., "Epworth Ag ppm", "Epworth Au ppb", "Epworth Cu pct", "Lake Sed Au Ag"
+            geochemistry_patterns = [
+                r'\b(ppm|ppb|ppt|g/t|oz/t|pct|%)\b',  # Unit suffixes
+                r'\b(au|ag|cu|pb|zn|ni|co|pt|pd|li|u|mo|w|sn|fe|mn|as|sb|bi|cd|hg)\s+(ppm|ppb|ppt|g/t|%|pct)\b',  # Element + unit
+                r'\bsed\s+(au|ag|cu|pb|zn)',  # Sediment samples like "Lake Sed Au Ag"
+                r'\b(lake|stream|soil|rock)\s+sed\b',  # Sediment sample types
+            ]
+            if any(re.search(pattern, name_lower) for pattern in geochemistry_patterns):
+                continue
+
             # Skip if already seen (case-insensitive, normalized)
             # Also normalize "The X Project" to "X Project"
             normalized_name = name_lower.replace('-', ' ').replace('_', ' ')
