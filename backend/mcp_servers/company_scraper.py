@@ -565,13 +565,29 @@ class CompanyDataScraper:
             self.visited_urls.add(url)
             soup = BeautifulSoup(result.html, 'html.parser')
 
-            # Find all PDF links
+            # Find all PDF links on this page
             for link in soup.find_all('a', href=True):
                 href = link.get('href', '')
                 if '.pdf' in href.lower():
                     doc = self._classify_document(link, url)
                     if doc:
                         self.extracted_data['documents'].append(doc)
+
+            # Find and follow sub-pages for presentations, fact sheets, and reports
+            sub_page_keywords = [
+                'presentation', 'fact-sheet', 'factsheet', 'fact_sheet',
+                'reports', 'documents', 'filings', 'annual-report'
+            ]
+            for link in soup.find_all('a', href=True):
+                href = link.get('href', '').lower()
+                link_text = link.get_text(strip=True).lower()
+                combined = href + ' ' + link_text
+
+                # Check if this links to a sub-page with key documents
+                if any(kw in combined for kw in sub_page_keywords):
+                    full_url = urljoin(url, link.get('href', ''))
+                    if full_url not in self.visited_urls and self.base_url in full_url:
+                        await self._scrape_document_subpage(crawler, config, full_url)
 
             # Look for stock info
             page_text = soup.get_text()
@@ -601,6 +617,47 @@ class CompanyDataScraper:
 
         except Exception as e:
             self.errors.append(f"Investor page error ({url}): {str(e)}")
+
+    async def _scrape_document_subpage(self, crawler, config, url: str):
+        """Scrape a sub-page (like /presentations/ or /fact-sheet/) for documents."""
+        if url in self.visited_urls:
+            return
+
+        try:
+            result = await crawler.arun(url=url, config=config)
+            if not result.success:
+                return
+
+            self.visited_urls.add(url)
+            soup = BeautifulSoup(result.html, 'html.parser')
+
+            # Determine the page type from the URL to help with classification
+            url_lower = url.lower()
+            page_hint = None
+            if 'presentation' in url_lower:
+                page_hint = 'presentation'
+            elif 'fact' in url_lower and 'sheet' in url_lower:
+                page_hint = 'fact_sheet'
+
+            # Find all PDF links
+            docs_found = 0
+            for link in soup.find_all('a', href=True):
+                href = link.get('href', '')
+                if '.pdf' in href.lower():
+                    doc = self._classify_document(link, url)
+                    if doc:
+                        # If the page is specifically for presentations/fact sheets,
+                        # override the classification if it was 'other'
+                        if page_hint and doc.get('document_type') == 'other':
+                            doc['document_type'] = page_hint
+                        self.extracted_data['documents'].append(doc)
+                        docs_found += 1
+
+            if docs_found > 0:
+                print(f"[OK] Document sub-page scraped ({url}): {docs_found} documents found")
+
+        except Exception as e:
+            self.errors.append(f"Document sub-page error ({url}): {str(e)}")
 
     def _classify_document(self, link, source_url: str) -> Optional[Dict]:
         """Classify a document link by type."""
