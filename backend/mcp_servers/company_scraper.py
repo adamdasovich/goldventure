@@ -158,6 +158,7 @@ class CompanyDataScraper:
                     break
 
         # Also construct common URL patterns
+        current_year = datetime.utcnow().year
         for keyword in keywords:
             common_patterns = [
                 f"{self.base_url}/{keyword}/",
@@ -165,6 +166,15 @@ class CompanyDataScraper:
                 f"{self.base_url}/{keyword}s/",
                 f"{self.base_url}/{keyword}s",
             ]
+            # For news, also add year-specific patterns (current year and previous year)
+            if keyword in ['news', 'press']:
+                common_patterns.extend([
+                    f"{self.base_url}/{keyword}/{keyword}-{current_year}/",
+                    f"{self.base_url}/{keyword}/{keyword}-{current_year}",
+                    f"{self.base_url}/{keyword}/{current_year}-{keyword}/",
+                    f"{self.base_url}/{keyword}/{current_year}-{keyword}",
+                ])
+
             for pattern in common_patterns:
                 if pattern not in matching_urls:
                     matching_urls.append(pattern)
@@ -1012,14 +1022,52 @@ class CompanyDataScraper:
                 unique_docs.append(doc)
         self.extracted_data['documents'] = unique_docs
 
-        # Deduplicate news by title
-        seen_titles = set()
+        # Deduplicate news by normalized URL and clean titles
+        seen_urls = set()
         unique_news = []
+
+        # Month abbreviation map for date parsing
+        month_abbr_map = {
+            'jan': '01', 'feb': '02', 'mar': '03', 'apr': '04',
+            'may': '05', 'jun': '06', 'jul': '07', 'aug': '08',
+            'sep': '09', 'oct': '10', 'nov': '11', 'dec': '12'
+        }
+
         for news in self.extracted_data['news']:
-            title = news.get('title', '').lower()[:50]
-            if title and title not in seen_titles:
-                seen_titles.add(title)
+            url = news.get('source_url', '')
+
+            # Skip year-archive URLs (e.g., /news-2024, /news-2025)
+            if re.search(r'/news-20\d{2}/?$', url):
+                continue
+
+            # Normalize URL for deduplication (remove www., trailing slash, lowercase)
+            normalized_url = url.replace('www.', '').rstrip('/').lower()
+
+            if normalized_url in seen_urls:
+                continue
+            seen_urls.add(normalized_url)
+
+            # Clean date prefix from title (e.g., "26Nov" -> "")
+            title = news.get('title', '')
+            prefix_match = re.match(r'^(\d{1,2})(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)', title, re.IGNORECASE)
+            if prefix_match:
+                day = prefix_match.group(1).zfill(2)
+                month_abbr = prefix_match.group(2).lower()
+                month = month_abbr_map.get(month_abbr)
+
+                # Remove prefix from title
+                title = re.sub(r'^\d{1,2}(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)', '', title, flags=re.IGNORECASE).strip()
+                news['title'] = title
+
+                # Extract date if not already set
+                if not news.get('publication_date') and month:
+                    year_match = re.search(r'(20\d{2})', url)
+                    year = year_match.group(1) if year_match else str(datetime.utcnow().year)
+                    news['publication_date'] = f"{year}-{month}-{day}"
+
+            if title and len(title) > 10:
                 unique_news.append(news)
+
         self.extracted_data['news'] = unique_news
 
         # Deduplicate and filter projects by name
