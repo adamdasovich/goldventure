@@ -1125,7 +1125,6 @@ class CompanyDataScraper:
             'quebec, canada', 'british columbia, canada', 'yukon, canada',
             # Generic section names
             'overview', 'summary', 'details', 'information', 'data',
-            'epworth', 'epworth, canada',  # Specific case from Aston Bay
         ]
 
         for project in self.extracted_data['projects']:
