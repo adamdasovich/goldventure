@@ -307,7 +307,10 @@ def _get_stockwatch_quote(ticker_symbol: str, exchange: str) -> dict:
     """
     Fetch real-time stock quote from StockWatch.com for Canadian stocks.
     StockWatch provides excellent coverage for TSX, TSXV, and CSE stocks.
-    Returns dict with quote data or error.
+
+    Data format from StockWatch table row:
+    CSE - C | 0.5 | 0.98 | · | 0.99 | 1.0 | 0.99 | +0.06 | 6.5 | 189.7 | 183 | 98 | ...
+    [exch] | [bid_size] | [bid] | [·] | [ask] | [ask_size] | [last] | [chg] | [%ch] | [vol] | ...
     """
     import requests
     from bs4 import BeautifulSoup
@@ -315,14 +318,16 @@ def _get_stockwatch_quote(ticker_symbol: str, exchange: str) -> dict:
 
     try:
         # Build StockWatch URL based on exchange
-        # CSE uses C: prefix, TSXV uses V: prefix, TSX uses T: prefix
         exchange_upper = exchange.upper() if exchange else ''
         if exchange_upper == 'CSE':
             stockwatch_symbol = f"C:{ticker_symbol}"
+            exchange_prefix = 'CSE - C'
         elif exchange_upper == 'TSXV':
             stockwatch_symbol = f"V:{ticker_symbol}"
+            exchange_prefix = 'TSX-V - V'
         elif exchange_upper == 'TSX':
             stockwatch_symbol = f"T:{ticker_symbol}"
+            exchange_prefix = 'TSX - T'
         else:
             return {'error': f'StockWatch does not support exchange: {exchange}'}
 
@@ -338,72 +343,70 @@ def _get_stockwatch_quote(ticker_symbol: str, exchange: str) -> dict:
         soup = BeautifulSoup(response.text, 'html.parser')
 
         # Parse the quote data from StockWatch HTML
-        # Look for the main quote section
         price = None
         change = None
         change_percent = None
         volume = None
-        day_high = None
-        day_low = None
 
-        # StockWatch uses specific HTML structure for quote data
-        # Try to find price in various possible locations
-        price_elem = soup.find('span', {'class': 'price'}) or soup.find('td', text=re.compile(r'Last'))
-        if price_elem:
-            price_text = price_elem.get_text(strip=True)
-            price_match = re.search(r'\$?([\d.]+)', price_text)
-            if price_match:
-                price = float(price_match.group(1))
+        # Find the data row for the primary exchange
+        for row in soup.find_all('tr'):
+            cells = row.find_all(['td', 'th'])
+            if len(cells) >= 10:
+                first_cell = cells[0].get_text(strip=True)
 
-        # Look for change values
-        change_elem = soup.find('span', {'class': 'change'})
-        if change_elem:
-            change_text = change_elem.get_text(strip=True)
-            change_match = re.search(r'([+-]?\$?[\d.]+)', change_text)
-            if change_match:
-                change = float(change_match.group(1).replace('$', ''))
+                # Match exchange pattern like "CSE - C" or similar
+                if exchange_prefix in first_cell:
+                    # Extract all cell text values
+                    cell_texts = [c.get_text(strip=True) for c in cells]
 
-        # Look for percent change
-        pct_elem = soup.find('span', {'class': 'pctchange'})
-        if pct_elem:
-            pct_text = pct_elem.get_text(strip=True)
-            pct_match = re.search(r'([+-]?[\d.]+)%?', pct_text)
-            if pct_match:
-                change_percent = float(pct_match.group(1))
+                    # Based on observed format:
+                    # 0: "CSE - C", 1: bid_size, 2: bid, 3: "·", 4: ask, 5: ask_size,
+                    # 6: last, 7: change, 8: %change, 9: volume, 10: $volume, 11: trades
 
-        # Alternative parsing: look for table-based quote data
-        if not price:
-            # Try to find in a quote table
-            for row in soup.find_all('tr'):
-                cells = row.find_all(['td', 'th'])
-                for i, cell in enumerate(cells):
-                    text = cell.get_text(strip=True).lower()
-                    if 'last' in text and i + 1 < len(cells):
-                        price_text = cells[i + 1].get_text(strip=True)
-                        price_match = re.search(r'\$?([\d.]+)', price_text)
-                        if price_match:
-                            price = float(price_match.group(1))
-                    elif 'change' in text and 'percent' not in text and i + 1 < len(cells):
-                        change_text = cells[i + 1].get_text(strip=True)
-                        change_match = re.search(r'([+-]?\$?[\d.]+)', change_text)
-                        if change_match:
-                            change = float(change_match.group(1).replace('$', ''))
-                    elif 'volume' in text and i + 1 < len(cells):
-                        vol_text = cells[i + 1].get_text(strip=True)
-                        vol_match = re.search(r'([\d,]+)', vol_text)
-                        if vol_match:
-                            volume = int(vol_match.group(1).replace(',', ''))
+                    try:
+                        # Last price is typically at index 6
+                        if len(cell_texts) > 6:
+                            price_text = cell_texts[6]
+                            price_match = re.search(r'(\d+\.?\d*)', price_text)
+                            if price_match:
+                                price = float(price_match.group(1))
+
+                        # Change is at index 7 (has +/- prefix)
+                        if len(cell_texts) > 7:
+                            change_text = cell_texts[7]
+                            change_match = re.search(r'([+-]?\d+\.?\d*)', change_text)
+                            if change_match:
+                                change = float(change_match.group(1))
+
+                        # Percent change is at index 8
+                        if len(cell_texts) > 8:
+                            pct_text = cell_texts[8]
+                            pct_match = re.search(r'([+-]?\d+\.?\d*)', pct_text)
+                            if pct_match:
+                                change_percent = float(pct_match.group(1))
+
+                        # Volume is at index 9 (in thousands)
+                        if len(cell_texts) > 9:
+                            vol_text = cell_texts[9].replace(',', '')
+                            vol_match = re.search(r'(\d+\.?\d*)', vol_text)
+                            if vol_match:
+                                volume = int(float(vol_match.group(1)) * 1000)
+
+                        if price:
+                            break
+                    except (ValueError, IndexError):
+                        pass
 
         if not price:
             return {'error': f'Could not parse price from StockWatch for {ticker_symbol}'}
 
         return {
-            'price': price,
-            'change': change or 0,
-            'change_percent': change_percent or 0,
+            'price': round(price, 4),
+            'change': round(change, 4) if change else 0,
+            'change_percent': round(change_percent, 2) if change_percent else 0,
             'volume': volume or 0,
-            'day_high': day_high or price,
-            'day_low': day_low or price,
+            'day_high': price,
+            'day_low': price,
             'source': 'stockwatch'
         }
 
