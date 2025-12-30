@@ -5672,8 +5672,8 @@ def _save_scraped_company_data(data: dict, source_url: str, update_existing: boo
                 company=company,
                 name=project_data.get('name', '')[:200],
                 defaults={
-                    'description': project_data.get('description', '')[:2000],
-                    'country': project_data.get('location', '')[:100],
+                    'description': (project_data.get('description') or '')[:2000],
+                    'country': (project_data.get('location') or '')[:100],
                     'project_stage': 'early_exploration',
                     'primary_commodity': 'gold',
                 }
