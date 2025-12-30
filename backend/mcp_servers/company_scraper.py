@@ -619,13 +619,13 @@ class CompanyDataScraper:
             doc['document_type'] = 'ni43101'
         elif any(kw in combined for kw in ['preliminary economic assessment', 'pea report', 'pea study', ' pea ']):
             doc['document_type'] = 'pea'
-        elif any(kw in combined for kw in ['presentation', 'corporate presentation']):
+        elif any(kw in combined for kw in ['presentation', 'corporate presentation', 'corpdeck', 'corp_deck', 'investor deck', 'investor_deck', 'company deck', 'company_deck']):
             doc['document_type'] = 'presentation'
-        elif any(kw in combined for kw in ['fact sheet', 'factsheet']):
+        elif any(kw in combined for kw in ['fact sheet', 'factsheet', 'fact_sheet', 'investor fact']):
             doc['document_type'] = 'fact_sheet'
-        elif any(kw in combined for kw in ['annual report', 'annual-report']):
+        elif any(kw in combined for kw in ['annual report', 'annual-report', 'annual_report']):
             doc['document_type'] = 'annual_report'
-        elif any(kw in combined for kw in ['quarterly', 'q1', 'q2', 'q3', 'q4']):
+        elif any(kw in combined for kw in ['quarterly', 'q1 ', 'q2 ', 'q3 ', 'q4 ']):
             doc['document_type'] = 'quarterly_report'
         elif any(kw in combined for kw in ['financial', 'statement']):
             doc['document_type'] = 'financial_report'
