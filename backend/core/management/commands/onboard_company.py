@@ -464,18 +464,32 @@ class Command(BaseCommand):
         for project_data in projects_data:
             if project_data.get('name'):
                 project_name = project_data.get('name')
-                # Infer commodity and stage from project name
-                commodity = self._infer_commodity_from_name(project_name)
-                stage = self._infer_project_stage_from_name(project_name)
-                Project.objects.update_or_create(
+
+                # Check if project already exists
+                existing_project = Project.objects.filter(
                     company=company,
-                    name=project_name,
-                    defaults={
-                        'description': project_data.get('description', ''),
-                        'country': project_data.get('location', ''),
-                        'project_stage': stage,
-                        'primary_commodity': commodity,
-                    }
-                )
+                    name=project_name
+                ).first()
+
+                if existing_project:
+                    # Only update description and location, preserve commodity and stage
+                    # (to avoid overwriting manual corrections)
+                    if project_data.get('description'):
+                        existing_project.description = project_data.get('description', '')
+                    if project_data.get('location'):
+                        existing_project.country = project_data.get('location', '')
+                    existing_project.save()
+                else:
+                    # New project - infer commodity and stage from name
+                    commodity = self._infer_commodity_from_name(project_name)
+                    stage = self._infer_project_stage_from_name(project_name)
+                    Project.objects.create(
+                        company=company,
+                        name=project_name,
+                        description=project_data.get('description', ''),
+                        country=project_data.get('location', ''),
+                        project_stage=stage,
+                        primary_commodity=commodity,
+                    )
 
         return company
