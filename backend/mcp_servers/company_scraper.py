@@ -1077,7 +1077,13 @@ class CompanyDataScraper:
         # Invalid patterns for project names
         invalid_patterns = [
             'what makes', 'why', 'how', 'learn more', 'read more', 'click here',
-            'view', 'explore', 'discover', 'see our', 'about the'
+            'view', 'explore', 'discover', 'see our', 'about the',
+            # News/update patterns
+            'update', 'q1 ', 'q2 ', 'q3 ', 'q4 ', 'quarter', 'results',
+            'announces', 'reports', 'closes', 'completes',
+            # Tagline patterns
+            'developing', 'advancing', 'building', 'creating', 'delivering',
+            'two high-grade', 'district scale', 'historic mining'
         ]
 
         for project in self.extracted_data['projects']:
@@ -1088,7 +1094,11 @@ class CompanyDataScraper:
             if not name or len(name) < 5:
                 continue
 
-            # Skip if name matches invalid patterns (questions, CTAs, etc.)
+            # Skip if name is too long (likely a tagline or description)
+            if len(name) > 80:
+                continue
+
+            # Skip if name matches invalid patterns (questions, CTAs, news titles, taglines)
             if any(pattern in name_lower for pattern in invalid_patterns):
                 continue
 
@@ -1096,8 +1106,14 @@ class CompanyDataScraper:
             if re.search(r'&[A-Z]', name):
                 continue
 
+            # Skip if name looks like a news title (company name followed by colon)
+            if re.match(r'^[A-Z][a-z]+\s+(Silver|Gold|Mining|Resources|Corp).*:', name):
+                continue
+
             # Skip if already seen (case-insensitive, normalized)
+            # Also normalize "The X Project" to "X Project"
             normalized_name = name_lower.replace('-', ' ').replace('_', ' ')
+            normalized_name = re.sub(r'^the\s+', '', normalized_name)
             if normalized_name in seen_project_names:
                 continue
 
