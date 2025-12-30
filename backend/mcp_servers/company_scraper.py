@@ -1044,6 +1044,10 @@ class CompanyDataScraper:
             if any(pattern in name_lower for pattern in invalid_patterns):
                 continue
 
+            # Skip if name looks like concatenated text (contains "&" followed by uppercase)
+            if re.search(r'&[A-Z]', name):
+                continue
+
             # Skip if already seen (case-insensitive, normalized)
             normalized_name = name_lower.replace('-', ' ').replace('_', ' ')
             if normalized_name in seen_project_names:
