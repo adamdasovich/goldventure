@@ -1168,12 +1168,28 @@ class CompanyDataScraper:
 
             # Remove common suffixes for better deduplication
             # e.g., "True North Complex" and "True North Gold Project" should be considered duplicates
+            # Also handles "Ixtaca Gold-Silver Deposit" vs "Ixtaca Gold-Silver Project" vs "Ixtaca Project"
             base_name = normalized_name
-            for suffix in [' project', ' property', ' mine', ' deposit', ' complex',
-                          ' gold project', ' gold mine', ' gold deposit', ' gold property',
-                          ' silver project', ' copper project', ' exploration',
-                          ' mill', ' tailings', ' underground']:
-                base_name = base_name.replace(suffix, '')
+            # Order matters - remove longer/more specific suffixes first
+            for suffix in [
+                # Compound commodity + type suffixes (most specific first)
+                ' gold silver deposit', ' gold silver project', ' gold silver property',
+                ' gold silver mine', ' gold-silver deposit', ' gold-silver project',
+                ' gold-silver property', ' gold-silver mine',
+                # Single commodity + type suffixes
+                ' gold project', ' gold mine', ' gold deposit', ' gold property',
+                ' silver project', ' silver mine', ' silver deposit', ' silver property',
+                ' copper project', ' copper mine', ' copper deposit', ' copper property',
+                ' zinc project', ' zinc mine', ' zinc deposit', ' zinc property',
+                # Generic type suffixes
+                ' project', ' property', ' mine', ' deposit', ' complex',
+                ' exploration', ' mill', ' tailings', ' underground',
+                # Commodity-only suffixes (in case name is like "Ixtaca Gold-Silver")
+                ' gold silver', ' gold-silver', ' gold', ' silver', ' copper', ' zinc',
+            ]:
+                if base_name.endswith(suffix):
+                    base_name = base_name[:-len(suffix)]
+                    break  # Only remove one suffix to preserve meaningful parts
             base_name = base_name.strip()
 
             # Check if this base name is already seen (to avoid duplicates like "True North Complex" and "True North Gold Project")
@@ -1182,10 +1198,14 @@ class CompanyDataScraper:
 
             # Check if any existing project has a similar base name (fuzzy matching)
             is_duplicate = False
-            for existing_name in seen_project_names:
-                # If one name contains the other's base name, they're likely duplicates
-                if base_name and len(base_name) > 5:
-                    if base_name in existing_name or existing_name.replace(' project', '').replace(' property', '').strip() in base_name:
+            for existing_base in seen_project_names:
+                # If one base name contains the other, they're likely duplicates
+                # e.g., "ixtaca" matches "ixtaca gold silver"
+                if base_name and len(base_name) > 4:
+                    # Check if base names match or one contains the other
+                    if (base_name == existing_base or
+                        (len(existing_base) > 4 and base_name in existing_base) or
+                        (len(existing_base) > 4 and existing_base in base_name)):
                         is_duplicate = True
                         break
 
