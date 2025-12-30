@@ -12,6 +12,7 @@ from mcp_servers.alpha_vantage import AlphaVantageServer
 from mcp_servers.document_processor_hybrid import HybridDocumentProcessor
 from mcp_servers.document_search import DocumentSearchServer
 from mcp_servers.news_release_server import NewsReleaseServer
+from mcp_servers.news_content_processor import NewsContentProcessor
 
 
 class ClaudeClient:
@@ -41,6 +42,7 @@ class ClaudeClient:
         self.document_processor = HybridDocumentProcessor(company_id, user)
         self.document_search = DocumentSearchServer(company_id, user)
         self.news_release_server = NewsReleaseServer(company_id, user)
+        self.news_content_processor = NewsContentProcessor(company_id, user)
 
         # Map tool name prefixes to servers
         self.server_map = {
@@ -51,8 +53,11 @@ class ClaudeClient:
             'search_': self.document_search,
             'get_document_': self.document_search,
             'get_latest_news': self.news_release_server,
-            'search_news': self.news_release_server,
+            'search_news_releases': self.news_release_server,
             'get_news_by': self.news_release_server,
+            'process_company_news': self.news_content_processor,
+            'search_news_content': self.news_content_processor,
+            'get_news_context': self.news_content_processor,
         }
 
     def _get_all_tools(self) -> List[Dict]:
@@ -64,6 +69,7 @@ class ClaudeClient:
         tools.extend(self.document_processor.get_tool_definitions())
         tools.extend(self.document_search.get_tools())
         tools.extend(self.news_release_server.get_tool_definitions())
+        tools.extend(self.news_content_processor.get_tool_definitions())
         return tools
 
     def _route_tool_call(self, tool_name: str, parameters: Dict) -> Any:
@@ -144,6 +150,14 @@ NEWS RELEASES & PRESS RELEASES:
 - News releases include titles, dates, URLs, and types
 - Use get_latest_news_releases to get recent news for a company
 - Use search_news_releases to find news by specific topics or keywords
+
+NEWS CONTENT SEARCH (Semantic Search with RAG):
+- Search across all processed news content using semantic search
+- News releases, articles, and company news are chunked and embedded for accurate retrieval
+- Use search_news_content to find relevant news by meaning, not just keywords
+- Use get_news_context to get formatted news context for answering questions
+- Process new news content with process_company_news to add to the searchable index
+- Combines with document search to provide comprehensive answers from all sources
 
 When presenting data:
 - Format numbers clearly (use commas for thousands, appropriate decimals)

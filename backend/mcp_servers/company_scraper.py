@@ -1083,7 +1083,20 @@ class CompanyDataScraper:
             'announces', 'reports', 'closes', 'completes',
             # Tagline patterns
             'developing', 'advancing', 'building', 'creating', 'delivering',
-            'two high-grade', 'district scale', 'historic mining'
+            'two high-grade', 'district scale', 'historic mining',
+            # Navigation/UI elements that get scraped as projects
+            'projects map', 'project map', 'property map', 'map of', 'location map',
+            'site map', 'interactive map', 'overview map',
+            # Resource table headers that aren't projects
+            'mineral resource', 'mineral reserve', 'resource estimate',
+            'inferred resource', 'indicated resource', 'measured resource',
+            'total resources', 'resource table', 'resource summary',
+            # Generic navigation items
+            'all projects', 'our projects', 'view projects', 'see projects',
+            'all properties', 'our properties', 'back to', 'return to',
+            # Date/time patterns that indicate news items
+            'january', 'february', 'march', 'april', 'may', 'june',
+            'july', 'august', 'september', 'october', 'november', 'december',
         ]
 
         for project in self.extracted_data['projects']:
@@ -1114,10 +1127,35 @@ class CompanyDataScraper:
             # Also normalize "The X Project" to "X Project"
             normalized_name = name_lower.replace('-', ' ').replace('_', ' ')
             normalized_name = re.sub(r'^the\s+', '', normalized_name)
-            if normalized_name in seen_project_names:
+
+            # Remove common suffixes for better deduplication
+            # e.g., "True North Complex" and "True North Gold Project" should be considered duplicates
+            base_name = normalized_name
+            for suffix in [' project', ' property', ' mine', ' deposit', ' complex',
+                          ' gold project', ' gold mine', ' gold deposit', ' gold property',
+                          ' silver project', ' copper project', ' exploration',
+                          ' mill', ' tailings', ' underground']:
+                base_name = base_name.replace(suffix, '')
+            base_name = base_name.strip()
+
+            # Check if this base name is already seen (to avoid duplicates like "True North Complex" and "True North Gold Project")
+            if normalized_name in seen_project_names or base_name in seen_project_names:
+                continue
+
+            # Check if any existing project has a similar base name (fuzzy matching)
+            is_duplicate = False
+            for existing_name in seen_project_names:
+                # If one name contains the other's base name, they're likely duplicates
+                if base_name and len(base_name) > 5:
+                    if base_name in existing_name or existing_name.replace(' project', '').replace(' property', '').strip() in base_name:
+                        is_duplicate = True
+                        break
+
+            if is_duplicate:
                 continue
 
             seen_project_names.add(normalized_name)
+            seen_project_names.add(base_name)  # Also track the base name
             unique_projects.append(project)
 
         self.extracted_data['projects'] = unique_projects

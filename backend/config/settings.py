@@ -274,3 +274,23 @@ CELERY_TIMEZONE = 'UTC'
 CELERY_TASK_TRACK_STARTED = True
 CELERY_TASK_TIME_LIMIT = 30 * 60  # 30 minutes max
 
+# Celery Beat Schedule - Periodic Tasks
+from celery.schedules import crontab
+
+CELERY_BEAT_SCHEDULE = {
+    # Scrape Kitco metals prices twice daily (9 AM and 4 PM ET / 14:00 and 21:00 UTC)
+    'scrape-metals-prices-morning': {
+        'task': 'core.tasks.scrape_metals_prices_task',
+        'schedule': crontab(hour=14, minute=0),  # 9 AM ET
+    },
+    'scrape-metals-prices-afternoon': {
+        'task': 'core.tasks.scrape_metals_prices_task',
+        'schedule': crontab(hour=21, minute=0),  # 4 PM ET
+    },
+    # Fetch stock prices daily after market close (4:30 PM ET / 21:30 UTC) on weekdays
+    'fetch-stock-prices-daily': {
+        'task': 'core.tasks.fetch_stock_prices_task',
+        'schedule': crontab(hour=21, minute=30, day_of_week='mon-fri'),  # 4:30 PM ET, Mon-Fri
+    },
+}
+

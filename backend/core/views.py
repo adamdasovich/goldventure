@@ -85,13 +85,16 @@ from django.core.cache import cache
 @permission_classes([AllowAny])
 def metals_prices(request):
     """
-    Get current precious metals prices from Alpha Vantage.
+    Get current precious metals prices from Kitco (scraped) or Twelve Data API fallback.
 
     GET /api/metals/prices/
 
     Returns prices for Gold (XAU), Silver (XAG), Platinum (XPT), Palladium (XPD)
-    Data is cached for 5 minutes to avoid excessive API calls.
+    Primary source: Kitco scraped data (updated twice daily)
+    Fallback: Twelve Data API (if no recent scraped data)
+    Data is cached for 5 minutes.
     """
+    from .models import MetalPrice
 
     # Check cache first
     cached_data = cache.get('metals_prices')
@@ -99,13 +102,81 @@ def metals_prices(request):
         cached_data['cached'] = True
         return Response(cached_data)
 
+    # Metal display info
+    metal_info = {
+        'XAU': {'name': 'Gold', 'unit': 'oz'},
+        'XAG': {'name': 'Silver', 'unit': 'oz'},
+        'XPT': {'name': 'Platinum', 'unit': 'oz'},
+        'XPD': {'name': 'Palladium', 'unit': 'oz'}
+    }
+
+    results = []
+
+    # Try to get Kitco scraped data first
+    try:
+        kitco_prices = MetalPrice.get_latest_prices()
+        if kitco_prices:
+            for symbol, price_obj in kitco_prices.items():
+                info = metal_info.get(symbol, {'name': symbol, 'unit': 'oz'})
+                results.append({
+                    'metal': info['name'],
+                    'symbol': symbol,
+                    'price': float(price_obj.bid_price),
+                    'ask_price': float(price_obj.ask_price),
+                    'change_amount': float(price_obj.change_amount),
+                    'change_percent': float(price_obj.change_percent),
+                    'unit': info['unit'],
+                    'currency': 'USD',
+                    'last_updated': price_obj.scraped_at.isoformat(),
+                    'source': 'Kitco'
+                })
+
+            if results:
+                response_data = {
+                    'metals': results,
+                    'timestamp': datetime.now().isoformat(),
+                    'cached': False,
+                    'source': 'Kitco (scraped)'
+                }
+                cache.set('metals_prices', response_data, 300)
+                return Response(response_data)
+    except Exception as e:
+        print(f"Error fetching Kitco prices: {e}")
+
+    # Fallback to Twelve Data API if no Kitco data
     api_key = getattr(settings, 'TWELVE_DATA_API_KEY', None)
     if not api_key:
-        return Response(
-            {'error': 'Twelve Data API key not configured'},
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
-        )
+        # Return estimated prices if no API key and no Kitco data
+        fallback_prices = {
+            'XAU': 2650.00,
+            'XAG': 31.50,
+            'XPT': 960.00,
+            'XPD': 1030.00
+        }
+        for symbol, price in fallback_prices.items():
+            info = metal_info.get(symbol, {'name': symbol, 'unit': 'oz'})
+            results.append({
+                'metal': info['name'],
+                'symbol': symbol,
+                'price': price,
+                'change_percent': 0.0,
+                'unit': info['unit'],
+                'currency': 'USD',
+                'last_updated': datetime.now().isoformat(),
+                'source': 'Estimated (no data source configured)',
+                'note': 'Configure Kitco scraping for real-time data'
+            })
 
+        response_data = {
+            'metals': results,
+            'timestamp': datetime.now().isoformat(),
+            'cached': False,
+            'source': 'Estimated'
+        }
+        cache.set('metals_prices', response_data, 300)
+        return Response(response_data)
+
+    # Use Twelve Data API as fallback
     metals = {
         'XAU/USD': {'name': 'Gold', 'symbol': 'XAU', 'unit': 'oz'},
         'XAG/USD': {'name': 'Silver', 'symbol': 'XAG', 'unit': 'oz'},
@@ -113,11 +184,8 @@ def metals_prices(request):
         'XPD/USD': {'name': 'Palladium', 'symbol': 'XPD', 'unit': 'oz'}
     }
 
-    results = []
-
     for symbol_pair, info in metals.items():
         try:
-            # Twelve Data API endpoint for commodities
             url = "https://api.twelvedata.com/price"
             params = {
                 'symbol': symbol_pair,
@@ -130,7 +198,6 @@ def metals_prices(request):
             if 'price' in data:
                 current_price = float(data['price'])
 
-                # Get previous day's price for change calculation
                 try:
                     prev_url = "https://api.twelvedata.com/time_series"
                     prev_params = {
@@ -161,14 +228,11 @@ def metals_prices(request):
                     'source': 'Twelve Data'
                 })
             else:
-                # API error or requires paid plan - use fallback mock data
-                error_msg = data.get('message', data.get('note', 'Unknown error'))
-
-                # Fallback to approximate prices for metals not in free tier
                 fallback_prices = {
-                    'XAG': 31.50,    # Silver
-                    'XPT': 960.00,   # Platinum
-                    'XPD': 1030.00   # Palladium
+                    'XAU': 2650.00,
+                    'XAG': 31.50,
+                    'XPT': 960.00,
+                    'XPD': 1030.00
                 }
 
                 if info['symbol'] in fallback_prices:
@@ -181,15 +245,8 @@ def metals_prices(request):
                         'unit': info['unit'],
                         'currency': 'USD',
                         'last_updated': datetime.now().isoformat(),
-                        'source': 'Estimated (requires paid API tier)',
-                        'note': 'Upgrade to paid plan for real-time data'
-                    })
-                else:
-                    results.append({
-                        'metal': info['name'],
-                        'symbol': info['symbol'],
-                        'price': None,
-                        'error': error_msg
+                        'source': 'Estimated',
+                        'note': 'API limit reached'
                     })
 
         except Exception as e:
@@ -203,12 +260,11 @@ def metals_prices(request):
     response_data = {
         'metals': results,
         'timestamp': datetime.now().isoformat(),
-        'cached': False
+        'cached': False,
+        'source': 'Twelve Data (fallback)'
     }
 
-    # Cache for 5 minutes
     cache.set('metals_prices', response_data, 300)
-
     return Response(response_data)
 
 

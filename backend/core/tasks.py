@@ -338,3 +338,75 @@ def scrape_company_news_task(self, company_id):
             'message': f'Error scraping news: {str(e)}',
             'news_count': 0
         }
+
+
+@shared_task(bind=True, max_retries=3)
+def scrape_metals_prices_task(self):
+    """
+    Scheduled task to scrape precious metals prices from Kitco.
+    Runs twice daily (e.g., 9 AM and 4 PM ET).
+
+    Returns:
+        dict: Status information about the scraping operation
+    """
+    try:
+        from mcp_servers.kitco_scraper import scrape_and_save_metals_prices
+
+        result = scrape_and_save_metals_prices()
+
+        if result['success']:
+            print(f"Successfully scraped {result['scraped']} metals prices from Kitco")
+            return result
+        else:
+            print(f"Metals scrape failed: {result.get('error', 'Unknown error')}")
+            # Retry on failure
+            raise Exception(result.get('error', 'Scraping failed'))
+
+    except Exception as e:
+        print(f"Error in metals scraping task: {str(e)}")
+        self.retry(exc=e, countdown=300)  # Retry after 5 minutes
+
+        return {
+            'success': False,
+            'error': str(e)
+        }
+
+
+@shared_task(bind=True, max_retries=3)
+def fetch_stock_prices_task(self):
+    """
+    Scheduled task to fetch and store daily stock prices for all companies.
+    Runs weekdays after market close (4:30 PM ET / 21:30 UTC).
+
+    Primary source: Stockwatch.com (for Canadian exchanges)
+    Fallback: Alpha Vantage API
+
+    Returns:
+        dict: Status information about the scraping operation
+    """
+    try:
+        from mcp_servers.stock_price_scraper import fetch_and_save_stock_prices
+
+        result = fetch_and_save_stock_prices()
+
+        if result['success']:
+            print(f"Successfully fetched {result['successful']} stock prices")
+            print(f"Failed: {result['failed']}, Skipped: {result['skipped']}")
+            return result
+        else:
+            # Partial success - some companies had errors
+            print(f"Stock price fetch completed with errors:")
+            print(f"Successful: {result['successful']}, Failed: {result['failed']}")
+            if result['errors']:
+                for error in result['errors'][:5]:  # Show first 5 errors
+                    print(f"  - {error}")
+            return result
+
+    except Exception as e:
+        print(f"Error in stock price fetching task: {str(e)}")
+        self.retry(exc=e, countdown=300)  # Retry after 5 minutes
+
+        return {
+            'success': False,
+            'error': str(e)
+        }

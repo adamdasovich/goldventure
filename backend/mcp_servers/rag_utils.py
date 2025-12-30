@@ -1,12 +1,13 @@
 """
 RAG (Retrieval-Augmented Generation) Utilities
-Handles document chunking, embedding, and semantic search using ChromaDB
+Handles document chunking, embedding, and semantic search using ChromaDB.
+Supports both technical documents (NI 43-101) and news content.
 """
 
 import chromadb
 from chromadb.config import Settings
 import tiktoken
-from typing import List, Dict, Tuple
+from typing import List, Dict, Tuple, Optional
 from pathlib import Path
 import anthropic
 from django.conf import settings
@@ -27,10 +28,16 @@ class RAGManager:
             settings=Settings(anonymized_telemetry=False)
         )
 
-        # Get or create collection for document chunks
+        # Get or create collection for document chunks (technical reports)
         self.collection = self.chroma_client.get_or_create_collection(
             name="document_chunks",
             metadata={"hnsw:space": "cosine"}  # Cosine similarity for semantic search
+        )
+
+        # Get or create collection for news chunks
+        self.news_collection = self.chroma_client.get_or_create_collection(
+            name="news_chunks",
+            metadata={"hnsw:space": "cosine"}
         )
 
         # Initialize tokenizer for Claude's model
@@ -224,3 +231,153 @@ class RAGManager:
             )
 
         return "\n---\n".join(context_parts)
+
+    def search_news(self, query: str, n_results: int = 5, filter_company: str = None) -> List[Dict]:
+        """
+        Semantic search across news content chunks
+
+        Args:
+            query: User's question or search query
+            n_results: Number of results to return
+            filter_company: Optional company name to filter results
+
+        Returns:
+            List of relevant news chunks with metadata
+        """
+        # Build filter if company specified
+        where_filter = None
+        if filter_company:
+            where_filter = {"company": filter_company}
+
+        # Query news collection
+        results = self.news_collection.query(
+            query_texts=[query],
+            n_results=n_results,
+            where=where_filter
+        )
+
+        formatted_results = []
+        if results and results['documents'] and results['documents'][0]:
+            for idx in range(len(results['documents'][0])):
+                meta = results['metadatas'][0][idx]
+                formatted_results.append({
+                    'text': results['documents'][0][idx],
+                    'metadata': meta,
+                    'distance': results['distances'][0][idx] if results.get('distances') else None,
+                    'source_type': 'news',
+                    'title': meta.get('title', 'Unknown'),
+                    'date': meta.get('date', ''),
+                    'company': meta.get('company', '')
+                })
+
+        return formatted_results
+
+    def search_all(
+        self,
+        query: str,
+        n_results: int = 5,
+        filter_company: str = None,
+        include_documents: bool = True,
+        include_news: bool = True
+    ) -> Dict[str, List[Dict]]:
+        """
+        Search across both technical documents and news content
+
+        Args:
+            query: User's question
+            n_results: Number of results per source type
+            filter_company: Optional company name filter
+            include_documents: Whether to search technical documents
+            include_news: Whether to search news content
+
+        Returns:
+            Dictionary with 'documents' and 'news' result lists
+        """
+        results = {
+            'documents': [],
+            'news': [],
+            'combined': []
+        }
+
+        if include_documents:
+            results['documents'] = self.search_documents(
+                query, n_results=n_results, filter_company=filter_company
+            )
+
+        if include_news:
+            results['news'] = self.search_news(
+                query, n_results=n_results, filter_company=filter_company
+            )
+
+        # Combine and sort by relevance
+        combined = []
+
+        for doc in results['documents']:
+            combined.append({
+                **doc,
+                'source_type': 'document',
+                'relevance': 1 - doc['distance'] if doc.get('distance') else 0.5
+            })
+
+        for news in results['news']:
+            combined.append({
+                **news,
+                'source_type': 'news',
+                'relevance': 1 - news['distance'] if news.get('distance') else 0.5
+            })
+
+        # Sort by relevance (highest first)
+        combined.sort(key=lambda x: x['relevance'], reverse=True)
+        results['combined'] = combined[:n_results * 2]  # Return up to 2x n_results
+
+        return results
+
+    def get_combined_context(
+        self,
+        query: str,
+        company: str = None,
+        max_chunks: int = 5
+    ) -> str:
+        """
+        Get context from both documents and news for answering questions
+
+        Args:
+            query: User's question
+            company: Optional company filter
+            max_chunks: Max chunks from each source type
+
+        Returns:
+            Formatted context string with both document and news sources
+        """
+        results = self.search_all(
+            query=query,
+            n_results=max_chunks,
+            filter_company=company
+        )
+
+        context_parts = []
+
+        # Add document context
+        if results['documents']:
+            context_parts.append("=== TECHNICAL DOCUMENTS ===")
+            for idx, result in enumerate(results['documents'][:max_chunks], 1):
+                meta = result['metadata']
+                context_parts.append(
+                    f"[Document {idx}: {meta.get('document_title', 'Unknown')} ({meta.get('document_date', '')})]\n"
+                    f"{result['text']}"
+                )
+
+        # Add news context
+        if results['news']:
+            context_parts.append("\n=== NEWS & PRESS RELEASES ===")
+            for idx, result in enumerate(results['news'][:max_chunks], 1):
+                context_parts.append(
+                    f"[News {idx}: {result.get('title', 'Unknown')} ({result.get('date', '')})]\n"
+                    f"Company: {result.get('company', 'Unknown')}\n"
+                    f"{result['text']}"
+                )
+
+        if not context_parts:
+            return "No relevant content found in documents or news."
+
+        return "\n\n---\n\n".join(context_parts)
