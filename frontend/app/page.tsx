@@ -97,10 +97,18 @@ export default function Home() {
             <h2 className="text-5xl md:text-6xl font-bold mb-6 text-gradient-gold animate-fade-in leading-tight pb-2">
               Junior Gold Mining Intelligence
             </h2>
-            <p className="text-xl text-slate-300 max-w-3xl mx-auto animate-slide-in-up">
+            <p className="text-xl text-slate-300 max-w-3xl mx-auto animate-slide-in-up mb-8">
               AI-powered investor relations platform for junior gold mining investors and companies.
               Instant access to projects, resources, prospector listings and technical data.
             </p>
+            {/* Socrates Miner Image */}
+            <div className="flex justify-center animate-fade-in">
+              <img
+                src="/images/socrates-miner.png"
+                alt="When the meek inherit the world... who will mine?"
+                className="w-48 md:w-56 h-auto opacity-90 hover:opacity-100 transition-opacity duration-300"
+              />
+            </div>
           </div>
 
           {/* Three Content Cards */}
