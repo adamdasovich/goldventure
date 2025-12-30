@@ -127,6 +127,29 @@ class Command(BaseCommand):
         # Default to gold for mining companies
         return 'gold'
 
+    def _is_invalid_project_name(self, name: str) -> bool:
+        """
+        Check if a project name is invalid (geochemistry data, sample labels, etc.)
+        Returns True if the name should be filtered out.
+        """
+        import re
+        name_lower = name.lower()
+
+        # Filter out geochemistry/assay data labels
+        # e.g., "Epworth Ag ppm", "Epworth Au ppb", "Epworth Cu pct", "Lake Sed Au Ag"
+        geochemistry_patterns = [
+            r'\b(ppm|ppb|ppt|g/t|oz/t|pct)\b',  # Unit suffixes
+            r'\b(au|ag|cu|pb|zn|ni|co|pt|pd|li|u|mo|w|sn|fe|mn|as|sb|bi|cd|hg)\s+(ppm|ppb|ppt|g/t|pct)\b',  # Element + unit
+            r'\bsed\s+(au|ag|cu|pb|zn)',  # Sediment samples like "Lake Sed Au Ag"
+            r'\b(lake|stream|soil|rock)\s+sed\b',  # Sediment sample types
+        ]
+
+        for pattern in geochemistry_patterns:
+            if re.search(pattern, name_lower):
+                return True
+
+        return False
+
     def _infer_project_stage_from_name(self, name: str) -> str:
         """
         Infer the project stage from a project name.
@@ -464,6 +487,10 @@ class Command(BaseCommand):
         for project_data in projects_data:
             if project_data.get('name'):
                 project_name = project_data.get('name')
+
+                # Skip invalid project names (geochemistry data, sample labels, etc.)
+                if self._is_invalid_project_name(project_name):
+                    continue
 
                 # Check if project already exists
                 existing_project = Project.objects.filter(
