@@ -303,6 +303,116 @@ def metal_historical(request, symbol):
 # STOCK QUOTE API
 # ============================================================================
 
+def _get_stockwatch_quote(ticker_symbol: str, exchange: str) -> dict:
+    """
+    Fetch real-time stock quote from StockWatch.com for Canadian stocks.
+    StockWatch provides excellent coverage for TSX, TSXV, and CSE stocks.
+    Returns dict with quote data or error.
+    """
+    import requests
+    from bs4 import BeautifulSoup
+    import re
+
+    try:
+        # Build StockWatch URL based on exchange
+        # CSE uses C: prefix, TSXV uses V: prefix, TSX uses T: prefix
+        exchange_upper = exchange.upper() if exchange else ''
+        if exchange_upper == 'CSE':
+            stockwatch_symbol = f"C:{ticker_symbol}"
+        elif exchange_upper == 'TSXV':
+            stockwatch_symbol = f"V:{ticker_symbol}"
+        elif exchange_upper == 'TSX':
+            stockwatch_symbol = f"T:{ticker_symbol}"
+        else:
+            return {'error': f'StockWatch does not support exchange: {exchange}'}
+
+        url = f"https://www.stockwatch.com/Quote/Detail?{stockwatch_symbol}"
+
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        }
+
+        response = requests.get(url, headers=headers, timeout=10)
+        response.raise_for_status()
+
+        soup = BeautifulSoup(response.text, 'html.parser')
+
+        # Parse the quote data from StockWatch HTML
+        # Look for the main quote section
+        price = None
+        change = None
+        change_percent = None
+        volume = None
+        day_high = None
+        day_low = None
+
+        # StockWatch uses specific HTML structure for quote data
+        # Try to find price in various possible locations
+        price_elem = soup.find('span', {'class': 'price'}) or soup.find('td', text=re.compile(r'Last'))
+        if price_elem:
+            price_text = price_elem.get_text(strip=True)
+            price_match = re.search(r'\$?([\d.]+)', price_text)
+            if price_match:
+                price = float(price_match.group(1))
+
+        # Look for change values
+        change_elem = soup.find('span', {'class': 'change'})
+        if change_elem:
+            change_text = change_elem.get_text(strip=True)
+            change_match = re.search(r'([+-]?\$?[\d.]+)', change_text)
+            if change_match:
+                change = float(change_match.group(1).replace('$', ''))
+
+        # Look for percent change
+        pct_elem = soup.find('span', {'class': 'pctchange'})
+        if pct_elem:
+            pct_text = pct_elem.get_text(strip=True)
+            pct_match = re.search(r'([+-]?[\d.]+)%?', pct_text)
+            if pct_match:
+                change_percent = float(pct_match.group(1))
+
+        # Alternative parsing: look for table-based quote data
+        if not price:
+            # Try to find in a quote table
+            for row in soup.find_all('tr'):
+                cells = row.find_all(['td', 'th'])
+                for i, cell in enumerate(cells):
+                    text = cell.get_text(strip=True).lower()
+                    if 'last' in text and i + 1 < len(cells):
+                        price_text = cells[i + 1].get_text(strip=True)
+                        price_match = re.search(r'\$?([\d.]+)', price_text)
+                        if price_match:
+                            price = float(price_match.group(1))
+                    elif 'change' in text and 'percent' not in text and i + 1 < len(cells):
+                        change_text = cells[i + 1].get_text(strip=True)
+                        change_match = re.search(r'([+-]?\$?[\d.]+)', change_text)
+                        if change_match:
+                            change = float(change_match.group(1).replace('$', ''))
+                    elif 'volume' in text and i + 1 < len(cells):
+                        vol_text = cells[i + 1].get_text(strip=True)
+                        vol_match = re.search(r'([\d,]+)', vol_text)
+                        if vol_match:
+                            volume = int(vol_match.group(1).replace(',', ''))
+
+        if not price:
+            return {'error': f'Could not parse price from StockWatch for {ticker_symbol}'}
+
+        return {
+            'price': price,
+            'change': change or 0,
+            'change_percent': change_percent or 0,
+            'volume': volume or 0,
+            'day_high': day_high or price,
+            'day_low': day_low or price,
+            'source': 'stockwatch'
+        }
+
+    except requests.exceptions.RequestException as e:
+        return {'error': f'StockWatch request error: {str(e)}'}
+    except Exception as e:
+        return {'error': f'StockWatch parsing error: {str(e)}'}
+
+
 def _get_yahoo_finance_quote(ticker_symbol: str) -> dict:
     """
     Fetch real-time stock quote from Yahoo Finance using yfinance.
@@ -362,8 +472,9 @@ def stock_quote(request, company_id):
     Fetches stock data with the following priority:
     1. In-memory cache (5 minute TTL)
     2. Yahoo Finance (more up-to-date for Canadian stocks)
-    3. Alpha Vantage (fallback)
-    4. Database (last resort fallback)
+    3. StockWatch.com (fallback for Canadian CSE/TSXV/TSX stocks)
+    4. Alpha Vantage (fallback for non-CSE stocks - CSE not supported)
+    5. Database (last resort fallback)
 
     Returns only essential data (ticker, price, change) to minimize payload.
     """
@@ -429,30 +540,53 @@ def stock_quote(request, company_id):
         cache.set(cache_key, response_data, 300)
         return Response(response_data)
 
-    # Yahoo Finance failed - try Alpha Vantage as fallback
-    from mcp_servers.alpha_vantage import AlphaVantageServer
+    # Yahoo Finance failed - try StockWatch for Canadian stocks (CSE, TSXV, TSX)
+    if exchange_upper in ['CSE', 'TSXV', 'TSX']:
+        stockwatch_result = _get_stockwatch_quote(ticker, exchange_upper)
 
-    alpha_vantage = AlphaVantageServer(company_id=company_id)
-    quote_result = alpha_vantage._get_quote(av_ticker)
+        if 'error' not in stockwatch_result and stockwatch_result.get('price', 0) > 0:
+            response_data = {
+                'ticker': company.ticker_symbol,
+                'exchange': company.exchange,
+                'price': stockwatch_result['price'],
+                'change': stockwatch_result['change'],
+                'change_percent': stockwatch_result['change_percent'],
+                'volume': stockwatch_result['volume'],
+                'date': str(today),
+                'source': 'stockwatch',
+                'cached': False
+            }
 
-    if 'error' not in quote_result:
-        response_data = {
-            'ticker': company.ticker_symbol,
-            'exchange': company.exchange,
-            'price': quote_result.get('price', 0),
-            'change': quote_result.get('change', 0),
-            'change_percent': float(quote_result.get('change_percent', '0')),
-            'volume': quote_result.get('volume', 0),
-            'date': quote_result.get('latest_trading_day', str(today)),
-            'source': 'alpha_vantage',
-            'cached': False
-        }
+            # Cache for 5 minutes
+            cache.set(cache_key, response_data, 300)
+            return Response(response_data)
 
-        # Cache for 5 minutes
-        cache.set(cache_key, response_data, 300)
-        return Response(response_data)
+    # StockWatch failed or not Canadian - try Alpha Vantage as fallback
+    # Note: Alpha Vantage does NOT support CSE stocks
+    if exchange_upper != 'CSE':
+        from mcp_servers.alpha_vantage import AlphaVantageServer
 
-    # Both APIs failed - try database as last resort
+        alpha_vantage = AlphaVantageServer(company_id=company_id)
+        quote_result = alpha_vantage._get_quote(av_ticker)
+
+        if 'error' not in quote_result and quote_result.get('price', 0) > 0:
+            response_data = {
+                'ticker': company.ticker_symbol,
+                'exchange': company.exchange,
+                'price': quote_result.get('price', 0),
+                'change': quote_result.get('change', 0),
+                'change_percent': float(quote_result.get('change_percent', '0')),
+                'volume': quote_result.get('volume', 0),
+                'date': quote_result.get('latest_trading_day', str(today)),
+                'source': 'alpha_vantage',
+                'cached': False
+            }
+
+            # Cache for 5 minutes
+            cache.set(cache_key, response_data, 300)
+            return Response(response_data)
+
+    # All external APIs failed - try database as last resort
     market_data = MarketData.objects.filter(
         company=company,
         date=today
