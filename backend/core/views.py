@@ -5773,6 +5773,49 @@ def scrape_company_save(request):
         )
 
 
+def _infer_commodity_from_name(name: str) -> str:
+    """
+    Infer the primary commodity from a project name.
+    Looks for commodity keywords in the name and returns the appropriate commodity code.
+    Defaults to 'gold' if no commodity is detected.
+    """
+    name_lower = name.lower()
+
+    # Check for specific commodities in order of specificity
+    # Check compound commodities first
+    if 'gold-silver' in name_lower or 'gold silver' in name_lower:
+        return 'gold'  # Gold-silver projects typically listed as gold primary
+    if 'silver-gold' in name_lower or 'silver gold' in name_lower:
+        return 'silver'
+
+    # Check individual commodities
+    if 'silver' in name_lower:
+        return 'silver'
+    if 'copper' in name_lower:
+        return 'copper'
+    if 'zinc' in name_lower:
+        return 'zinc'
+    if 'nickel' in name_lower:
+        return 'nickel'
+    if 'lithium' in name_lower:
+        return 'lithium'
+    if 'uranium' in name_lower:
+        return 'uranium'
+    if 'cobalt' in name_lower:
+        return 'cobalt'
+    if 'platinum' in name_lower or 'palladium' in name_lower or 'pgm' in name_lower:
+        return 'pgm'
+    if 'rare earth' in name_lower or 'ree' in name_lower:
+        return 'ree'
+    if 'base metal' in name_lower:
+        return 'base metals'
+    if 'gold' in name_lower:
+        return 'gold'
+
+    # Default to gold for mining companies
+    return 'gold'
+
+
 def _save_scraped_company_data(data: dict, source_url: str, update_existing: bool, user) -> 'Company':
     """Helper function to save scraped data to database."""
     from core.models import (
@@ -5949,14 +5992,17 @@ def _save_scraped_company_data(data: dict, source_url: str, update_existing: boo
     # Save projects
     for project_data in data.get('projects', []):
         if project_data.get('name'):
+            project_name = project_data.get('name', '')[:200]
+            # Infer commodity from project name
+            commodity = _infer_commodity_from_name(project_name)
             Project.objects.update_or_create(
                 company=company,
-                name=project_data.get('name', '')[:200],
+                name=project_name,
                 defaults={
                     'description': (project_data.get('description') or '')[:2000],
                     'country': (project_data.get('location') or '')[:100],
                     'project_stage': 'early_exploration',
-                    'primary_commodity': 'gold',
+                    'primary_commodity': commodity,
                 }
             )
 
