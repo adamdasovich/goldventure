@@ -55,6 +55,21 @@ class Company(models.Model):
         ('other', 'Other'),
     ]
 
+    APPROVAL_STATUS = [
+        ('pending_approval', 'Pending Approval'),
+        ('approved', 'Approved'),
+        ('rejected', 'Rejected'),
+    ]
+
+    COMPANY_SIZE_CHOICES = [
+        ('1-10', '1-10 employees'),
+        ('11-50', '11-50 employees'),
+        ('51-200', '51-200 employees'),
+        ('201-500', '201-500 employees'),
+        ('501-1000', '501-1000 employees'),
+        ('1000+', '1000+ employees'),
+    ]
+
     name = models.CharField(max_length=200)
     legal_name = models.CharField(max_length=200, blank=True)
     ticker_symbol = models.CharField(max_length=10, blank=True)
@@ -114,6 +129,38 @@ class Company(models.Model):
     # Address
     street_address = models.CharField(max_length=300, blank=True)
     postal_code = models.CharField(max_length=20, blank=True)
+
+    # User submission fields
+    approval_status = models.CharField(
+        max_length=20,
+        choices=APPROVAL_STATUS,
+        default='approved',
+        help_text="Approval status for user-submitted companies"
+    )
+    company_size = models.CharField(max_length=20, choices=COMPANY_SIZE_CHOICES, blank=True)
+    industry = models.CharField(max_length=100, blank=True)
+    contact_email = models.EmailField(blank=True, help_text="Main contact email for user-submitted companies")
+    brief_description = models.CharField(max_length=500, blank=True, help_text="Brief company description")
+    presentation = models.TextField(blank=True, help_text="Company presentation text for user submissions")
+    rejection_reason = models.TextField(blank=True, help_text="Reason for rejection if status is rejected")
+    submitted_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='submitted_companies',
+        help_text="User who submitted this company"
+    )
+    reviewed_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='reviewed_companies',
+        help_text="Admin who reviewed this company"
+    )
+    reviewed_at = models.DateTimeField(null=True, blank=True, help_text="When the company was reviewed")
+    is_user_submitted = models.BooleanField(default=False, help_text="Was this company submitted by a user?")
 
     class Meta:
         db_table = 'companies'

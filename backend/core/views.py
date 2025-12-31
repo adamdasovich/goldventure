@@ -1100,6 +1100,10 @@ class CompanyViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         queryset = Company.objects.filter(is_active=True)
 
+        # Only show approved companies to non-superusers
+        if not (self.request.user and self.request.user.is_superuser):
+            queryset = queryset.filter(approval_status='approved')
+
         # Filter by ticker
         ticker = self.request.query_params.get('ticker')
         if ticker:
@@ -1209,6 +1213,253 @@ class CompanyViewSet(viewsets.ModelViewSet):
         return Response({
             'can_edit': False,
             'reason': None
+        })
+
+    def create(self, request, *args, **kwargs):
+        """
+        Submit a company for approval.
+
+        POST /api/companies/
+
+        Requires authentication. Companies submitted by users will have approval_status='pending_approval'
+        and must be approved by a superuser before becoming visible to the public.
+        """
+        if not request.user.is_authenticated:
+            return Response(
+                {'error': 'Authentication required to submit a company.'},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+
+        # Validate required fields
+        name = request.data.get('name', '').strip()
+        website_url = request.data.get('website_url', '').strip()
+        presentation = request.data.get('presentation', '').strip()
+        company_size = request.data.get('company_size', '').strip()
+        industry = request.data.get('industry', '').strip()
+        location = request.data.get('location', '').strip()
+        contact_email = request.data.get('contact_email', '').strip()
+        brief_description = request.data.get('brief_description', '').strip()
+
+        errors = {}
+
+        # Validate name
+        if not name or len(name) < 2 or len(name) > 100:
+            errors['name'] = ['Company name must be between 2 and 100 characters.']
+
+        # Validate conditional: website OR presentation (200+ chars)
+        if not website_url and (not presentation or len(presentation) < 200):
+            errors['_conditional'] = ['Please provide either a website URL or a detailed company presentation (200+ characters).']
+
+        # Validate website URL format if provided
+        if website_url:
+            if len(website_url) > 255:
+                errors['website_url'] = ['Website URL must be 255 characters or less.']
+            elif not website_url.startswith(('http://', 'https://')):
+                errors['website_url'] = ['Please provide a valid URL starting with http:// or https://']
+
+        # Validate presentation length if provided
+        if presentation and len(presentation) > 2000:
+            errors['presentation'] = ['Company presentation must be 2000 characters or less.']
+
+        # Validate company size
+        valid_sizes = ['1-10', '11-50', '51-200', '201-500', '501-1000', '1000+']
+        if not company_size or company_size not in valid_sizes:
+            errors['company_size'] = [f'Company size must be one of: {", ".join(valid_sizes)}']
+
+        # Validate industry
+        if not industry or len(industry) < 2 or len(industry) > 100:
+            errors['industry'] = ['Industry must be between 2 and 100 characters.']
+
+        # Validate location
+        if not location or len(location) < 2 or len(location) > 100:
+            errors['location'] = ['Location must be between 2 and 100 characters.']
+
+        # Validate contact email
+        if not contact_email:
+            errors['contact_email'] = ['Contact email is required.']
+        elif len(contact_email) > 255:
+            errors['contact_email'] = ['Contact email must be 255 characters or less.']
+        elif '@' not in contact_email or '.' not in contact_email:
+            errors['contact_email'] = ['Please provide a valid email address.']
+
+        # Validate brief description
+        if not brief_description or len(brief_description) < 100 or len(brief_description) > 500:
+            errors['brief_description'] = ['Brief description must be between 100 and 500 characters.']
+
+        # Check for duplicate company name (case-insensitive) in approved/pending status
+        if name:
+            existing = Company.objects.filter(
+                name__iexact=name,
+                approval_status__in=['approved', 'pending_approval']
+            ).exists()
+            if existing:
+                errors['name'] = ['A company with this name already exists or is pending approval.']
+
+        if errors:
+            return Response({'errors': errors}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Create the company with pending_approval status
+        company = Company.objects.create(
+            name=name,
+            website=website_url,
+            presentation=presentation,
+            company_size=company_size,
+            industry=industry,
+            headquarters_city=location,
+            contact_email=contact_email,
+            brief_description=brief_description,
+            approval_status='pending_approval',
+            is_user_submitted=True,
+            submitted_by=request.user,
+            status='private',  # Default company status
+            is_active=True
+        )
+
+        return Response({
+            'id': company.id,
+            'status': 'pending_approval',
+            'message': 'Company submitted successfully. It will be reviewed by our team.'
+        }, status=status.HTTP_201_CREATED)
+
+    @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated], url_path='pending')
+    def pending_companies(self, request):
+        """
+        Get all companies pending approval.
+
+        GET /api/companies/pending/
+
+        Only accessible to superusers.
+        """
+        if not request.user.is_superuser:
+            return Response(
+                {'error': 'You do not have permission to view pending companies.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        page = int(request.query_params.get('page', 1))
+        limit = min(int(request.query_params.get('limit', 20)), 100)
+
+        queryset = Company.objects.filter(
+            approval_status='pending_approval'
+        ).select_related('submitted_by').order_by('-created_at')
+
+        # Pagination
+        total = queryset.count()
+        start = (page - 1) * limit
+        end = start + limit
+        companies = queryset[start:end]
+
+        data = []
+        for company in companies:
+            data.append({
+                'id': company.id,
+                'name': company.name,
+                'website_url': company.website,
+                'presentation': company.presentation,
+                'company_size': company.company_size,
+                'industry': company.industry,
+                'location': company.headquarters_city,
+                'contact_email': company.contact_email,
+                'brief_description': company.brief_description,
+                'created_at': company.created_at.isoformat() if company.created_at else None,
+                'submitter': {
+                    'id': company.submitted_by.id if company.submitted_by else None,
+                    'username': company.submitted_by.username if company.submitted_by else 'Unknown',
+                    'email': company.submitted_by.email if company.submitted_by else ''
+                }
+            })
+
+        return Response({
+            'companies': data,
+            'total': total,
+            'page': page,
+            'limit': limit,
+            'total_pages': (total + limit - 1) // limit
+        })
+
+    @action(detail=True, methods=['patch'], permission_classes=[IsAuthenticated], url_path='approve')
+    def approve_company(self, request, pk=None):
+        """
+        Approve a pending company.
+
+        PATCH /api/companies/{id}/approve/
+
+        Only accessible to superusers.
+        """
+        if not request.user.is_superuser:
+            return Response(
+                {'error': 'You do not have permission to approve companies.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        company = self.get_object()
+
+        if company.approval_status != 'pending_approval':
+            return Response(
+                {'error': 'This company is not pending approval.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        from django.utils import timezone
+
+        company.approval_status = 'approved'
+        company.reviewed_by = request.user
+        company.reviewed_at = timezone.now()
+        company.save(update_fields=['approval_status', 'reviewed_by', 'reviewed_at', 'updated_at'])
+
+        return Response({
+            'success': True,
+            'message': f'{company.name} has been approved and is now visible to all users.',
+            'company_id': company.id
+        })
+
+    @action(detail=True, methods=['patch'], permission_classes=[IsAuthenticated], url_path='reject')
+    def reject_company(self, request, pk=None):
+        """
+        Reject a pending company.
+
+        PATCH /api/companies/{id}/reject/
+
+        Request body (optional):
+        {
+            "reason": "Rejection reason here..."
+        }
+
+        Only accessible to superusers.
+        """
+        if not request.user.is_superuser:
+            return Response(
+                {'error': 'You do not have permission to reject companies.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        company = self.get_object()
+
+        if company.approval_status != 'pending_approval':
+            return Response(
+                {'error': 'This company is not pending approval.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        from django.utils import timezone
+
+        rejection_reason = request.data.get('reason', '')
+        if rejection_reason and len(rejection_reason) > 500:
+            return Response(
+                {'error': 'Rejection reason must be 500 characters or less.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        company.approval_status = 'rejected'
+        company.rejection_reason = rejection_reason
+        company.reviewed_by = request.user
+        company.reviewed_at = timezone.now()
+        company.save(update_fields=['approval_status', 'rejection_reason', 'reviewed_by', 'reviewed_at', 'updated_at'])
+
+        return Response({
+            'success': True,
+            'message': f'{company.name} has been rejected.',
+            'company_id': company.id
         })
 
 
