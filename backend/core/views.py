@@ -1224,6 +1224,9 @@ class CompanyViewSet(viewsets.ModelViewSet):
         Requires authentication. Companies submitted by users will have approval_status='pending_approval'
         and must be approved by a superuser before becoming visible to the public.
         """
+        print("=== CUSTOM CREATE METHOD CALLED ===")
+        print(f"Request data: {request.data}")
+
         if not request.user.is_authenticated:
             return Response(
                 {'error': 'Authentication required to submit a company.'},
