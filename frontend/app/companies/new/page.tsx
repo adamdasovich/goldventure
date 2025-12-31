@@ -170,13 +170,13 @@ export default function NewCompanyPage() {
             Website URL <span className="text-slate-500 text-xs">(Optional if presentation provided)</span>
           </label>
           <input
-            type="url"
+            type="text"
             id="website_url"
             name="website_url"
             value={formData.website_url}
             onChange={handleChange}
             className={`w-full px-4 py-2 bg-slate-900 border ${errors.website_url ? 'border-red-500' : 'border-slate-600'} rounded-lg text-slate-100 placeholder-slate-500 focus:outline-none focus:border-gold-500`}
-            placeholder="https://example.com"
+            placeholder="example.com or https://example.com"
           />
           {errors.website_url && (
             <p className="mt-1 text-sm text-red-400">{errors.website_url[0]}</p>
