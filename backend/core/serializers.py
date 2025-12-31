@@ -52,6 +52,9 @@ class CompanySerializer(serializers.ModelSerializer):
         model = Company
         fields = '__all__'
         read_only_fields = ['id', 'created_at', 'updated_at']
+        extra_kwargs = {
+            'status': {'required': False},  # Make status optional for user submissions
+        }
 
     def get_project_count(self, obj):
         return obj.projects.filter(is_active=True).count()
