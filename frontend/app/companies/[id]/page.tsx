@@ -474,6 +474,38 @@ export default function CompanyDetailPage() {
         </div>
       ) : company ? (
         <>
+          {/* JSON-LD Schema Markup for Company */}
+          <script
+            type="application/ld+json"
+            dangerouslySetInnerHTML={{
+              __html: JSON.stringify({
+                '@context': 'https://schema.org',
+                '@type': 'Corporation',
+                name: company.name,
+                description: company.description || `${company.name} is a mining company listed on ${company.exchange.toUpperCase()}.`,
+                url: `https://juniorgoldminingintelligence.com/companies/${companyId}`,
+                tickerSymbol: `${company.exchange.toUpperCase()}:${company.ticker_symbol}`,
+                ...(company.website && { sameAs: [company.website] }),
+                ...(company.location && {
+                  location: {
+                    '@type': 'Place',
+                    address: {
+                      '@type': 'PostalAddress',
+                      addressLocality: company.location
+                    }
+                  }
+                }),
+                ...(stockQuote && {
+                  quote: {
+                    '@type': 'MonetaryAmount',
+                    currency: 'CAD',
+                    value: stockQuote.price
+                  }
+                })
+              })
+            }}
+          />
+
           {/* Company Header */}
           <section className="relative py-12 px-4 sm:px-6 lg:px-8 bg-gradient-slate">
             <div className="max-w-7xl mx-auto">
