@@ -1548,6 +1548,32 @@ class CompanyViewSet(viewsets.ModelViewSet):
             'company_id': company.id
         })
 
+    def destroy(self, request, *args, **kwargs):
+        """
+        Delete a company - only superusers can delete.
+
+        DELETE /api/companies/{id}/
+
+        Only accessible to superusers.
+        """
+        if not request.user.is_superuser:
+            return Response(
+                {'error': 'You do not have permission to delete companies.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        company = self.get_object()
+        company_name = company.name
+
+        # Soft delete by setting is_active=False
+        company.is_active = False
+        company.save(update_fields=['is_active', 'updated_at'])
+
+        return Response({
+            'success': True,
+            'message': f'{company_name} has been deleted.'
+        }, status=status.HTTP_200_OK)
+
 
 # ============================================================================
 # PROJECT VIEWSET

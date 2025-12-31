@@ -10,12 +10,13 @@ import LogoMono from '@/components/LogoMono';
 import { useAuth } from '@/contexts/AuthContext';
 
 export default function CompaniesPage() {
-  const { user } = useAuth();
+  const { user, accessToken } = useAuth();
   const [companies, setCompanies] = useState<Company[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
+  const [deletingId, setDeletingId] = useState<number | null>(null);
 
   useEffect(() => {
     fetchCompanies();
@@ -31,6 +32,37 @@ export default function CompaniesPage() {
       setError(err instanceof Error ? err.message : 'Failed to fetch companies');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDelete = async (companyId: number, companyName: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+
+    if (!confirm(`Are you sure you want to delete ${companyName}? This action cannot be undone.`)) {
+      return;
+    }
+
+    setDeletingId(companyId);
+    try {
+      const response = await fetch(`/api/companies/${companyId}/`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+        },
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Failed to delete company');
+      }
+
+      // Remove from local state
+      setCompanies(prev => prev.filter(c => c.id !== companyId));
+      alert(`${companyName} has been deleted successfully.`);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to delete company');
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -206,8 +238,8 @@ export default function CompaniesPage() {
                         <span className="text-slate-400">Projects</span>
                         <span className="text-white font-semibold">{company.project_count || 0}</span>
                       </div>
-                      {company.website && (
-                        <div className="mt-3 pt-3 border-t border-slate-700">
+                      <div className="mt-3 pt-3 border-t border-slate-700 flex items-center justify-between">
+                        {company.website && (
                           <a
                             href={company.website}
                             target="_blank"
@@ -220,8 +252,28 @@ export default function CompaniesPage() {
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
                             </svg>
                           </a>
-                        </div>
-                      )}
+                        )}
+                        {user?.is_superuser && (
+                          <button
+                            type="button"
+                            onClick={(e) => handleDelete(company.id, company.name, e)}
+                            disabled={deletingId === company.id}
+                            className="text-xs text-red-400 hover:text-red-300 flex items-center gap-1 disabled:opacity-50"
+                            title="Delete company"
+                          >
+                            {deletingId === company.id ? (
+                              <svg className="animate-spin w-3 h-3" fill="none" viewBox="0 0 24 24">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                              </svg>
+                            ) : (
+                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              </svg>
+                            )}
+                          </button>
+                        )}
+                      </div>
                     </CardContent>
                   </Card>
                 ))
@@ -244,6 +296,9 @@ export default function CompaniesPage() {
                         <th className="text-left py-4 px-6 text-sm font-semibold text-gold-400">Exchange</th>
                         <th className="text-left py-4 px-6 text-sm font-semibold text-gold-400">Projects</th>
                         <th className="text-left py-4 px-6 text-sm font-semibold text-gold-400">Website</th>
+                        {user?.is_superuser && (
+                          <th className="text-left py-4 px-6 text-sm font-semibold text-gold-400">Actions</th>
+                        )}
                       </tr>
                     </thead>
                     <tbody>
@@ -279,11 +334,33 @@ export default function CompaniesPage() {
                                 <span className="text-slate-600">—</span>
                               )}
                             </td>
+                            {user?.is_superuser && (
+                              <td className="py-4 px-6">
+                                <button
+                                  type="button"
+                                  onClick={(e) => handleDelete(company.id, company.name, e)}
+                                  disabled={deletingId === company.id}
+                                  className="text-red-400 hover:text-red-300 disabled:opacity-50"
+                                  title="Delete company"
+                                >
+                                  {deletingId === company.id ? (
+                                    <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+                                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                                    </svg>
+                                  ) : (
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                    </svg>
+                                  )}
+                                </button>
+                              </td>
+                            )}
                           </tr>
                         ))
                       ) : (
                         <tr>
-                          <td colSpan={5} className="py-12 text-center text-slate-400">
+                          <td colSpan={user?.is_superuser ? 6 : 5} className="py-12 text-center text-slate-400">
                             No companies found matching "{searchQuery}"
                           </td>
                         </tr>
