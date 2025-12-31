@@ -1246,16 +1246,17 @@ class CompanyViewSet(viewsets.ModelViewSet):
         if not name or len(name) < 2 or len(name) > 100:
             errors['name'] = ['Company name must be between 2 and 100 characters.']
 
+        # Auto-add https:// to website URL if missing
+        if website_url and not website_url.startswith(('http://', 'https://')):
+            website_url = 'https://' + website_url
+
         # Validate conditional: website OR presentation (200+ chars)
         if not website_url and (not presentation or len(presentation) < 200):
             errors['_conditional'] = ['Please provide either a website URL or a detailed company presentation (200+ characters).']
 
         # Validate website URL format if provided
-        if website_url:
-            if len(website_url) > 255:
-                errors['website_url'] = ['Website URL must be 255 characters or less.']
-            elif not website_url.startswith(('http://', 'https://')):
-                errors['website_url'] = ['Please provide a valid URL starting with http:// or https://']
+        if website_url and len(website_url) > 255:
+            errors['website_url'] = ['Website URL must be 255 characters or less.']
 
         # Validate presentation length if provided
         if presentation and len(presentation) > 2000:
