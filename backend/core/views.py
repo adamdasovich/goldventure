@@ -1392,7 +1392,7 @@ class CompanyViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['patch'], permission_classes=[IsAuthenticated], url_path='approve')
     def approve_company(self, request, pk=None):
         """
-        Approve a pending company.
+        Approve a pending company and trigger onboarding/scraping.
 
         PATCH /api/companies/{id}/approve/
 
@@ -1413,16 +1413,90 @@ class CompanyViewSet(viewsets.ModelViewSet):
             )
 
         from django.utils import timezone
+        import asyncio
+        from mcp_servers.company_scraper import scrape_company_website
+        from core.models import ScrapingJob
 
+        # Approve the company first
         company.approval_status = 'approved'
         company.reviewed_by = request.user
         company.reviewed_at = timezone.now()
         company.save(update_fields=['approval_status', 'reviewed_by', 'reviewed_at', 'updated_at'])
 
+        # Trigger onboarding/scraping if website URL is provided
+        if company.website:
+            try:
+                # Create scraping job
+                job = ScrapingJob.objects.create(
+                    company_name_input=company.name,
+                    website_url=company.website,
+                    status='running',
+                    started_at=timezone.now(),
+                    sections_to_process=['all'],
+                    initiated_by=request.user,
+                    company=company
+                )
+
+                # Run the scraper
+                result = asyncio.run(scrape_company_website(company.website))
+                data = result['data']
+                errors = result['errors']
+
+                # Update the existing company with scraped data
+                updated_company = _save_scraped_company_data(data, company.website, update_existing=True, user=request.user)
+
+                # Update job with success
+                job.company = updated_company or company
+                job.status = 'success'
+                job.completed_at = timezone.now()
+                job.data_extracted = data
+                job.documents_found = len(data.get('documents', []))
+                job.people_found = len(data.get('people', []))
+                job.news_found = len(data.get('news', []))
+                job.sections_completed = ['all']
+                job.error_messages = errors
+                job.save()
+
+                # Start document processing in background if documents were found
+                processing_jobs = data.get('_processing_jobs_created', [])
+                if processing_jobs:
+                    import threading
+                    from core.tasks import process_document_queue
+                    threading.Thread(target=process_document_queue, daemon=True).start()
+
+                return Response({
+                    'success': True,
+                    'message': f'{company.name} has been approved and onboarded successfully.',
+                    'company_id': company.id,
+                    'onboarding_completed': True,
+                    'documents_found': len(data.get('documents', [])),
+                    'people_found': len(data.get('people', [])),
+                    'news_found': len(data.get('news', [])),
+                })
+
+            except Exception as e:
+                # If scraping fails, still keep the company approved
+                # but mark the scraping job as failed
+                if 'job' in locals():
+                    job.status = 'failed'
+                    job.completed_at = timezone.now()
+                    job.error_messages = [str(e)]
+                    job.save()
+
+                return Response({
+                    'success': True,
+                    'message': f'{company.name} has been approved, but onboarding failed.',
+                    'company_id': company.id,
+                    'onboarding_completed': False,
+                    'onboarding_error': str(e)
+                })
+
+        # No website URL provided, just approve
         return Response({
             'success': True,
             'message': f'{company.name} has been approved and is now visible to all users.',
-            'company_id': company.id
+            'company_id': company.id,
+            'onboarding_completed': False
         })
 
     @action(detail=True, methods=['patch'], permission_classes=[IsAuthenticated], url_path='reject')
