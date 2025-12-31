@@ -129,10 +129,20 @@ const financeServiceJsonLd = {
   name: 'Junior Gold Mining Intelligence',
   url: 'https://juniorgoldminingintelligence.com',
   description: 'Mining investment research platform providing company analysis, precious metals pricing, and investment qualification services.',
-  areaServed: {
-    '@type': 'Country',
-    name: ['Canada', 'United States']
+  address: {
+    '@type': 'PostalAddress',
+    addressCountry: 'CA'
   },
+  areaServed: [
+    {
+      '@type': 'Country',
+      name: 'Canada'
+    },
+    {
+      '@type': 'Country',
+      name: 'United States'
+    }
+  ],
   serviceType: ['Investment Research', 'Market Analysis', 'Investor Education']
 };
 
