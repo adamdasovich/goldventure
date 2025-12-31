@@ -486,15 +486,6 @@ export default function CompanyDetailPage() {
                 url: `https://juniorgoldminingintelligence.com/companies/${companyId}`,
                 tickerSymbol: `${company.exchange.toUpperCase()}:${company.ticker_symbol}`,
                 ...(company.website && { sameAs: [company.website] }),
-                ...(company.location && {
-                  location: {
-                    '@type': 'Place',
-                    address: {
-                      '@type': 'PostalAddress',
-                      addressLocality: company.location
-                    }
-                  }
-                }),
                 ...(stockQuote && {
                   quote: {
                     '@type': 'MonetaryAmount',
