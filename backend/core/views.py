@@ -1303,21 +1303,29 @@ class CompanyViewSet(viewsets.ModelViewSet):
             return Response({'errors': errors}, status=status.HTTP_400_BAD_REQUEST)
 
         # Create the company with pending_approval status
-        company = Company.objects.create(
-            name=name,
-            website=website_url,
-            presentation=presentation,
-            company_size=company_size,
-            industry=industry,
-            headquarters_city=location,
-            contact_email=contact_email,
-            brief_description=brief_description,
-            approval_status='pending_approval',
-            is_user_submitted=True,
-            submitted_by=request.user,
-            status='private',  # Default company status
-            is_active=True
-        )
+        try:
+            company = Company.objects.create(
+                name=name,
+                website=website_url,
+                presentation=presentation,
+                company_size=company_size,
+                industry=industry,
+                headquarters_city=location,
+                contact_email=contact_email,
+                brief_description=brief_description,
+                approval_status='pending_approval',
+                is_user_submitted=True,
+                submitted_by=request.user,
+                status='private',  # Default company status
+                is_active=True
+            )
+        except Exception as e:
+            import traceback
+            print(f"ERROR creating company: {str(e)}")
+            print(traceback.format_exc())
+            return Response({
+                'error': f'Failed to create company: {str(e)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
         return Response({
             'id': company.id,
