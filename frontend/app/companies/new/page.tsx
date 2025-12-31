@@ -64,9 +64,11 @@ export default function NewCompanyPage() {
       const data = await response.json();
 
       if (!response.ok) {
-        console.error('Submission failed:', data);
+        console.error('Submission failed:', JSON.stringify(data, null, 2));
         if (data.errors) {
           setErrors(data.errors);
+        } else if (data.status) {
+          setErrors({ _general: data.status });
         } else {
           setErrors({ _general: [data.error || data.detail || 'Failed to submit company'] });
         }
