@@ -140,7 +140,7 @@ class Company(models.Model):
     company_size = models.CharField(max_length=20, choices=COMPANY_SIZE_CHOICES, blank=True)
     industry = models.CharField(max_length=100, blank=True)
     contact_email = models.EmailField(blank=True, help_text="Main contact email for user-submitted companies")
-    brief_description = models.CharField(max_length=500, blank=True, help_text="Brief company description")
+    brief_description = models.CharField(max_length=2000, blank=True, help_text="Brief company description")
     presentation = models.TextField(blank=True, help_text="Company presentation text for user submissions")
     rejection_reason = models.TextField(blank=True, help_text="Reason for rejection if status is rejected")
     submitted_by = models.ForeignKey(

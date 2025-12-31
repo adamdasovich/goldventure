@@ -1287,8 +1287,8 @@ class CompanyViewSet(viewsets.ModelViewSet):
             errors['contact_email'] = ['Please provide a valid email address.']
 
         # Validate brief description
-        if not brief_description or len(brief_description) < 100 or len(brief_description) > 500:
-            errors['brief_description'] = ['Brief description must be between 100 and 500 characters.']
+        if not brief_description or len(brief_description) < 100 or len(brief_description) > 2000:
+            errors['brief_description'] = ['Brief description must be between 100 and 2000 characters.']
 
         # Check for duplicate company name (case-insensitive) in approved/pending status
         if name:

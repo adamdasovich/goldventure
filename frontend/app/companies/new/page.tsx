@@ -307,7 +307,7 @@ export default function NewCompanyPage() {
           {errors.brief_description && (
             <p className="mt-1 text-sm text-red-400">{errors.brief_description[0]}</p>
           )}
-          <p className="mt-1 text-xs text-slate-500">{getCharCount('brief_description')}/500 characters (minimum 100)</p>
+          <p className="mt-1 text-xs text-slate-500">{getCharCount('brief_description')}/2000 characters (minimum 100)</p>
         </div>
 
         <div className="flex justify-end gap-4 pt-4">
