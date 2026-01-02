@@ -24,6 +24,7 @@ class ToolCategory(Enum):
     DOCUMENTS = "documents"
     NEWS = "news"
     SEARCH = "search"
+    GLOSSARY = "glossary"
 
 
 class DetailLevel(Enum):
@@ -172,6 +173,19 @@ class ToolRegistry:
             "Get news within a specific date range",
             ["news", "date", "range", "historical"])
 
+        # Glossary tools
+        self._register_metadata("glossary_search", ToolCategory.GLOSSARY,
+            "Search for mining industry glossary term definitions",
+            ["glossary", "definition", "term", "NI 43-101", "technical", "terminology"])
+
+        self._register_metadata("glossary_list_by_category", ToolCategory.GLOSSARY,
+            "List all glossary terms in a specific category",
+            ["glossary", "category", "list", "reporting", "geology", "finance"])
+
+        self._register_metadata("glossary_list_all", ToolCategory.GLOSSARY,
+            "List all available glossary terms",
+            ["glossary", "all", "overview", "terms"])
+
     def _register_metadata(self, name: str, category: ToolCategory,
                           description: str, keywords: List[str]):
         """Register tool metadata"""
@@ -192,6 +206,8 @@ class ToolRegistry:
             self._tool_servers[name] = "document_processor"
         elif name.startswith("search_") or name.startswith("get_document_"):
             self._tool_servers[name] = "document_search"
+        elif name.startswith("glossary_"):
+            self._tool_servers[name] = "glossary"
         elif "news" in name:
             self._tool_servers[name] = "news_release"
 
@@ -308,6 +324,9 @@ class ToolRegistry:
             elif server_type == "news_release":
                 from mcp_servers.news_release_server import NewsReleaseServer
                 self._server_instances[cache_key] = NewsReleaseServer(company_id, user)
+            elif server_type == "glossary":
+                from mcp_servers.glossary import GlossaryMCPServer
+                self._server_instances[cache_key] = GlossaryMCPServer(company_id, user)
 
         return self._server_instances.get(cache_key)
 
@@ -369,6 +388,12 @@ class ToolRegistry:
         if any(kw in query_lower for kw in ["news", "release", "announcement", "press",
                                             "latest", "recent"]):
             recommended_categories.add(ToolCategory.NEWS)
+
+        # Glossary keywords
+        if any(kw in query_lower for kw in ["what is", "define", "definition", "glossary",
+                                            "term", "meaning", "explain", "ni 43-101",
+                                            "indicated resource", "feasibility"]):
+            recommended_categories.add(ToolCategory.GLOSSARY)
 
         # If no specific categories detected, return common ones
         if not recommended_categories:

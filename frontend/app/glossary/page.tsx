@@ -1,17 +1,22 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardHeader, CardTitle, CardDescription } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 
 interface GlossaryTerm {
+  id?: number;
   term: string;
   definition: string;
-  category: 'reporting' | 'geology' | 'finance' | 'regulatory' | 'operations';
+  category: 'reporting' | 'geology' | 'finance' | 'regulatory' | 'operations' | 'general';
   relatedLinks?: { text: string; url: string }[];
+  keywords?: string;
+  created_at?: string;
+  updated_at?: string;
 }
 
-const glossaryTerms: GlossaryTerm[] = [
+// Fallback static terms (will be replaced by API data when available)
+const fallbackGlossaryTerms: GlossaryTerm[] = [
   {
     term: "NI 43-101",
     definition: "Canadian National Instrument 43-101 is a regulatory standard for public disclosure of scientific and technical information concerning mineral projects. It requires independent qualified persons to prepare technical reports and resource estimates, ensuring transparency and accuracy in mining investment information.",
@@ -335,6 +340,37 @@ const categories = [
 export default function GlossaryPage() {
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [glossaryTerms, setGlossaryTerms] = useState<GlossaryTerm[]>(fallbackGlossaryTerms);
+  const [isLoading, setIsLoading] = useState(true);
+  const [apiError, setApiError] = useState<string | null>(null);
+
+  // Fetch glossary terms from API
+  useEffect(() => {
+    const fetchGlossaryTerms = async () => {
+      try {
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/glossary/`);
+        if (response.ok) {
+          const data = await response.json();
+          // API returns paginated results with 'results' array
+          const terms = Array.isArray(data) ? data : (data.results || []);
+          if (terms.length > 0) {
+            setGlossaryTerms(terms);
+            setApiError(null);
+          }
+        } else {
+          console.warn('Failed to fetch glossary from API, using fallback data');
+          setApiError('Using cached glossary data');
+        }
+      } catch (error) {
+        console.error('Error fetching glossary:', error);
+        setApiError('Using cached glossary data');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchGlossaryTerms();
+  }, []);
 
   // Filter terms based on category and search
   const filteredTerms = glossaryTerms
