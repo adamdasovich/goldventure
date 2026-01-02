@@ -35,6 +35,7 @@ export default function Home() {
               <Button variant="ghost" size="sm" onClick={() => window.location.href = '/dashboard'}>Dashboard</Button>
               <Button variant="ghost" size="sm" onClick={() => window.location.href = '/companies'}>Companies</Button>
               <Button variant="ghost" size="sm" onClick={() => window.location.href = '/properties'}>Prospector's Exchange</Button>
+              <Button variant="ghost" size="sm" onClick={() => window.location.href = '/glossary'}>Glossary</Button>
               <Button variant="ghost" size="sm" onClick={() => window.location.href = '/metals'}>Metals</Button>
               <Button variant="ghost" size="sm" onClick={() => window.location.href = '/financial-hub'}>Financial Hub</Button>
               <Button variant="ghost" size="sm" onClick={() => window.location.href = '/store'}>Store</Button>
