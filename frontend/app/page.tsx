@@ -94,18 +94,18 @@ export default function Home() {
 
         <div className="relative max-w-7xl mx-auto">
           <div className="text-center mb-12">
-            <h2 className="text-5xl md:text-6xl font-bold mb-6 text-gradient-gold animate-fade-in leading-tight pb-2">
-              Junior Gold Mining Intelligence
-            </h2>
+            <h1 className="text-5xl md:text-6xl font-bold mb-6 text-gradient-gold animate-fade-in leading-tight pb-2">
+              Junior Gold Mining Stocks, Data & Industry Intelligence Hub
+            </h1>
             <p className="text-xl text-slate-300 max-w-3xl mx-auto animate-slide-in-up mb-8">
-              AI-powered investor relations platform for junior gold mining investors and companies.
-              Instant access to projects, resources, prospector listings and technical data.
+              AI-powered platform for junior gold mining investors and companies.
+              Track 500+ TSXV mining stocks with real-time exploration data, NI 43-101 reports, resource estimates, and project analytics.
             </p>
             {/* Socrates Miner Image */}
             <div className="flex justify-center animate-fade-in">
               <img
                 src="/images/socrates-miner.png"
-                alt="When the meek inherit the world... who will mine?"
+                alt="Junior Gold Mining Intelligence Platform - AI-Powered Mining Stock Analysis"
                 className="w-48 md:w-56 h-auto opacity-90 hover:opacity-100 transition-opacity duration-300"
               />
             </div>
@@ -138,10 +138,10 @@ export default function Home() {
       <section className="py-16 px-4 sm:px-6 lg:px-8 bg-gradient-slate">
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-12">
-            <h3 className="text-4xl font-bold text-gold-400 mb-4">Ask Anything About Mining Companies or Properties</h3>
+            <h2 className="text-4xl font-bold text-gold-400 mb-4">Ask Anything About Junior Gold Mining Companies or Exploration Projects</h2>
             <p className="text-slate-300 text-lg max-w-2xl mx-auto">
-              Natural language access to companies, projects, resources, prospector listings, and economic studies.
-              Claude uses MCP servers to query your PostgreSQL database in real-time.
+              Natural language access to junior gold mining companies, exploration projects, NI 43-101 resources, prospector listings, and economic studies.
+              Claude AI uses MCP servers to query mining data in real-time.
             </p>
           </div>
 
@@ -153,9 +153,9 @@ export default function Home() {
       <section ref={newsSectionRef} id="news-section" className="py-16 px-4 sm:px-6 lg:px-8">
         <div className="max-w-4xl mx-auto">
           <div className="text-center mb-8">
-            <h3 className="text-4xl font-bold text-gold-400 mb-4">Latest Mining News</h3>
+            <h2 className="text-4xl font-bold text-gold-400 mb-4">Latest Junior Gold Mining News & Industry Updates</h2>
             <p className="text-slate-300 text-lg max-w-2xl mx-auto">
-              Stay informed with the latest news and developments from the mining industry.
+              Stay informed with the latest news and developments from the junior gold mining industry, exploration discoveries, and TSXV market updates.
             </p>
           </div>
 
@@ -169,7 +169,7 @@ export default function Home() {
       <section className="py-16 px-4 sm:px-6 lg:px-8 bg-gradient-slate">
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-12">
-            <h3 className="text-4xl font-bold text-gold-400 mb-4">Platform Features</h3>
+            <h2 className="text-4xl font-bold text-gold-400 mb-4">Junior Gold Mining Intelligence Platform Features</h2>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">

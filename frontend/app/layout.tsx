@@ -18,10 +18,10 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   metadataBase: new URL('https://juniorgoldminingintelligence.com'),
   title: {
-    default: 'Junior Gold Mining Intelligence - AI-Powered Mining Investment Platform',
+    default: 'Junior Gold Mining Data, Stocks & Industry Intelligence 2026',
     template: '%s | Junior Gold Mining Intelligence'
   },
-  description: 'Discover and analyze junior gold mining companies with AI-powered insights. Real-time data, resource estimates, financings, and expert analysis for gold exploration investments.',
+  description: 'Track 500+ junior gold mining stocks with real-time data on exploration projects, NI 43-101 reports, TSXV listings, resource estimates, and financings. AI-powered mining intelligence platform.',
   keywords: [
     'junior gold mining',
     'gold exploration',
@@ -52,8 +52,8 @@ export const metadata: Metadata = {
     locale: 'en_US',
     url: 'https://juniorgoldminingintelligence.com',
     siteName: 'Junior Gold Mining Intelligence',
-    title: 'Junior Gold Mining Intelligence - AI-Powered Mining Investment Platform',
-    description: 'Discover and analyze junior gold mining companies with AI-powered insights. Real-time data, resource estimates, financings, and expert analysis.',
+    title: 'Junior Gold Mining Data, Stocks & Industry Intelligence 2026',
+    description: 'Track 500+ junior gold mining stocks with real-time data on exploration projects, NI 43-101 reports, TSXV listings, and resource estimates.',
     images: [
       {
         url: '/og-image.png',
@@ -65,8 +65,8 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Junior Gold Mining Intelligence - AI-Powered Mining Investment Platform',
-    description: 'Discover and analyze junior gold mining companies with AI-powered insights and real-time data.',
+    title: 'Junior Gold Mining Data, Stocks & Industry Intelligence 2026',
+    description: 'Track 500+ junior gold mining stocks with real-time exploration data, NI 43-101 reports, and TSXV listings.',
     images: ['/og-image.png'],
     creator: '@jrgoldmining',
   },
@@ -97,6 +97,32 @@ const organizationJsonLd = {
   url: 'https://juniorgoldminingintelligence.com',
   logo: 'https://juniorgoldminingintelligence.com/logo.png',
   description: 'AI-powered platform for junior gold mining company analysis, investment research, and precious metals market intelligence.',
+  about: [
+    {
+      '@type': 'Thing',
+      '@id': 'https://www.wikidata.org/wiki/Q44626',
+      name: 'Junior Mining'
+    },
+    {
+      '@type': 'Thing',
+      '@id': 'https://www.wikidata.org/wiki/Q897308',
+      name: 'Gold Mining'
+    },
+    {
+      '@type': 'Thing',
+      name: 'TSXV Mining Stocks'
+    },
+    {
+      '@type': 'Thing',
+      name: 'Gold Exploration Companies'
+    }
+  ],
+  mentions: {
+    '@type': 'DefinedTerm',
+    name: 'NI 43-101',
+    inDefinedTermSet: 'Mining Industry Standards',
+    description: 'Canadian National Instrument 43-101 standards for mineral resource reporting'
+  },
   sameAs: [
     'https://twitter.com/jrgoldmining'
   ],
