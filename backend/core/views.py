@@ -2,7 +2,7 @@
 API Views for GoldVenture Platform
 """
 
-from rest_framework import viewsets, status
+from rest_framework import viewsets, status, permissions
 from rest_framework.decorators import api_view, permission_classes, action
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
@@ -28,6 +28,8 @@ from .models import (
     StoreDigitalAsset, StoreCart, StoreCartItem, StoreOrder, StoreOrderItem,
     StoreShippingRate, StoreProductShare, StoreRecentPurchase,
     StoreProductInquiry, UserStoreBadge,
+    # Glossary
+    GlossaryTerm,
 )
 from .serializers import (
     CompanySerializer, CompanyDetailSerializer,
@@ -68,6 +70,8 @@ from .serializers import (
     StoreProductAdminDetailSerializer, StoreProductAdminCreateSerializer,
     StoreProductImageAdminSerializer, StoreProductVariantAdminSerializer,
     StoreDigitalAssetAdminSerializer, StoreOrderAdminSerializer,
+    # Glossary serializers
+    GlossaryTermSerializer,
 )
 from claude_integration.client import ClaudeClient
 from claude_integration.client_optimized import OptimizedClaudeClient
@@ -6672,4 +6676,66 @@ def retry_failed_discovery(request, discovery_id):
         return Response(
             {'error': str(e)},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+# ============================================================================
+# GLOSSARY VIEWSET
+# ============================================================================
+
+class GlossaryTermViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    ViewSet for mining glossary terms
+    Provides read-only access to glossary (superuser can edit via admin)
+    """
+    queryset = GlossaryTerm.objects.all()
+    serializer_class = GlossaryTermSerializer
+    permission_classes = [permissions.AllowAny]  # Public access for SEO
+    filterset_fields = ['category']
+    search_fields = ['term', 'definition', 'keywords']
+    ordering_fields = ['term', 'created_at', 'category']
+    ordering = ['term']  # Default alphabetical ordering
+
+    @action(detail=False, methods=['get'])
+    def by_letter(self, request):
+        """Get glossary terms grouped by first letter"""
+        letter = request.query_params.get('letter', '').upper()
+        if not letter or len(letter) != 1:
+            return Response(
+                {'error': 'Please provide a single letter parameter'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        terms = self.queryset.filter(term__istartswith=letter)
+        serializer = self.get_serializer(terms, many=True)
+        return Response(serializer.data)
+
+    @action(detail=False, methods=['get'])
+    def search_term(self, request):
+        """Search for a specific term definition (for chatbot)"""
+        term = request.query_params.get('term', '')
+        if not term:
+            return Response(
+                {'error': 'Please provide a term parameter'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Try exact match first
+        glossary_term = self.queryset.filter(term__iexact=term).first()
+        if glossary_term:
+            serializer = self.get_serializer(glossary_term)
+            return Response(serializer.data)
+
+        # Try partial match
+        terms = self.queryset.filter(term__icontains=term)[:5]
+        if terms:
+            serializer = self.get_serializer(terms, many=True)
+            return Response({
+                'exact_match': False,
+                'suggestions': serializer.data
+            })
+
+        return Response(
+            {'error': 'Term not found', 'term': term},
+            status=status.HTTP_404_NOT_FOUND
         )

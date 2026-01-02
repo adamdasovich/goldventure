@@ -25,6 +25,8 @@ from .models import (
     StoreDigitalAsset, StoreCart, StoreCartItem, StoreOrder, StoreOrderItem,
     StoreShippingRate, StoreProductShare, StoreRecentPurchase,
     StoreProductInquiry, UserStoreBadge,
+    # Glossary
+    GlossaryTerm,
 )
 
 
@@ -2031,3 +2033,21 @@ class StoreOrderAdminSerializer(serializers.ModelSerializer):
 
     def get_total_dollars(self, obj):
         return obj.total_cents / 100
+
+
+# ============================================================================
+# GLOSSARY SERIALIZERS
+# ============================================================================
+
+class GlossaryTermSerializer(serializers.ModelSerializer):
+    """Serializer for glossary terms"""
+    first_letter = serializers.CharField(read_only=True)
+
+    class Meta:
+        model = GlossaryTerm
+        fields = [
+            'id', 'term', 'definition', 'category',
+            'related_links', 'keywords', 'first_letter',
+            'created_at', 'updated_at'
+        ]
+        read_only_fields = ['created_at', 'updated_at']

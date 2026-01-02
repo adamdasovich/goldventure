@@ -4294,3 +4294,47 @@ class StockPrice(models.Model):
             company=company,
             date=target_date
         ).first()
+
+
+# ============================================================================
+# GLOSSARY MODEL
+# ============================================================================
+
+class GlossaryTerm(models.Model):
+    """Mining industry glossary terms for SEO and chatbot knowledge"""
+
+    CATEGORY_CHOICES = [
+        ('reporting', 'Reporting & Standards'),
+        ('geology', 'Geology & Resources'),
+        ('finance', 'Finance & Investment'),
+        ('regulatory', 'Regulatory & Legal'),
+        ('operations', 'Mining Operations'),
+        ('general', 'General Terms'),
+    ]
+
+    term = models.CharField(max_length=200, unique=True, db_index=True)
+    definition = models.TextField()
+    category = models.CharField(max_length=20, choices=CATEGORY_CHOICES, default='general')
+    related_links = models.JSONField(default=list, blank=True, help_text='List of related links with text and url fields')
+
+    # SEO fields
+    keywords = models.CharField(max_length=500, blank=True, help_text='Comma-separated keywords for SEO')
+
+    # Metadata
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='glossary_terms_created')
+
+    class Meta:
+        db_table = 'glossary_terms'
+        ordering = ['term']
+        verbose_name = 'Glossary Term'
+        verbose_name_plural = 'Glossary Terms'
+
+    def __str__(self):
+        return self.term
+
+    @property
+    def first_letter(self):
+        """Get the first letter of the term for alphabetical grouping"""
+        return self.term[0].upper() if self.term else ''

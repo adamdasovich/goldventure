@@ -18,7 +18,9 @@ from .models import (
     CompanyResource, SpeakingEvent, CompanySubscription, SubscriptionInvoice,
     CompanyAccessRequest,
     # Company Onboarding models
-    CompanyPerson, CompanyDocument, CompanyNews, ScrapingJob, FailedCompanyDiscovery
+    CompanyPerson, CompanyDocument, CompanyNews, ScrapingJob, FailedCompanyDiscovery,
+    # Glossary
+    GlossaryTerm
 )
 
 
@@ -764,3 +766,38 @@ class FailedCompanyDiscoveryAdmin(admin.ModelAdmin):
             'fields': ('created_at', 'last_attempted_at')
         }),
     )
+
+
+# ============================================================================
+# GLOSSARY ADMIN
+# ============================================================================
+
+@admin.register(GlossaryTerm)
+class GlossaryTermAdmin(admin.ModelAdmin):
+    """Admin interface for mining glossary terms"""
+    list_display = ['term', 'category', 'first_letter', 'created_at', 'updated_at']
+    list_filter = ['category', 'created_at']
+    search_fields = ['term', 'definition', 'keywords']
+    readonly_fields = ['created_at', 'updated_at', 'created_by']
+
+    fieldsets = (
+        ('Term Details', {
+            'fields': ('term', 'definition', 'category')
+        }),
+        ('Related Links', {
+            'fields': ('related_links',),
+            'description': 'Add related links as JSON: [{"text": "Link text", "url": "/path"}]'
+        }),
+        ('SEO', {
+            'fields': ('keywords',),
+            'description': 'Comma-separated keywords for SEO optimization'
+        }),
+        ('Metadata', {
+            'fields': ('created_by', 'created_at', 'updated_at')
+        }),
+    )
+
+    def save_model(self, request, obj, form, change):
+        if not change:
+            obj.created_by = request.user
+        super().save_model(request, obj, form, change)

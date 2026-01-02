@@ -7,7 +7,7 @@ class Migration(migrations.Migration):
 
     dependencies = [
         ('core', '0015_add_company_submission_fields'),
-        ('core', '0026_merge_0014_news_chunk_0025_stockprice'),
+        ('core', '0014_news_chunk'),
     ]
 
     operations = [
