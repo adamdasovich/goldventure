@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Head from 'next/head';
 import { Card, CardHeader, CardTitle, CardDescription } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 
@@ -393,32 +394,77 @@ export default function GlossaryPage() {
 
   const letters = Object.keys(groupedTerms).sort();
 
-  // Generate DefinedTermSet schema
+  // Generate DefinedTermSet schema for SEO
   const schemaMarkup = {
     '@context': 'https://schema.org',
     '@type': 'DefinedTermSet',
     name: 'Junior Gold Mining Industry Glossary',
-    description: 'Comprehensive glossary of technical terms, standards, and definitions used in junior gold mining, mineral exploration, and mining investment.',
+    description: 'Comprehensive glossary of technical terms, standards, and definitions used in junior gold mining, mineral exploration, NI 43-101 standards, TSXV listings, and mining investment. Essential resource for understanding mining terminology.',
+    url: 'https://juniorgoldminingintelligence.com/glossary',
+    inLanguage: 'en-US',
+    dateModified: new Date().toISOString().split('T')[0],
     publisher: {
       '@type': 'Organization',
       name: 'Junior Gold Mining Intelligence',
-      url: 'https://juniorgoldminingintelligence.com'
+      url: 'https://juniorgoldminingintelligence.com',
+      description: 'Junior gold mining data, stock intelligence, and industry analysis platform'
     },
+    about: [
+      {
+        '@type': 'Thing',
+        '@id': 'https://www.wikidata.org/wiki/Q44626',
+        name: 'Junior Mining'
+      },
+      {
+        '@type': 'Thing',
+        '@id': 'https://www.wikidata.org/wiki/Q897308',
+        name: 'Gold Mining'
+      },
+      {
+        '@type': 'Thing',
+        name: 'NI 43-101 Technical Reports'
+      },
+      {
+        '@type': 'Thing',
+        name: 'TSX Venture Exchange Mining'
+      }
+    ],
     hasDefinedTerm: glossaryTerms.map(term => ({
       '@type': 'DefinedTerm',
+      '@id': `https://juniorgoldminingintelligence.com/glossary#${term.term.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
       name: term.term,
       description: term.definition,
-      inDefinedTermSet: 'Junior Gold Mining Industry Glossary'
+      inDefinedTermSet: 'Junior Gold Mining Industry Glossary',
+      termCode: term.category,
+      ...(term.keywords && {
+        alternateName: term.keywords.split(',').map(k => k.trim()).slice(0, 3)
+      })
     }))
   };
 
   return (
-    <div className="min-h-screen bg-slate-900">
-      {/* Schema Markup */}
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(schemaMarkup) }}
-      />
+    <>
+      {/* SEO Meta Tags */}
+      <Head>
+        <title>Junior Gold Mining Glossary - NI 43-101, TSXV & Mining Terms | Junior Gold Mining Intelligence</title>
+        <meta
+          name="description"
+          content="Comprehensive glossary of 60+ junior gold mining terms covering NI 43-101 standards, TSXV listings, mineral resources, exploration geology, and mining investment. Essential definitions for understanding junior mining stocks."
+        />
+        <meta name="keywords" content="junior gold mining glossary, NI 43-101 terms, mining definitions, TSXV mining, indicated resource, feasibility study, junior mining company, gold exploration terms" />
+        <link rel="canonical" href="https://juniorgoldminingintelligence.com/glossary" />
+        <meta property="og:title" content="Junior Gold Mining Industry Glossary - 60+ Essential Terms" />
+        <meta property="og:description" content="Learn junior gold mining terminology: NI 43-101, indicated resources, feasibility studies, TSXV listings, and exploration terms." />
+        <meta property="og:url" content="https://juniorgoldminingintelligence.com/glossary" />
+        <meta property="og:type" content="website" />
+      </Head>
+
+      <div className="min-h-screen bg-slate-900">
+        {/* Schema Markup */}
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(schemaMarkup) }}
+        />
 
       {/* Header */}
       <div className="bg-gradient-to-b from-slate-800 to-slate-900 border-b border-slate-700">
@@ -577,6 +623,7 @@ export default function GlossaryPage() {
           </div>
         </div>
       </div>
-    </div>
+      </div>
+    </>
   );
 }
