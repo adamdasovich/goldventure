@@ -78,56 +78,30 @@ export const GLOSSARY_TERMS = [
 ];
 
 /**
- * Helper function to automatically wrap glossary terms in content
+ * Helper function to check if text contains glossary terms
  *
- * @param text - The text content to process
- * @param maxLinks - Maximum number of terms to link (default: 5)
- * @returns JSX with glossary terms linked
+ * @param text - The text content to check
+ * @returns Array of glossary terms found in the text
  *
  * Example:
- * const content = "This NI 43-101 compliant report shows Indicated Resources of 1.5M oz at 2.5 g/t gold.";
- * const linkedContent = autoLinkGlossaryTerms(content);
+ * const content = "This NI 43-101 compliant report shows Indicated Resources.";
+ * const foundTerms = findGlossaryTerms(content);
+ * // Returns: ['NI 43-101', 'Indicated Resources']
  */
-export function autoLinkGlossaryTerms(text: string, maxLinks: number = 5): React.ReactNode {
-  if (!text) return text;
+export function findGlossaryTerms(text: string): string[] {
+  if (!text) return [];
 
-  let linkedCount = 0;
-  const linkedTerms = new Set<string>();
-  let result: React.ReactNode[] = [text];
+  const foundTerms: string[] = [];
 
   // Sort terms by length (descending) to match longer phrases first
   const sortedTerms = [...GLOSSARY_TERMS].sort((a, b) => b.length - a.length);
 
   for (const term of sortedTerms) {
-    if (linkedCount >= maxLinks) break;
-    if (linkedTerms.has(term.toLowerCase())) continue;
-
-    // Create a case-insensitive regex to find the term
-    const regex = new RegExp(`\\b${term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'gi');
-
-    // Process each element in result array
-    result = result.flatMap((element) => {
-      if (typeof element !== 'string') return [element];
-
-      const matches = element.match(regex);
-      if (!matches || matches.length === 0) return [element];
-
-      // Only link the first occurrence
-      const parts = element.split(regex);
-      const match = matches[0];
-
-      linkedCount++;
-      linkedTerms.add(term.toLowerCase());
-
-      return [
-        parts[0],
-        <GlossaryLink key={`${term}-${linkedCount}`} term={term}>
-          {match}
-        </GlossaryLink>,
-        ...parts.slice(1).join(match),
-      ].filter(Boolean);
-    });
+    const regex = new RegExp(`\\b${term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
+    if (regex.test(text)) {
+      foundTerms.push(term);
+    }
   }
 
-  return result;
+  return foundTerms;
 }
