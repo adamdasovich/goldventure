@@ -96,7 +96,7 @@ export default function Home() {
         <div className="relative max-w-7xl mx-auto">
           <div className="text-center mb-12">
             <h1 className="text-5xl md:text-6xl font-bold mb-6 text-gradient-gold animate-fade-in leading-tight pb-2">
-              Junior Gold Mining Stocks, Data & Industry Intelligence Hub
+              Junior Gold Mining Stocks & Exploration Data Platform
             </h1>
             <p className="text-xl text-slate-300 max-w-3xl mx-auto animate-slide-in-up mb-8">
               AI-powered platform for junior gold mining investors and companies.

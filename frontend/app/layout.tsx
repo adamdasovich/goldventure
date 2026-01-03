@@ -18,10 +18,10 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   metadataBase: new URL('https://juniorgoldminingintelligence.com'),
   title: {
-    default: 'Junior Gold Mining Data, Stocks & Industry Intelligence 2026',
+    default: 'Junior Gold Mining Stocks, Exploration Data & TSXV Intelligence 2026',
     template: '%s | Junior Gold Mining Intelligence'
   },
-  description: 'Track 500+ junior gold mining stocks with real-time data on exploration projects, NI 43-101 reports, TSXV listings, resource estimates, and financings. AI-powered mining intelligence platform.',
+  description: 'Track 500+ junior gold mining stocks with real-time exploration data, NI 43-101 technical reports, TSXV listings, mineral resource estimates, and project financings. AI-powered junior mining intelligence platform for investors.',
   keywords: [
     'junior gold mining',
     'gold exploration',
@@ -52,8 +52,8 @@ export const metadata: Metadata = {
     locale: 'en_US',
     url: 'https://juniorgoldminingintelligence.com',
     siteName: 'Junior Gold Mining Intelligence',
-    title: 'Junior Gold Mining Data, Stocks & Industry Intelligence 2026',
-    description: 'Track 500+ junior gold mining stocks with real-time data on exploration projects, NI 43-101 reports, TSXV listings, and resource estimates.',
+    title: 'Junior Gold Mining Stocks, Exploration Data & TSXV Intelligence 2026',
+    description: 'Track 500+ junior gold mining stocks with real-time exploration data, NI 43-101 technical reports, TSXV listings, and mineral resource estimates.',
     images: [
       {
         url: '/og-image.png',
@@ -65,8 +65,8 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Junior Gold Mining Data, Stocks & Industry Intelligence 2026',
-    description: 'Track 500+ junior gold mining stocks with real-time exploration data, NI 43-101 reports, and TSXV listings.',
+    title: 'Junior Gold Mining Stocks, Exploration Data & TSXV Intelligence 2026',
+    description: 'Track 500+ junior gold mining stocks with real-time exploration data, NI 43-101 technical reports, and TSXV listings.',
     images: ['/og-image.png'],
     creator: '@jrgoldmining',
   },
