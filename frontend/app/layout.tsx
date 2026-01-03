@@ -124,13 +124,26 @@ const organizationJsonLd = {
     description: 'Canadian National Instrument 43-101 standards for mineral resource reporting'
   },
   sameAs: [
-    'https://twitter.com/jrgoldmining'
+    'https://twitter.com/jrgoldmining',
+    'https://www.linkedin.com/company/junior-gold-mining-intelligence',
+    'https://www.facebook.com/juniorgoldmining'
   ],
   contactPoint: {
     '@type': 'ContactPoint',
     contactType: 'customer service',
-    availableLanguage: ['English']
-  }
+    availableLanguage: ['English'],
+    email: 'info@juniorgoldminingintelligence.com'
+  },
+  foundingDate: '2024',
+  slogan: 'AI-Powered Mining Intelligence Platform',
+  knowsAbout: [
+    'Junior Gold Mining',
+    'Mineral Exploration',
+    'NI 43-101 Technical Reports',
+    'TSXV Stock Analysis',
+    'Mining Investment Research',
+    'Precious Metals Markets'
+  ]
 };
 
 const websiteJsonLd = {
@@ -172,6 +185,84 @@ const financeServiceJsonLd = {
   serviceType: ['Investment Research', 'Market Analysis', 'Investor Education']
 };
 
+const faqPageJsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'FAQPage',
+  mainEntity: [
+    {
+      '@type': 'Question',
+      name: 'What is a junior gold mining company?',
+      acceptedAnswer: {
+        '@type': 'Answer',
+        text: 'A junior gold mining company is a small to mid-sized exploration or development company focused on discovering and developing gold deposits. These companies typically have market capitalizations under $500 million and are listed on exchanges like the TSX Venture Exchange (TSXV) or TSX.'
+      }
+    },
+    {
+      '@type': 'Question',
+      name: 'What is NI 43-101?',
+      acceptedAnswer: {
+        '@type': 'Answer',
+        text: 'NI 43-101 is a Canadian National Instrument that sets standards for disclosure of scientific and technical information about mineral projects. It requires all public disclosures of mineral resources and reserves to be prepared or supervised by a Qualified Person and to follow strict reporting standards.'
+      }
+    },
+    {
+      '@type': 'Question',
+      name: 'How do I track junior gold mining stocks?',
+      acceptedAnswer: {
+        '@type': 'Answer',
+        text: 'Junior Gold Mining Intelligence provides a comprehensive platform to track 500+ junior gold mining stocks with real-time exploration data, NI 43-101 technical reports, mineral resource estimates, project financings, and AI-powered analysis. Our database includes companies listed on TSXV, TSX, and other major exchanges.'
+      }
+    },
+    {
+      '@type': 'Question',
+      name: 'What data does the platform provide?',
+      acceptedAnswer: {
+        '@type': 'Answer',
+        text: 'Our platform provides comprehensive data including: company profiles and management teams, NI 43-101 technical reports, mineral resource estimates (gold, silver, copper), exploration project details and locations, financing history and market data, news releases and press announcements, AI-powered company analysis, and real-time precious metals pricing.'
+      }
+    },
+    {
+      '@type': 'Question',
+      name: 'What are mineral resource categories?',
+      acceptedAnswer: {
+        '@type': 'Answer',
+        text: 'Under NI 43-101, mineral resources are classified into three categories based on geological confidence: Inferred Resources (lowest confidence), Indicated Resources (moderate confidence), and Measured Resources (highest confidence). Measured and Indicated Resources can be converted to Mineral Reserves after economic feasibility is demonstrated.'
+      }
+    }
+  ]
+};
+
+const breadcrumbJsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'BreadcrumbList',
+  itemListElement: [
+    {
+      '@type': 'ListItem',
+      position: 1,
+      name: 'Home',
+      item: 'https://juniorgoldminingintelligence.com'
+    },
+    {
+      '@type': 'ListItem',
+      position: 2,
+      name: 'Companies',
+      item: 'https://juniorgoldminingintelligence.com/companies'
+    },
+    {
+      '@type': 'ListItem',
+      position: 3,
+      name: 'Properties',
+      item: 'https://juniorgoldminingintelligence.com/properties'
+    },
+    {
+      '@type': 'ListItem',
+      position: 4,
+      name: 'Glossary',
+      item: 'https://juniorgoldminingintelligence.com/glossary'
+    }
+  ]
+};
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -200,6 +291,14 @@ export default function RootLayout({
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(financeServiceJsonLd) }}
+        />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(faqPageJsonLd) }}
+        />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }}
         />
         {gaId && <GoogleAnalytics measurementId={gaId} />}
       </head>
