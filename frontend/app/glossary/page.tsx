@@ -410,7 +410,9 @@ export default function GlossaryPage() {
     return acc;
   }, {} as Record<string, GlossaryTerm[]>);
 
-  const letters = Object.keys(groupedTerms).sort();
+  // Full alphabet A-Z
+  const allLetters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
+  const letters = allLetters;
 
   // Generate DefinedTermSet schema for SEO
   const schemaMarkup = {
@@ -447,7 +449,7 @@ export default function GlossaryPage() {
         name: 'TSX Venture Exchange Mining'
       }
     ],
-    hasDefinedTerm: glossaryTerms.map(term => ({
+    hasDefinedTerm: (glossaryTerms || []).map(term => ({
       '@type': 'DefinedTerm',
       '@id': `https://juniorgoldminingintelligence.com/glossary#${term.term.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
       name: term.term,
@@ -581,15 +583,25 @@ export default function GlossaryPage() {
 
           {/* Letter Navigation */}
           <div className="mt-4 flex flex-wrap gap-2">
-            {letters.map(letter => (
-              <a
-                key={letter}
-                href={`#letter-${letter}`}
-                className="w-8 h-8 flex items-center justify-center rounded border border-gold-500/30 text-gold-400 hover:bg-gold-500/20 transition-colors text-sm font-medium"
-              >
-                {letter}
-              </a>
-            ))}
+            {letters && letters.map(letter => {
+              const hasTerms = groupedTerms && groupedTerms[letter] && groupedTerms[letter].length > 0;
+              return hasTerms ? (
+                <a
+                  key={letter}
+                  href={`#letter-${letter}`}
+                  className="w-8 h-8 flex items-center justify-center rounded border border-gold-500/30 text-gold-400 hover:bg-gold-500/20 transition-colors text-sm font-medium"
+                >
+                  {letter}
+                </a>
+              ) : (
+                <span
+                  key={letter}
+                  className="w-8 h-8 flex items-center justify-center rounded border border-slate-700/30 text-slate-600 text-sm font-medium cursor-not-allowed"
+                >
+                  {letter}
+                </span>
+              );
+            })}
           </div>
         </div>
       </div>
@@ -607,7 +619,12 @@ export default function GlossaryPage() {
           </Card>
         ) : (
           <div className="space-y-12">
-            {letters.map(letter => (
+            {letters.map(letter => {
+              // Only render letters that have terms
+              if (!groupedTerms[letter] || groupedTerms[letter].length === 0) {
+                return null;
+              }
+              return (
               <div key={letter} id={`letter-${letter}`}>
                 <h2 className="text-3xl font-bold text-gold-400 mb-6 pb-2 border-b border-slate-700">
                   {letter}
@@ -647,7 +664,8 @@ export default function GlossaryPage() {
                   ))}
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
