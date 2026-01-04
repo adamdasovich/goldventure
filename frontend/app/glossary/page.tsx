@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import Head from 'next/head';
 import { Card, CardHeader, CardTitle, CardDescription } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
+import GlossarySubmissionForm from '@/components/GlossarySubmissionForm';
 
 interface GlossaryTerm {
   id?: number;
@@ -344,6 +345,15 @@ export default function GlossaryPage() {
   const [glossaryTerms, setGlossaryTerms] = useState<GlossaryTerm[]>(fallbackGlossaryTerms);
   const [isLoading, setIsLoading] = useState(true);
   const [apiError, setApiError] = useState<string | null>(null);
+  const [isSubmissionFormOpen, setIsSubmissionFormOpen] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [showSuccessMessage, setShowSuccessMessage] = useState(false);
+
+  // Check authentication status
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    setIsAuthenticated(!!token);
+  }, []);
 
   // Fetch glossary terms from API
   useEffect(() => {
@@ -373,6 +383,11 @@ export default function GlossaryPage() {
 
     fetchGlossaryTerms();
   }, []);
+
+  const handleSubmissionSuccess = () => {
+    setShowSuccessMessage(true);
+    setTimeout(() => setShowSuccessMessage(false), 5000);
+  };
 
   // Filter terms based on category and search
   const filteredTerms = glossaryTerms
@@ -470,9 +485,35 @@ export default function GlossaryPage() {
       {/* Header */}
       <div className="bg-gradient-to-b from-slate-800 to-slate-900 border-b border-slate-700">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-          <h1 className="text-4xl md:text-5xl font-bold text-gradient-gold mb-4">
-            Junior Gold Mining Glossary
-          </h1>
+          <div className="flex items-start justify-between gap-4 mb-4">
+            <div className="flex-1">
+              <h1 className="text-4xl md:text-5xl font-bold text-gradient-gold mb-4">
+                Junior Gold Mining Glossary
+              </h1>
+            </div>
+            {isAuthenticated && (
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() => setIsSubmissionFormOpen(true)}
+                className="mt-2"
+              >
+                <svg className="w-4 h-4 mr-2 inline" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                </svg>
+                Submit New Term
+              </Button>
+            )}
+          </div>
+
+          {showSuccessMessage && (
+            <div className="mb-4 p-4 bg-green-500/20 border border-green-500/50 rounded-lg">
+              <p className="text-green-300 font-medium">
+                ✓ Term submitted successfully! Your submission will be reviewed by our team.
+              </p>
+            </div>
+          )}
+
           <p className="text-xl text-slate-300 max-w-3xl">
             Essential terms and definitions for understanding junior gold mining, exploration, NI 43-101 standards, TSXV listings, and mining investment fundamentals.
           </p>
@@ -624,6 +665,13 @@ export default function GlossaryPage() {
           </div>
         </div>
       </div>
+
+      {/* Submission Form Modal */}
+      <GlossarySubmissionForm
+        isOpen={isSubmissionFormOpen}
+        onClose={() => setIsSubmissionFormOpen(false)}
+        onSubmitSuccess={handleSubmissionSuccess}
+      />
       </div>
     </>
   );
