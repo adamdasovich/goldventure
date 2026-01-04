@@ -325,8 +325,8 @@ class ToolRegistry:
                 from mcp_servers.news_release_server import NewsReleaseServer
                 self._server_instances[cache_key] = NewsReleaseServer(company_id, user)
             elif server_type == "glossary":
-                from mcp_servers.glossary import GlossaryMCPServer
-                self._server_instances[cache_key] = GlossaryMCPServer(company_id, user)
+                from mcp_servers.glossary_server import GlossaryServer
+                self._server_instances[cache_key] = GlossaryServer(company_id, user)
 
         return self._server_instances.get(cache_key)
 

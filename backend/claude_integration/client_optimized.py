@@ -80,6 +80,9 @@ class OptimizedClaudeClient:
             elif server_type == "news_release":
                 from mcp_servers.news_release_server import NewsReleaseServer
                 self._servers[server_type] = NewsReleaseServer(self.company_id, self.user)
+            elif server_type == "glossary":
+                from mcp_servers.glossary_server import GlossaryServer
+                self._servers[server_type] = GlossaryServer(self.company_id, self.user)
 
         return self._servers.get(server_type)
 
