@@ -93,7 +93,6 @@ export default function CompaniesPage() {
               </div>
             </div>
             <div className="flex items-center space-x-4">
-              <Badge variant="copper">AI-Powered</Badge>
               <Button variant="ghost" size="sm" onClick={() => window.location.href = '/'}>Home</Button>
               <Button variant="ghost" size="sm" onClick={() => window.location.href = '/'}>Dashboard</Button>
               <Button variant="primary" size="sm">Companies</Button>

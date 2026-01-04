@@ -494,7 +494,6 @@ export default function GlossaryPage() {
               </div>
             </div>
             <div className="flex items-center space-x-4">
-              <Badge variant="copper">AI-Powered</Badge>
               <Button variant="ghost" size="sm" onClick={() => window.location.href = '/'}>Home</Button>
               <Button variant="ghost" size="sm" onClick={() => window.location.href = '/dashboard'}>Dashboard</Button>
               <Button variant="ghost" size="sm" onClick={() => window.location.href = '/companies'}>Companies</Button>

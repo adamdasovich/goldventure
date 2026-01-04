@@ -142,7 +142,6 @@ export default function SubscriptionAgreements() {
                 <LogoMono className="h-18" />
               </div>
               <div className="flex items-center space-x-4">
-                <Badge variant="copper">AI-Powered</Badge>
                 <Button variant="ghost" size="sm" onClick={() => router.push('/')}>Dashboard</Button>
                 <Button variant="ghost" size="sm" onClick={() => router.push('/companies')}>Companies</Button>
                 <Button variant="ghost" size="sm" onClick={() => router.push('/metals')}>Metals</Button>
@@ -239,7 +238,6 @@ export default function SubscriptionAgreements() {
               <LogoMono className="h-18" />
             </div>
             <div className="flex items-center space-x-4">
-              <Badge variant="copper">AI-Powered</Badge>
               <Button variant="ghost" size="sm" onClick={() => router.push('/')}>Dashboard</Button>
               <Button variant="ghost" size="sm" onClick={() => router.push('/companies')}>Companies</Button>
               <Button variant="ghost" size="sm" onClick={() => router.push('/metals')}>Metals</Button>
