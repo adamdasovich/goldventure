@@ -204,6 +204,8 @@ class OptimizedClaudeClient:
             server_type = "document_search"
         elif "news" in tool_name:
             server_type = "news_release"
+        elif tool_name.startswith("glossary_"):
+            server_type = "glossary"
 
         if not server_type:
             return {"error": f"Unknown tool: {tool_name}"}
