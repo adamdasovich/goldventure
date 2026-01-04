@@ -361,19 +361,27 @@ export default function GlossaryPage() {
   useEffect(() => {
     const fetchGlossaryTerms = async () => {
       try {
-        // Request all terms with a large page size to avoid pagination
-        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/glossary/?page_size=200`);
-        if (response.ok) {
-          const data = await response.json();
-          // API returns paginated results with 'results' array
-          const terms = Array.isArray(data) ? data : (data.results || []);
-          if (terms.length > 0) {
-            setGlossaryTerms(terms);
-            setApiError(null);
+        // Fetch all pages of glossary terms
+        let allTerms: GlossaryTerm[] = [];
+        let nextUrl: string | null = `${process.env.NEXT_PUBLIC_API_URL}/glossary/?page_size=100`;
+
+        while (nextUrl) {
+          const response: Response = await fetch(nextUrl);
+          if (response.ok) {
+            const data: any = await response.json();
+            const pageTerms: GlossaryTerm[] = data.results || [];
+            allTerms = [...allTerms, ...pageTerms];
+            nextUrl = data.next;
+          } else {
+            console.warn('Failed to fetch glossary from API, using fallback data');
+            setApiError('Using cached glossary data');
+            break;
           }
-        } else {
-          console.warn('Failed to fetch glossary from API, using fallback data');
-          setApiError('Using cached glossary data');
+        }
+
+        if (allTerms.length > 0) {
+          setGlossaryTerms(allTerms);
+          setApiError(null);
         }
       } catch (error) {
         console.error('Error fetching glossary:', error);
