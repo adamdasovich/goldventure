@@ -4338,3 +4338,115 @@ class GlossaryTerm(models.Model):
     def first_letter(self):
         """Get the first letter of the term for alphabetical grouping"""
         return self.term[0].upper() if self.term else ''
+
+
+class GlossaryTermSubmission(models.Model):
+    """User-submitted glossary terms pending superuser approval"""
+
+    STATUS_CHOICES = [
+        ('pending', 'Pending Review'),
+        ('approved', 'Approved'),
+        ('rejected', 'Rejected'),
+    ]
+
+    # Submission data (matches GlossaryTerm fields)
+    term = models.CharField(max_length=200, db_index=True)
+    definition = models.TextField()
+    category = models.CharField(
+        max_length=20,
+        choices=GlossaryTerm.CATEGORY_CHOICES,
+        default='general'
+    )
+    related_links = models.JSONField(
+        default=list,
+        blank=True,
+        help_text='List of related links with text and url fields'
+    )
+    keywords = models.CharField(
+        max_length=500,
+        blank=True,
+        help_text='Comma-separated keywords for SEO'
+    )
+
+    # Submission metadata
+    submitted_by = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='glossary_submissions'
+    )
+    submitted_at = models.DateTimeField(auto_now_add=True)
+
+    # Approval workflow
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default='pending',
+        db_index=True
+    )
+    reviewed_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='glossary_reviews'
+    )
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    rejection_reason = models.TextField(blank=True)
+
+    # Reference to approved term (if approved)
+    approved_term = models.ForeignKey(
+        GlossaryTerm,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='source_submission'
+    )
+
+    # Audit
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'glossary_term_submissions'
+        ordering = ['-submitted_at']
+        verbose_name = 'Glossary Term Submission'
+        verbose_name_plural = 'Glossary Term Submissions'
+        indexes = [
+            models.Index(fields=['status', '-submitted_at']),
+            models.Index(fields=['submitted_by', '-submitted_at']),
+        ]
+
+    def __str__(self):
+        return f"{self.term} - {self.get_status_display()}"
+
+    def approve(self, reviewer):
+        """Approve submission and create GlossaryTerm"""
+        from django.utils import timezone
+
+        # Create the approved glossary term
+        approved_term = GlossaryTerm.objects.create(
+            term=self.term,
+            definition=self.definition,
+            category=self.category,
+            related_links=self.related_links,
+            keywords=self.keywords,
+            created_by=self.submitted_by
+        )
+
+        # Update submission status
+        self.status = 'approved'
+        self.reviewed_by = reviewer
+        self.reviewed_at = timezone.now()
+        self.approved_term = approved_term
+        self.save()
+
+        return approved_term
+
+    def reject(self, reviewer, reason=''):
+        """Reject submission"""
+        from django.utils import timezone
+
+        self.status = 'rejected'
+        self.reviewed_by = reviewer
+        self.reviewed_at = timezone.now()
+        self.rejection_reason = reason
+        self.save()

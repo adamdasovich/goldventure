@@ -53,6 +53,7 @@ router.register(r'admin/store/orders', views.StoreAdminOrderViewSet, basename='a
 
 # Glossary ViewSet
 router.register(r'glossary', views.GlossaryTermViewSet, basename='glossary')
+router.register(r'glossary/submissions', views.GlossaryTermSubmissionViewSet, basename='glossary-submission')
 
 urlpatterns = [
     # Authentication endpoints

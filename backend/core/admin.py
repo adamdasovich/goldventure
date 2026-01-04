@@ -20,7 +20,7 @@ from .models import (
     # Company Onboarding models
     CompanyPerson, CompanyDocument, CompanyNews, ScrapingJob, FailedCompanyDiscovery,
     # Glossary
-    GlossaryTerm
+    GlossaryTerm, GlossaryTermSubmission
 )
 
 
@@ -801,3 +801,77 @@ class GlossaryTermAdmin(admin.ModelAdmin):
         if not change:
             obj.created_by = request.user
         super().save_model(request, obj, form, change)
+
+
+@admin.register(GlossaryTermSubmission)
+class GlossaryTermSubmissionAdmin(admin.ModelAdmin):
+    """Admin interface for user-submitted glossary terms with approval workflow"""
+    list_display = ['term', 'status_badge', 'category', 'submitted_by', 'submitted_at', 'reviewed_by']
+    list_filter = ['status', 'category', 'submitted_at']
+    search_fields = ['term', 'definition', 'submitted_by__username']
+    readonly_fields = ['submitted_by', 'submitted_at', 'reviewed_by', 'reviewed_at', 'approved_term']
+    actions = ['approve_submissions', 'reject_submissions']
+    ordering = ['-submitted_at']
+
+    fieldsets = (
+        ('Submitted Term', {
+            'fields': ('term', 'definition', 'category')
+        }),
+        ('Additional Information', {
+            'fields': ('related_links', 'keywords'),
+            'description': 'Optional: Related links as JSON and comma-separated keywords'
+        }),
+        ('Submission Details', {
+            'fields': ('submitted_by', 'submitted_at')
+        }),
+        ('Review Status', {
+            'fields': ('status', 'reviewed_by', 'reviewed_at', 'rejection_reason', 'approved_term')
+        }),
+    )
+
+    def status_badge(self, obj):
+        """Display status with color-coded badge"""
+        colors = {
+            'pending': '#ffc107',  # Yellow
+            'approved': '#28a745',  # Green
+            'rejected': '#dc3545',  # Red
+        }
+        return format_html(
+            '<span style="background-color: {}; color: white; padding: 3px 10px; border-radius: 3px; font-weight: bold;">{}</span>',
+            colors.get(obj.status, '#6c757d'),
+            obj.get_status_display()
+        )
+    status_badge.short_description = 'Status'
+
+    def approve_submissions(self, request, queryset):
+        """Bulk approve selected submissions"""
+        approved_count = 0
+        for submission in queryset.filter(status='pending'):
+            try:
+                submission.approve(reviewer=request.user)
+                approved_count += 1
+            except Exception as e:
+                self.message_user(request, f'Error approving "{submission.term}": {str(e)}', level='error')
+
+        if approved_count > 0:
+            self.message_user(request, f'Successfully approved {approved_count} submission(s)', level='success')
+    approve_submissions.short_description = 'Approve selected submissions'
+
+    def reject_submissions(self, request, queryset):
+        """Bulk reject selected submissions"""
+        rejected_count = 0
+        for submission in queryset.filter(status='pending'):
+            try:
+                submission.reject(reviewer=request.user, reason='Rejected by admin action')
+                rejected_count += 1
+            except Exception as e:
+                self.message_user(request, f'Error rejecting "{submission.term}": {str(e)}', level='error')
+
+        if rejected_count > 0:
+            self.message_user(request, f'Successfully rejected {rejected_count} submission(s)', level='success')
+    reject_submissions.short_description = 'Reject selected submissions'
+
+    def get_queryset(self, request):
+        """Optimize queryset with related fields"""
+        qs = super().get_queryset(request)
+        return qs.select_related('submitted_by', 'reviewed_by', 'approved_term')

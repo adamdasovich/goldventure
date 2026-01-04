@@ -29,7 +29,7 @@ from .models import (
     StoreShippingRate, StoreProductShare, StoreRecentPurchase,
     StoreProductInquiry, UserStoreBadge,
     # Glossary
-    GlossaryTerm,
+    GlossaryTerm, GlossaryTermSubmission,
 )
 from .serializers import (
     CompanySerializer, CompanyDetailSerializer,
@@ -71,7 +71,8 @@ from .serializers import (
     StoreProductImageAdminSerializer, StoreProductVariantAdminSerializer,
     StoreDigitalAssetAdminSerializer, StoreOrderAdminSerializer,
     # Glossary serializers
-    GlossaryTermSerializer,
+    GlossaryTermSerializer, GlossaryTermSubmissionSerializer,
+    GlossaryTermSubmissionCreateSerializer,
 )
 from claude_integration.client import ClaudeClient
 from claude_integration.client_optimized import OptimizedClaudeClient
@@ -6739,3 +6740,96 @@ class GlossaryTermViewSet(viewsets.ReadOnlyModelViewSet):
             {'error': 'Term not found', 'term': term},
             status=status.HTTP_404_NOT_FOUND
         )
+
+
+class GlossaryTermSubmissionViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for user-submitted glossary terms
+    - POST: Authenticated users can submit new terms
+    - GET: Superusers can view pending submissions
+    - PUT/PATCH: Superusers can approve or reject submissions
+    """
+    queryset = GlossaryTermSubmission.objects.all()
+    filterset_fields = ['status', 'submitted_by', 'category']
+    search_fields = ['term', 'definition']
+    ordering_fields = ['submitted_at', 'term', 'status']
+    ordering = ['-submitted_at']
+
+    def get_serializer_class(self):
+        """Use different serializers for create vs list/retrieve"""
+        if self.action == 'create':
+            return GlossaryTermSubmissionCreateSerializer
+        return GlossaryTermSubmissionSerializer
+
+    def get_permissions(self):
+        """
+        - Create: Authenticated users
+        - List/Retrieve/Update: Superusers only
+        """
+        if self.action == 'create':
+            return [permissions.IsAuthenticated()]
+        return [permissions.IsAdminUser()]
+
+    def get_queryset(self):
+        """Filter queryset based on user permissions"""
+        if self.request.user.is_superuser:
+            return self.queryset
+        # Regular users can only see their own submissions
+        return self.queryset.filter(submitted_by=self.request.user)
+
+    @action(detail=False, methods=['get'], permission_classes=[permissions.IsAdminUser])
+    def pending(self, request):
+        """Get all pending submissions (superuser only)"""
+        pending_submissions = self.queryset.filter(status='pending')
+        serializer = self.get_serializer(pending_submissions, many=True)
+        return Response(serializer.data)
+
+    @action(detail=True, methods=['post'], permission_classes=[permissions.IsAdminUser])
+    def approve(self, request, pk=None):
+        """Approve a submission and create GlossaryTerm (superuser only)"""
+        submission = self.get_object()
+
+        if submission.status != 'pending':
+            return Response(
+                {'error': f'Cannot approve submission with status: {submission.status}'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            approved_term = submission.approve(reviewer=request.user)
+            return Response({
+                'message': 'Submission approved successfully',
+                'approved_term_id': approved_term.id,
+                'term': approved_term.term
+            }, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    @action(detail=True, methods=['post'], permission_classes=[permissions.IsAdminUser])
+    def reject(self, request, pk=None):
+        """Reject a submission (superuser only)"""
+        submission = self.get_object()
+
+        if submission.status != 'pending':
+            return Response(
+                {'error': f'Cannot reject submission with status: {submission.status}'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        rejection_reason = request.data.get('reason', 'No reason provided')
+
+        try:
+            submission.reject(reviewer=request.user, reason=rejection_reason)
+            return Response({
+                'message': 'Submission rejected successfully',
+                'term': submission.term,
+                'reason': rejection_reason
+            }, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
