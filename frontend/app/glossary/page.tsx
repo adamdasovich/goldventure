@@ -351,7 +351,7 @@ export default function GlossaryPage() {
 
   // Check authentication status
   useEffect(() => {
-    const token = localStorage.getItem('token');
+    const token = localStorage.getItem('accessToken');
     setIsAuthenticated(!!token);
   }, []);
 

@@ -77,7 +77,7 @@ export default function GlossarySubmissionForm({ isOpen, onClose, onSubmitSucces
         }
       }
 
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem('accessToken');
       if (!token) {
         setSubmitError('You must be logged in to submit terms');
         setIsSubmitting(false);

@@ -46,7 +46,7 @@ export default function PendingGlossaryTermsPage() {
 
   const fetchPendingSubmissions = async () => {
     try {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem('accessToken');
       if (!token) {
         setError('Unauthorized: Please log in');
         setIsLoading(false);
@@ -83,7 +83,7 @@ export default function PendingGlossaryTermsPage() {
 
     setActionLoading(submissionId);
     try {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem('accessToken');
       const response = await fetch(
         `${process.env.NEXT_PUBLIC_API_URL}/glossary/submissions/${submissionId}/approve/`,
         {
@@ -117,7 +117,7 @@ export default function PendingGlossaryTermsPage() {
 
     setActionLoading(submissionId);
     try {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem('accessToken');
       const response = await fetch(
         `${process.env.NEXT_PUBLIC_API_URL}/glossary/submissions/${submissionId}/reject/`,
         {
