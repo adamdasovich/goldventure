@@ -349,7 +349,8 @@ export default function GlossaryPage() {
   useEffect(() => {
     const fetchGlossaryTerms = async () => {
       try {
-        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/glossary/`);
+        // Request all terms with a large page size to avoid pagination
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/glossary/?page_size=200`);
         if (response.ok) {
           const data = await response.json();
           // API returns paginated results with 'results' array
