@@ -51,9 +51,9 @@ router.register(r'admin/store/variants', views.StoreAdminVariantViewSet, basenam
 router.register(r'admin/store/digital-assets', views.StoreAdminDigitalAssetViewSet, basename='admin-store-digital-asset')
 router.register(r'admin/store/orders', views.StoreAdminOrderViewSet, basename='admin-store-order')
 
-# Glossary ViewSet
-router.register(r'glossary', views.GlossaryTermViewSet, basename='glossary')
+# Glossary ViewSet (order matters - more specific routes first)
 router.register(r'glossary/submissions', views.GlossaryTermSubmissionViewSet, basename='glossary-submission')
+router.register(r'glossary', views.GlossaryTermViewSet, basename='glossary')
 
 urlpatterns = [
     # Authentication endpoints
