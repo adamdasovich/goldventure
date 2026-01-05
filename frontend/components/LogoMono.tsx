@@ -23,8 +23,8 @@ export default function LogoMono({ className = "" }: { className?: string }) {
       </g>
       <g id="Text-Mono">
         <rect className="cls-gold" x="160" y="30" width="60" height="3"/>
-        <text className="cls-light cls-font-bold" transform="translate(160 50)" fontSize="20">JUNIOR MINING</text>
-        <text className="cls-gold cls-font-reg" transform="translate(160 80)" fontSize="36">INTELLIGENCE</text>
+        <text className="cls-light cls-font-bold" transform="translate(160 70)" fontSize="36">JUNIOR MINING</text>
+        <text className="cls-gold cls-font-reg" transform="translate(160 90)" fontSize="20">INTELLIGENCE</text>
       </g>
     </svg>
   );
