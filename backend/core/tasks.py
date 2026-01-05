@@ -411,3 +411,122 @@ def fetch_stock_prices_task(self):
             'success': False,
             'error': str(e)
         }
+
+
+@shared_task(bind=True)
+def auto_discover_and_process_documents_task(self, company_ids=None, document_types=None, limit=None):
+    """
+    Celery task to automatically discover and process documents for companies.
+    Can be scheduled to run periodically (e.g., daily, weekly).
+    
+    Args:
+        company_ids (list, optional): List of company IDs to process. If None, processes all companies.
+        document_types (list, optional): List of document types to filter for. If None, processes all types.
+        limit (int, optional): Limit number of companies to process.
+    
+    Returns:
+        dict: Status information about the discovery and processing operation
+    """
+    try:
+        from core.models import Company
+        from mcp_servers.website_crawler import crawl_company_website
+        
+        # Get companies to process
+        if company_ids:
+            companies = Company.objects.filter(id__in=company_ids, website__isnull=False).exclude(website='')
+        else:
+            companies = Company.objects.filter(website__isnull=False).exclude(website='')
+        
+        if limit:
+            companies = companies[:limit]
+        
+        companies = list(companies)
+        
+        if not companies:
+            return {
+                'status': 'warning',
+                'message': 'No companies with websites found to process',
+                'total_discovered': 0,
+                'jobs_created': 0
+            }
+        
+        # Track statistics
+        total_discovered = 0
+        total_jobs_created = 0
+        companies_processed = 0
+        
+        print(f"Auto-discovery task: Processing {len(companies)} companies")
+        
+        for company in companies:
+            try:
+                print(f"Crawling {company.name}...")
+                
+                # Discover documents
+                documents = asyncio.run(crawl_company_website(company.website, max_depth=2))
+                
+                if not documents:
+                    print(f"  No documents discovered for {company.name}")
+                    continue
+                
+                # Filter by document type if specified
+                if document_types:
+                    documents = [d for d in documents if d['document_type'] in document_types]
+                
+                print(f"  Discovered {len(documents)} documents")
+                total_discovered += len(documents)
+                
+                # Create processing jobs (skip existing)
+                jobs_created = 0
+                for doc in documents:
+                    # Check if document already exists or job pending
+                    existing = Document.objects.filter(
+                        company=company,
+                        file_url=doc['url']
+                    ).exists()
+                    
+                    existing_job = DocumentProcessingJob.objects.filter(
+                        url=doc['url'],
+                        status__in=['completed', 'processing']
+                    ).exists()
+                    
+                    if existing or existing_job:
+                        continue
+                    
+                    # Create processing job
+                    DocumentProcessingJob.objects.create(
+                        url=doc['url'],
+                        document_type=doc['document_type'],
+                        company_name=company.name,
+                        status='pending'
+                    )
+                    jobs_created += 1
+                
+                total_jobs_created += jobs_created
+                companies_processed += 1
+                
+                print(f"  Created {jobs_created} new processing jobs")
+                
+            except Exception as e:
+                print(f"  Error processing {company.name}: {str(e)}")
+                continue
+        
+        # Auto-process the queue
+        if total_jobs_created > 0:
+            print(f"\nAuto-processing {total_jobs_created} new jobs...")
+            process_document_queue()
+        
+        return {
+            'status': 'success',
+            'companies_processed': companies_processed,
+            'total_discovered': total_discovered,
+            'jobs_created': total_jobs_created,
+            'message': f'Auto-discovery completed: {companies_processed} companies, {total_discovered} documents discovered, {total_jobs_created} jobs created'
+        }
+        
+    except Exception as e:
+        print(f"Error in auto-discovery task: {str(e)}")
+        return {
+            'status': 'error',
+            'error': str(e),
+            'message': f'Auto-discovery task failed: {str(e)}'
+        }

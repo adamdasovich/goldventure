@@ -196,27 +196,181 @@ Company Name: 1911 Gold Corporation
 2. Refresh the page to see if status updated
 3. If truly stuck, you can manually set status back to 'pending' and retry
 
-## Next Steps: Web Crawling with Crawl4AI
+## Automatic Document Discovery and Processing
 
-Coming soon! Automatic discovery and processing of documents from company websites.
+The system now supports automatic document discovery and processing! You can run this via command line or schedule it as a periodic task.
 
-**Planned Features:**
-- Auto-discover all NI 43-101 reports on a company website
-- Schedule regular crawls for new documents
-- Filter by document type and date
-- Batch process discovered documents
+### Option 1: Management Command (One-Time Run)
 
-**Example:**
+Run the auto-discovery command to crawl company websites, discover documents, and process them automatically:
+
+```bash
+cd backend
+
+# Process all companies with websites
+python manage.py auto_process_documents --all
+
+# Process specific company by ID
+python manage.py auto_process_documents --company-id 123
+
+# Process specific company by name
+python manage.py auto_process_documents --company-name "1911 Gold"
+
+# Only discover specific document types
+python manage.py auto_process_documents --all --types ni43101,news_release
+
+# Limit number of companies
+python manage.py auto_process_documents --all --limit 10
+
+# Dry run (discover but don't create jobs)
+python manage.py auto_process_documents --all --dry-run
+
+# Skip documents already in system
+python manage.py auto_process_documents --all --skip-existing
+
+# Auto-process after discovery
+python manage.py auto_process_documents --all --auto-process
+```
+
+**What This Does:**
+1. Crawls company website(s) using Crawl4AI
+2. Discovers all documents (NI 43-101, news releases, presentations, etc.)
+3. Creates DocumentProcessingJob records
+4. Optionally auto-processes the queue
+5. Shows detailed progress and summary
+
+**Example Output:**
+```
+================================================================================
+Processing: 1911 Gold Corporation
+================================================================================
+  ✓ Discovered 12 documents
+
+  NI43101: 2 documents
+    - 2024 NI 43-101 Technical Report - True North Gold Project...
+    - 2023 Updated Resource Estimate - Apex Mine...
+
+  NEWS_RELEASE: 5 documents
+    - Q3 2024 Drilling Results - True North Project...
+    - Resource Estimate Update - November 2024...
+    ... and 3 more
+
+  PRESENTATION: 3 documents
+    - November 2024 Corporate Presentation...
+    ... and 2 more
+
+  ✓ Created 12 processing jobs
+
+================================================================================
+SUMMARY
+================================================================================
+Companies processed: 1
+Documents discovered: 12
+Jobs created: 12
+```
+
+### Option 2: Scheduled Periodic Task (Celery Beat)
+
+Set up automatic daily/weekly document discovery using Celery Beat.
+
+**1. Configure Celery Beat Schedule**
+
+Edit `backend/goldventure/settings.py` and add:
+
 ```python
-# Future capability
-crawler.discover_documents(
-    url="https://www.1911gold.com",
-    document_types=["ni43101", "presentation"],
-    max_depth=3
-)
-# → Finds 15 documents
-# → Adds to processing queue
-# → Processes automatically
+from celery.schedules import crontab
+
+CELERY_BEAT_SCHEDULE = {
+    'auto-discover-documents-weekly': {
+        'task': 'core.tasks.auto_discover_and_process_documents_task',
+        'schedule': crontab(day_of_week=1, hour=2, minute=0),  # Every Monday at 2 AM
+        'kwargs': {
+            'limit': 20,  # Process 20 companies per run
+            'document_types': ['ni43101', 'news_release', 'presentation']  # Optional filter
+        }
+    },
+}
+```
+
+**Schedule Options:**
+```python
+# Daily at 3 AM
+'schedule': crontab(hour=3, minute=0)
+
+# Every Monday at 2 AM
+'schedule': crontab(day_of_week=1, hour=2, minute=0)
+
+# Twice weekly (Monday and Thursday at 2 AM)
+'schedule': crontab(day_of_week='1,4', hour=2, minute=0)
+
+# Every day at midnight
+'schedule': crontab(hour=0, minute=0)
+```
+
+**2. Start Celery Beat**
+
+```bash
+cd backend
+
+# Start Celery worker (in one terminal)
+celery -A goldventure worker --loglevel=info
+
+# Start Celery Beat scheduler (in another terminal)
+celery -A goldventure beat --loglevel=info
+```
+
+**3. Monitor Automatic Processing**
+
+Check the Celery logs to see when automatic discovery runs:
+```
+[2024-01-15 02:00:00] Auto-discovery task: Processing 20 companies
+[2024-01-15 02:05:23] Crawling 1911 Gold Corporation...
+[2024-01-15 02:05:45]   Discovered 12 documents
+[2024-01-15 02:05:46]   Created 8 new processing jobs
+...
+[2024-01-15 02:25:10] Auto-discovery completed: 20 companies, 156 documents discovered, 89 jobs created
+```
+
+### Option 3: Cron Job (Server Deployment)
+
+For production deployment, you can use cron to run the management command:
+
+```bash
+# Edit crontab
+crontab -e
+
+# Add this line to run every Monday at 2 AM
+0 2 * * 1 cd /var/www/goldventure/backend && source venv/bin/activate && python manage.py auto_process_documents --all --limit 20 --skip-existing --auto-process
+
+# Or run daily at 3 AM
+0 3 * * * cd /var/www/goldventure/backend && source venv/bin/activate && python manage.py auto_process_documents --all --limit 10 --skip-existing --auto-process
+```
+
+### Tips for Automatic Processing
+
+**Best Practices:**
+- Use `--skip-existing` to avoid reprocessing documents
+- Use `--limit` to prevent overwhelming the system
+- Filter `--types` to prioritize certain document types
+- Schedule during off-peak hours (e.g., 2-4 AM)
+- Monitor logs for errors
+
+**Resource Considerations:**
+- Each company crawl takes 30-60 seconds
+- Document processing takes 5-90 minutes per document
+- Limit concurrent processing to avoid overload
+- Recommended: 10-20 companies per scheduled run
+
+**Example Weekly Schedule:**
+```bash
+# Monday: Process NI 43-101 reports only
+python manage.py auto_process_documents --all --types ni43101 --limit 10 --auto-process
+
+# Wednesday: Process news releases and presentations
+python manage.py auto_process_documents --all --types news_release,presentation --limit 20 --auto-process
+
+# Friday: Process financial statements and fact sheets
+python manage.py auto_process_documents --all --types financial_statement,fact_sheet --limit 20 --auto-process
 ```
 
 ## API Access (Advanced)
