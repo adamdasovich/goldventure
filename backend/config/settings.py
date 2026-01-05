@@ -189,6 +189,11 @@ EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', '')
 EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', '')
 DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'Junior Mining Intelligence <noreply@juniorminingintelligence.com>')
 
+# Notification Recipients
+ADMIN_EMAIL = os.getenv('ADMIN_EMAIL', 'adamdasovich@gmail.com')
+NI43101_NOTIFICATION_EMAIL = os.getenv('NI43101_NOTIFICATION_EMAIL', 'adamdasovich@gmail.com')
+FINANCING_NOTIFICATION_EMAIL = os.getenv('FINANCING_NOTIFICATION_EMAIL', 'adamdasovich@gmail.com')
+
 # ============================================================================
 # DJANGO CHANNELS & WEBSOCKET CONFIGURATION
 # ============================================================================

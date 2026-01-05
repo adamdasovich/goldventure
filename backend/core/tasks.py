@@ -193,6 +193,16 @@ def process_single_job(job: DocumentProcessingJob):
             print(f"  - Chunks created: {job.chunks_created}")
             print(f"  - Processing time: {job.duration_display}")
 
+            # Send email notification for NI 43-101 reports
+            if job.document_type == 'ni43101' and job.document_id:
+                try:
+                    from core.notifications import send_ni43101_discovery_notification
+                    document = Document.objects.get(id=job.document_id)
+                    if document.company:
+                        send_ni43101_discovery_notification(document, document.company)
+                except Exception as e:
+                    print(f"  ⚠ Failed to send NI 43-101 notification: {str(e)}")
+
         else:
             # Processing failed
             error_msg = result.get('error', 'Unknown error occurred')
@@ -335,7 +345,7 @@ def scrape_company_news_task(self, company_id):
                     from core.models import NewsReleaseFlag
 
                     # Only create flag if one doesn't already exist
-                    NewsReleaseFlag.objects.get_or_create(
+                    flag, flag_created = NewsReleaseFlag.objects.get_or_create(
                         news_release=obj,
                         defaults={
                             'detected_keywords': detected_keywords,
@@ -345,6 +355,14 @@ def scrape_company_news_task(self, company_id):
 
                     print(f"  🚩 Flagged financing-related news: {title[:60]}...")
                     print(f"     Keywords: {', '.join(detected_keywords)}")
+
+                    # Send email notification for new flags only
+                    if flag_created:
+                        try:
+                            from core.notifications import send_financing_flag_notification
+                            send_financing_flag_notification(flag, company, obj)
+                        except Exception as e:
+                            print(f"     ⚠ Failed to send financing flag notification: {str(e)}")
 
             else:
                 updated_count += 1
