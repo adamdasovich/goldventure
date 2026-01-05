@@ -1,41 +1,47 @@
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'Junior Gold Mining Companies - Explore TSXV & TSX Mining Stocks',
-  description: 'Browse our comprehensive database of junior gold mining companies listed on TSXV and TSX. View resource estimates, project data, and investment opportunities in gold exploration.',
+  title: 'Junior Mining Companies - Gold, Silver & Critical Minerals | TSXV & TSX Stocks',
+  description: 'Browse 500+ junior mining companies exploring gold, silver, lithium, copper, rare earths & critical minerals on TSXV and TSX. View resource estimates, project data, and investment opportunities.',
   keywords: [
-    'junior gold mining companies',
+    'junior mining companies',
+    'gold mining companies',
+    'silver mining stocks',
+    'lithium exploration companies',
+    'critical minerals companies',
+    'rare earth mining',
+    'copper mining stocks',
     'TSXV mining stocks',
-    'TSX gold companies',
-    'gold exploration companies',
+    'TSX mining companies',
+    'battery metals companies',
     'mining stock database',
-    'gold mining investments',
+    'mineral exploration companies',
     'Canadian mining companies',
-    'gold resource estimates',
+    'mining resource estimates',
     'mining company analysis'
   ],
   openGraph: {
-    title: 'Junior Gold Mining Companies | Junior Gold Mining Intelligence',
-    description: 'Comprehensive database of junior gold mining companies with detailed resource estimates and project data.',
-    url: 'https://juniorgoldminingintelligence.com/companies',
+    title: 'Junior Mining Companies: Gold, Silver & Critical Minerals | Junior Mining Intelligence',
+    description: 'Comprehensive database of 500+ junior mining companies exploring gold, silver, lithium, copper, rare earths & critical minerals with detailed resource estimates.',
+    url: 'https://juniorminingintelligence.com/companies',
     type: 'website',
     images: [
       {
         url: '/og-image.png',
         width: 1200,
         height: 630,
-        alt: 'Junior Gold Mining Companies Database',
+        alt: 'Junior Mining Companies Database',
       },
     ],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Junior Gold Mining Companies',
-    description: 'Browse junior gold mining companies with AI-powered analysis.',
+    title: 'Junior Mining Companies: Gold, Silver & Critical Minerals',
+    description: 'Browse 500+ junior mining companies with AI-powered analysis. Track gold, silver, lithium, copper, rare earths & critical minerals.',
     images: ['/og-image.png'],
   },
   alternates: {
-    canonical: 'https://juniorgoldminingintelligence.com/companies',
+    canonical: 'https://juniorminingintelligence.com/companies',
   },
 };
 

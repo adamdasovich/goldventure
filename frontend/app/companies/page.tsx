@@ -118,7 +118,7 @@ export default function CompaniesPage() {
             Explore Mining Companies
           </h1>
           <p className="text-xl text-slate-300 max-w-3xl mx-auto mb-12 animate-slide-in-up">
-            Comprehensive database of junior gold mining companies with detailed resource estimates and project data
+            Comprehensive database of junior mining companies exploring gold, silver, lithium, copper, rare earths & critical minerals with detailed resource estimates and project data
           </p>
         </div>
       </section>
