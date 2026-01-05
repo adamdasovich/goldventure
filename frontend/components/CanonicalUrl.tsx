@@ -13,7 +13,7 @@ export default function CanonicalUrl() {
   useEffect(() => {
     // Normalize the pathname: lowercase and remove trailing slash
     const normalizedPath = pathname.toLowerCase().replace(/\/$/, '') || '/';
-    const canonicalUrl = `https://juniorgoldminingintelligence.com${normalizedPath}`;
+    const canonicalUrl = `https://juniorminingintelligence.com${normalizedPath}`;
 
     // Check if canonical link already exists
     let canonicalLink = document.querySelector('link[rel="canonical"]');

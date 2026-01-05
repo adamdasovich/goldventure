@@ -96,17 +96,17 @@ export default function Home() {
         <div className="relative max-w-7xl mx-auto">
           <div className="text-center mb-12">
             <h1 className="text-5xl md:text-6xl font-bold mb-6 text-gradient-gold animate-fade-in leading-tight pb-2">
-              Junior Gold Mining Stocks & Exploration Data Platform
+              Junior Mining Intelligence: Gold, Silver & Critical Minerals
             </h1>
             <p className="text-xl text-slate-300 max-w-3xl mx-auto animate-slide-in-up mb-8">
-              AI-powered platform for junior gold mining investors and companies.
-              Track 500+ TSXV mining stocks with real-time exploration data, NI 43-101 reports, resource estimates, and project analytics.
+              AI-powered platform for investors and companies exploring gold, silver, lithium, copper, rare earths & critical minerals.
+              Track 500+ TSXV/TSX mining stocks with real-time exploration data, NI 43-101 reports, resource estimates, and project analytics.
             </p>
             {/* Socrates Miner Image */}
             <div className="flex justify-center animate-fade-in">
               <img
                 src="/images/socrates-miner.png"
-                alt="Junior Gold Mining Intelligence Platform - AI-Powered Mining Stock Analysis"
+                alt="Junior Mining Intelligence Platform - AI-Powered Mining Stock Analysis for Gold, Silver & Critical Minerals"
                 className="w-48 md:w-56 h-auto opacity-90 hover:opacity-100 transition-opacity duration-300"
               />
             </div>
@@ -139,9 +139,9 @@ export default function Home() {
       <section className="py-16 px-4 sm:px-6 lg:px-8 bg-gradient-slate">
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-12">
-            <h2 className="text-4xl font-bold text-gold-400 mb-4">Ask Anything About Junior Gold Mining Companies or Exploration Projects</h2>
+            <h2 className="text-4xl font-bold text-gold-400 mb-4">Ask Anything About Mining Companies or Exploration Projects</h2>
             <p className="text-slate-300 text-lg max-w-2xl mx-auto">
-              Natural language access to junior gold mining companies, exploration projects, NI 43-101 resources, prospector listings, and economic studies.
+              Natural language access to junior mining companies exploring gold, silver, lithium, copper, rare earths & critical minerals. Query exploration projects, NI 43-101 resources, prospector listings, and economic studies.
               Claude AI uses MCP servers to query mining data in real-time.
             </p>
           </div>
@@ -154,9 +154,9 @@ export default function Home() {
       <section ref={newsSectionRef} id="news-section" className="py-16 px-4 sm:px-6 lg:px-8">
         <div className="max-w-4xl mx-auto">
           <div className="text-center mb-8">
-            <h2 className="text-4xl font-bold text-gold-400 mb-4">Latest Junior Gold Mining News & Industry Updates</h2>
+            <h2 className="text-4xl font-bold text-gold-400 mb-4">Latest Mining News & Industry Updates</h2>
             <p className="text-slate-300 text-lg max-w-2xl mx-auto">
-              Stay informed with the latest news and developments from the junior gold mining industry, exploration discoveries, and TSXV market updates.
+              Stay informed with the latest news from junior mining companies exploring gold, silver, lithium, copper, rare earths & critical minerals. Track exploration discoveries, TSXV market updates, and industry developments.
             </p>
           </div>
 
@@ -170,7 +170,7 @@ export default function Home() {
       <section className="py-16 px-4 sm:px-6 lg:px-8 bg-gradient-slate">
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-12">
-            <h2 className="text-4xl font-bold text-gold-400 mb-4">Junior Gold Mining Intelligence Platform Features</h2>
+            <h2 className="text-4xl font-bold text-gold-400 mb-4">Junior Mining Intelligence Platform Features</h2>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -189,7 +189,7 @@ export default function Home() {
               },
               {
                 title: 'Metals Prices',
-                description: 'Real-time gold, silver, and metal pricing',
+                description: 'Real-time pricing for precious & battery metals',
                 badge: 'Markets',
                 svgPath: 'M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z'
               },

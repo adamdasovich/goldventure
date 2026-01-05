@@ -1,29 +1,33 @@
 import { Metadata } from 'next';
 
 export const homeMetadata: Metadata = {
-  title: 'Junior Gold Mining Data, Stocks & Industry Intelligence 2026',
-  description: 'Track 500+ junior gold mining stocks with real-time data on exploration projects, NI 43-101 reports, TSXV listings, resource estimates, and financings. AI-powered mining intelligence platform.',
+  title: 'Junior Mining Data: Gold, Silver & Critical Minerals Intelligence 2026',
+  description: 'Track 500+ junior mining companies exploring gold, silver, lithium, copper, rare earths & critical minerals. Real-time data on exploration projects, NI 43-101 reports, TSXV listings, resource estimates. AI-powered mining intelligence.',
   keywords: [
-    'junior gold mining',
-    'junior gold mining stocks',
-    'gold exploration companies',
+    'junior mining',
+    'junior mining stocks',
+    'gold mining companies',
+    'silver mining stocks',
+    'lithium exploration',
+    'critical minerals',
+    'rare earth elements',
+    'copper mining stocks',
     'TSXV mining stocks',
     'TSX mining companies',
     'NI 43-101 reports',
-    'gold mining data',
+    'battery metals',
     'junior mining intelligence',
-    'gold exploration projects',
     'mining resource estimates',
     'precious metals stocks',
     'mining investment research',
-    'gold mining stocks Canada',
+    'exploration companies Canada',
     'junior miners TSXV',
-    'gold exploration data'
+    'critical minerals exploration'
   ],
   openGraph: {
-    title: 'Junior Gold Mining Data, Stocks & Industry Intelligence 2026',
-    description: 'Track 500+ junior gold mining stocks with real-time exploration data, NI 43-101 reports, and TSXV listings.',
+    title: 'Junior Mining Data: Gold, Silver & Critical Minerals Intelligence 2026',
+    description: 'Track 500+ junior mining companies exploring gold, silver, lithium, copper, rare earths & critical minerals with real-time exploration data and NI 43-101 reports.',
     type: 'website',
-    url: 'https://juniorgoldminingintelligence.com',
+    url: 'https://juniorminingintelligence.com',
   },
 };

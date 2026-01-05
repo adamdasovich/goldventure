@@ -21,15 +21,15 @@ export default function Logo({ className = "" }: { className?: string }) {
 
       {/* Company Name */}
       <text x="160" y="65" fontFamily="Arial, sans-serif" fontSize="36" fontWeight="bold" fill="#212f3c">
-        GOLD
+        MINING
       </text>
-      <text x="280" y="65" fontFamily="Arial, sans-serif" fontSize="36" fontWeight="300" fill="#555">
-        VENTURE
+      <text x="300" y="65" fontFamily="Arial, sans-serif" fontSize="36" fontWeight="300" fill="#555">
+        INTEL
       </text>
 
       {/* Tagline */}
       <text x="160" y="95" fontFamily="Arial, sans-serif" fontSize="14" fontWeight="300" fill="#888" letterSpacing="2">
-        JUNIOR GOLD MINING INTELLIGENCE
+        JUNIOR MINING INTELLIGENCE
       </text>
 
       {/* Decorative underline */}

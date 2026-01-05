@@ -16,32 +16,37 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL('https://juniorgoldminingintelligence.com'),
+  metadataBase: new URL('https://juniorminingintelligence.com'),
   title: {
-    default: 'Junior Gold Mining Stocks, Exploration Data & TSXV Intelligence 2026',
-    template: '%s | Junior Gold Mining Intelligence'
+    default: 'Junior Mining Stocks: Gold, Silver & Critical Minerals Intelligence 2026',
+    template: '%s | Junior Mining Intelligence'
   },
-  description: 'Track 500+ junior gold mining stocks with real-time exploration data, NI 43-101 technical reports, TSXV listings, mineral resource estimates, and project financings. AI-powered junior mining intelligence platform for investors.',
+  description: 'Track 500+ junior mining companies exploring gold, silver, lithium, copper, rare earths & critical minerals. Real-time exploration data, NI 43-101 reports, TSXV listings, resource estimates. AI-powered mining intelligence platform.',
   keywords: [
-    'junior gold mining',
-    'gold exploration',
+    'junior mining',
+    'gold mining stocks',
+    'silver mining companies',
+    'lithium exploration',
+    'critical minerals',
+    'rare earth elements',
+    'copper mining',
+    'nickel mining',
     'mining stocks',
-    'gold investments',
     'mineral exploration',
-    'gold mining companies',
     'TSXV mining',
     'TSX mining',
-    'gold resource estimates',
-    'mining financings',
+    'battery metals',
     'precious metals',
     'mining intelligence',
     'AI mining analysis',
-    'gold mining news',
-    'exploration companies'
+    'exploration companies',
+    'mineral resource estimates',
+    'mining financings',
+    'NI 43-101 reports'
   ],
-  authors: [{ name: 'Junior Gold Mining Intelligence' }],
-  creator: 'Junior Gold Mining Intelligence',
-  publisher: 'Junior Gold Mining Intelligence',
+  authors: [{ name: 'Junior Mining Intelligence' }],
+  creator: 'Junior Mining Intelligence',
+  publisher: 'Junior Mining Intelligence',
   formatDetection: {
     email: false,
     address: false,
@@ -50,25 +55,25 @@ export const metadata: Metadata = {
   openGraph: {
     type: 'website',
     locale: 'en_US',
-    url: 'https://juniorgoldminingintelligence.com',
-    siteName: 'Junior Gold Mining Intelligence',
-    title: 'Junior Gold Mining Stocks, Exploration Data & TSXV Intelligence 2026',
-    description: 'Track 500+ junior gold mining stocks with real-time exploration data, NI 43-101 technical reports, TSXV listings, and mineral resource estimates.',
+    url: 'https://juniorminingintelligence.com',
+    siteName: 'Junior Mining Intelligence',
+    title: 'Junior Mining Stocks: Gold, Silver & Critical Minerals Intelligence 2026',
+    description: 'Track 500+ junior mining companies exploring gold, silver, lithium, copper, rare earths & critical minerals. Real-time exploration data, NI 43-101 reports, TSXV listings.',
     images: [
       {
         url: '/og-image.png',
         width: 1200,
         height: 630,
-        alt: 'Junior Gold Mining Intelligence Platform',
+        alt: 'Junior Mining Intelligence Platform',
       },
     ],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Junior Gold Mining Stocks, Exploration Data & TSXV Intelligence 2026',
-    description: 'Track 500+ junior gold mining stocks with real-time exploration data, NI 43-101 technical reports, and TSXV listings.',
+    title: 'Junior Mining Stocks: Gold, Silver & Critical Minerals Intelligence 2026',
+    description: 'Track 500+ junior mining companies exploring gold, silver, lithium, copper, rare earths & critical minerals with AI-powered insights.',
     images: ['/og-image.png'],
-    creator: '@jrgoldmining',
+    creator: '@jrminingintel',
   },
   robots: {
     index: true,
@@ -85,7 +90,7 @@ export const metadata: Metadata = {
     google: 'Dl6Cet84N81hYfuQbcFr-CNUqfyv71gDQje7aOPqkqQ',
   },
   alternates: {
-    canonical: 'https://juniorgoldminingintelligence.com',
+    canonical: 'https://juniorminingintelligence.com',
   },
 };
 
@@ -93,10 +98,10 @@ export const metadata: Metadata = {
 const organizationJsonLd = {
   '@context': 'https://schema.org',
   '@type': 'Organization',
-  name: 'Junior Gold Mining Intelligence',
-  url: 'https://juniorgoldminingintelligence.com',
-  logo: 'https://juniorgoldminingintelligence.com/logo.png',
-  description: 'AI-powered platform for junior gold mining company analysis, investment research, and precious metals market intelligence.',
+  name: 'Junior Mining Intelligence',
+  url: 'https://juniorminingintelligence.com',
+  logo: 'https://juniorminingintelligence.com/logo.png',
+  description: 'AI-powered platform for junior mining company analysis covering gold, silver, lithium, copper, rare earths, and critical minerals. Investment research and market intelligence for precious metals and battery metals.',
   about: [
     {
       '@type': 'Thing',
@@ -110,11 +115,25 @@ const organizationJsonLd = {
     },
     {
       '@type': 'Thing',
+      '@id': 'https://www.wikidata.org/wiki/Q568',
+      name: 'Lithium'
+    },
+    {
+      '@type': 'Thing',
+      '@id': 'https://www.wikidata.org/wiki/Q753',
+      name: 'Copper'
+    },
+    {
+      '@type': 'Thing',
       name: 'TSXV Mining Stocks'
     },
     {
       '@type': 'Thing',
-      name: 'Gold Exploration Companies'
+      name: 'Critical Minerals Exploration'
+    },
+    {
+      '@type': 'Thing',
+      name: 'Rare Earth Elements'
     }
   ],
   mentions: {
@@ -124,21 +143,24 @@ const organizationJsonLd = {
     description: 'Canadian National Instrument 43-101 standards for mineral resource reporting'
   },
   sameAs: [
-    'https://twitter.com/jrgoldmining',
-    'https://www.linkedin.com/company/junior-gold-mining-intelligence',
-    'https://www.facebook.com/juniorgoldmining'
+    'https://twitter.com/jrminingintel',
+    'https://www.linkedin.com/company/junior-mining-intelligence',
+    'https://www.facebook.com/juniorminingintel'
   ],
   contactPoint: {
     '@type': 'ContactPoint',
     contactType: 'customer service',
     availableLanguage: ['English'],
-    email: 'info@juniorgoldminingintelligence.com'
+    email: 'info@juniorminingintelligence.com'
   },
   foundingDate: '2024',
   slogan: 'AI-Powered Mining Intelligence Platform',
   knowsAbout: [
-    'Junior Gold Mining',
-    'Mineral Exploration',
+    'Junior Mining Companies',
+    'Gold & Silver Exploration',
+    'Critical Minerals',
+    'Lithium & Battery Metals',
+    'Rare Earth Elements',
     'NI 43-101 Technical Reports',
     'TSXV Stock Analysis',
     'Mining Investment Research',
@@ -149,14 +171,14 @@ const organizationJsonLd = {
 const websiteJsonLd = {
   '@context': 'https://schema.org',
   '@type': 'WebSite',
-  name: 'Junior Gold Mining Intelligence',
-  url: 'https://juniorgoldminingintelligence.com',
-  description: 'Discover and analyze junior gold mining companies with AI-powered insights.',
+  name: 'Junior Mining Intelligence',
+  url: 'https://juniorminingintelligence.com',
+  description: 'Discover and analyze junior mining companies exploring gold, silver, lithium, copper, and critical minerals with AI-powered insights.',
   potentialAction: {
     '@type': 'SearchAction',
     target: {
       '@type': 'EntryPoint',
-      urlTemplate: 'https://juniorgoldminingintelligence.com/companies?search={search_term_string}'
+      urlTemplate: 'https://juniorminingintelligence.com/companies?search={search_term_string}'
     },
     'query-input': 'required name=search_term_string'
   }
@@ -165,9 +187,9 @@ const websiteJsonLd = {
 const financeServiceJsonLd = {
   '@context': 'https://schema.org',
   '@type': 'FinancialService',
-  name: 'Junior Gold Mining Intelligence',
-  url: 'https://juniorgoldminingintelligence.com',
-  description: 'Mining investment research platform providing company analysis, precious metals pricing, and investment qualification services.',
+  name: 'Junior Mining Intelligence',
+  url: 'https://juniorminingintelligence.com',
+  description: 'Mining investment research platform providing company analysis for gold, silver, lithium, copper, rare earths, and critical minerals. Includes precious metals pricing and investment qualification services.',
   address: {
     '@type': 'PostalAddress',
     addressCountry: 'CA'
@@ -191,10 +213,10 @@ const faqPageJsonLd = {
   mainEntity: [
     {
       '@type': 'Question',
-      name: 'What is a junior gold mining company?',
+      name: 'What is a junior mining company?',
       acceptedAnswer: {
         '@type': 'Answer',
-        text: 'A junior gold mining company is a small to mid-sized exploration or development company focused on discovering and developing gold deposits. These companies typically have market capitalizations under $500 million and are listed on exchanges like the TSX Venture Exchange (TSXV) or TSX.'
+        text: 'A junior mining company is a small to mid-sized exploration or development company focused on discovering and developing mineral deposits including gold, silver, lithium, copper, rare earths, and other critical minerals. These companies typically have market capitalizations under $500 million and are listed on exchanges like the TSX Venture Exchange (TSXV) or TSX.'
       }
     },
     {
@@ -207,10 +229,10 @@ const faqPageJsonLd = {
     },
     {
       '@type': 'Question',
-      name: 'How do I track junior gold mining stocks?',
+      name: 'How do I track junior mining stocks?',
       acceptedAnswer: {
         '@type': 'Answer',
-        text: 'Junior Gold Mining Intelligence provides a comprehensive platform to track 500+ junior gold mining stocks with real-time exploration data, NI 43-101 technical reports, mineral resource estimates, project financings, and AI-powered analysis. Our database includes companies listed on TSXV, TSX, and other major exchanges.'
+        text: 'Junior Mining Intelligence provides a comprehensive platform to track 500+ junior mining companies exploring gold, silver, lithium, copper, rare earths, and critical minerals. Features include real-time exploration data, NI 43-101 technical reports, mineral resource estimates, project financings, and AI-powered analysis. Our database includes companies listed on TSXV, TSX, and other major exchanges.'
       }
     },
     {
@@ -218,7 +240,7 @@ const faqPageJsonLd = {
       name: 'What data does the platform provide?',
       acceptedAnswer: {
         '@type': 'Answer',
-        text: 'Our platform provides comprehensive data including: company profiles and management teams, NI 43-101 technical reports, mineral resource estimates (gold, silver, copper), exploration project details and locations, financing history and market data, news releases and press announcements, AI-powered company analysis, and real-time precious metals pricing.'
+        text: 'Our platform provides comprehensive data including: company profiles and management teams, NI 43-101 technical reports, mineral resource estimates (gold, silver, copper, lithium, rare earths, nickel), exploration project details and locations, financing history and market data, news releases and press announcements, AI-powered company analysis, and real-time precious metals and critical minerals pricing.'
       }
     },
     {
@@ -240,13 +262,13 @@ const breadcrumbJsonLd = {
       '@type': 'ListItem',
       position: 1,
       name: 'Home',
-      item: 'https://juniorgoldminingintelligence.com'
+      item: 'https://juniorminingintelligence.com'
     },
     {
       '@type': 'ListItem',
       position: 2,
       name: 'Companies',
-      item: 'https://juniorgoldminingintelligence.com/companies'
+      item: 'https://juniorminingintelligence.com/companies'
     },
     {
       '@type': 'ListItem',

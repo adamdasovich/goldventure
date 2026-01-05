@@ -3,7 +3,7 @@ import { MetadataRoute } from 'next';
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api';
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const baseUrl = 'https://juniorgoldminingintelligence.com';
+  const baseUrl = 'https://juniorminingintelligence.com';
 
   // Fetch all companies for dynamic routes
   let companies: any[] = [];
