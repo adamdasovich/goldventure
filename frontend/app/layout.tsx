@@ -98,9 +98,26 @@ export const metadata: Metadata = {
 const organizationJsonLd = {
   '@context': 'https://schema.org',
   '@type': 'Organization',
+  '@id': 'https://juniorminingintelligence.com/#organization',
   name: 'Junior Mining Intelligence',
+  alternateName: 'JMI Platform',
+  legalName: 'Junior Mining Intelligence',
   url: 'https://juniorminingintelligence.com',
-  logo: 'https://juniorminingintelligence.com/logo.png',
+  logo: {
+    '@type': 'ImageObject',
+    '@id': 'https://juniorminingintelligence.com/#logo',
+    url: 'https://juniorminingintelligence.com/logo.png',
+    contentUrl: 'https://juniorminingintelligence.com/logo.png',
+    width: '512',
+    height: '512',
+    caption: 'Junior Mining Intelligence Logo'
+  },
+  image: {
+    '@type': 'ImageObject',
+    url: 'https://juniorminingintelligence.com/og-image.png',
+    width: '1200',
+    height: '630'
+  },
   description: 'AI-powered platform for junior mining company analysis covering gold, silver, lithium, copper, rare earths, and critical minerals. Investment research and market intelligence for precious metals and battery metals.',
   about: [
     {
@@ -147,11 +164,28 @@ const organizationJsonLd = {
     'https://www.linkedin.com/company/junior-mining-intelligence',
     'https://www.facebook.com/juniorminingintel'
   ],
-  contactPoint: {
-    '@type': 'ContactPoint',
-    contactType: 'customer service',
-    availableLanguage: ['English'],
-    email: 'info@juniorminingintelligence.com'
+  contactPoint: [
+    {
+      '@type': 'ContactPoint',
+      contactType: 'customer service',
+      availableLanguage: ['English'],
+      email: 'info@juniorminingintelligence.com',
+      contactOption: 'TollFree',
+      areaServed: ['CA', 'US']
+    },
+    {
+      '@type': 'ContactPoint',
+      contactType: 'technical support',
+      availableLanguage: ['English'],
+      email: 'support@juniorminingintelligence.com',
+      contactOption: 'TollFree',
+      areaServed: ['CA', 'US']
+    }
+  ],
+  address: {
+    '@type': 'PostalAddress',
+    addressCountry: 'CA',
+    addressRegion: 'Canada'
   },
   foundingDate: '2024',
   slogan: 'AI-Powered Mining Intelligence Platform',
@@ -164,8 +198,59 @@ const organizationJsonLd = {
     'NI 43-101 Technical Reports',
     'TSXV Stock Analysis',
     'Mining Investment Research',
-    'Precious Metals Markets'
-  ]
+    'Precious Metals Markets',
+    'Mineral Resource Estimates',
+    'Mining Financings',
+    'Battery Metals Exploration',
+    'Precious Metals Analysis'
+  ],
+  areaServed: [
+    {
+      '@type': 'Country',
+      name: 'Canada',
+      '@id': 'https://www.wikidata.org/wiki/Q16'
+    },
+    {
+      '@type': 'Country',
+      name: 'United States',
+      '@id': 'https://www.wikidata.org/wiki/Q30'
+    },
+    {
+      '@type': 'Country',
+      name: 'Australia',
+      '@id': 'https://www.wikidata.org/wiki/Q408'
+    }
+  ],
+  hasOfferCatalog: {
+    '@type': 'OfferCatalog',
+    name: 'Mining Intelligence Services',
+    itemListElement: [
+      {
+        '@type': 'Offer',
+        itemOffered: {
+          '@type': 'Service',
+          name: 'Junior Mining Company Analysis',
+          description: 'Comprehensive analysis of 500+ junior mining companies including gold, silver, lithium, copper, and critical minerals exploration'
+        }
+      },
+      {
+        '@type': 'Offer',
+        itemOffered: {
+          '@type': 'Service',
+          name: 'NI 43-101 Report Database',
+          description: 'Access to technical reports and mineral resource estimates'
+        }
+      },
+      {
+        '@type': 'Offer',
+        itemOffered: {
+          '@type': 'Service',
+          name: 'Mining Market Intelligence',
+          description: 'Real-time precious metals pricing, financing data, and exploration updates'
+        }
+      }
+    ]
+  }
 };
 
 const websiteJsonLd = {
