@@ -231,6 +231,18 @@ class Project(models.Model):
         ('gold', 'Gold'),
         ('silver', 'Silver'),
         ('copper', 'Copper'),
+        ('lithium', 'Lithium'),
+        ('nickel', 'Nickel'),
+        ('cobalt', 'Cobalt'),
+        ('rare_earths', 'Rare Earth Elements'),
+        ('zinc', 'Zinc'),
+        ('lead', 'Lead'),
+        ('platinum', 'Platinum Group Metals'),
+        ('uranium', 'Uranium'),
+        ('graphite', 'Graphite'),
+        ('vanadium', 'Vanadium'),
+        ('tungsten', 'Tungsten'),
+        ('molybdenum', 'Molybdenum'),
         ('multi_metal', 'Multi-Metal'),
         ('other', 'Other'),
     ]
@@ -546,11 +558,18 @@ class MarketData(models.Model):
 
 
 class CommodityPrice(models.Model):
-    """Gold, silver, copper prices"""
+    """Precious metals, base metals, and critical minerals prices"""
     COMMODITIES = [
         ('gold', 'Gold (USD/oz)'),
         ('silver', 'Silver (USD/oz)'),
         ('copper', 'Copper (USD/lb)'),
+        ('lithium', 'Lithium Carbonate (USD/tonne)'),
+        ('nickel', 'Nickel (USD/lb)'),
+        ('cobalt', 'Cobalt (USD/lb)'),
+        ('zinc', 'Zinc (USD/lb)'),
+        ('lead', 'Lead (USD/lb)'),
+        ('uranium', 'Uranium (USD/lb)'),
+        ('rare_earths', 'Rare Earth Oxides (USD/kg)'),
     ]
 
     commodity = models.CharField(max_length=20, choices=COMMODITIES)
@@ -4157,7 +4176,7 @@ class FailedCompanyDiscovery(models.Model):
 
 class MetalPrice(models.Model):
     """
-    Stores historical precious metals prices scraped from Kitco.
+    Stores historical precious metals and critical minerals prices.
     Updated twice daily via scheduled task.
     """
     METAL_CHOICES = [
@@ -4165,6 +4184,12 @@ class MetalPrice(models.Model):
         ('XAG', 'Silver'),
         ('XPT', 'Platinum'),
         ('XPD', 'Palladium'),
+        ('CU', 'Copper'),
+        ('NI', 'Nickel'),
+        ('LI', 'Lithium'),
+        ('CO', 'Cobalt'),
+        ('REE', 'Rare Earth Elements'),
+        ('U', 'Uranium'),
     ]
 
     metal = models.CharField(max_length=3, choices=METAL_CHOICES)
