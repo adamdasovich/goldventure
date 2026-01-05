@@ -1,4 +1,4 @@
-# Deployment Summary for juniorgoldminingintelligence.com
+# Deployment Summary for juniorminingintelligence.com
 
 ## What's Been Prepared
 
@@ -37,7 +37,7 @@ Created template files:
 - [ ] Purchase VPS/Cloud Server (DigitalOcean, AWS, Linode recommended)
   - Recommended: 2 CPU, 4GB RAM, 50GB SSD
   - Ubuntu 22.04 LTS
-- [ ] Domain: juniorgoldminingintelligence.com ✓ (purchased)
+- [ ] Domain: juniorminingintelligence.com ✓ (purchased)
 
 ### Step 1: Server Setup (30 minutes)
 ```bash
@@ -56,7 +56,7 @@ In your domain registrar, add these DNS records:
 |-------|------|----------------|
 | A     | @    | YOUR_SERVER_IP |
 | A     | www  | YOUR_SERVER_IP |
-| CNAME | api  | juniorgoldminingintelligence.com |
+| CNAME | api  | juniorminingintelligence.com |
 
 ### Step 3: Clone Repository (5 minutes)
 ```bash
@@ -122,7 +122,7 @@ Follow instructions in `DEPLOYMENT_GUIDE.md` sections:
 ### Step 7: SSL Certificate (10 minutes)
 ```bash
 sudo apt install certbot python3-certbot-nginx
-sudo certbot --nginx -d juniorgoldminingintelligence.com -d www.juniorgoldminingintelligence.com -d api.juniorgoldminingintelligence.com
+sudo certbot --nginx -d juniorminingintelligence.com -d www.juniorminingintelligence.com -d api.juniorminingintelligence.com
 ```
 
 ### Step 8: Nginx Configuration (15 minutes)
@@ -143,7 +143,7 @@ pm2 restart goldventure-frontend
 ```
 
 ### Step 10: Test Everything (30 minutes)
-- [ ] Visit https://juniorgoldminingintelligence.com
+- [ ] Visit https://juniorminingintelligence.com
 - [ ] Test user registration
 - [ ] Test user login
 - [ ] Test event creation
@@ -177,10 +177,10 @@ pm2 restart goldventure-frontend
 
 After deployment, your platform will be accessible at:
 
-- **Frontend**: https://juniorgoldminingintelligence.com
-- **API**: https://api.juniorgoldminingintelligence.com
-- **Admin Panel**: https://api.juniorgoldminingintelligence.com/admin/
-- **WebSocket**: wss://api.juniorgoldminingintelligence.com/ws/
+- **Frontend**: https://juniorminingintelligence.com
+- **API**: https://api.juniorminingintelligence.com
+- **Admin Panel**: https://api.juniorminingintelligence.com/admin/
+- **WebSocket**: wss://api.juniorminingintelligence.com/ws/
 
 ---
 
@@ -243,7 +243,7 @@ After deployment, your platform will be accessible at:
 - **Managed Hosting**: Consider Vercel for frontend, Railway for backend
 
 **Current Status:**
-- ✓ Domain purchased: juniorgoldminingintelligence.com
+- ✓ Domain purchased: juniorminingintelligence.com
 - ✓ Code production-ready with security settings
 - ✓ Environment templates created
 - ✓ Deployment guide written

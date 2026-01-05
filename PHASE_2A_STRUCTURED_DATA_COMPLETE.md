@@ -41,7 +41,7 @@ Successfully enhanced Schema.org structured data markup to improve Google's unde
     "@type": "ContactPoint",
     "contactType": "customer service",
     "availableLanguage": ["English"],
-    "email": "info@juniorgoldminingintelligence.com"
+    "email": "info@juniorminingintelligence.com"
   },
   "foundingDate": "2024",
   "slogan": "AI-Powered Mining Intelligence Platform",
@@ -84,10 +84,10 @@ Implemented FAQ schema targeting common user questions to enable rich FAQ snippe
 Added site navigation breadcrumbs to help Google understand site structure.
 
 **Breadcrumb Hierarchy**:
-1. Home → `https://juniorgoldminingintelligence.com`
-2. Companies → `https://juniorgoldminingintelligence.com/companies`
-3. Properties → `https://juniorgoldminingintelligence.com/properties`
-4. Glossary → `https://juniorgoldminingintelligence.com/glossary`
+1. Home → `https://juniorminingintelligence.com`
+2. Companies → `https://juniorminingintelligence.com/companies`
+3. Properties → `https://juniorminingintelligence.com/properties`
+4. Glossary → `https://juniorminingintelligence.com/glossary`
 
 **Schema Type**: `@type: "BreadcrumbList"`
 
@@ -194,7 +194,7 @@ All schemas validated against Schema.org standards:
 3. Google Search Console → Enhancements → Rich Results
 
 ### **Test URLs**:
-- Homepage: `https://juniorgoldminingintelligence.com`
+- Homepage: `https://juniorminingintelligence.com`
 - Test for FAQPage, BreadcrumbList, Organization schemas
 
 ---

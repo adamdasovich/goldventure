@@ -1,4 +1,4 @@
-# Deployment Guide for juniorgoldminingintelligence.com
+# Deployment Guide for juniorminingintelligence.com
 
 This guide will walk you through deploying the GoldVenture platform to production.
 
@@ -21,7 +21,7 @@ This guide will walk you through deploying the GoldVenture platform to productio
 - [ ] VPS/Cloud Server (DigitalOcean, AWS, Linode, etc.)
   - Recommended: 2 CPU cores, 4GB RAM, 50GB SSD
   - Ubuntu 22.04 LTS recommended
-- [ ] Domain: juniorgoldminingintelligence.com (purchased ✓)
+- [ ] Domain: juniorminingintelligence.com (purchased ✓)
 - [ ] PostgreSQL database (can be on same server or managed service)
 - [ ] Redis server (for WebSocket/caching)
 
@@ -70,7 +70,7 @@ cd /var/www/goldventure
 
 ### Step 1: Point Domain to Server
 
-In your domain registrar (where you bought juniorgoldminingintelligence.com):
+In your domain registrar (where you bought juniorminingintelligence.com):
 
 **Add these DNS records:**
 
@@ -78,18 +78,18 @@ In your domain registrar (where you bought juniorgoldminingintelligence.com):
 |-------|------|------------------------|------|
 | A     | @    | YOUR_SERVER_IP         | 3600 |
 | A     | www  | YOUR_SERVER_IP         | 3600 |
-| CNAME | api  | juniorgoldminingintelligence.com | 3600 |
+| CNAME | api  | juniorminingintelligence.com | 3600 |
 
 **Example:**
 ```
 A     @    147.182.123.45
 A     www  147.182.123.45
-CNAME api  juniorgoldminingintelligence.com
+CNAME api  juniorminingintelligence.com
 ```
 
 ### Step 2: Wait for DNS Propagation
 - DNS changes can take 1-48 hours
-- Check status: `dig juniorgoldminingintelligence.com`
+- Check status: `dig juniorminingintelligence.com`
 
 ---
 
@@ -104,7 +104,7 @@ sudo apt install certbot python3-certbot-nginx
 
 2. **Obtain SSL Certificate**
 ```bash
-sudo certbot --nginx -d juniorgoldminingintelligence.com -d www.juniorgoldminingintelligence.com -d api.juniorgoldminingintelligence.com
+sudo certbot --nginx -d juniorminingintelligence.com -d www.juniorminingintelligence.com -d api.juniorminingintelligence.com
 ```
 
 3. **Auto-renewal** (Certbot sets this up automatically)
@@ -124,13 +124,13 @@ Create `/var/www/goldventure/backend/.env.production`:
 # Django Settings
 SECRET_KEY=your-super-secret-key-here-change-this
 DEBUG=False
-ALLOWED_HOSTS=juniorgoldminingintelligence.com,www.juniorgoldminingintelligence.com,api.juniorgoldminingintelligence.com
+ALLOWED_HOSTS=juniorminingintelligence.com,www.juniorminingintelligence.com,api.juniorminingintelligence.com
 
 # Database
 DATABASE_URL=postgresql://dbuser:dbpassword@localhost:5432/goldventure_prod
 
 # CORS
-CORS_ALLOWED_ORIGINS=https://juniorgoldminingintelligence.com,https://www.juniorgoldminingintelligence.com
+CORS_ALLOWED_ORIGINS=https://juniorminingintelligence.com,https://www.juniorminingintelligence.com
 
 # Redis
 REDIS_URL=redis://localhost:6379/0
@@ -229,8 +229,8 @@ sudo systemctl status goldventure-backend
 Create `/var/www/goldventure/frontend/.env.production`:
 
 ```bash
-NEXT_PUBLIC_API_URL=https://api.juniorgoldminingintelligence.com
-NEXT_PUBLIC_WS_URL=wss://api.juniorgoldminingintelligence.com
+NEXT_PUBLIC_API_URL=https://api.juniorminingintelligence.com
+NEXT_PUBLIC_WS_URL=wss://api.juniorminingintelligence.com
 ```
 
 ### Step 2: Update API URLs in Code
@@ -301,7 +301,7 @@ Create `/etc/nginx/sites-available/goldventure`:
 server {
     listen 80;
     listen [::]:80;
-    server_name juniorgoldminingintelligence.com www.juniorgoldminingintelligence.com;
+    server_name juniorminingintelligence.com www.juniorminingintelligence.com;
 
     # Redirect to HTTPS
     return 301 https://$server_name$request_uri;
@@ -310,11 +310,11 @@ server {
 server {
     listen 443 ssl http2;
     listen [::]:443 ssl http2;
-    server_name juniorgoldminingintelligence.com www.juniorgoldminingintelligence.com;
+    server_name juniorminingintelligence.com www.juniorminingintelligence.com;
 
     # SSL certificates (Certbot will add these)
-    ssl_certificate /etc/letsencrypt/live/juniorgoldminingintelligence.com/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/juniorgoldminingintelligence.com/privkey.pem;
+    ssl_certificate /etc/letsencrypt/live/juniorminingintelligence.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/juniorminingintelligence.com/privkey.pem;
 
     # Frontend - Next.js
     location / {
@@ -334,7 +334,7 @@ server {
 server {
     listen 80;
     listen [::]:80;
-    server_name api.juniorgoldminingintelligence.com;
+    server_name api.juniorminingintelligence.com;
 
     return 301 https://$server_name$request_uri;
 }
@@ -342,10 +342,10 @@ server {
 server {
     listen 443 ssl http2;
     listen [::]:443 ssl http2;
-    server_name api.juniorgoldminingintelligence.com;
+    server_name api.juniorminingintelligence.com;
 
-    ssl_certificate /etc/letsencrypt/live/juniorgoldminingintelligence.com/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/juniorgoldminingintelligence.com/privkey.pem;
+    ssl_certificate /etc/letsencrypt/live/juniorminingintelligence.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/juniorminingintelligence.com/privkey.pem;
 
     # Django Backend
     location / {

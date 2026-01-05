@@ -62,7 +62,7 @@ This document outlines all the technical SEO improvements implemented for the Go
 <title>Gold Mining Property - British Columbia, Canada | Junior Gold Mining Intelligence</title>
 <meta name="description" content="For Sale property in British Columbia, Canada. 500 hectares, gold exploration project." />
 <meta property="og:title" content="Gold Mining Property - British Columbia, Canada" />
-<meta property="og:image" content="https://juniorgoldminingintelligence.com/property-image.jpg" />
+<meta property="og:image" content="https://juniorminingintelligence.com/property-image.jpg" />
 ```
 
 ### Benefits
@@ -94,7 +94,7 @@ This document outlines all the technical SEO improvements implemented for the Go
   "@type": "Corporation",
   "name": "ABC Mining Corp",
   "description": "ABC Mining Corp is a mining company listed on TSX.",
-  "url": "https://juniorgoldminingintelligence.com/companies/123",
+  "url": "https://juniorminingintelligence.com/companies/123",
   "tickerSymbol": "TSX:ABC",
   "sameAs": ["https://abcmining.com"],
   "location": {
@@ -167,19 +167,19 @@ Cache-Control: public, max-age=300, stale-while-revalidate=60  // API
       "@type": "ListItem",
       "position": 1,
       "name": "Home",
-      "item": "https://juniorgoldminingintelligence.com"
+      "item": "https://juniorminingintelligence.com"
     },
     {
       "@type": "ListItem",
       "position": 2,
       "name": "Prospector's Exchange",
-      "item": "https://juniorgoldminingintelligence.com/properties"
+      "item": "https://juniorminingintelligence.com/properties"
     },
     {
       "@type": "ListItem",
       "position": 3,
       "name": "Gold Mining Property - British Columbia",
-      "item": "https://juniorgoldminingintelligence.com/properties/abc-mining-property"
+      "item": "https://juniorminingintelligence.com/properties/abc-mining-property"
     }
   ]
 }
@@ -389,7 +389,7 @@ Based on the comprehensive SEO audit recommendations, the following critical opt
 - ✅ **Server-Side Rendering**: All critical keywords present before client hydration
 
 #### Deployment Status
-- ✅ Deployed to production (https://juniorgoldminingintelligence.com) on 2026-01-02
+- ✅ Deployed to production (https://juniorminingintelligence.com) on 2026-01-02
 - ✅ All changes verified in live HTML source
 - ✅ Git repository updated with commit: "SEO Optimization Phase 1: Keyword-First Metadata & Technical Improvements"
 
@@ -400,7 +400,7 @@ Based on the comprehensive SEO audit recommendations, the following critical opt
 #### Glossary Page Implementation
 - ✅ **Created Comprehensive Glossary**: 60 professionally-written mining industry definitions
 - ✅ **DefinedTermSet Schema**: Full structured data markup for all 60 terms
-- ✅ **URL**: https://juniorgoldminingintelligence.com/glossary
+- ✅ **URL**: https://juniorminingintelligence.com/glossary
 - ✅ **Categories**: 5 organized sections (Reporting, Geology, Finance, Regulatory, Operations)
 - ✅ **Features**: Real-time search, category filtering, A-Z navigation, internal links
 

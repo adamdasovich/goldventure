@@ -1,5 +1,5 @@
 # DigitalOcean Deployment Guide
-## juniorgoldminingintelligence.com
+## juniorminingintelligence.com
 
 This guide will walk you through deploying your GoldVenture platform on DigitalOcean.
 
@@ -50,12 +50,12 @@ This guide will walk you through deploying your GoldVenture platform on DigitalO
 ### Step 1: Add Domain to DigitalOcean (Optional but Recommended)
 1. In DigitalOcean dashboard, go to **Networking** → **Domains**
 2. Click **"Add Domain"**
-3. Enter: `juniorgoldminingintelligence.com`
+3. Enter: `juniorminingintelligence.com`
 4. Select your droplet
 5. Click **"Add Domain"**
 
 ### Step 2: Update Nameservers at Your Registrar
-Go to where you purchased juniorgoldminingintelligence.com and update nameservers to:
+Go to where you purchased juniorminingintelligence.com and update nameservers to:
 ```
 ns1.digitalocean.com
 ns2.digitalocean.com
@@ -72,7 +72,7 @@ ns3.digitalocean.com
 
 ### Step 3: Create DNS Records in DigitalOcean
 If using DigitalOcean DNS:
-1. Go to **Networking** → **Domains** → **juniorgoldminingintelligence.com**
+1. Go to **Networking** → **Domains** → **juniorminingintelligence.com**
 2. Add these records:
 
 ```
@@ -210,13 +210,13 @@ Paste this and **replace the values**:
 # Django Core
 SECRET_KEY=PASTE-NEW-SECRET-KEY-HERE
 DEBUG=False
-ALLOWED_HOSTS=juniorgoldminingintelligence.com,www.juniorgoldminingintelligence.com,api.juniorgoldminingintelligence.com,YOUR_DROPLET_IP
+ALLOWED_HOSTS=juniorminingintelligence.com,www.juniorminingintelligence.com,api.juniorminingintelligence.com,YOUR_DROPLET_IP
 
 # Database
 DATABASE_URL=postgresql://dbuser:your-super-secure-password-here@localhost:5432/goldventure_prod
 
 # CORS
-CORS_ALLOWED_ORIGINS=https://juniorgoldminingintelligence.com,https://www.juniorgoldminingintelligence.com
+CORS_ALLOWED_ORIGINS=https://juniorminingintelligence.com,https://www.juniorminingintelligence.com
 
 # Redis
 REDIS_URL=redis://localhost:6379/0
@@ -231,7 +231,7 @@ EMAIL_PORT=587
 EMAIL_USE_TLS=True
 EMAIL_HOST_USER=your-email@gmail.com
 EMAIL_HOST_PASSWORD=your-app-password
-DEFAULT_FROM_EMAIL=noreply@juniorgoldminingintelligence.com
+DEFAULT_FROM_EMAIL=noreply@juniorminingintelligence.com
 
 # API Keys (add your keys)
 ANTHROPIC_API_KEY=
@@ -368,8 +368,8 @@ nano .env.production
 
 Paste:
 ```bash
-NEXT_PUBLIC_API_URL=https://api.juniorgoldminingintelligence.com
-NEXT_PUBLIC_WS_URL=wss://api.juniorgoldminingintelligence.com
+NEXT_PUBLIC_API_URL=https://api.juniorminingintelligence.com
+NEXT_PUBLIC_WS_URL=wss://api.juniorminingintelligence.com
 ```
 
 Save: `Ctrl+X`, `Y`, `Enter`
@@ -418,7 +418,7 @@ Paste this configuration:
 server {
     listen 80;
     listen [::]:80;
-    server_name juniorgoldminingintelligence.com www.juniorgoldminingintelligence.com;
+    server_name juniorminingintelligence.com www.juniorminingintelligence.com;
 
     location / {
         proxy_pass http://127.0.0.1:3000;
@@ -437,7 +437,7 @@ server {
 server {
     listen 80;
     listen [::]:80;
-    server_name api.juniorgoldminingintelligence.com;
+    server_name api.juniorminingintelligence.com;
 
     # Django Backend
     location / {
@@ -500,13 +500,13 @@ sudo systemctl restart nginx
 
 **Wait for DNS to propagate first!** Check with:
 ```bash
-dig juniorgoldminingintelligence.com
+dig juniorminingintelligence.com
 # Should show your droplet IP
 ```
 
 ### Step 1: Obtain SSL Certificate
 ```bash
-sudo certbot --nginx -d juniorgoldminingintelligence.com -d www.juniorgoldminingintelligence.com -d api.juniorgoldminingintelligence.com
+sudo certbot --nginx -d juniorminingintelligence.com -d www.juniorminingintelligence.com -d api.juniorminingintelligence.com
 ```
 
 Follow prompts:
@@ -524,11 +524,11 @@ sudo certbot renew --dry-run
 ### Step 3: Verify HTTPS
 ```bash
 # Test main site
-curl -I https://juniorgoldminingintelligence.com
+curl -I https://juniorminingintelligence.com
 # Should return 200 OK
 
 # Test API
-curl -I https://api.juniorgoldminingintelligence.com
+curl -I https://api.juniorminingintelligence.com
 # Should return 200 OK
 ```
 
@@ -561,9 +561,9 @@ All should show "active (running)"
 
 ### Step 2: Test Website
 Open in browser:
-- https://juniorgoldminingintelligence.com (should load frontend)
-- https://api.juniorgoldminingintelligence.com/admin/ (should load Django admin)
-- https://api.juniorgoldminingintelligence.com/api/companies/ (should return JSON)
+- https://juniorminingintelligence.com (should load frontend)
+- https://api.juniorminingintelligence.com/admin/ (should load Django admin)
+- https://api.juniorminingintelligence.com/api/companies/ (should return JSON)
 
 ### Step 3: Test Live Streaming
 1. Log in as superuser
@@ -692,8 +692,8 @@ sudo systemctl restart nginx
 ## ✅ Deployment Complete!
 
 Your platform should now be live at:
-- **https://juniorgoldminingintelligence.com**
-- **https://api.juniorgoldminingintelligence.com/admin/**
+- **https://juniorminingintelligence.com**
+- **https://api.juniorminingintelligence.com/admin/**
 
 **Total Cost:** ~$12-18/month for DigitalOcean Droplet
 

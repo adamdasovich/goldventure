@@ -16,7 +16,7 @@ Successfully created and deployed the first pillar content piece: **"The Complet
 ### **Article Details**
 
 **Title**: The Complete Guide to Junior Gold Mining Companies
-**URL**: https://juniorgoldminingintelligence.com/guides/junior-gold-mining-companies-guide
+**URL**: https://juniorminingintelligence.com/guides/junior-gold-mining-companies-guide
 **Word Count**: ~3,800 words
 **Reading Time**: 15 minutes
 **Publication Date**: January 4, 2026
@@ -424,5 +424,5 @@ In addition to the pillar content, created comprehensive strategy guides:
 ---
 
 **Status**: ✅ **Complete and Live**
-**URL**: https://juniorgoldminingintelligence.com/guides/junior-gold-mining-companies-guide
+**URL**: https://juniorminingintelligence.com/guides/junior-gold-mining-companies-guide
 **Next Pillar**: NI 43-101 Technical Reports Guide (Month 2)

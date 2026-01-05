@@ -12,20 +12,20 @@ Successfully implemented comprehensive canonical URL normalization to ensure Goo
 ## Changes Implemented
 
 ### **1. WWW → Non-WWW Redirect (HTTPS)**
-**Before**: `https://www.juniorgoldminingintelligence.com` → served directly
-**After**: `https://www.juniorgoldminingintelligence.com` → `301 redirect` → `https://juniorgoldminingintelligence.com`
+**Before**: `https://www.juniorminingintelligence.com` → served directly
+**After**: `https://www.juniorminingintelligence.com` → `301 redirect` → `https://juniorminingintelligence.com`
 
 **Implementation**: Added dedicated server block for www subdomain with permanent redirect.
 
 ```nginx
 server {
     listen 443 ssl http2;
-    server_name www.juniorgoldminingintelligence.com;
+    server_name www.juniorminingintelligence.com;
 
-    ssl_certificate /etc/letsencrypt/live/juniorgoldminingintelligence.com/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/juniorgoldminingintelligence.com/privkey.pem;
+    ssl_certificate /etc/letsencrypt/live/juniorminingintelligence.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/juniorminingintelligence.com/privkey.pem;
 
-    return 301 https://juniorgoldminingintelligence.com$request_uri;
+    return 301 https://juniorminingintelligence.com$request_uri;
 }
 ```
 
@@ -40,9 +40,9 @@ server {
 ```nginx
 server {
     listen 80;
-    server_name juniorgoldminingintelligence.com www.juniorgoldminingintelligence.com 137.184.168.166;
+    server_name juniorminingintelligence.com www.juniorminingintelligence.com 137.184.168.166;
 
-    return 301 https://juniorgoldminingintelligence.com$request_uri;
+    return 301 https://juniorminingintelligence.com$request_uri;
 }
 ```
 
@@ -70,7 +70,7 @@ add_header Referrer-Policy "strict-origin-when-cross-origin" always;
 
 **Official Canonical URL Format**:
 ```
-https://juniorgoldminingintelligence.com[/path]
+https://juniorminingintelligence.com[/path]
 ```
 
 **Rules**:
@@ -87,26 +87,26 @@ All tests passed successfully:
 
 ### **Test 1: WWW to Non-WWW**
 ```bash
-curl -I -L https://www.juniorgoldminingintelligence.com/glossary
-# Result: HTTP/2 301 → https://juniorgoldminingintelligence.com/glossary → HTTP/2 200
+curl -I -L https://www.juniorminingintelligence.com/glossary
+# Result: HTTP/2 301 → https://juniorminingintelligence.com/glossary → HTTP/2 200
 ```
 
 ### **Test 2: HTTP to HTTPS**
 ```bash
-curl -I -L http://juniorgoldminingintelligence.com
-# Result: HTTP/1.1 301 → https://juniorgoldminingintelligence.com/ → HTTP/2 200
+curl -I -L http://juniorminingintelligence.com
+# Result: HTTP/1.1 301 → https://juniorminingintelligence.com/ → HTTP/2 200
 ```
 
 ### **Test 3: WWW + HTTP to Canonical**
 ```bash
-curl -I -L http://www.juniorgoldminingintelligence.com
-# Result: HTTP/1.1 301 → https://juniorgoldminingintelligence.com/ → HTTP/2 200
+curl -I -L http://www.juniorminingintelligence.com
+# Result: HTTP/1.1 301 → https://juniorminingintelligence.com/ → HTTP/2 200
 ```
 
 ### **Test 4: Canonical Tag Verification**
 ```bash
-curl -s https://juniorgoldminingintelligence.com/ | grep canonical
-# Result: <link rel="canonical" href="https://juniorgoldminingintelligence.com"/>
+curl -s https://juniorminingintelligence.com/ | grep canonical
+# Result: <link rel="canonical" href="https://juniorminingintelligence.com"/>
 ```
 
 ---

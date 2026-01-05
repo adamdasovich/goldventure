@@ -67,7 +67,7 @@ I hope this email finds you well. My name is [Your Name] from Junior Gold Mining
 
 We've recently launched an AI-powered platform that provides comprehensive data and analysis on 500+ junior gold mining companies - including real-time exploration data, NI 43-101 technical reports, mineral resource estimates, and TSXV stock intelligence.
 
-Given [Publication Name]'s focus on [specific coverage area], I thought your readers might find value in our free glossary of 60+ mining terms (https://juniorgoldminingintelligence.com/glossary) and our comprehensive company database.
+Given [Publication Name]'s focus on [specific coverage area], I thought your readers might find value in our free glossary of 60+ mining terms (https://juniorminingintelligence.com/glossary) and our comprehensive company database.
 
 Would you be interested in:
 1. Featuring our platform in your "Industry Tools" or "Resources" section?
@@ -76,7 +76,7 @@ Would you be interested in:
 
 I'd be happy to provide early access, arrange an interview, or provide any information that would be helpful for your editorial team.
 
-Our platform: https://juniorgoldminingintelligence.com
+Our platform: https://juniorminingintelligence.com
 
 Thank you for considering this, and I look forward to hearing from you.
 
@@ -84,8 +84,8 @@ Best regards,
 [Your Name]
 [Title]
 Junior Gold Mining Intelligence
-info@juniorgoldminingintelligence.com
-https://juniorgoldminingintelligence.com
+info@juniorminingintelligence.com
+https://juniorminingintelligence.com
 ```
 
 ---
@@ -102,10 +102,10 @@ I'm reaching out from Junior Gold Mining Intelligence, a new AI-powered platform
 We've developed several free educational resources that may be valuable to [Association Name] members:
 
 1. **Comprehensive Mining Glossary** - 60+ technical terms covering NI 43-101, resource categories, and TSXV regulations
-   https://juniorgoldminingintelligence.com/glossary
+   https://juniorminingintelligence.com/glossary
 
 2. **Company Database** - Searchable database of junior mining companies with project data
-   https://juniorgoldminingintelligence.com/companies
+   https://juniorminingintelligence.com/companies
 
 Would you consider adding our platform to your member resources or educational tools page? We're committed to providing free, accurate, and comprehensive data to the mining community.
 
@@ -116,7 +116,7 @@ Thank you for your consideration.
 Best regards,
 [Your Name]
 Junior Gold Mining Intelligence
-info@juniorgoldminingintelligence.com
+info@juniorminingintelligence.com
 ```
 
 ---
@@ -145,7 +145,7 @@ I'd also be happy to:
 - Collaborate on data-driven content
 - Provide custom analysis for your projects
 
-Platform: https://juniorgoldminingintelligence.com
+Platform: https://juniorminingintelligence.com
 
 Would love to hear your thoughts!
 
@@ -176,7 +176,7 @@ This 2,500-word comprehensive guide would cover:
 
 The article would provide genuine educational value with actionable insights for your readers. I would include a brief mention of our platform (Junior Gold Mining Intelligence) as one tool among many in the ecosystem.
 
-I have a background in [relevant experience] and have been tracking junior mining companies for [time period]. You can see our educational approach at: https://juniorgoldminingintelligence.com/glossary
+I have a background in [relevant experience] and have been tracking junior mining companies for [time period]. You can see our educational approach at: https://juniorminingintelligence.com/glossary
 
 Would this be a good fit for [Publication Name]? I can provide a detailed outline or draft if you're interested.
 

@@ -6,21 +6,21 @@
 
 #### Current Status:
 ✅ **IMPLEMENTED**: Homepage has canonical URL
-- Found: `<link rel="canonical" href="https://juniorgoldminingintelligence.com"/>`
+- Found: `<link rel="canonical" href="https://juniorminingintelligence.com"/>`
 
 #### Action Items for You:
 1. **Go to Google Search Console** → https://search.google.com/search-console
 2. Navigate to **URL Inspection** tool
-3. Enter: `https://juniorgoldminingintelligence.com`
+3. Enter: `https://juniorminingintelligence.com`
 4. Check the following:
-   - **User-declared canonical**: Should be `https://juniorgoldminingintelligence.com`
+   - **User-declared canonical**: Should be `https://juniorminingintelligence.com`
    - **Google-selected canonical**: Should MATCH the user-declared canonical
 
 #### Red Flags to Watch For:
 ❌ **If Google selected a DIFFERENT URL**, you have duplicate content issues
 - Common examples:
-  - `https://www.juniorgoldminingintelligence.com` (www vs non-www)
-  - `https://juniorgoldminingintelligence.com/` (trailing slash)
+  - `https://www.juniorminingintelligence.com` (www vs non-www)
+  - `https://juniorminingintelligence.com/` (trailing slash)
   - `http://juniorgoldminintelligence.com` (http vs https)
 
 #### If Canonical Mismatch Found:
@@ -126,7 +126,7 @@ CTR: 1.2%
 
 #### Should See:
 ```
-Sitemap: https://juniorgoldminingintelligence.com/sitemap.xml
+Sitemap: https://juniorminingintelligence.com/sitemap.xml
 Status: Success
 Discovered URLs: [number]
 ```

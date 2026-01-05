@@ -137,7 +137,7 @@ URL: [News Release URL]
 Detected Keywords: [keyword1], [keyword2], [keyword3]
 
 ⚡ Action Required:
-Review this news release at: https://juniorgoldminingintelligence.com/admin/news-flags
+Review this news release at: https://juniorminingintelligence.com/admin/news-flags
 
 This news release was automatically flagged by the financing detection system
 based on keywords in the title. Please review and confirm if this represents

@@ -17,7 +17,7 @@
 **Page Identity**
 - **Company Name**: Junior Gold Mining Intelligence
 - **LinkedIn Public URL**: linkedin.com/company/junior-gold-mining-intelligence
-- **Website**: https://juniorgoldminingintelligence.com
+- **Website**: https://juniorminingintelligence.com
 - **Industry**: Financial Services
 - **Company Size**: 2-10 employees
 - **Company Type**: Privately Held
@@ -81,7 +81,7 @@ We're excited to announce Junior Gold Mining Intelligence - your AI-powered plat
 💰 Financing & market intelligence
 🤖 AI-powered analysis
 
-Discover smarter ways to track junior mining stocks at juniorgoldminingintelligence.com
+Discover smarter ways to track junior mining stocks at juniorminingintelligence.com
 
 #JuniorMining #GoldExploration #MiningIntelligence #TSXV #MiningInvestment
 ```
@@ -99,7 +99,7 @@ What makes our platform different?
 
 Built by mining investors, for mining investors.
 
-Explore the platform: juniorgoldminingintelligence.com/companies
+Explore the platform: juniorminingintelligence.com/companies
 
 #GoldMining #MiningData #InvestmentResearch
 ```
@@ -113,7 +113,7 @@ New to junior mining? Start with our comprehensive glossary covering 60+ essenti
 • Feasibility Studies explained
 • TSXV listing requirements
 
-Learn the language of junior mining: juniorgoldminingintelligence.com/glossary
+Learn the language of junior mining: juniorminingintelligence.com/glossary
 
 #MiningEducation #JuniorMining #NI43101
 ```
@@ -154,13 +154,13 @@ Our platform features:
 
 Whether you're a retail investor, institutional analyst, or industry professional, we provide the tools and intelligence you need to navigate the junior mining sector.
 
-Visit: juniorgoldminingintelligence.com
+Visit: juniorminingintelligence.com
 ```
 
 ### Step 3: Page Details
 
-- **Website**: https://juniorgoldminingintelligence.com
-- **Email**: info@juniorgoldminingintelligence.com
+- **Website**: https://juniorminingintelligence.com
+- **Email**: info@juniorminingintelligence.com
 - **Username**: @juniorgoldmining
 - **Custom URL**: facebook.com/juniorgoldmining
 
@@ -175,7 +175,7 @@ Visit: juniorgoldminingintelligence.com
 ### Step 4: Call-to-Action Button
 
 - **Button Type**: "Learn More"
-- **Link**: https://juniorgoldminingintelligence.com
+- **Link**: https://juniorminingintelligence.com
 
 ### Step 5: First Posts
 
@@ -185,7 +185,7 @@ Welcome to Junior Gold Mining Intelligence! 🎉
 
 We're building the most comprehensive AI-powered platform for junior gold mining intelligence. Track 500+ companies, analyze exploration data, and make smarter investment decisions.
 
-🌐 Explore the platform: juniorgoldminingintelligence.com
+🌐 Explore the platform: juniorminingintelligence.com
 
 #JuniorMining #GoldExploration #MiningIntelligence #TSXV
 ```
@@ -201,7 +201,7 @@ What can you do on our platform?
 ✅ View financing history & market data
 ✅ Get AI-powered company insights
 
-Start exploring: juniorgoldminingintelligence.com/companies
+Start exploring: juniorminingintelligence.com/companies
 
 #GoldMining #MiningData #InvestmentTools
 ```
@@ -216,7 +216,7 @@ Check out our glossary covering 60+ essential mining terms:
 • TSXV listing requirements
 • Feasibility study stages
 
-Learn more: juniorgoldminingintelligence.com/glossary
+Learn more: juniorminingintelligence.com/glossary
 
 #MiningEducation #JuniorMining
 ```
