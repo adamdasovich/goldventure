@@ -22,27 +22,14 @@ from channels.security.websocket import OriginValidator
 from core import routing
 from core.middleware import JWTAuthMiddlewareStack
 
-# Custom origin validator that allows our domains
-class CustomOriginValidator(OriginValidator):
-    """Custom origin validator for WebSocket connections"""
-
-    def valid_origin(self, parsed_origin):
-        """Check if origin is valid"""
-        # Allow our production domain
-        allowed_origins = [
-            'juniorminingintelligence.com',
-            'www.juniorminingintelligence.com',
-            'api.juniorminingintelligence.com',
-            'localhost:3000',
-            '127.0.0.1:3000',
-        ]
-
-        # Check if the origin host is in our allowed list
-        origin_host = parsed_origin.hostname
-        if parsed_origin.port:
-            origin_host = f"{origin_host}:{parsed_origin.port}"
-
-        return origin_host in allowed_origins or super().valid_origin(parsed_origin)
+# Configure allowed origins for WebSocket connections
+ALLOWED_WEBSOCKET_ORIGINS = [
+    'juniorminingintelligence.com',
+    'www.juniorminingintelligence.com',
+    'api.juniorminingintelligence.com',
+    'localhost:3000',
+    '127.0.0.1:3000',
+]
 
 # Configure ASGI application with WebSocket support
 application = ProtocolTypeRouter({
@@ -50,11 +37,12 @@ application = ProtocolTypeRouter({
     "http": django_asgi_app,
 
     # WebSocket chat handler with JWT authentication
-    "websocket": CustomOriginValidator(
+    "websocket": OriginValidator(
         JWTAuthMiddlewareStack(
             URLRouter(
                 routing.websocket_urlpatterns
             )
-        )
+        ),
+        ALLOWED_WEBSOCKET_ORIGINS
     ),
 })
