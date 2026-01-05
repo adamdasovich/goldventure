@@ -22,9 +22,9 @@ export default function LogoMono({ className = "" }: { className?: string }) {
         <path className="cls-gold" d="M75,120l15-25H60Z"/>
       </g>
       <g id="Text-Mono">
-        <text className="cls-light cls-font-bold" transform="translate(160 38)" fontSize="20">JUNIOR MINING</text>
-        <rect className="cls-gold" x="160" y="45" width="60" height="3"/>
-        <text className="cls-gold cls-font-reg" transform="translate(160 75)" fontSize="36">INTELLIGENCE</text>
+        <rect className="cls-gold" x="160" y="30" width="60" height="3"/>
+        <text className="cls-light cls-font-bold" transform="translate(160 50)" fontSize="20">JUNIOR MINING</text>
+        <text className="cls-gold cls-font-reg" transform="translate(160 80)" fontSize="36">INTELLIGENCE</text>
       </g>
     </svg>
   );
