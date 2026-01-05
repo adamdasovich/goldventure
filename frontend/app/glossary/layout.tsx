@@ -1,8 +1,8 @@
 import { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'Junior Gold Mining Glossary - NI 43-101, TSXV & Industry Terms',
-  description: 'Comprehensive glossary of 60+ junior gold mining terms including NI 43-101 standards, TSXV definitions, resource classifications, exploration terminology, and mining investment concepts.',
+  title: 'Junior Mining Glossary - Gold, Silver, Lithium, REE & Critical Minerals Terms',
+  description: 'Comprehensive glossary of 100+ mining terms including gold, silver, lithium, rare earths, battery metals, critical minerals, NI 43-101 standards, TSXV definitions, resource classifications, and investment concepts.',
   keywords: [
     'mining glossary',
     'NI 43-101',
@@ -11,27 +11,34 @@ export const metadata: Metadata = {
     'inferred resource',
     'measured resource',
     'junior mining terms',
-    'gold mining dictionary',
+    'mining dictionary',
     'exploration glossary',
-    'mining investment terms',
+    'lithium glossary',
+    'rare earth terms',
+    'battery metals glossary',
+    'critical minerals definitions',
+    'silver mining terms',
+    'copper mining glossary',
     'feasibility study definition',
     'PEA definition',
     'qualified person mining',
     'mineral reserve',
-    'heap leaching',
-    'grade g/t',
-    'flow-through shares',
-    'private placement',
-    'accredited investor'
+    'NMC battery',
+    'LFP battery',
+    'REE TREO',
+    'spodumene lithium',
+    'cobalt sulphate',
+    'nickel sulphate',
+    'graphite anode'
   ],
   openGraph: {
-    title: 'Junior Gold Mining Glossary - Essential Industry Terms & Definitions',
-    description: '60+ mining terms including NI 43-101 standards, TSXV definitions, resource classifications, and investment concepts.',
+    title: 'Junior Mining Glossary - Gold, Silver, Lithium, REE & Critical Minerals',
+    description: '100+ mining terms covering gold, silver, lithium, rare earths, battery metals, critical minerals, NI 43-101 standards, and investment concepts.',
     type: 'website',
-    url: 'https://juniorgoldminingintelligence.com/glossary',
+    url: 'https://juniorminingintelligence.com/glossary',
   },
   alternates: {
-    canonical: 'https://juniorgoldminingintelligence.com/glossary',
+    canonical: 'https://juniorminingintelligence.com/glossary',
   },
 };
 
