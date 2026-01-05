@@ -398,6 +398,11 @@ class ForumConsumer(AsyncWebsocketConsumer):
     @database_sync_to_async
     def update_presence(self, is_online: bool = True, is_typing: bool = False):
         """Update or create user presence."""
+        # Skip if discussion_id is invalid (e.g., 0 or None)
+        if not self.discussion_id or self.discussion_id == 0:
+            logger.warning(f"Attempted to update presence with invalid discussion_id: {self.discussion_id}")
+            return
+
         UserPresence.objects.update_or_create(
             user=self.user,
             discussion_id=self.discussion_id,
