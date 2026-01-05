@@ -338,7 +338,8 @@ const categories = [
   { id: 'geology', label: 'Geology & Exploration' },
   { id: 'finance', label: 'Finance & Investment' },
   { id: 'regulatory', label: 'Regulatory & Standards' },
-  { id: 'operations', label: 'Mining Operations' }
+  { id: 'operations', label: 'Mining Operations' },
+  { id: 'general', label: 'General Terms' }
 ];
 
 export default function GlossaryPage() {
@@ -363,7 +364,7 @@ export default function GlossaryPage() {
       try {
         // Fetch all pages of glossary terms
         let allTerms: GlossaryTerm[] = [];
-        let nextUrl: string | null = `${process.env.NEXT_PUBLIC_API_URL}/glossary/?page_size=100`;
+        let nextUrl: string | null = `${process.env.NEXT_PUBLIC_API_URL}/glossary/?page_size=200`;
 
         while (nextUrl) {
           const response: Response = await fetch(nextUrl);
