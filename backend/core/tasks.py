@@ -144,8 +144,9 @@ def process_single_job(job: DocumentProcessingJob):
                 project_name=project_name
             )
 
-        elif job.document_type in ['presentation', 'fact_sheet']:
-            # Process presentations and fact sheets using simpler approach
+        elif job.document_type in ['presentation', 'fact_sheet', 'news_release', 'financial_statement']:
+            # Process all general documents (presentations, fact sheets, news releases, financial statements)
+            # These documents are processed with Docling extraction and stored in RAG for chatbot queries
             job.progress_message = f"Processing {job.get_document_type_display()}..."
             job.save()
 
@@ -157,7 +158,7 @@ def process_single_job(job: DocumentProcessingJob):
             )
 
         else:
-            # For other document types, use basic processing
+            # For other/unknown document types, use basic processing
             job.progress_message = f"Processing {job.get_document_type_display()}..."
             job.save()
 
