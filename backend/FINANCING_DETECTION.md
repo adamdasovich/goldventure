@@ -8,12 +8,15 @@ The financing detection system automatically scans all incoming news releases fo
 
 ## Features
 
-✅ **Automatic Keyword Detection** - Scans news release titles for 11+ financing keywords
+✅ **Automatic Keyword Detection** - Scans news release titles for 25+ financing and strategic investment keywords
+✅ **Strategic Investment Detection** - Identifies major miner investments in juniors (Barrick, Newmont, etc.)
+✅ **Historical Backfill** - Retroactively scan existing news releases for financing flags
 ✅ **Superuser Review Queue** - Dedicated interface for reviewing flagged news
 ✅ **One-Click Financing Creation** - Create Financing records directly from flagged news
 ✅ **False Positive Dismissal** - Dismiss non-financing news with notes
 ✅ **Audit Trail** - Tracks who reviewed, when, and links to created financing records
 ✅ **Status Tracking** - Three states: Pending, Confirmed Financing, False Positive
+✅ **Email Notifications** - Instant alerts when new financing flags are detected
 
 ## How It Works
 
@@ -21,6 +24,7 @@ The financing detection system automatically scans all incoming news releases fo
 
 When news releases are scraped (via `scrape_company_news_task`), the system checks titles for these keywords:
 
+**Financing Keywords:**
 - private placement
 - financing
 - funding round
@@ -32,6 +36,30 @@ When news releases are scraped (via `scrape_company_news_task`), the system chec
 - warrant
 - subscription
 - offering
+
+**Strategic Investment Keywords:**
+- strategic investment
+- strategic partner
+- equity stake
+- strategic alliance
+- strategic equity
+- cornerstone investor
+
+**Major Miner Detection:**
+- barrick
+- newmont
+- agnico eagle
+- franco-nevada
+- kinross
+- anglogold ashanti
+- gold fields
+- wheaton precious metals
+- royal gold
+- eldorado gold
+- iamgold
+- endeavour mining
+- b2gold
+- yamana gold
 
 If any keywords are detected, a `NewsReleaseFlag` record is automatically created with:
 - Link to the news release
@@ -339,11 +367,100 @@ for flag in latest:
     print(f"  Keywords: {', '.join(flag.detected_keywords)}")
 ```
 
+## Backfilling Historical News Releases
+
+The system includes a management command to retroactively scan existing news releases and create financing flags for historical data.
+
+### Backfill Command
+
+```bash
+cd backend
+
+# Backfill last 3 months (default)
+python manage.py backfill_financing_flags --months 3 --dry-run
+
+# Backfill last 6 months and create flags
+python manage.py backfill_financing_flags --months 6
+
+# Backfill specific company
+python manage.py backfill_financing_flags --company-id 5
+
+# Send email notifications for backfilled flags (optional)
+python manage.py backfill_financing_flags --months 3 --send-emails
+```
+
+**Command Options:**
+- `--months N` - Number of months to scan backwards (default: 3)
+- `--company-id ID` - Only scan specific company
+- `--dry-run` - Show matches without creating flags
+- `--send-emails` - Send email notifications (default: False for backfill)
+
+**Example Output:**
+```
+================================================================================
+BACKFILL FINANCING FLAGS
+================================================================================
+[Date] Scanning news releases from: 2025-10-07
+[Mode] Creating flags for matches
+[Total] News releases to scan: 7
+
+================================================================================
+SCAN RESULTS
+================================================================================
+Total news releases scanned: 7
+Already flagged (skipped): 0
+New matches found: 2
+
+================================================================================
+DETECTED MATCHES
+================================================================================
+
+1. [Financing] 1911 Gold Corporation
+   Date: 2025-11-12
+   Title: 1911 Gold Announces C$20 Million Best Efforts Life Offering and Private Placement
+   Keywords: private placement, offering
+   URL: https://1911gold.com/_resources/restricted/index.php?file=nr-20251112
+
+2. [Strategic Investment] Explorer Corp
+   Date: 2025-10-15
+   Title: Barrick Invests $10M in Strategic Partnership with Explorer Corp
+   Keywords: barrick, strategic partner
+   URL: https://explorer.com/news/barrick-investment
+
+================================================================================
+CREATING FLAGS
+================================================================================
+[Created] Flag #1 for 1911 Gold Corporation
+[Created] Flag #2 for Explorer Corp
+
+[Success] Created 2 flags
+
+[Info] Email notifications were NOT sent (use --send-emails to enable)
+
+================================================================================
+SUMMARY
+================================================================================
+Period scanned: 2025-10-07 to 2026-01-05
+News releases scanned: 7
+Already flagged: 0
+New matches: 2
+Flags created: 2
+Emails sent: 0
+
+[Complete] Backfill finished!
+```
+
+**Best Practices:**
+- Always run with `--dry-run` first to preview matches
+- Don't use `--send-emails` for large backfills to avoid email spam
+- Backfill is safe to run multiple times (skips already flagged news)
+- Use for initial system setup or after adding new keywords
+
 ## Configuration
 
 ### Customize Detection Keywords
 
-Edit the keyword list in [backend/core/tasks.py:316-328](backend/core/tasks.py):
+Edit the keyword lists in [backend/core/tasks.py:325-366](backend/core/tasks.py):
 
 ```python
 financing_keywords = [
@@ -359,6 +476,23 @@ financing_keywords = [
     'subscription',
     'offering',
     # Add more keywords here
+]
+
+strategic_keywords = [
+    'strategic investment',
+    'strategic partner',
+    'equity stake',
+    'strategic alliance',
+    'strategic equity',
+    'cornerstone investor',
+]
+
+major_miners = [
+    'barrick',
+    'newmont',
+    'agnico eagle',
+    'franco-nevada',
+    # Add more major miners here
 ]
 ```
 

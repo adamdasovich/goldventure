@@ -337,8 +337,38 @@ def scrape_company_news_task(self, company_id):
                     'offering'
                 ]
 
+                # STRATEGIC INVESTMENT DETECTION: Major miner investments in juniors
+                strategic_keywords = [
+                    'strategic investment',
+                    'strategic partner',
+                    'equity stake',
+                    'strategic alliance',
+                    'strategic equity',
+                    'cornerstone investor',
+                ]
+
+                # Major miner names to detect strategic investments
+                major_miners = [
+                    'barrick',
+                    'newmont',
+                    'agnico eagle',
+                    'franco-nevada',
+                    'kinross',
+                    'anglogold ashanti',
+                    'gold fields',
+                    'wheaton precious metals',
+                    'royal gold',
+                    'eldorado gold',
+                    'iamgold',
+                    'endeavour mining',
+                    'b2gold',
+                    'yamana gold',
+                ]
+
+                all_keywords = financing_keywords + strategic_keywords + major_miners
+
                 title_lower = title.lower()
-                detected_keywords = [kw for kw in financing_keywords if kw in title_lower]
+                detected_keywords = [kw for kw in all_keywords if kw in title_lower]
 
                 # If financing keywords detected, create flag for superuser review
                 if detected_keywords:
