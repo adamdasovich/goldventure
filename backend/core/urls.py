@@ -55,6 +55,9 @@ router.register(r'admin/store/orders', views.StoreAdminOrderViewSet, basename='a
 router.register(r'glossary/submissions', views.GlossaryTermSubmissionViewSet, basename='glossary-submission')
 router.register(r'glossary', views.GlossaryTermViewSet, basename='glossary')
 
+# News Release Financing Flags ViewSet
+router.register(r'news-flags', views.NewsReleaseFlagViewSet, basename='news-flag')
+
 urlpatterns = [
     # Authentication endpoints
     path('auth/register/', views.register_user, name='register_user'),

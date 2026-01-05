@@ -292,5 +292,16 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'core.tasks.fetch_stock_prices_task',
         'schedule': crontab(hour=21, minute=30, day_of_week='mon-fri'),  # 4:30 PM ET, Mon-Fri
     },
+
+    # RECOMMENDED SCHEDULE ARCHITECTURE: Auto-discover and process documents
+    # Conservative approach: 10 companies per week, focused on high-priority document types
+    'auto-discover-documents-weekly': {
+        'task': 'core.tasks.auto_discover_and_process_documents_task',
+        'schedule': crontab(day_of_week=1, hour=2, minute=0),  # Every Monday at 2 AM
+        'kwargs': {
+            'limit': 10,  # Process 10 companies per week
+            'document_types': ['ni43101', 'news_release', 'presentation']  # High-priority types
+        }
+    },
 }
 

@@ -4475,3 +4475,86 @@ class GlossaryTermSubmission(models.Model):
         self.reviewed_at = timezone.now()
         self.rejection_reason = reason
         self.save()
+
+
+class NewsReleaseFlag(models.Model):
+    """
+    Tracks news releases flagged for potential financing announcements.
+    Superusers review these and can create Financing records from them.
+    """
+    STATUS_CHOICES = [
+        ('pending', 'Pending Review'),
+        ('reviewed_financing', 'Confirmed Financing - Created'),
+        ('reviewed_false_positive', 'False Positive - Dismissed'),
+    ]
+
+    news_release = models.OneToOneField(
+        NewsRelease,
+        on_delete=models.CASCADE,
+        related_name='financing_flag'
+    )
+    
+    # Detection metadata
+    flagged_at = models.DateTimeField(auto_now_add=True)
+    detected_keywords = models.JSONField(
+        default=list,
+        help_text="List of financing keywords that triggered the flag"
+    )
+    
+    # Review workflow
+    status = models.CharField(
+        max_length=30,
+        choices=STATUS_CHOICES,
+        default='pending'
+    )
+    reviewed_by = models.ForeignKey(
+        'User',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='reviewed_news_flags'
+    )
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    
+    # Link to created financing record (if confirmed)
+    created_financing = models.ForeignKey(
+        Financing,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='source_flag'
+    )
+    
+    # Review notes
+    review_notes = models.TextField(blank=True)
+    
+    class Meta:
+        db_table = 'news_release_flags'
+        ordering = ['-flagged_at']
+        indexes = [
+            models.Index(fields=['status', '-flagged_at']),
+        ]
+    
+    def __str__(self):
+        return f"Flag: {self.news_release.company.name} - {self.news_release.title[:50]}"
+    
+    def mark_as_financing(self, reviewer, financing_record, notes=''):
+        """Mark as confirmed financing and link to created Financing record"""
+        from django.utils import timezone
+        
+        self.status = 'reviewed_financing'
+        self.reviewed_by = reviewer
+        self.reviewed_at = timezone.now()
+        self.created_financing = financing_record
+        self.review_notes = notes
+        self.save()
+    
+    def dismiss_as_false_positive(self, reviewer, notes=''):
+        """Dismiss as false positive"""
+        from django.utils import timezone
+        
+        self.status = 'reviewed_false_positive'
+        self.reviewed_by = reviewer
+        self.reviewed_at = timezone.now()
+        self.review_notes = notes
+        self.save()

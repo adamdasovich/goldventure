@@ -311,6 +311,41 @@ def scrape_company_news_task(self, company_id):
 
             if created:
                 created_count += 1
+
+                # FINANCING DETECTION: Check for financing keywords in title
+                financing_keywords = [
+                    'private placement',
+                    'financing',
+                    'funding round',
+                    'capital raise',
+                    'bought deal',
+                    'equity financing',
+                    'debt financing',
+                    'flow-through',
+                    'warrant',
+                    'subscription',
+                    'offering'
+                ]
+
+                title_lower = title.lower()
+                detected_keywords = [kw for kw in financing_keywords if kw in title_lower]
+
+                # If financing keywords detected, create flag for superuser review
+                if detected_keywords:
+                    from core.models import NewsReleaseFlag
+
+                    # Only create flag if one doesn't already exist
+                    NewsReleaseFlag.objects.get_or_create(
+                        news_release=obj,
+                        defaults={
+                            'detected_keywords': detected_keywords,
+                            'status': 'pending'
+                        }
+                    )
+
+                    print(f"  🚩 Flagged financing-related news: {title[:60]}...")
+                    print(f"     Keywords: {', '.join(detected_keywords)}")
+
             else:
                 updated_count += 1
 

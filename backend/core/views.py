@@ -6833,3 +6833,162 @@ class GlossaryTermSubmissionViewSet(viewsets.ModelViewSet):
                 {'error': str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+
+# =============================================================================
+# NEWS RELEASE FINANCING FLAG VIEWS
+# =============================================================================
+
+class NewsReleaseFlagViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    ViewSet for reviewing news releases flagged for potential financing announcements.
+    Superusers can review and create financing records from flagged news.
+    """
+    permission_classes = [IsAuthenticated]
+    serializer_class = None  # Will define serializer inline
+    queryset = None  # Will define in get_queryset()
+
+    def get_queryset(self):
+        from core.models import NewsReleaseFlag
+
+        # Only superusers can access
+        if not self.request.user.is_superuser:
+            return NewsReleaseFlag.objects.none()
+
+        # Filter by status if provided
+        status_filter = self.request.query_params.get('status', 'pending')
+        if status_filter:
+            return NewsReleaseFlag.objects.filter(status=status_filter).select_related(
+                'news_release__company',
+                'reviewed_by',
+                'created_financing'
+            )
+
+        return NewsReleaseFlag.objects.all().select_related(
+            'news_release__company',
+            'reviewed_by',
+            'created_financing'
+        )
+
+    def list(self, request, *args, **kwargs):
+        """List all flagged news releases with filtering"""
+        flags = self.get_queryset()
+
+        # Build response
+        data = []
+        for flag in flags:
+            data.append({
+                'id': flag.id,
+                'company_name': flag.news_release.company.name,
+                'company_id': flag.news_release.company.id,
+                'news_release_id': flag.news_release.id,
+                'news_title': flag.news_release.title,
+                'news_url': flag.news_release.url,
+                'news_date': flag.news_release.release_date,
+                'detected_keywords': flag.detected_keywords,
+                'status': flag.status,
+                'flagged_at': flag.flagged_at,
+                'reviewed_by': flag.reviewed_by.username if flag.reviewed_by else None,
+                'reviewed_at': flag.reviewed_at,
+                'created_financing_id': flag.created_financing.id if flag.created_financing else None,
+                'review_notes': flag.review_notes
+            })
+
+        return Response(data)
+
+    @action(detail=True, methods=['post'], url_path='create-financing')
+    def create_financing(self, request, pk=None):
+        """
+        Create a Financing record from a flagged news release.
+        Marks the flag as 'reviewed_financing'.
+        """
+        from core.models import NewsReleaseFlag, Financing
+        from decimal import Decimal
+        from datetime import datetime
+
+        flag = self.get_object()
+
+        if flag.status != 'pending':
+            return Response(
+                {'error': 'This flag has already been reviewed'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Get financing details from request
+        financing_data = request.data
+
+        try:
+            # Parse announced date
+            announced_date = financing_data.get('announced_date')
+            if isinstance(announced_date, str):
+                announced_date = datetime.strptime(announced_date, '%Y-%m-%d').date()
+
+            # Create Financing record
+            financing = Financing.objects.create(
+                company=flag.news_release.company,
+                financing_type=financing_data.get('financing_type', 'private_placement'),
+                status=financing_data.get('status', 'announced'),
+                announced_date=announced_date or flag.news_release.release_date,
+                amount_raised_usd=Decimal(financing_data.get('amount_raised_usd', 0)),
+                price_per_share=Decimal(financing_data.get('price_per_share', 0)) if financing_data.get('price_per_share') else None,
+                shares_issued=financing_data.get('shares_issued'),
+                has_warrants=financing_data.get('has_warrants', False),
+                warrant_strike_price=Decimal(financing_data.get('warrant_strike_price', 0)) if financing_data.get('warrant_strike_price') else None,
+                use_of_proceeds=financing_data.get('use_of_proceeds', ''),
+                lead_agent=financing_data.get('lead_agent', ''),
+                press_release_url=flag.news_release.url,
+                notes=financing_data.get('notes', '')
+            )
+
+            # Mark flag as reviewed and link financing
+            flag.mark_as_financing(
+                reviewer=request.user,
+                financing_record=financing,
+                notes=financing_data.get('review_notes', 'Financing created from flagged news release')
+            )
+
+            return Response({
+                'message': 'Financing created successfully',
+                'financing_id': financing.id,
+                'flag_id': flag.id
+            }, status=status.HTTP_201_CREATED)
+
+        except Exception as e:
+            return Response(
+                {'error': f'Error creating financing: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    @action(detail=True, methods=['post'], url_path='dismiss')
+    def dismiss_flag(self, request, pk=None):
+        """
+        Dismiss a flagged news release as a false positive.
+        """
+        from core.models import NewsReleaseFlag
+
+        flag = self.get_object()
+
+        if flag.status != 'pending':
+            return Response(
+                {'error': 'This flag has already been reviewed'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        notes = request.data.get('notes', 'Dismissed as false positive')
+
+        try:
+            flag.dismiss_as_false_positive(
+                reviewer=request.user,
+                notes=notes
+            )
+
+            return Response({
+                'message': 'Flag dismissed successfully',
+                'flag_id': flag.id
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response(
+                {'error': f'Error dismissing flag: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
