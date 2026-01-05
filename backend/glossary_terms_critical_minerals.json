@@ -1,0 +1,308 @@
+[
+  {
+    "term": "Silver-Gold Ratio",
+    "definition": "The number of ounces of silver required to purchase one ounce of gold. This ratio is used by investors to assess the relative value between silver and gold markets. Historically averages around 60:1 but can vary significantly based on market conditions.",
+    "category": "finance",
+    "keywords": "silver, gold, ratio, precious metals, investment"
+  },
+  {
+    "term": "Primary Silver Producer",
+    "definition": "A mining company where silver is the principal metal produced and accounts for the majority of revenue, as opposed to companies producing silver as a by-product of gold, copper, or lead-zinc operations.",
+    "category": "operations",
+    "keywords": "silver, producer, mining company, primary metal"
+  },
+  {
+    "term": "By-Product Silver",
+    "definition": "Silver recovered as a secondary metal during the processing of ores primarily mined for other metals such as gold, copper, lead, or zinc. Most silver production globally comes from by-product operations rather than primary silver mines.",
+    "category": "operations",
+    "keywords": "silver, by-product, polymetallic, mining"
+  },
+  {
+    "term": "Silver Ounce Equivalent (AgEq)",
+    "definition": "A conversion metric used to express the value of polymetallic deposits in terms of silver ounces. AgEq calculations include silver content plus the value of other metals (gold, lead, zinc) converted to equivalent silver ounces at specified metal prices.",
+    "category": "reporting",
+    "keywords": "silver equivalent, AgEq, conversion, polymetallic"
+  },
+  {
+    "term": "Epithermal Silver Deposit",
+    "definition": "A type of mineral deposit formed by hot, rising fluids in volcanic environments at shallow depths and low temperatures. Epithermal deposits are a major source of silver and gold, characterized by high-grade veins and stockwork mineralization.",
+    "category": "geology",
+    "keywords": "epithermal, silver, gold, deposit type, volcanic"
+  },
+  {
+    "term": "Lithium Carbonate (Li2CO3)",
+    "definition": "A white powdery compound that is the most common form of lithium used in battery production. Produced from either hard rock (spodumene) or brine sources, lithium carbonate is a key material for lithium-ion batteries used in electric vehicles and energy storage.",
+    "category": "operations",
+    "keywords": "lithium, carbonate, battery, EV, processing"
+  },
+  {
+    "term": "Lithium Hydroxide (LiOH)",
+    "definition": "A chemical compound preferred for high-energy-density batteries, particularly in electric vehicle applications. Lithium hydroxide generally commands a price premium over lithium carbonate due to superior battery performance characteristics.",
+    "category": "operations",
+    "keywords": "lithium, hydroxide, battery, EV, high-grade"
+  },
+  {
+    "term": "Spodumene",
+    "definition": "A lithium-bearing mineral (LiAlSi2O6) found in pegmatite deposits. Spodumene is the primary source mineral for hard rock lithium production and must be processed through chemical conversion to produce battery-grade lithium carbonate or hydroxide.",
+    "category": "geology",
+    "keywords": "spodumene, lithium, pegmatite, hard rock, mineral"
+  },
+  {
+    "term": "Lithium Brine",
+    "definition": "Underground reservoirs of salty water with dissolved lithium compounds, typically found in salt flats (salars) in South America. Brine extraction involves pumping to surface evaporation ponds, offering lower production costs than hard rock mining but longer development timelines.",
+    "category": "geology",
+    "keywords": "lithium, brine, salar, evaporation, extraction"
+  },
+  {
+    "term": "Battery-Grade Lithium",
+    "definition": "Lithium chemical products (carbonate or hydroxide) that meet purity specifications required for lithium-ion battery manufacturing, typically 99.5% or higher purity. Battery-grade material commands premium pricing over industrial-grade lithium.",
+    "category": "operations",
+    "keywords": "battery grade, lithium, purity, specification, EV"
+  },
+  {
+    "term": "Battery Metals",
+    "definition": "A group of critical minerals essential for lithium-ion battery production, including lithium, cobalt, nickel, graphite, and manganese. Demand for battery metals is rapidly growing due to electric vehicle adoption and energy storage requirements.",
+    "category": "general",
+    "keywords": "battery metals, lithium, cobalt, nickel, EV, critical minerals"
+  },
+  {
+    "term": "Cobalt Sulphate",
+    "definition": "A chemical compound (CoSO4) used as a critical input for lithium-ion battery cathodes, particularly in NMC (nickel-manganese-cobalt) battery chemistries. Most cobalt is produced as a by-product of copper and nickel mining in the Democratic Republic of Congo.",
+    "category": "operations",
+    "keywords": "cobalt, sulphate, battery, cathode, by-product"
+  },
+  {
+    "term": "Nickel Sulphate",
+    "definition": "A chemical compound (NiSO4) used in battery cathode production, particularly for high-nickel NMC and NCA battery chemistries that offer higher energy density. Class 1 nickel (>99.8% purity) is required for battery-grade nickel sulphate production.",
+    "category": "operations",
+    "keywords": "nickel, sulphate, battery, cathode, class 1"
+  },
+  {
+    "term": "Critical Minerals",
+    "definition": "Minerals deemed essential to economic security and supply chain resilience, particularly for clean energy, defense, and technology applications. Lists vary by country but commonly include lithium, cobalt, rare earths, graphite, and other battery and technology metals.",
+    "category": "regulatory",
+    "keywords": "critical minerals, supply chain, strategic, government, policy"
+  },
+  {
+    "term": "NMC Battery Chemistry",
+    "definition": "Nickel-Manganese-Cobalt lithium-ion battery chemistry, one of the most common types used in electric vehicles. NMC batteries offer a balance of energy density, safety, and cost, with varying ratios (e.g., NMC 811 has 80% nickel, 10% manganese, 10% cobalt).",
+    "category": "general",
+    "keywords": "NMC, battery, nickel, manganese, cobalt, lithium-ion"
+  },
+  {
+    "term": "REE (Rare Earth Elements)",
+    "definition": "A group of 17 metallic elements including the 15 lanthanides plus scandium and yttrium. Despite the name, rare earths are relatively abundant but difficult to extract economically. Used in magnets, electronics, catalysts, and defense applications.",
+    "category": "general",
+    "keywords": "rare earth elements, REE, lanthanides, critical minerals"
+  },
+  {
+    "term": "TREO (Total Rare Earth Oxides)",
+    "definition": "The sum of all rare earth element oxides in a mineral deposit, typically expressed as a grade percentage or parts per million (ppm). TREO is the standard metric for reporting rare earth resource estimates and provides a measure of total rare earth content.",
+    "category": "reporting",
+    "keywords": "TREO, rare earth oxides, grade, reporting, REE"
+  },
+  {
+    "term": "Heavy Rare Earths (HREE)",
+    "definition": "The heavier elements in the rare earth series, including europium, gadolinium, terbium, dysprosium, holmium, erbium, thulium, ytterbium, lutetium, and yttrium. HREEs are more valuable and scarcer than light rare earths, critical for high-performance magnets and advanced technology.",
+    "category": "geology",
+    "keywords": "heavy rare earths, HREE, dysprosium, critical minerals"
+  },
+  {
+    "term": "Light Rare Earths (LREE)",
+    "definition": "The lighter elements in the rare earth series, including lanthanum, cerium, praseodymium, neodymium, promethium, and samarium. LREEs are more abundant than heavy rare earths but still economically important, particularly neodymium and praseodymium for permanent magnets.",
+    "category": "geology",
+    "keywords": "light rare earths, LREE, neodymium, praseodymium, cerium"
+  },
+  {
+    "term": "Neodymium (Nd)",
+    "definition": "A rare earth element (atomic number 60) essential for manufacturing high-strength permanent magnets used in electric vehicle motors, wind turbines, and electronics. Neodymium-iron-boron (NdFeB) magnets are the strongest permanent magnets commercially available.",
+    "category": "general",
+    "keywords": "neodymium, Nd, rare earth, magnet, EV motor"
+  },
+  {
+    "term": "Praseodymium (Pr)",
+    "definition": "A rare earth element (atomic number 59) used in combination with neodymium for permanent magnet production. Praseodymium improves magnet temperature resistance and is typically marketed together with neodymium as 'NdPr' oxide.",
+    "category": "general",
+    "keywords": "praseodymium, Pr, rare earth, magnet, NdPr"
+  },
+  {
+    "term": "Dysprosium (Dy)",
+    "definition": "A heavy rare earth element (atomic number 66) added to neodymium magnets to improve temperature stability and resistance to demagnetization. Dysprosium is one of the most critical and valuable rare earths due to limited supply and growing demand for EV motors.",
+    "category": "general",
+    "keywords": "dysprosium, Dy, heavy rare earth, magnet, critical"
+  },
+  {
+    "term": "NdPr Oxide",
+    "definition": "A combined rare earth product containing neodymium oxide (Nd2O3) and praseodymium oxide (Pr2O3), the two most valuable rare earth elements for permanent magnet production. NdPr oxide typically trades as a single commodity due to similar properties and applications.",
+    "category": "operations",
+    "keywords": "NdPr, neodymium, praseodymium, oxide, rare earth"
+  },
+  {
+    "term": "Magnetic Rare Earths",
+    "definition": "Rare earth elements used in permanent magnet production, primarily neodymium, praseodymium, dysprosium, and terbium. These elements are critical for electric vehicle motors, wind turbine generators, and various high-tech applications.",
+    "category": "general",
+    "keywords": "magnetic rare earths, magnet, neodymium, dysprosium, EV"
+  },
+  {
+    "term": "Bastnasite",
+    "definition": "A rare earth carbonate-fluoride mineral [(Ce,La,Y)CO3F] that is the primary ore mineral for light rare earth production. Major bastnasite deposits are found in China (Bayan Obo) and the United States (Mountain Pass), accounting for most global rare earth supply.",
+    "category": "geology",
+    "keywords": "bastnasite, rare earth, mineral, cerium, lanthanum"
+  },
+  {
+    "term": "Critical Minerals List",
+    "definition": "Government-designated lists of minerals deemed essential for economic and national security. Lists vary by country but typically include materials critical for energy transition, defense, and technology sectors. Examples include lithium, cobalt, rare earths, and graphite.",
+    "category": "regulatory",
+    "keywords": "critical minerals, government, policy, strategic, security"
+  },
+  {
+    "term": "Strategic Metals",
+    "definition": "Metals considered essential for national defense, economic security, and critical infrastructure. Strategic metals often overlap with critical minerals and include elements like rare earths, cobalt, titanium, and other materials with concentrated supply chains.",
+    "category": "regulatory",
+    "keywords": "strategic metals, defense, security, supply chain, critical"
+  },
+  {
+    "term": "Copper Equivalent (CuEq)",
+    "definition": "A conversion metric used to express the combined value of multiple metals in polymetallic deposits as equivalent copper. CuEq calculations include copper content plus the value of by-products (gold, silver, molybdenum) converted to equivalent copper at specified metal prices.",
+    "category": "reporting",
+    "keywords": "copper equivalent, CuEq, conversion, polymetallic"
+  },
+  {
+    "term": "Porphyry Copper Deposit",
+    "definition": "A large, low-to-moderate grade copper deposit formed by hydrothermal fluids associated with intrusive igneous rocks. Porphyry deposits account for most global copper production and often contain significant by-products including gold, molybdenum, silver, and rhenium.",
+    "category": "geology",
+    "keywords": "porphyry, copper, deposit type, molybdenum, gold"
+  },
+  {
+    "term": "VMS (Volcanogenic Massive Sulphide)",
+    "definition": "A type of metal sulfide ore deposit formed on the seafloor from hydrothermal vents in volcanic environments. VMS deposits typically contain copper, zinc, lead, gold, and silver in massive sulfide lenses. Found in ancient volcanic sequences now exposed on land.",
+    "category": "geology",
+    "keywords": "VMS, volcanogenic, massive sulphide, copper, zinc"
+  },
+  {
+    "term": "Base Metals",
+    "definition": "Industrial metals that are relatively abundant and oxidize or corrode easily, including copper, zinc, lead, nickel, and aluminum. Base metals are essential for construction, manufacturing, and infrastructure, distinguished from precious metals like gold and silver.",
+    "category": "general",
+    "keywords": "base metals, copper, zinc, lead, nickel, industrial"
+  },
+  {
+    "term": "Polymetallic Deposit",
+    "definition": "A mineral deposit containing economically significant quantities of two or more metals, such as copper-gold, zinc-lead-silver, or cobalt-nickel. Polymetallic deposits offer revenue diversification but require more complex metallurgy and processing.",
+    "category": "geology",
+    "keywords": "polymetallic, multiple metals, by-product, deposit"
+  },
+  {
+    "term": "Graphite (Natural vs Synthetic)",
+    "definition": "A crystalline form of carbon used in lithium-ion battery anodes, with two production sources: natural graphite mined from deposits (flake, vein, amorphous) and synthetic graphite produced from petroleum coke. Natural graphite requires purification to battery-grade (>99.95% carbon).",
+    "category": "general",
+    "keywords": "graphite, carbon, battery, anode, natural, synthetic"
+  },
+  {
+    "term": "Cathode Active Material (CAM)",
+    "definition": "The positive electrode material in lithium-ion batteries that determines energy density and performance characteristics. CAM typically contains lithium combined with transition metals (nickel, manganese, cobalt) or phosphates, making up 30-40% of battery cost.",
+    "category": "general",
+    "keywords": "cathode, CAM, battery, lithium, nickel, cobalt"
+  },
+  {
+    "term": "Lithium Iron Phosphate (LFP)",
+    "definition": "A lithium-ion battery cathode chemistry (LiFePO4) that uses iron phosphate instead of nickel and cobalt. LFP batteries offer lower cost, longer cycle life, and improved safety compared to NMC batteries, but with lower energy density. Increasingly used in EVs and stationary storage.",
+    "category": "general",
+    "keywords": "LFP, lithium iron phosphate, battery, cathode, safety"
+  },
+  {
+    "term": "Electric Vehicle (EV) Metals",
+    "definition": "Metals and minerals essential for electric vehicle manufacturing, including lithium, cobalt, nickel, graphite, copper, rare earths, and aluminum. An average EV contains 10x more critical minerals than a conventional vehicle, driving rapid demand growth.",
+    "category": "general",
+    "keywords": "EV metals, electric vehicle, lithium, battery, critical minerals"
+  },
+  {
+    "term": "Energy Transition Metals",
+    "definition": "Metals required for decarbonization and clean energy technologies, including battery metals (lithium, nickel, cobalt), rare earths for magnets, copper for electrification, and silver for solar panels. Demand projected to grow 400-500% by 2040.",
+    "category": "general",
+    "keywords": "energy transition, clean energy, decarbonization, critical minerals"
+  },
+  {
+    "term": "Gigafactory",
+    "definition": "A large-scale manufacturing facility for lithium-ion battery production, originally coined by Tesla. Gigafactories require enormous quantities of battery metals (lithium, nickel, cobalt, graphite) and represent a key driver of demand for critical minerals.",
+    "category": "general",
+    "keywords": "gigafactory, battery, manufacturing, lithium, EV"
+  },
+  {
+    "term": "Silver Streaming Agreement",
+    "definition": "A financing arrangement where a mining company receives upfront capital in exchange for the right to purchase a percentage of future silver production at a predetermined, below-market price. Streaming provides alternative financing while allowing companies to retain project ownership.",
+    "category": "finance",
+    "keywords": "silver stream, streaming, financing, royalty, off-take"
+  },
+  {
+    "term": "Precious Metals Basket",
+    "definition": "A portfolio or investment approach that includes multiple precious metals (gold, silver, platinum, palladium) to diversify risk and capture different market dynamics. Silver often exhibits higher volatility and industrial demand compared to gold's safe-haven characteristics.",
+    "category": "finance",
+    "keywords": "precious metals, basket, portfolio, gold, silver, diversification"
+  },
+  {
+    "term": "Silver Grade (g/t)",
+    "definition": "The concentration of silver in ore, measured in grams per tonne (g/t) or ounces per ton (oz/t). Primary silver deposits typically range from 100-500 g/t Ag, while by-product silver from base metal deposits is often 10-50 g/t. High-grade silver veins can exceed 1,000 g/t.",
+    "category": "reporting",
+    "keywords": "silver grade, g/t, concentration, ore"
+  },
+  {
+    "term": "Antimony",
+    "definition": "A critical mineral (Sb, atomic number 51) used in flame retardants, batteries, semiconductors, and ammunition. China dominates global antimony supply (>80%), raising supply chain security concerns. Antimony is often recovered as a by-product of gold mining.",
+    "category": "general",
+    "keywords": "antimony, Sb, critical mineral, flame retardant, strategic"
+  },
+  {
+    "term": "Vanadium",
+    "definition": "A metallic element (V, atomic number 23) used in steel alloys for strengthening and in vanadium redox flow batteries for grid-scale energy storage. Vanadium's energy storage applications are growing due to renewable energy integration requirements.",
+    "category": "general",
+    "keywords": "vanadium, V, steel alloy, battery, energy storage"
+  },
+  {
+    "term": "Tungsten",
+    "definition": "A dense, high-melting-point metal (W, atomic number 74) with critical applications in cutting tools, drill bits, defense applications, and high-temperature components. China produces >80% of global tungsten, making it a strategic critical mineral.",
+    "category": "general",
+    "keywords": "tungsten, W, critical mineral, cutting tools, strategic"
+  },
+  {
+    "term": "Molybdenum",
+    "definition": "A refractory metal (Mo, atomic number 42) used primarily as a steel alloying element to improve strength and corrosion resistance. Molybdenum is typically recovered as a by-product of porphyry copper mining and commands premium pricing during economic expansions.",
+    "category": "general",
+    "keywords": "molybdenum, Mo, steel alloy, by-product, porphyry copper"
+  },
+  {
+    "term": "Indium",
+    "definition": "A rare metallic element (In, atomic number 49) used in flat-panel displays, touchscreens, solar cells, and semiconductors. Indium is recovered primarily as a by-product of zinc refining, making supply dependent on zinc production levels.",
+    "category": "general",
+    "keywords": "indium, In, technology metal, electronics, by-product, zinc"
+  },
+  {
+    "term": "Uranium (U3O8)",
+    "definition": "Triuranium octoxide, the concentrated form of uranium ore (yellowcake) produced at uranium mills. U3O8 is the standard commodity traded for nuclear fuel production. Uranium prices are denominated in dollars per pound U3O8 and fluctuate based on nuclear energy demand.",
+    "category": "general",
+    "keywords": "uranium, U3O8, yellowcake, nuclear, fuel"
+  },
+  {
+    "term": "Technology Metals",
+    "definition": "Metals essential for high-tech applications including electronics, semiconductors, renewable energy, and advanced manufacturing. Technology metals overlap significantly with critical minerals and include indium, gallium, germanium, rare earths, and tellurium.",
+    "category": "general",
+    "keywords": "technology metals, high-tech, semiconductors, critical minerals"
+  },
+  {
+    "term": "Defense Metals",
+    "definition": "Metals and minerals deemed essential for military and defense applications, including rare earths (for precision-guided weapons), titanium (aircraft), tungsten (ammunition), and cobalt (jet engines). Defense metals often appear on critical minerals lists due to national security implications.",
+    "category": "regulatory",
+    "keywords": "defense metals, military, strategic, security, rare earths"
+  },
+  {
+    "term": "Class 1 Nickel",
+    "definition": "High-purity nickel (≥99.8% Ni) suitable for battery-grade nickel sulphate production. Class 1 nickel commands a premium over Class 2 nickel (ferronickel and nickel pig iron used in stainless steel). The EV revolution is driving unprecedented demand for Class 1 nickel.",
+    "category": "operations",
+    "keywords": "class 1 nickel, battery grade, purity, EV, sulphate"
+  },
+  {
+    "term": "Cobalt Hydroxide",
+    "definition": "An intermediate cobalt product (Co(OH)2) produced at some cobalt mines and refined into cobalt sulphate for battery cathode production. Cobalt hydroxide offers transportability advantages and flexibility in the cobalt supply chain.",
+    "category": "operations",
+    "keywords": "cobalt hydroxide, intermediate, battery, processing"
+  }
+]
