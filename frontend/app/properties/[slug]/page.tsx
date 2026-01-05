@@ -44,9 +44,9 @@ export async function generateMetadata({ params }: { params: { slug: string } })
     `${property.listing_type.replace('_', ' ')} property in ${property.province_state}, ${property.country_display}. ${property.total_hectares || 'N/A'} hectares, ${property.primary_mineral_display || 'mineral exploration'} project.`;
 
   const images = property.hero_image
-    ? [`https://juniorgoldminingintelligence.com${property.hero_image}`]
+    ? [`https://juniorminingintelligence.com${property.hero_image}`]
     : property.media?.[0]?.file_url
-    ? [`https://juniorgoldminingintelligence.com${property.media[0].file_url}`]
+    ? [`https://juniorminingintelligence.com${property.media[0].file_url}`]
     : ['/og-image.png'];
 
   return {
@@ -57,7 +57,7 @@ export async function generateMetadata({ params }: { params: { slug: string } })
       description,
       type: 'article',
       images,
-      url: `https://juniorgoldminingintelligence.com/properties/${params.slug}`,
+      url: `https://juniorminingintelligence.com/properties/${params.slug}`,
     },
     twitter: {
       card: 'summary_large_image',
@@ -66,7 +66,7 @@ export async function generateMetadata({ params }: { params: { slug: string } })
       images,
     },
     alternates: {
-      canonical: `https://juniorgoldminingintelligence.com/properties/${params.slug}`,
+      canonical: `https://juniorminingintelligence.com/properties/${params.slug}`,
     },
   };
 }

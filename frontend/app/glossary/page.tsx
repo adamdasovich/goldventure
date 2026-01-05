@@ -429,13 +429,13 @@ export default function GlossaryPage() {
     '@type': 'DefinedTermSet',
     name: 'Junior Gold Mining Industry Glossary',
     description: 'Comprehensive glossary of technical terms, standards, and definitions used in junior gold mining, mineral exploration, NI 43-101 standards, TSXV listings, and mining investment. Essential resource for understanding mining terminology.',
-    url: 'https://juniorgoldminingintelligence.com/glossary',
+    url: 'https://juniorminingintelligence.com/glossary',
     inLanguage: 'en-US',
     dateModified: new Date().toISOString().split('T')[0],
     publisher: {
       '@type': 'Organization',
       name: 'Junior Gold Mining Intelligence',
-      url: 'https://juniorgoldminingintelligence.com',
+      url: 'https://juniorminingintelligence.com',
       description: 'Junior gold mining data, stock intelligence, and industry analysis platform'
     },
     about: [
@@ -460,7 +460,7 @@ export default function GlossaryPage() {
     ],
     hasDefinedTerm: (glossaryTerms || []).map(term => ({
       '@type': 'DefinedTerm',
-      '@id': `https://juniorgoldminingintelligence.com/glossary#${term.term.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
+      '@id': `https://juniorminingintelligence.com/glossary#${term.term.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
       name: term.term,
       description: term.definition,
       inDefinedTermSet: 'Junior Gold Mining Industry Glossary',
@@ -481,10 +481,10 @@ export default function GlossaryPage() {
           content="Comprehensive glossary of 60+ junior gold mining terms covering NI 43-101 standards, TSXV listings, mineral resources, exploration geology, and mining investment. Essential definitions for understanding junior mining stocks."
         />
         <meta name="keywords" content="junior gold mining glossary, NI 43-101 terms, mining definitions, TSXV mining, indicated resource, feasibility study, junior mining company, gold exploration terms" />
-        <link rel="canonical" href="https://juniorgoldminingintelligence.com/glossary" />
+        <link rel="canonical" href="https://juniorminingintelligence.com/glossary" />
         <meta property="og:title" content="Junior Gold Mining Industry Glossary - 60+ Essential Terms" />
         <meta property="og:description" content="Learn junior gold mining terminology: NI 43-101, indicated resources, feasibility studies, TSXV listings, and exploration terms." />
-        <meta property="og:url" content="https://juniorgoldminingintelligence.com/glossary" />
+        <meta property="og:url" content="https://juniorminingintelligence.com/glossary" />
         <meta property="og:type" content="website" />
       </Head>
 

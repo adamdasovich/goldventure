@@ -19,7 +19,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: 'Live Precious Metals Prices | Junior Gold Mining Intelligence',
     description: 'Real-time gold, silver, platinum and palladium prices with historical charts and market analysis.',
-    url: 'https://juniorgoldminingintelligence.com/metals',
+    url: 'https://juniorminingintelligence.com/metals',
     type: 'website',
     images: [
       {
@@ -37,7 +37,7 @@ export const metadata: Metadata = {
     images: ['/og-image.png'],
   },
   alternates: {
-    canonical: 'https://juniorgoldminingintelligence.com/metals',
+    canonical: 'https://juniorminingintelligence.com/metals',
   },
 };
 

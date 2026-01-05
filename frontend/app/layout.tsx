@@ -274,13 +274,13 @@ const breadcrumbJsonLd = {
       '@type': 'ListItem',
       position: 3,
       name: 'Properties',
-      item: 'https://juniorgoldminingintelligence.com/properties'
+      item: 'https://juniorminingintelligence.com/properties'
     },
     {
       '@type': 'ListItem',
       position: 4,
       name: 'Glossary',
-      item: 'https://juniorgoldminingintelligence.com/glossary'
+      item: 'https://juniorminingintelligence.com/glossary'
     }
   ]
 };

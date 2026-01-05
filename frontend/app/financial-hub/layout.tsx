@@ -17,7 +17,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: 'Financial Hub | Junior Gold Mining Intelligence',
     description: 'Access financing rounds, private placements, and investment opportunities in junior mining companies.',
-    url: 'https://juniorgoldminingintelligence.com/financial-hub',
+    url: 'https://juniorminingintelligence.com/financial-hub',
     type: 'website',
     images: [
       {
@@ -35,7 +35,7 @@ export const metadata: Metadata = {
     images: ['/og-image.png'],
   },
   alternates: {
-    canonical: 'https://juniorgoldminingintelligence.com/financial-hub',
+    canonical: 'https://juniorminingintelligence.com/financial-hub',
   },
 };
 

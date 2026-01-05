@@ -482,7 +482,7 @@ export default function CompanyDetailPage() {
                 '@type': 'Corporation',
                 name: company.name,
                 description: company.description || `${company.name} is a mining company listed on ${company.exchange.toUpperCase()}.`,
-                url: `https://juniorgoldminingintelligence.com/companies/${companyId}`,
+                url: `https://juniorminingintelligence.com/companies/${companyId}`,
                 tickerSymbol: `${company.exchange.toUpperCase()}:${company.ticker_symbol}`,
                 ...(company.website && { sameAs: [company.website] }),
                 ...(stockQuote && {

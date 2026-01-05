@@ -46,7 +46,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
         title,
         description,
         type: 'website',
-        url: `https://juniorgoldminingintelligence.com/companies/${id}`,
+        url: `https://juniorminingintelligence.com/companies/${id}`,
         siteName: 'Junior Gold Mining Intelligence',
         images: [
           {
@@ -64,7 +64,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
         images: ['/og-image.png'],
       },
       alternates: {
-        canonical: `https://juniorgoldminingintelligence.com/companies/${id}`,
+        canonical: `https://juniorminingintelligence.com/companies/${id}`,
       },
     };
   } catch (error) {

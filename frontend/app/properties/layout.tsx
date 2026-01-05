@@ -18,7 +18,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "Prospector's Property Exchange | Junior Gold Mining Intelligence",
     description: 'Browse and list mineral claims, exploration properties, and mining projects. Free listings for prospectors.',
-    url: 'https://juniorgoldminingintelligence.com/properties',
+    url: 'https://juniorminingintelligence.com/properties',
     type: 'website',
     images: [
       {
@@ -36,7 +36,7 @@ export const metadata: Metadata = {
     images: ['/og-image.png'],
   },
   alternates: {
-    canonical: 'https://juniorgoldminingintelligence.com/properties',
+    canonical: 'https://juniorminingintelligence.com/properties',
   },
 };
 

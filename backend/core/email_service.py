@@ -72,7 +72,7 @@ class EmailService:
             text_content = strip_tags(html_content)
 
             # Parse from_email - handle "Name <email>" format
-            from_email_setting = getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@juniorgoldminingintelligence.com')
+            from_email_setting = getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@juniorminingintelligence.com')
             if '<' in from_email_setting and '>' in from_email_setting:
                 # Extract just the email address
                 from_email = from_email_setting.split('<')[1].split('>')[0].strip()
@@ -152,7 +152,7 @@ class EmailService:
             'has_physical': has_physical,
             'tracking_number': order.tracking_number,
             'customer_name': order.shipping_address.get('name', '') if order.shipping_address else '',
-            'site_url': 'https://juniorgoldminingintelligence.com',
+            'site_url': 'https://juniorminingintelligence.com',
         }
 
     @staticmethod
@@ -212,7 +212,7 @@ class EmailService:
                     <div style="color: #D4AF37; font-weight: 600; margin-bottom: 8px;">📚 Digital Downloads Ready</div>
                     <div style="color: #94A3B8; font-size: 14px;">
                         Your digital items are available for immediate download. Click the download links above or visit your
-                        <a href="https://juniorgoldminingintelligence.com/account/orders" style="color: #D4AF37;">orders page</a>.
+                        <a href="https://juniorminingintelligence.com/account/orders" style="color: #D4AF37;">orders page</a>.
                     </div>
                 </div>
             '''
@@ -313,7 +313,7 @@ class EmailService:
 
                             <!-- CTA Button -->
                             <div style="text-align: center; margin-top: 32px;">
-                                <a href="https://juniorgoldminingintelligence.com/account/orders"
+                                <a href="https://juniorminingintelligence.com/account/orders"
                                    style="display: inline-block; background: linear-gradient(135deg, #D4AF37 0%, #B8860B 100%); color: #0F172A; text-decoration: none; padding: 14px 32px; border-radius: 8px; font-weight: 600; font-size: 16px;">
                                     View Your Orders
                                 </a>
@@ -326,7 +326,7 @@ class EmailService:
                     <tr>
                         <td style="text-align: center; padding-top: 32px;">
                             <p style="color: #64748B; font-size: 14px; margin: 0 0 8px 0;">
-                                Questions about your order? Contact us at support@juniorgoldminingintelligence.com
+                                Questions about your order? Contact us at support@juniorminingintelligence.com
                             </p>
                             <p style="color: #475569; font-size: 12px; margin: 0;">
                                 © 2025 Junior Gold Mining Intelligence. All rights reserved.
@@ -395,7 +395,7 @@ class EmailService:
 
                             {f'<div style="background: #0F172A; border: 1px solid #334155; border-radius: 8px; padding: 16px; margin-bottom: 24px;"><div style="color: #64748B; font-size: 12px; text-transform: uppercase; margin-bottom: 8px;">Tracking Number</div><div style="color: #D4AF37; font-family: monospace; font-size: 18px;">{order.tracking_number}</div></div>' if order.tracking_number else ''}
 
-                            <a href="https://juniorgoldminingintelligence.com/account/orders" style="display: inline-block; background: linear-gradient(135deg, #D4AF37 0%, #B8860B 100%); color: #0F172A; text-decoration: none; padding: 14px 32px; border-radius: 8px; font-weight: 600;">
+                            <a href="https://juniorminingintelligence.com/account/orders" style="display: inline-block; background: linear-gradient(135deg, #D4AF37 0%, #B8860B 100%); color: #0F172A; text-decoration: none; padding: 14px 32px; border-radius: 8px; font-weight: 600;">
                                 Track Your Order
                             </a>
                         </td>
@@ -411,7 +411,7 @@ class EmailService:
             text_content = strip_tags(html_content)
 
             # Parse from_email - handle "Name <email>" format
-            from_email_setting = getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@juniorgoldminingintelligence.com')
+            from_email_setting = getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@juniorminingintelligence.com')
             if '<' in from_email_setting and '>' in from_email_setting:
                 from_email = from_email_setting.split('<')[1].split('>')[0].strip()
                 from_name = from_email_setting.split('<')[0].strip()
@@ -570,7 +570,7 @@ class EmailService:
 
                             <!-- CTA Button -->
                             <div style="text-align: center; margin-top: 32px;">
-                                <a href="https://juniorgoldminingintelligence.com/companies/{company.id}"
+                                <a href="https://juniorminingintelligence.com/companies/{company.id}"
                                    style="display: inline-block; background: linear-gradient(135deg, #D4AF37 0%, #B8860B 100%); color: #0F172A; text-decoration: none; padding: 14px 32px; border-radius: 8px; font-weight: 600; font-size: 16px;">
                                     Go to Company Portal
                                 </a>
@@ -583,7 +583,7 @@ class EmailService:
                     <tr>
                         <td style="text-align: center; padding-top: 32px;">
                             <p style="color: #64748B; font-size: 14px; margin: 0 0 8px 0;">
-                                Need help? Contact us at support@juniorgoldminingintelligence.com
+                                Need help? Contact us at support@juniorminingintelligence.com
                             </p>
                             <p style="color: #475569; font-size: 12px; margin: 0;">
                                 © 2025 Junior Gold Mining Intelligence. All rights reserved.
@@ -602,7 +602,7 @@ class EmailService:
             text_content = strip_tags(html_content)
 
             # Parse from_email - handle "Name <email>" format
-            from_email_setting = getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@juniorgoldminingintelligence.com')
+            from_email_setting = getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@juniorminingintelligence.com')
             if '<' in from_email_setting and '>' in from_email_setting:
                 from_email = from_email_setting.split('<')[1].split('>')[0].strip()
                 from_name = from_email_setting.split('<')[0].strip()

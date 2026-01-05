@@ -18,10 +18,10 @@ export const metadata: Metadata = {
     title: 'The Complete Guide to Junior Gold Mining Companies 2026',
     description: 'Learn how to evaluate, invest in, and track junior gold mining companies with this comprehensive 3,500+ word guide.',
     type: 'article',
-    url: 'https://juniorgoldminingintelligence.com/guides/junior-gold-mining-companies-guide',
+    url: 'https://juniorminingintelligence.com/guides/junior-gold-mining-companies-guide',
   },
   alternates: {
-    canonical: 'https://juniorgoldminingintelligence.com/guides/junior-gold-mining-companies-guide',
+    canonical: 'https://juniorminingintelligence.com/guides/junior-gold-mining-companies-guide',
   },
 };
 
@@ -34,21 +34,21 @@ const articleSchema = {
   author: {
     '@type': 'Organization',
     name: 'Junior Gold Mining Intelligence',
-    url: 'https://juniorgoldminingintelligence.com'
+    url: 'https://juniorminingintelligence.com'
   },
   publisher: {
     '@type': 'Organization',
     name: 'Junior Gold Mining Intelligence',
     logo: {
       '@type': 'ImageObject',
-      url: 'https://juniorgoldminingintelligence.com/logo.png'
+      url: 'https://juniorminingintelligence.com/logo.png'
     }
   },
   datePublished: '2026-01-04',
   dateModified: '2026-01-04',
   mainEntityOfPage: {
     '@type': 'WebPage',
-    '@id': 'https://juniorgoldminingintelligence.com/guides/junior-gold-mining-companies-guide'
+    '@id': 'https://juniorminingintelligence.com/guides/junior-gold-mining-companies-guide'
   }
 };
 

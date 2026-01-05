@@ -270,19 +270,19 @@ export default function PropertyDetailClient() {
                 '@type': 'ListItem',
                 position: 1,
                 name: 'Home',
-                item: 'https://juniorgoldminingintelligence.com'
+                item: 'https://juniorminingintelligence.com'
               },
               {
                 '@type': 'ListItem',
                 position: 2,
                 name: 'Prospector\'s Exchange',
-                item: 'https://juniorgoldminingintelligence.com/properties'
+                item: 'https://juniorminingintelligence.com/properties'
               },
               {
                 '@type': 'ListItem',
                 position: 3,
                 name: listing.title,
-                item: `https://juniorgoldminingintelligence.com/properties/${slug}`
+                item: `https://juniorminingintelligence.com/properties/${slug}`
               }
             ]
           })

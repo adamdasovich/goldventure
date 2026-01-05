@@ -19,10 +19,10 @@ export function OrganizationSchema() {
     '@context': 'https://schema.org',
     '@type': 'Organization',
     name: 'Junior Gold Mining Intelligence',
-    url: 'https://juniorgoldminingintelligence.com',
+    url: 'https://juniorminingintelligence.com',
     logo: {
       '@type': 'ImageObject',
-      url: 'https://juniorgoldminingintelligence.com/android-chrome-512x512.png',
+      url: 'https://juniorminingintelligence.com/android-chrome-512x512.png',
       width: 512,
       height: 512,
     },
@@ -139,7 +139,7 @@ export function NewsArticleSchema({
       name: 'Junior Gold Mining Intelligence',
       logo: {
         '@type': 'ImageObject',
-        url: 'https://juniorgoldminingintelligence.com/android-chrome-512x512.png',
+        url: 'https://juniorminingintelligence.com/android-chrome-512x512.png',
         width: 512,
         height: 512,
       },

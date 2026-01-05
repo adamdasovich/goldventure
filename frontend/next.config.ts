@@ -20,11 +20,11 @@ const nextConfig: NextConfig = {
       },
       {
         protocol: 'https',
-        hostname: 'juniorgoldminingintelligence.com',
+        hostname: 'juniorminingintelligence.com',
       },
       {
         protocol: 'https',
-        hostname: 'api.juniorgoldminingintelligence.com',
+        hostname: 'api.juniorminingintelligence.com',
       },
     ],
   },
