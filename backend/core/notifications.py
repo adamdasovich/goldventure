@@ -122,7 +122,7 @@ def send_financing_flag_notification(flag, company, news_release):
                 <div style="background-color: #e3f2fd; padding: 15px; border-left: 4px solid #2196F3; margin: 20px 0;">
                     <p style="margin: 0; color: #1565C0;"><strong>⚡ Action Required:</strong></p>
                     <p style="margin: 5px 0 0 0; color: #1565C0; font-size: 14px;">
-                        Review this news release at <a href="https://juniorgoldminingintelligence.com/admin/news-flags" style="color: #1565C0; text-decoration: underline;">Admin Panel → News Flags</a>
+                        Review this news release at <a href="https://juniorminingintelligence.com/admin/news-flags" style="color: #1565C0; text-decoration: underline;">Admin Panel → News Flags</a>
                     </p>
                 </div>
 
@@ -155,7 +155,7 @@ URL: {news_release.url}
 Detected Keywords: {', '.join(flag.detected_keywords)}
 
 ⚡ Action Required:
-Review this news release at: https://juniorgoldminingintelligence.com/admin/news-flags
+Review this news release at: https://juniorminingintelligence.com/admin/news-flags
 
 This news release was automatically flagged by the financing detection system based on keywords in the title.
 Please review and confirm if this represents an actual financing announcement.
