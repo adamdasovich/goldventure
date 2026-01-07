@@ -615,6 +615,158 @@ def auto_discover_and_process_documents_task(self, company_ids=None, document_ty
         }
 
 
+@shared_task(bind=True, max_retries=2, default_retry_delay=600)
+def scrape_all_companies_news_task(self):
+    """
+    Background task to scrape news releases for ALL companies with websites.
+    Iterates through each company and scrapes their news releases.
+
+    Scheduled to run daily in the morning via Celery Beat.
+    """
+    print("Starting company news scrape task for all companies...")
+
+    try:
+        # Get all companies with websites
+        companies = Company.objects.filter(
+            website__isnull=False
+        ).exclude(website='').order_by('name')
+
+        total_companies = companies.count()
+        print(f"Found {total_companies} companies with websites to scrape")
+
+        results = {
+            'total_companies': total_companies,
+            'successful': 0,
+            'failed': 0,
+            'total_news_created': 0,
+            'total_news_updated': 0,
+            'errors': []
+        }
+
+        for company in companies:
+            try:
+                print(f"Scraping news for {company.name}...")
+
+                # Run the async crawler
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+
+                try:
+                    news_releases = loop.run_until_complete(
+                        crawl_news_releases(
+                            url=company.website,
+                            months=3,  # Last 3 months for daily scrapes
+                            max_depth=2
+                        )
+                    )
+                finally:
+                    loop.close()
+
+                # Process and save news releases
+                created_count = 0
+                updated_count = 0
+
+                for news in news_releases:
+                    title = news.get('title', '').strip()
+                    url = news.get('url', '').strip()
+                    date_str = news.get('date')
+                    release_type = news.get('document_type', 'news_release')
+
+                    if not url:
+                        continue
+
+                    # Parse date
+                    release_date = None
+                    if date_str:
+                        try:
+                            release_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+                        except:
+                            release_date = timezone.now().date()
+                    else:
+                        release_date = timezone.now().date()
+
+                    # Create or update news release
+                    obj, created = NewsRelease.objects.update_or_create(
+                        company=company,
+                        url=url,
+                        defaults={
+                            'title': title,
+                            'release_type': release_type,
+                            'release_date': release_date,
+                            'summary': '',
+                            'is_material': False,
+                            'full_text': ''
+                        }
+                    )
+
+                    if created:
+                        created_count += 1
+
+                        # Check for financing keywords and flag
+                        financing_keywords = [
+                            'private placement', 'financing', 'funding round',
+                            'capital raise', 'bought deal', 'equity financing',
+                            'flow-through', 'warrant', 'subscription', 'offering',
+                            'strategic investment', 'strategic partner'
+                        ]
+
+                        title_lower = title.lower()
+                        detected_keywords = [kw for kw in financing_keywords if kw in title_lower]
+
+                        if detected_keywords:
+                            from core.models import NewsReleaseFlag
+                            flag, flag_created = NewsReleaseFlag.objects.get_or_create(
+                                news_release=obj,
+                                defaults={
+                                    'detected_keywords': detected_keywords,
+                                    'status': 'pending'
+                                }
+                            )
+                            if flag_created:
+                                print(f"  🚩 Flagged: {title[:50]}...")
+                                try:
+                                    from core.notifications import send_financing_flag_notification
+                                    send_financing_flag_notification(flag, company, obj)
+                                except Exception as e:
+                                    print(f"  ⚠ Notification error: {str(e)}")
+                    else:
+                        updated_count += 1
+
+                results['successful'] += 1
+                results['total_news_created'] += created_count
+                results['total_news_updated'] += updated_count
+                print(f"  ✓ {company.name}: {created_count} new, {updated_count} updated")
+
+            except Exception as e:
+                results['failed'] += 1
+                error_msg = f"{company.name}: {str(e)}"
+                results['errors'].append(error_msg)
+                print(f"  ✗ {error_msg}")
+                continue
+
+        print(f"\nCompany news scrape completed:")
+        print(f"  Successful: {results['successful']}/{total_companies}")
+        print(f"  News created: {results['total_news_created']}")
+        print(f"  News updated: {results['total_news_updated']}")
+
+        return {
+            'status': 'success',
+            **results,
+            'message': f"Scraped {results['successful']}/{total_companies} companies, {results['total_news_created']} new articles"
+        }
+
+    except Exception as e:
+        print(f"Error in company news scrape task: {str(e)}")
+        try:
+            self.retry(exc=e)
+        except self.MaxRetriesExceededError:
+            return {
+                'status': 'error',
+                'error': str(e),
+                'message': f'Company news scrape failed after retries: {str(e)}'
+            }
+
+
 @shared_task(bind=True, max_retries=3, default_retry_delay=300)
 def scrape_mining_news_task(self):
     """

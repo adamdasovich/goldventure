@@ -322,5 +322,11 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'core.tasks.scrape_mining_news_task',
         'schedule': crontab(hour=23, minute=0),  # 6 PM ET
     },
+
+    # Scrape news releases from ALL company websites daily (7 AM ET / 12:00 UTC)
+    'scrape-all-companies-news-daily': {
+        'task': 'core.tasks.scrape_all_companies_news_task',
+        'schedule': crontab(hour=12, minute=0),  # 7 AM ET
+    },
 }
 
