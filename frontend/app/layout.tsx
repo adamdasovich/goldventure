@@ -107,7 +107,8 @@ const organizationJsonLd = {
     'https://www.wikidata.org/wiki/Q137719703',
     'https://www.linkedin.com/company/juniorminingintelligence',
     'https://twitter.com/JuniorMini82636',
-    'https://www.facebook.com/profile.php?id=61586276247045'
+    'https://www.facebook.com/profile.php?id=61586276247045',
+    'https://share.google/g3J4e9SJfYf7jR0yp'
   ],
   logo: {
     '@type': 'ImageObject',
