@@ -104,7 +104,6 @@ const organizationJsonLd = {
   legalName: 'Junior Mining Intelligence',
   url: 'https://juniorminingintelligence.com',
   sameAs: [
-    'https://www.wikidata.org/wiki/Q137719703',
     'https://www.linkedin.com/company/juniorminingintelligence',
     'https://twitter.com/JuniorMini82636',
     'https://www.facebook.com/profile.php?id=61586276247045',
