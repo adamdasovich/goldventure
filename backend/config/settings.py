@@ -308,5 +308,19 @@ CELERY_BEAT_SCHEDULE = {
             'document_types': ['ni43101', 'news_release', 'presentation']  # High-priority types
         }
     },
+
+    # Scrape mining industry news 3 times daily (8 AM, 1 PM, 6 PM ET / 13:00, 18:00, 23:00 UTC)
+    'scrape-mining-news-morning': {
+        'task': 'core.tasks.scrape_mining_news_task',
+        'schedule': crontab(hour=13, minute=0),  # 8 AM ET
+    },
+    'scrape-mining-news-afternoon': {
+        'task': 'core.tasks.scrape_mining_news_task',
+        'schedule': crontab(hour=18, minute=0),  # 1 PM ET
+    },
+    'scrape-mining-news-evening': {
+        'task': 'core.tasks.scrape_mining_news_task',
+        'schedule': crontab(hour=23, minute=0),  # 6 PM ET
+    },
 }
 

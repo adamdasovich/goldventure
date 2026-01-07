@@ -613,3 +613,49 @@ def auto_discover_and_process_documents_task(self, company_ids=None, document_ty
             'error': str(e),
             'message': f'Auto-discovery task failed: {str(e)}'
         }
+
+
+@shared_task(bind=True, max_retries=3, default_retry_delay=300)
+def scrape_mining_news_task(self):
+    """
+    Background task to scrape mining news from configured sources.
+    Runs the async news scraper and saves articles to the database.
+
+    Scheduled to run multiple times daily via Celery Beat.
+    """
+    from mcp_servers.news_scraper import run_scrape_job
+    from .models import NewsScrapeJob
+
+    print("Starting mining news scrape task...")
+
+    try:
+        # Create a new scrape job record
+        job = NewsScrapeJob.objects.create(
+            status='pending',
+            is_scheduled=True
+        )
+        print(f"Created scrape job {job.id}")
+
+        # Run the async scraper
+        result = asyncio.run(run_scrape_job(job_id=job.id))
+
+        print(f"Mining news scrape completed: {result}")
+        return {
+            'status': 'success',
+            'job_id': job.id,
+            'sources_processed': result.get('sources_processed', 0),
+            'articles_found': result.get('articles_found', 0),
+            'message': f"Successfully scraped mining news: {result.get('articles_found', 0)} articles found"
+        }
+
+    except Exception as e:
+        print(f"Error in mining news scrape task: {str(e)}")
+        # Retry on failure
+        try:
+            self.retry(exc=e)
+        except self.MaxRetriesExceededError:
+            return {
+                'status': 'error',
+                'error': str(e),
+                'message': f'Mining news scrape failed after retries: {str(e)}'
+            }
