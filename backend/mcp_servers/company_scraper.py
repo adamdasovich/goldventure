@@ -256,40 +256,60 @@ class CompanyDataScraper:
             # Extract ticker symbol (often in header)
             # Note: Be careful with OTC patterns - "OTCQB" and "OTCQX" are market tiers, not exchanges
             ticker_patterns = [
-                # TSX patterns: "TSX: AMM", "TSX-V: AMM", "TSXV: AMM"
-                r'\b(TSX[-\s]?V|TSXV)[:\s]+([A-Z]{2,5})\b',
-                r'\b(TSX)[:\s]+([A-Z]{2,5})\b',
+                # TSX Venture patterns: "TSX.V: SSE", "TSX-V: AMM", "TSXV: AMM", "TSX V: AMM"
+                r'\b(TSX[.\-\s]?V|TSXV)[:\s]+([A-Z]{2,5})\b',
+                # TSX main patterns: "TSX: AMM" (only match if NOT followed by V)
+                r'\b(TSX)(?![.\-]?V)[:\s]+([A-Z]{2,5})\b',
                 # CSE patterns: "CSE: AMM"
                 r'\b(CSE)[:\s]+([A-Z]{2,5})\b',
+                # NEO patterns: "NEO: AMM"
+                r'\b(NEO)[:\s]+([A-Z]{2,5})\b',
                 # ASX/AIM patterns
                 r'\b(ASX|AIM)[:\s]+([A-Z]{2,5})\b',
                 # OTC patterns - specifically look for OTCQB/OTCQX followed by ticker
                 r'\b(?:OTCQB|OTCQX)[:\s]+([A-Z]{3,5})\b',
+                # US OTC pattern: "US: SSEBF" or "OTC: SSEBF"
+                r'\b(?:US|OTC)[:\s]+([A-Z]{4,5})\b',
                 # Reverse patterns: "AMM: TSX"
-                r'\b([A-Z]{2,5})[:\s]+(TSX[-\s]?V|TSXV|TSX|CSE|ASX|AIM)\b',
+                r'\b([A-Z]{2,5})[:\s]+(TSX[.\-\s]?V|TSXV|TSX|CSE|NEO|ASX|AIM)\b',
             ]
             page_text = soup.get_text()
             for pattern in ticker_patterns:
                 match = re.search(pattern, page_text, re.IGNORECASE)
                 if match:
                     groups = match.groups()
-                    # Handle OTCQB/OTCQX pattern (only has ticker, no exchange group)
+                    # Handle OTCQB/OTCQX/US pattern (only has ticker, no exchange group)
                     if len(groups) == 1:
                         self.extracted_data['company']['ticker_symbol'] = groups[0].upper()
                         self.extracted_data['company']['exchange'] = 'OTC'
-                    # Determine which group is exchange vs ticker
-                    elif groups[0].upper() in ['TSX', 'TSXV', 'TSX-V', 'TSX V', 'CSE', 'ASX', 'AIM']:
-                        exchange = groups[0].upper().replace(' ', '').replace('-', '')
-                        if exchange == 'TSXV':
-                            exchange = 'TSXV'
-                        self.extracted_data['company']['exchange'] = exchange
-                        self.extracted_data['company']['ticker_symbol'] = groups[1].upper()
                     else:
-                        self.extracted_data['company']['ticker_symbol'] = groups[0].upper()
-                        exchange = groups[1].upper().replace(' ', '').replace('-', '')
-                        if exchange == 'TSXV':
-                            exchange = 'TSXV'
-                        self.extracted_data['company']['exchange'] = exchange
+                        # Normalize exchange name
+                        def normalize_exchange(ex):
+                            ex_clean = ex.upper().replace(' ', '').replace('-', '').replace('.', '')
+                            # Map variations to standard codes
+                            if ex_clean in ['TSXV', 'TSXV', 'TSXVENTURE']:
+                                return 'TSXV'
+                            if ex_clean == 'TSX':
+                                return 'TSX'
+                            if ex_clean == 'CSE':
+                                return 'CSE'
+                            if ex_clean == 'NEO':
+                                return 'NEO'
+                            if ex_clean in ['ASX', 'AIM']:
+                                return ex_clean
+                            return ex_clean
+
+                        # Determine which group is exchange vs ticker
+                        exchange_keywords = ['TSX', 'TSXV', 'CSE', 'NEO', 'ASX', 'AIM']
+                        g0_normalized = groups[0].upper().replace(' ', '').replace('-', '').replace('.', '')
+                        g0_is_exchange = any(kw in g0_normalized for kw in exchange_keywords)
+
+                        if g0_is_exchange:
+                            self.extracted_data['company']['exchange'] = normalize_exchange(groups[0])
+                            self.extracted_data['company']['ticker_symbol'] = groups[1].upper()
+                        else:
+                            self.extracted_data['company']['ticker_symbol'] = groups[0].upper()
+                            self.extracted_data['company']['exchange'] = normalize_exchange(groups[1])
                     break
 
             # Extract navigation links for later use
@@ -382,10 +402,13 @@ class CompanyDataScraper:
             self.visited_urls.add(url)
             soup = BeautifulSoup(result.html, 'html.parser')
 
-            # Extract longer description
+            # Extract longer description - try multiple strategies
+            description = ''
+
+            # Strategy 1: Look for specific content areas
             content_selectors = [
                 'article', '.content', '.main-content', '#content',
-                '[class*="about"]', '[class*="corporate"]'
+                '[class*="about"]', '[class*="corporate"]', 'main', '.uk-section'
             ]
             for selector in content_selectors:
                 element = soup.select_one(selector)
@@ -393,10 +416,36 @@ class CompanyDataScraper:
                     # Get all paragraphs
                     paragraphs = element.find_all('p')
                     if paragraphs:
-                        description = ' '.join(p.get_text(strip=True) for p in paragraphs[:5])
-                        if len(description) > len(self.extracted_data['company'].get('description', '')):
-                            self.extracted_data['company']['description'] = description[:2000]
+                        desc_text = ' '.join(p.get_text(strip=True) for p in paragraphs[:5])
+                        if len(desc_text) > len(description):
+                            description = desc_text
                     break
+
+            # Strategy 2: If no specific container, look for first substantial paragraphs on page
+            if not description or len(description) < 100:
+                all_paragraphs = soup.find_all('p')
+                substantial_paras = []
+                for p in all_paragraphs:
+                    text = p.get_text(strip=True)
+                    # Look for company-describing paragraphs (not navigation, not person bios)
+                    if len(text) > 80:
+                        text_lower = text.lower()
+                        # Skip person biography paragraphs
+                        bio_indicators = ['years of experience', 'has served as', 'formerly',
+                                         'prior to that', 'currently serves', 'board of directors']
+                        if not any(ind in text_lower for ind in bio_indicators):
+                            substantial_paras.append(text)
+                            if len(substantial_paras) >= 3:
+                                break
+
+                if substantial_paras:
+                    combined = ' '.join(substantial_paras)
+                    if len(combined) > len(description):
+                        description = combined
+
+            # Update description if we found something better
+            if description and len(description) > len(self.extracted_data['company'].get('description', '')):
+                self.extracted_data['company']['description'] = description[:2000]
 
             # Look for incorporation/founding info
             page_text = soup.get_text()
@@ -462,7 +511,44 @@ class CompanyDataScraper:
                             members_found.append(person)
                     break
 
-            # If no structured members found, try to find names and titles
+            # If no structured members found, try header-based patterns (h3 name, h4 title)
+            if not members_found:
+                # Strategy 2: Look for h3/h4 pairs (common pattern: h3=name, h4=title, p=bio)
+                headers = soup.find_all('h3')
+                for h3 in headers:
+                    name = h3.get_text(strip=True)
+                    # Skip section headers
+                    if not name or len(name) > 80 or len(name) < 4:
+                        continue
+                    # Skip if it looks like a section title (all caps, ends with common section words)
+                    name_lower = name.lower()
+                    if any(x in name_lower for x in ['management', 'team', 'directors', 'officers', 'advisory', 'corporate']):
+                        continue
+
+                    # Look for title in next h4 sibling
+                    title = None
+                    next_elem = h3.find_next_sibling()
+                    if next_elem and next_elem.name == 'h4':
+                        title = next_elem.get_text(strip=True)
+
+                    # Look for bio in following paragraph
+                    bio = None
+                    for sibling in h3.find_next_siblings(['p'])[:2]:
+                        text = sibling.get_text(strip=True)
+                        if text and len(text) > 50:
+                            bio = text[:1500]
+                            break
+
+                    if name and (title or bio):
+                        members_found.append({
+                            'full_name': name,
+                            'title': title or '',
+                            'biography': bio or '',
+                            'source_url': url,
+                            'extracted_at': datetime.utcnow().isoformat(),
+                        })
+
+            # If still no members, try text pattern extraction
             if not members_found:
                 members_found = self._extract_people_from_text(soup, url)
 
@@ -972,7 +1058,7 @@ class CompanyDataScraper:
             soup = BeautifulSoup(result.html, 'html.parser')
             news_found = []
 
-            # Find news items using various selectors
+            # Strategy 1: Find news items using various selectors
             news_selectors = [
                 '.news-item', '.press-release', '.news', '[class*="news"]',
                 '[class*="release"]', 'article', '.post', '.entry'
@@ -986,6 +1072,65 @@ class CompanyDataScraper:
                         if news and news.get('title') and len(news['title']) > 10:
                             news_found.append(news)
                     break
+
+            # Strategy 2: Handle grid-based news layouts (like Silver Spruce's uk-grid)
+            # Look for grids containing date + title + VIEW/PDF links
+            if not news_found:
+                grids = soup.find_all(class_=re.compile(r'uk-grid|news-row|news-grid'))
+                for grid in grids[:50]:  # Limit to 50 grids
+                    grid_text = grid.get_text(strip=True)
+
+                    # Skip if no date-like pattern
+                    date_pattern = r'(January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},?\s+\d{4}'
+                    date_match = re.search(date_pattern, grid_text, re.IGNORECASE)
+                    if not date_match:
+                        continue
+
+                    # Skip if it contains navigation text
+                    if any(x in grid_text.lower() for x in ['contact', 'subscribe', 'menu', 'navigation']):
+                        continue
+
+                    # Find the date
+                    pub_date = None
+                    date_str = date_match.group(0)
+                    try:
+                        from datetime import datetime
+                        pub_date = datetime.strptime(date_str.replace(',', ''), '%B %d %Y').strftime('%Y-%m-%d')
+                    except:
+                        pass
+
+                    # Find title (usually the longest text that's not date/VIEW/PDF)
+                    title = None
+                    divs = grid.find_all('div', recursive=False)
+                    for div in divs:
+                        div_text = div.get_text(strip=True)
+                        # Skip date divs, VIEW, PDF
+                        if div_text.lower() in ['view', 'pdf', 'download'] or len(div_text) < 20:
+                            continue
+                        if re.match(date_pattern, div_text, re.IGNORECASE):
+                            continue
+                        if len(div_text) > 20 and len(div_text) < 500:
+                            title = div_text
+                            break
+
+                    # Find source URL (VIEW or PDF link)
+                    source_url = None
+                    for link in grid.find_all('a', href=True):
+                        href = link.get('href', '')
+                        link_text = link.get_text(strip=True).lower()
+                        if link_text in ['view', 'pdf', 'read more', 'more']:
+                            source_url = urljoin(url, href)
+                            break
+
+                    if title and (pub_date or source_url):
+                        news = {
+                            'title': title,
+                            'publication_date': pub_date,
+                            'source_url': source_url or url,
+                        }
+                        # Avoid duplicates
+                        if not any(n.get('title', '').lower() == title.lower() for n in news_found):
+                            news_found.append(news)
 
             # Find news links - look for links that appear to be news items
             # Common patterns: links with dates, links in list items, links with news-like URLs
@@ -1122,9 +1267,11 @@ class CompanyDataScraper:
             soup = BeautifulSoup(result.html, 'html.parser')
             page_text = soup.get_text()
 
-            # Extract emails
-            emails = re.findall(r'[\w\.-]+@[\w\.-]+\.\w+', page_text)
-            for email in emails:
+            # Extract emails from mailto links (more reliable)
+            mailto_links = soup.find_all('a', href=lambda x: x and 'mailto:' in x.lower())
+            for link in mailto_links:
+                href = link.get('href', '')
+                email = href.replace('mailto:', '').split('?')[0].strip()
                 email_lower = email.lower()
                 if 'info@' in email_lower or 'contact@' in email_lower:
                     self.extracted_data['contacts']['general_email'] = email
@@ -1132,11 +1279,48 @@ class CompanyDataScraper:
                     self.extracted_data['contacts']['ir_email'] = email
                 elif 'media@' in email_lower or 'press@' in email_lower:
                     self.extracted_data['contacts']['media_email'] = email
+                elif not self.extracted_data['contacts'].get('general_email'):
+                    # Use the first email found as general contact
+                    self.extracted_data['contacts']['general_email'] = email
 
-            # Extract phone numbers
-            phones = re.findall(r'[\+]?[\d\s\-\(\)]{10,20}', page_text)
-            if phones:
-                self.extracted_data['contacts']['phone'] = phones[0].strip()
+            # Also try regex extraction for emails in text
+            if not self.extracted_data['contacts'].get('general_email'):
+                emails = re.findall(r'[\w\.-]+@[\w\.-]+\.\w+', page_text)
+                for email in emails:
+                    email_lower = email.lower()
+                    # Skip generic web emails
+                    if any(x in email_lower for x in ['example.com', 'test.com', 'wix.com', 'wordpress']):
+                        continue
+                    if 'info@' in email_lower or 'contact@' in email_lower:
+                        self.extracted_data['contacts']['general_email'] = email
+                    elif 'ir@' in email_lower or 'investor' in email_lower:
+                        self.extracted_data['contacts']['ir_email'] = email
+                    elif not self.extracted_data['contacts'].get('general_email'):
+                        self.extracted_data['contacts']['general_email'] = email
+
+            # Extract phone numbers from tel: links first
+            tel_links = soup.find_all('a', href=lambda x: x and 'tel:' in x.lower())
+            for link in tel_links:
+                href = link.get('href', '')
+                phone = href.replace('tel:', '').strip()
+                if phone:
+                    self.extracted_data['contacts']['phone'] = phone
+                    break
+
+            # Fallback: regex for phone numbers
+            if not self.extracted_data['contacts'].get('phone'):
+                # Look for "Tel:" or "Phone:" followed by number
+                phone_match = re.search(r'(?:Tel|Phone|Call)[:\s]+([+\d\s\-\(\)]{10,20})', page_text, re.IGNORECASE)
+                if phone_match:
+                    self.extracted_data['contacts']['phone'] = phone_match.group(1).strip()
+                else:
+                    phones = re.findall(r'[\+]?[\d\s\-\(\)]{10,20}', page_text)
+                    for phone in phones:
+                        # Filter out numbers that are too short or have weird patterns
+                        clean = re.sub(r'[\s\-\(\)]', '', phone)
+                        if len(clean) >= 10 and len(clean) <= 15:
+                            self.extracted_data['contacts']['phone'] = phone.strip()
+                            break
 
             # Extract address
             address_selectors = ['.address', '[class*="address"]', 'address']
