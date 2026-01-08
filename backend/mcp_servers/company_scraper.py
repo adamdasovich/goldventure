@@ -116,6 +116,24 @@ class CompanyDataScraper:
                     print(f"[SCRAPE] Scraping projects page: {url}")
                     await self._scrape_projects_page(crawler, crawler_config, url)
 
+                # After scraping listing pages, visit individual project detail pages
+                # that were discovered (they will have source_url set)
+                detail_urls_to_visit = []
+                for project in self.extracted_data.get('projects', []):
+                    source_url = project.get('source_url', '')
+                    # Check if this is a project detail page we haven't visited
+                    if source_url and source_url not in self.visited_urls:
+                        # Check if it's a subpage (has more path components)
+                        path = urlparse(source_url).path.rstrip('/')
+                        parts = [p for p in path.split('/') if p]
+                        if len(parts) >= 2 and parts[0] in ['projects', 'project', 'properties', 'property']:
+                            detail_urls_to_visit.append(source_url)
+
+                # Visit up to 10 individual project pages to get full details
+                for url in detail_urls_to_visit[:10]:
+                    print(f"[SCRAPE] Scraping project detail page: {url}")
+                    await self._scrape_projects_page(crawler, crawler_config, url)
+
             # 6. Find and scrape News section
             if 'news' in sections:
                 news_urls = self._find_section_urls(['news', 'press', 'media', 'releases'])
@@ -1234,7 +1252,31 @@ class CompanyDataScraper:
 
         self.extracted_data['news'] = unique_news
 
-        # Deduplicate and filter projects by name
+        # Merge and deduplicate projects by name
+        # When we have multiple entries for the same project (from listing + detail pages),
+        # merge them keeping the most detailed information
+        merged_projects = {}
+        for project in self.extracted_data['projects']:
+            name = project.get('name', '').strip()
+            if not name:
+                continue
+
+            name_key = name.lower().replace('-', ' ').replace('_', ' ')
+
+            if name_key in merged_projects:
+                # Merge: keep existing data but add new fields if they're missing
+                existing = merged_projects[name_key]
+                for key, value in project.items():
+                    if value and not existing.get(key):
+                        existing[key] = value
+                    # For description, keep the longer one
+                    elif key == 'description' and value:
+                        if len(value) > len(existing.get(key, '')):
+                            existing[key] = value
+            else:
+                merged_projects[name_key] = project.copy()
+
+        # Now filter the merged projects
         seen_project_names = set()
         unique_projects = []
 
@@ -1287,7 +1329,7 @@ class CompanyDataScraper:
             'overview', 'summary', 'details', 'information', 'data',
         ]
 
-        for project in self.extracted_data['projects']:
+        for project in merged_projects.values():
             name = project.get('name', '').strip()
             name_lower = name.lower()
 
