@@ -176,9 +176,16 @@ class Command(BaseCommand):
             'maps', 'photos', 'gallery', 'galleries', 'videos', 'media',
             'resources', 'downloads', 'documents', 'overview', 'about',
             'contact', 'news', 'investors', 'corporate', 'highlights',
-            'properties', 'assets', 'portfolio', 'locations'
+            'properties', 'assets', 'portfolio', 'locations', 'location',
+            'recent posts', 'blog', 'articles', 'events', 'webinars',
+            'subscribe', 'newsletter', 'email signup', 'social media'
         ]
         if name_lower.strip() in exact_invalid_names:
+            return True
+
+        # Filter out project names that are actually page section labels
+        section_labels = ['recent posts', 'latest news', 'featured', 'read more', 'learn more']
+        if name_lower.strip() in section_labels:
             return True
 
         return False
