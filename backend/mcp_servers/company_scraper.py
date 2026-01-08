@@ -6,6 +6,7 @@ Uses Crawl4AI to automatically extract comprehensive company information from mi
 import asyncio
 import re
 import sys
+import requests
 from urllib.parse import urljoin, urlparse
 from typing import Dict, List, Optional, Any
 from datetime import datetime
@@ -221,6 +222,34 @@ class CompanyDataScraper:
                 for prefix in ['Welcome to ', 'Welcome To ', 'Home - ', 'Home | ']:
                     if title_text.startswith(prefix):
                         title_text = title_text[len(prefix):]
+
+                # Handle titles with taglines (e.g., "Company Name | Tagline" or "Tagline | Company Name")
+                # If there's a pipe, intelligently select the company name part
+                if '|' in title_text:
+                    parts = [p.strip() for p in title_text.split('|')]
+                    # Company identifiers that indicate a proper company name (not just keywords)
+                    company_suffixes = ['corp', 'corporation', 'inc', 'incorporated', 'ltd', 'limited',
+                                       'llc', 'lp', 'co.', 'company', 'plc', 'resources', 'metals',
+                                       'mining', 'exploration', 'minerals']
+                    # Check each part for company suffixes (strong indicator of company name)
+                    best_part = None
+                    for part in parts:
+                        part_lower = part.lower()
+                        # Check for company suffixes (strong indicator of company name)
+                        if any(kw in part_lower for kw in company_suffixes):
+                            best_part = part
+                            break
+                    if best_part:
+                        title_text = best_part
+                    else:
+                        # Heuristic: if first part is short (< 40 chars) and second is long,
+                        # first is likely the company name, second is the tagline
+                        if len(parts) >= 2 and len(parts[0]) < 40 and len(parts[1]) > len(parts[0]):
+                            title_text = parts[0]
+                        else:
+                            # Default to last part
+                            title_text = parts[-1]
+
                 self.extracted_data['company']['name'] = title_text.strip()
 
             # Extract tagline/slogan (usually in hero section)
@@ -253,7 +282,7 @@ class CompanyDataScraper:
             if meta_desc and meta_desc.get('content'):
                 self.extracted_data['company']['description'] = meta_desc['content']
 
-            # Extract ticker symbol (often in header)
+            # Extract ticker symbol (often in header or stock ticker bar)
             # Note: Be careful with OTC patterns - "OTCQB" and "OTCQX" are market tiers, not exchanges
             ticker_patterns = [
                 # TSX Venture patterns: "TSX.V: SSE", "TSX-V: AMM", "TSXV: AMM", "TSX V: AMM"
@@ -273,7 +302,58 @@ class CompanyDataScraper:
                 # Reverse patterns: "AMM: TSX"
                 r'\b([A-Z]{2,5})[:\s]+(TSX[.\-\s]?V|TSXV|TSX|CSE|NEO|ASX|AIM)\b',
             ]
-            page_text = soup.get_text()
+
+            # First, try to find ticker in specific stock ticker elements (often JS-rendered)
+            # Look for elements with class names containing 'stock', 'ticker', 'quote'
+            ticker_selectors = [
+                '[class*="stock"]', '[class*="ticker"]', '[class*="quote"]',
+                '[id*="stock"]', '[id*="ticker"]', '[id*="quote"]',
+                '.stock-info', '.stock-price', '.stock-ticker',
+                'header', '.topbar', '.top-bar', '[class*="topbar"]'
+            ]
+            ticker_text = ""
+            for selector in ticker_selectors:
+                elements = soup.select(selector)
+                for elem in elements:
+                    elem_text = elem.get_text(separator=' ')
+                    # Only use if it contains exchange-like text
+                    if any(ex in elem_text.upper() for ex in ['TSX', 'CSE', 'NEO', 'ASX', 'OTC', 'NYSE', 'NASDAQ']):
+                        ticker_text += " " + elem_text
+
+            # Check for stock quote iframes (common pattern for mining company websites)
+            # These load ticker info from external services like quotemedia, adnetcms, etc.
+            stock_iframes = soup.find_all('iframe', class_=lambda x: x and any(
+                kw in ' '.join(x).lower() for kw in ['quote', 'stock', 'ticker']
+            ))
+            if not stock_iframes:
+                # Also check for iframes with stock-related src URLs
+                stock_iframes = soup.find_all('iframe', src=lambda x: x and any(
+                    kw in x.lower() for kw in ['quote', 'stock', 'feed.adnet']
+                ))
+
+            # Fetch iframe content if found
+            for iframe in stock_iframes[:2]:  # Limit to first 2 iframes
+                iframe_src = iframe.get('src', '')
+                if iframe_src:
+                    try:
+                        iframe_resp = requests.get(iframe_src, headers={
+                            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                        }, timeout=5)
+                        if iframe_resp.status_code == 200:
+                            iframe_content = iframe_resp.text
+                            # Look for ticker patterns in iframe content
+                            ticker_text += " " + iframe_content
+                            # Also check for data attributes like data-qmod-params
+                            iframe_soup = BeautifulSoup(iframe_content, 'html.parser')
+                            for elem in iframe_soup.find_all(attrs={'data-qmod-params': True}):
+                                qmod_data = elem.get('data-qmod-params', '')
+                                if qmod_data:
+                                    ticker_text += " " + qmod_data
+                    except Exception as e:
+                        print(f"[WARN] Failed to fetch iframe: {iframe_src}: {e}")
+
+            # Combine ticker element text with full page text for pattern matching
+            page_text = ticker_text + " " + soup.get_text()
             for pattern in ticker_patterns:
                 match = re.search(pattern, page_text, re.IGNORECASE)
                 if match:
@@ -445,7 +525,7 @@ class CompanyDataScraper:
 
             # Update description if we found something better
             if description and len(description) > len(self.extracted_data['company'].get('description', '')):
-                self.extracted_data['company']['description'] = description[:2000]
+                self.extracted_data['company']['description'] = description[:1000]
 
             # Look for incorporation/founding info
             page_text = soup.get_text()
@@ -823,6 +903,14 @@ class CompanyDataScraper:
                 'overview', 'gallery', 'maps', 'documents', 'introduction'
             ]
 
+            # Keywords that indicate media content, not actual projects
+            media_keywords = [
+                'video presentation', 'technical presentation', 'corporate presentation',
+                'investor presentation', 'press release', 'news release', 'presentation',
+                'annual report', 'quarterly report', 'financial statement',
+                'technical video', 'webinar', 'interview', 'video', 'pdf', 'download'
+            ]
+
             # Check if this is a specific project page (e.g., /projects/pino-de-plata/)
             # by looking at the URL structure and page content
             url_path = urlparse(url).path.rstrip('/')
@@ -848,6 +936,10 @@ class CompanyDataScraper:
 
                     # Skip generic headers
                     if header_lower in invalid_names or len(header_text) < 3:
+                        continue
+
+                    # Skip media content headers (videos, presentations, etc.)
+                    if any(kw in header_lower for kw in media_keywords):
                         continue
 
                     # Check if header matches URL slug or is a reasonable project name
@@ -916,7 +1008,9 @@ class CompanyDataScraper:
                         commodity = comm
                         break
 
-                if project_name and project_name.lower() not in invalid_names:
+                # Check if project name is valid (not generic and not media content)
+                is_media_content = project_name and any(kw in project_name.lower() for kw in media_keywords)
+                if project_name and project_name.lower() not in invalid_names and not is_media_content:
                     project = {
                         'name': project_name[:200],
                         'description': description,
@@ -943,7 +1037,8 @@ class CompanyDataScraper:
                             project = self._extract_project_from_element(proj, url)
                             if project and project.get('name'):
                                 name_lower = project['name'].lower()
-                                if name_lower not in invalid_names:
+                                is_media = any(kw in name_lower for kw in media_keywords)
+                                if name_lower not in invalid_names and not is_media:
                                     projects_found.append(project)
                         break
 
@@ -958,8 +1053,9 @@ class CompanyDataScraper:
                     # Links that look like project pages
                     if any(kw in href_lower for kw in ['/project', '/property', '/asset', '/deposit', '/mine']):
                         if text and len(text) > 2 and len(text) < 100:
-                            # Skip navigation items and generic terms
-                            if text_lower not in invalid_names and not text.isupper():
+                            # Skip navigation items, generic terms, and media content
+                            is_media = any(kw in text_lower for kw in media_keywords)
+                            if text_lower not in invalid_names and not text.isupper() and not is_media:
                                 # Check if this is a subpage of the current projects page
                                 full_url = urljoin(url, href)
                                 # Avoid adding the current page or parent pages
@@ -981,6 +1077,10 @@ class CompanyDataScraper:
                         if header_lower in invalid_names or len(header_text) < 5:
                             continue
                         if header_text.isupper() and len(header_text.split()) <= 3:
+                            continue
+                        # Skip media content
+                        is_media = any(kw in header_lower for kw in media_keywords)
+                        if is_media:
                             continue
 
                         if any(kw in header_lower for kw in project_keywords):
@@ -1094,7 +1194,7 @@ class CompanyDataScraper:
                     pub_date = None
                     date_str = date_match.group(0)
                     try:
-                        from datetime import datetime
+                        # datetime is already imported at module level
                         pub_date = datetime.strptime(date_str.replace(',', ''), '%B %d %Y').strftime('%Y-%m-%d')
                     except:
                         pass

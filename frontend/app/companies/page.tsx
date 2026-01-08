@@ -78,7 +78,7 @@ export default function CompaniesPage() {
       'NYSE': 'gold',
       'NASDAQ': 'gold',
     };
-    return variants[exchange] || 'slate';
+    return variants[exchange.toUpperCase()] || 'slate';
   };
 
   return (

@@ -302,7 +302,7 @@ export default function CompanyDetailPage() {
       'NYSE': 'gold',
       'NASDAQ': 'gold',
     };
-    return variants[exchange] || 'slate';
+    return variants[exchange.toUpperCase()] || 'slate';
   };
 
   const formatNumber = (num: number | null | undefined) => {

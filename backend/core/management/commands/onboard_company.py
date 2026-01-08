@@ -12,6 +12,7 @@ import asyncio
 from datetime import datetime
 from django.core.management.base import BaseCommand, CommandError
 from django.utils import timezone
+from asgiref.sync import sync_to_async
 from core.models import (
     Company, Project, CompanyPerson, CompanyDocument,
     CompanyNews, ScrapingJob, FailedCompanyDiscovery, User
@@ -148,6 +149,17 @@ class Command(BaseCommand):
             if re.search(pattern, name_lower):
                 return True
 
+        # Filter out video/presentation/document titles that aren't actual project names
+        media_keywords = [
+            'video presentation', 'technical presentation', 'corporate presentation',
+            'investor presentation', 'press release', 'news release',
+            'annual report', 'quarterly report', 'financial statement',
+            'technical video', 'webinar', 'interview'
+        ]
+        for keyword in media_keywords:
+            if keyword in name_lower:
+                return True
+
         return False
 
     def _infer_project_stage_from_name(self, name: str) -> str:
@@ -215,14 +227,17 @@ class Command(BaseCommand):
         # Create scraping job record
         job = None
         if not dry_run:
-            job = ScrapingJob.objects.create(
-                company_name_input=url,
-                website_url=url,
-                status='running',
-                started_at=timezone.now(),
-                sections_to_process=sections or ['all'],
-                initiated_by_id=user_id
-            )
+            @sync_to_async
+            def create_job():
+                return ScrapingJob.objects.create(
+                    company_name_input=url,
+                    website_url=url,
+                    status='running',
+                    started_at=timezone.now(),
+                    sections_to_process=sections or ['all'],
+                    initiated_by_id=user_id
+                )
+            job = await create_job()
 
         try:
             self.stdout.write(f"\nScraping: {url}")
@@ -246,22 +261,28 @@ class Command(BaseCommand):
                 self.stdout.write(self.style.SUCCESS("\n[DRY RUN] No data saved to database"))
                 return
 
-            # Save to database
-            company = self._save_company_data(data, url, update_existing)
+            # Save to database (wrapped for async context)
+            @sync_to_async
+            def save_data():
+                return self._save_company_data(data, url, update_existing)
+            company = await save_data()
 
             if company:
                 # Update job with success
                 if job:
-                    job.company = company
-                    job.status = 'success'
-                    job.completed_at = timezone.now()
-                    job.data_extracted = data
-                    job.documents_found = len(data.get('documents', []))
-                    job.people_found = len(data.get('people', []))
-                    job.news_found = len(data.get('news', []))
-                    job.sections_completed = sections or ['all']
-                    job.error_messages = errors
-                    job.save()
+                    @sync_to_async
+                    def update_job_success():
+                        job.company = company
+                        job.status = 'success'
+                        job.completed_at = timezone.now()
+                        job.data_extracted = data
+                        job.documents_found = len(data.get('documents', []))
+                        job.people_found = len(data.get('people', []))
+                        job.news_found = len(data.get('news', []))
+                        job.sections_completed = sections or ['all']
+                        job.error_messages = errors
+                        job.save()
+                    await update_job_success()
 
                 self.stdout.write(self.style.SUCCESS(
                     f"\nCompany created/updated: {company.name} (ID: {company.id})"
@@ -274,21 +295,27 @@ class Command(BaseCommand):
             self.stderr.write(self.style.ERROR(f"\nError: {str(e)}"))
 
             if job:
-                job.status = 'failed'
-                job.completed_at = timezone.now()
-                job.error_messages = [str(e)]
-                job.error_traceback = str(e)
-                job.save()
+                @sync_to_async
+                def update_job_failed():
+                    job.status = 'failed'
+                    job.completed_at = timezone.now()
+                    job.error_messages = [str(e)]
+                    job.error_traceback = str(e)
+                    job.save()
+                await update_job_failed()
 
             # Record failed discovery
             if not dry_run:
-                FailedCompanyDiscovery.objects.update_or_create(
-                    website_url=url,
-                    defaults={
-                        'company_name': data.get('company', {}).get('name', url),
-                        'failure_reason': str(e),
-                    }
-                )
+                @sync_to_async
+                def record_failure():
+                    FailedCompanyDiscovery.objects.update_or_create(
+                        website_url=url,
+                        defaults={
+                            'company_name': data.get('company', {}).get('name', url),
+                            'failure_reason': str(e),
+                        }
+                    )
+                await record_failure()
 
             raise
 
@@ -472,13 +499,16 @@ class Command(BaseCommand):
                 except:
                     pass
 
+            # Truncate fields to fit DB constraints
+            news_title = news_item.get('title', 'Untitled')[:500]  # title max_length=500
+            source_url = news_item.get('source_url', '')[:200]  # source_url max_length=200
             CompanyNews.objects.update_or_create(
                 company=company,
-                source_url=news_item.get('source_url', ''),
+                source_url=source_url,
                 defaults={
-                    'title': news_item.get('title', 'Untitled'),
+                    'title': news_title,
                     'publication_date': pub_date,
-                    'is_pdf': '.pdf' in news_item.get('source_url', '').lower(),
+                    'is_pdf': '.pdf' in source_url.lower(),
                 }
             )
 
@@ -510,11 +540,13 @@ class Command(BaseCommand):
                     # New project - infer commodity and stage from name
                     commodity = self._infer_commodity_from_name(project_name)
                     stage = self._infer_project_stage_from_name(project_name)
+                    # Default country to empty string if not provided (DB requires non-null)
+                    country = project_data.get('location') or ''
                     Project.objects.create(
                         company=company,
                         name=project_name,
                         description=project_data.get('description', ''),
-                        country=project_data.get('location', ''),
+                        country=country,
                         project_stage=stage,
                         primary_commodity=commodity,
                     )
