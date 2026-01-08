@@ -255,45 +255,94 @@ class MiningDocumentCrawler:
                         if not sibling_text.replace('-', '').replace('/', '').replace(',', '').replace(' ', '').isdigit():
                             title = sibling_text
 
-            # Strategy 3: Look in parent/grandparent element (handle grid layouts like Silver Spruce)
-            parent = pdf_link.find_parent(['div', 'li', 'article', 'section', 'tr'])
-            if parent:
-                grandparent = parent.find_parent(['div', 'li', 'article', 'section', 'tr'])
-                search_element = grandparent if grandparent else parent
+            # Strategy 3: Handle GRID LAYOUTS (like Silver Spruce's uk-grid)
+            # Navigate up to find grid container and look for sibling divs with date/title
+            parent = pdf_link
+            for _ in range(10):  # Navigate up to 10 levels
+                parent = parent.parent
+                if parent is None:
+                    break
+                classes = parent.get('class', [])
+                # Check for grid-like containers
+                if any(c in classes for c in ['uk-grid', 'uk-grid-small', 'grid', 'row', 'news-item', 'news-row']):
+                    # Found grid container - look for date and title in direct children divs
+                    divs = parent.find_all('div', recursive=False)
+                    for div in divs:
+                        div_classes = div.get('class', [])
+                        div_text = div.get_text(strip=True)
 
-                # Get all text from the parent/grandparent for date extraction
-                parent_text = search_element.get_text()
+                        # Check for date column (uk-width-1-4@s is Silver Spruce's date column)
+                        if 'uk-width-1-4@s' in div_classes or any('date' in c.lower() for c in div_classes):
+                            # Try to parse date from this div
+                            date_pattern = r'(January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[\s,]+(\d{1,2})[\s,]+(\d{4})'
+                            date_match = re.search(date_pattern, div_text, re.IGNORECASE)
+                            if date_match:
+                                month_name = date_match.group(1)
+                                day = date_match.group(2).zfill(2)
+                                year = date_match.group(3)
+                                month_map = {
+                                    'jan': '01', 'january': '01', 'feb': '02', 'february': '02',
+                                    'mar': '03', 'march': '03', 'apr': '04', 'april': '04',
+                                    'may': '05', 'jun': '06', 'june': '06', 'jul': '07', 'july': '07',
+                                    'aug': '08', 'august': '08', 'sep': '09', 'september': '09',
+                                    'oct': '10', 'october': '10', 'nov': '11', 'november': '11',
+                                    'dec': '12', 'december': '12'
+                                }
+                                month_num = month_map.get(month_name.lower(), '01')
+                                extracted_date = f"{year}-{month_num}-{day}"
 
-                # Extract date from parent text - look for patterns like "December 3, 2025"
-                date_pattern = r'(January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[\s,]+(\d{1,2})[\s,]+(\d{4})'
-                date_match = re.search(date_pattern, parent_text, re.IGNORECASE)
-                if date_match:
-                    month_name = date_match.group(1)
-                    day = date_match.group(2).zfill(2)
-                    year = date_match.group(3)
-                    month_map = {
-                        'jan': '01', 'january': '01', 'feb': '02', 'february': '02',
-                        'mar': '03', 'march': '03', 'apr': '04', 'april': '04',
-                        'may': '05', 'jun': '06', 'june': '06', 'jul': '07', 'july': '07',
-                        'aug': '08', 'august': '08', 'sep': '09', 'september': '09',
-                        'oct': '10', 'october': '10', 'nov': '11', 'november': '11',
-                        'dec': '12', 'december': '12'
-                    }
-                    month_num = month_map.get(month_name.lower(), '01')
-                    extracted_date = f"{year}-{month_num}-{day}"
+                        # Check for title column (uk-width-expand@s is Silver Spruce's title column)
+                        if 'uk-width-expand@s' in div_classes or any('title' in c.lower() or 'expand' in c.lower() for c in div_classes):
+                            if div_text and len(div_text) > 20 and len(div_text) < 500:
+                                if div_text.lower() not in ['pdf', 'download', 'view', 'read more']:
+                                    if not title:
+                                        title = div_text
 
-                # Find title if not found yet
-                if not title:
-                    for child in search_element.find_all(['h1', 'h2', 'h3', 'h4', 'h5', 'p', 'span', 'div', 'td']):
-                        child_text = child.get_text(strip=True)
-                        if child_text and len(child_text) > 20 and len(child_text) < 300:
-                            # Skip if it's just numbers/dates or common link text
-                            text_clean = child_text.lower()
-                            if text_clean in ['pdf', 'download', 'view', 'read more']:
-                                continue
-                            if not child_text.replace('-', '').replace('/', '').replace(',', '').replace(' ', '').isdigit():
-                                title = child_text
-                                break
+                    # If we found date or title from grid, we're done with this strategy
+                    if extracted_date or title:
+                        break
+
+            # Strategy 4: Fallback to parent/grandparent text search
+            if not extracted_date or not title:
+                parent = pdf_link.find_parent(['div', 'li', 'article', 'section', 'tr'])
+                if parent:
+                    grandparent = parent.find_parent(['div', 'li', 'article', 'section', 'tr'])
+                    search_element = grandparent if grandparent else parent
+
+                    # Get all text from the parent/grandparent for date extraction
+                    parent_text = search_element.get_text()
+
+                    # Extract date from parent text if not found yet
+                    if not extracted_date:
+                        date_pattern = r'(January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[\s,]+(\d{1,2})[\s,]+(\d{4})'
+                        date_match = re.search(date_pattern, parent_text, re.IGNORECASE)
+                        if date_match:
+                            month_name = date_match.group(1)
+                            day = date_match.group(2).zfill(2)
+                            year = date_match.group(3)
+                            month_map = {
+                                'jan': '01', 'january': '01', 'feb': '02', 'february': '02',
+                                'mar': '03', 'march': '03', 'apr': '04', 'april': '04',
+                                'may': '05', 'jun': '06', 'june': '06', 'jul': '07', 'july': '07',
+                                'aug': '08', 'august': '08', 'sep': '09', 'september': '09',
+                                'oct': '10', 'october': '10', 'nov': '11', 'november': '11',
+                                'dec': '12', 'december': '12'
+                            }
+                            month_num = month_map.get(month_name.lower(), '01')
+                            extracted_date = f"{year}-{month_num}-{day}"
+
+                    # Find title if not found yet
+                    if not title:
+                        for child in search_element.find_all(['h1', 'h2', 'h3', 'h4', 'h5', 'p', 'span', 'div', 'td']):
+                            child_text = child.get_text(strip=True)
+                            if child_text and len(child_text) > 20 and len(child_text) < 300:
+                                # Skip if it's just numbers/dates or common link text
+                                text_clean = child_text.lower()
+                                if text_clean in ['pdf', 'download', 'view', 'read more']:
+                                    continue
+                                if not child_text.replace('-', '').replace('/', '').replace(',', '').replace(' ', '').isdigit():
+                                    title = child_text
+                                    break
 
             # If we found a good title or date, update or add the PDF
             if title or extracted_date:
