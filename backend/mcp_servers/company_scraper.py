@@ -223,32 +223,51 @@ class CompanyDataScraper:
                     if title_text.startswith(prefix):
                         title_text = title_text[len(prefix):]
 
-                # Handle titles with taglines (e.g., "Company Name | Tagline" or "Tagline | Company Name")
-                # If there's a pipe, intelligently select the company name part
-                if '|' in title_text:
-                    parts = [p.strip() for p in title_text.split('|')]
+                # Handle titles with taglines (e.g., "Company Name | Tagline" or "Company – Tagline")
+                # Split on common separators: |, –, -, :
+                separators = ['|', ' – ', ' - ', ' — ', ': ']
+                parts = None
+                for sep in separators:
+                    if sep in title_text:
+                        parts = [p.strip() for p in title_text.split(sep)]
+                        break
+
+                if parts and len(parts) >= 2:
                     # Company identifiers that indicate a proper company name (not just keywords)
                     company_suffixes = ['corp', 'corporation', 'inc', 'incorporated', 'ltd', 'limited',
                                        'llc', 'lp', 'co.', 'company', 'plc', 'resources', 'metals',
-                                       'mining', 'exploration', 'minerals']
-                    # Check each part for company suffixes (strong indicator of company name)
+                                       'mining', 'exploration', 'minerals', 'gold', 'silver', 'copper',
+                                       'nickel', 'energy', 'ventures']
+                    # Tagline indicators (words that suggest this is NOT the company name)
+                    tagline_indicators = ['unlocking', 'discovering', 'exploring', 'developing',
+                                         'focused on', 'leading', 'premier', 'innovative',
+                                         'potential', 'opportunity', 'future']
+
+                    # Score each part - higher score = more likely to be company name
                     best_part = None
+                    best_score = -1
                     for part in parts:
                         part_lower = part.lower()
-                        # Check for company suffixes (strong indicator of company name)
+                        score = 0
+                        # Company suffix is strong indicator (+10)
                         if any(kw in part_lower for kw in company_suffixes):
+                            score += 10
+                        # Tagline indicator is negative (-5)
+                        if any(kw in part_lower for kw in tagline_indicators):
+                            score -= 5
+                        # Shorter parts more likely to be company names (+2 if < 30 chars)
+                        if len(part) < 30:
+                            score += 2
+                        # First part gets slight preference (+1)
+                        if part == parts[0]:
+                            score += 1
+
+                        if score > best_score:
+                            best_score = score
                             best_part = part
-                            break
+
                     if best_part:
                         title_text = best_part
-                    else:
-                        # Heuristic: if first part is short (< 40 chars) and second is long,
-                        # first is likely the company name, second is the tagline
-                        if len(parts) >= 2 and len(parts[0]) < 40 and len(parts[1]) > len(parts[0]):
-                            title_text = parts[0]
-                        else:
-                            # Default to last part
-                            title_text = parts[-1]
 
                 self.extracted_data['company']['name'] = title_text.strip()
 
@@ -280,13 +299,20 @@ class CompanyDataScraper:
             # Extract description from meta tags
             meta_desc = soup.find('meta', attrs={'name': 'description'})
             if meta_desc and meta_desc.get('content'):
-                self.extracted_data['company']['description'] = meta_desc['content']
+                desc_content = meta_desc['content']
+                # Basic validation - skip if it looks like error page or garbage
+                desc_lower = desc_content.lower()
+                garbage_keywords = ['page not found', '404', 'apologies', "can't find", 'click here']
+                if not any(kw in desc_lower for kw in garbage_keywords):
+                    self.extracted_data['company']['description'] = desc_content
 
             # Extract ticker symbol (often in header or stock ticker bar)
             # Note: Be careful with OTC patterns - "OTCQB" and "OTCQX" are market tiers, not exchanges
             ticker_patterns = [
                 # TSX Venture patterns: "TSX.V: SSE", "TSX-V: AMM", "TSXV: AMM", "TSX V: AMM"
                 r'\b(TSX[.\-\s]?V|TSXV)[:\s]+([A-Z]{2,5})\b',
+                # Ticker.V format: "SGN.V" (common format for TSXV)
+                r'\b([A-Z]{2,5})\.(V)\b',
                 # TSX main patterns: "TSX: AMM" (only match if NOT followed by V)
                 r'\b(TSX)(?![.\-]?V)[:\s]+([A-Z]{2,5})\b',
                 # CSE patterns: "CSE: AMM"
@@ -301,6 +327,10 @@ class CompanyDataScraper:
                 r'\b(?:US|OTC)[:\s]+([A-Z]{4,5})\b',
                 # Reverse patterns: "AMM: TSX"
                 r'\b([A-Z]{2,5})[:\s]+(TSX[.\-\s]?V|TSXV|TSX|CSE|NEO|ASX|AIM)\b',
+                # Parenthetical format: "(TSX-V: SGN)" or "(TSXV: SGN)"
+                r'\((TSX[.\-\s]?V|TSXV)[:\s]+([A-Z]{2,5})\)',
+                r'\((TSX)[:\s]+([A-Z]{2,5})\)',
+                r'\((CSE)[:\s]+([A-Z]{2,5})\)',
             ]
 
             # First, try to find ticker in specific stock ticker elements (often JS-rendered)
@@ -380,11 +410,15 @@ class CompanyDataScraper:
                             return ex_clean
 
                         # Determine which group is exchange vs ticker
-                        exchange_keywords = ['TSX', 'TSXV', 'CSE', 'NEO', 'ASX', 'AIM']
-                        g0_normalized = groups[0].upper().replace(' ', '').replace('-', '').replace('.', '')
-                        g0_is_exchange = any(kw in g0_normalized for kw in exchange_keywords)
+                        exchange_keywords = ['TSX', 'TSXV', 'CSE', 'NEO', 'ASX', 'AIM', 'V']
+                        g0_upper = groups[0].upper().replace(' ', '').replace('-', '').replace('.', '')
+                        g1_upper = groups[1].upper().replace(' ', '').replace('-', '').replace('.', '')
 
-                        if g0_is_exchange:
+                        # Check for .V format (ticker.V means TSXV)
+                        if g1_upper == 'V':
+                            self.extracted_data['company']['ticker_symbol'] = groups[0].upper()
+                            self.extracted_data['company']['exchange'] = 'TSXV'
+                        elif any(kw in g0_upper for kw in exchange_keywords):
                             self.extracted_data['company']['exchange'] = normalize_exchange(groups[0])
                             self.extracted_data['company']['ticker_symbol'] = groups[1].upper()
                         else:
@@ -523,9 +557,35 @@ class CompanyDataScraper:
                     if len(combined) > len(description):
                         description = combined
 
-            # Update description if we found something better
+            # Validate and update description if we found something better
+            def is_valid_description(desc):
+                """Check if description is valid content, not garbage."""
+                if not desc or len(desc) < 50:
+                    return False
+                desc_lower = desc.lower()
+                # Garbage indicators (error pages, role lists, etc.)
+                garbage_indicators = [
+                    'page not found', '404', 'sorry', 'apologies',
+                    "can't find", "cannot find", 'check your spelling',
+                    'chairman ceo cfo', 'ceo cfo', 'director director',
+                    'president vice president', 'corporate secretary',
+                    'click here to', 'go back to', 'return to homepage'
+                ]
+                if any(ind in desc_lower for ind in garbage_indicators):
+                    return False
+                # Check if it looks like a list of roles (many job titles)
+                role_words = ['ceo', 'cfo', 'coo', 'director', 'president', 'chairman', 'secretary', 'officer']
+                role_count = sum(1 for word in role_words if word in desc_lower)
+                if role_count >= 3 and len(desc) < 200:
+                    return False
+                return True
+
             if description and len(description) > len(self.extracted_data['company'].get('description', '')):
-                self.extracted_data['company']['description'] = description[:1000]
+                if is_valid_description(description):
+                    self.extracted_data['company']['description'] = description[:1000]
+                elif not is_valid_description(self.extracted_data['company'].get('description', '')):
+                    # Current description is also garbage, keep new one anyway
+                    self.extracted_data['company']['description'] = description[:1000]
 
             # Look for incorporation/founding info
             page_text = soup.get_text()
