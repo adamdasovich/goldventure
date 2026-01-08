@@ -57,8 +57,16 @@ async function apiFetch<T>(endpoint: string, options?: RequestInit): Promise<T> 
   });
 
   if (!response.ok) {
-    const error = await response.json().catch(() => ({ error: 'Network error' }));
-    throw new Error(error.error || `API Error: ${response.status}`);
+    const error = await response.json().catch(() => ({}));
+    const statusMessages: Record<number, string> = {
+      400: 'Bad request',
+      401: 'Unauthorized - please log in again',
+      403: 'Permission denied',
+      404: 'Not found',
+      500: 'Server error',
+    };
+    const defaultMessage = statusMessages[response.status] || `API Error: ${response.status}`;
+    throw new Error(error.error || error.detail || defaultMessage);
   }
 
   // Handle 204 No Content responses (e.g., DELETE operations)
