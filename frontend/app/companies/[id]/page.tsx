@@ -993,14 +993,17 @@ export default function CompanyDetailPage() {
                 {projects.length > 0 ? (
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                     {projects.map((project) => (
-                      <Card key={project.id} variant="glass-card" className="hover:scale-105 transition-transform relative group">
+                      <Card key={project.id} variant="glass-card" className="hover:scale-105 transition-transform relative">
                         {/* Delete button for admins */}
                         {canEditCompany && (
                           <button
                             type="button"
-                            onClick={() => handleDeleteProject(project.id)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteProject(project.id);
+                            }}
                             disabled={deletingProjectId === project.id}
-                            className="absolute top-2 right-2 p-1.5 bg-red-500/20 hover:bg-red-500/40 rounded-lg text-red-400 opacity-0 group-hover:opacity-100 transition-opacity z-10"
+                            className="absolute top-3 right-3 p-2 bg-red-500/30 hover:bg-red-500/50 rounded-lg text-red-400 hover:text-red-300 transition-colors z-20"
                             title="Delete project"
                           >
                             {deletingProjectId === project.id ? (
