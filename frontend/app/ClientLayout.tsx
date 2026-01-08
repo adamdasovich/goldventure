@@ -2,8 +2,10 @@
 
 import { AuthProvider } from '@/contexts/AuthContext';
 import { CartProvider } from '@/contexts/CartContext';
+import { IdleTimeoutProvider } from '@/contexts/IdleTimeoutContext';
 import { CartSidebar } from '@/components/store';
 import CanonicalUrl from '@/components/CanonicalUrl';
+import IdleWarningModal from '@/components/auth/IdleWarningModal';
 
 export default function ClientLayout({
   children,
@@ -12,11 +14,14 @@ export default function ClientLayout({
 }) {
   return (
     <AuthProvider>
-      <CartProvider>
-        <CanonicalUrl />
-        {children}
-        <CartSidebar />
-      </CartProvider>
+      <IdleTimeoutProvider>
+        <CartProvider>
+          <CanonicalUrl />
+          {children}
+          <CartSidebar />
+          <IdleWarningModal />
+        </CartProvider>
+      </IdleTimeoutProvider>
     </AuthProvider>
   );
 }
