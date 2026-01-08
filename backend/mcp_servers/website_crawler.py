@@ -221,12 +221,13 @@ class MiningDocumentCrawler:
 
     def _extract_news_titles(self, soup: BeautifulSoup, source_url: str):
         """
-        Extract news release titles from news listing pages.
-        Finds PDF links and then looks for associated title text.
+        Extract news release titles and dates from news listing pages.
+        Finds PDF links and then looks for associated title text and dates.
         """
         from urllib.parse import urljoin
+        import re
 
-        # Strategy: Find all PDF links first, then find their associated titles
+        # Strategy: Find all PDF links first, then find their associated titles and dates
         # by looking at the link text itself or nearby elements
 
         pdf_links = soup.find_all('a', href=lambda href: href and '.pdf' in href.lower())
@@ -235,8 +236,9 @@ class MiningDocumentCrawler:
             href = pdf_link.get('href', '')
             full_url = urljoin(source_url, href)
 
-            # Try multiple strategies to find the title
+            # Try multiple strategies to find the title and date
             title = None
+            extracted_date = None
 
             # Strategy 1: Check the link's own text (if it's descriptive)
             link_text = pdf_link.get_text(strip=True)
@@ -253,15 +255,35 @@ class MiningDocumentCrawler:
                         if not sibling_text.replace('-', '').replace('/', '').replace(',', '').replace(' ', '').isdigit():
                             title = sibling_text
 
-            # Strategy 3: Look in parent element (handle grid layouts like Silver Spruce)
-            if not title:
-                parent = pdf_link.find_parent(['div', 'li', 'article', 'section', 'tr'])
-                if parent:
-                    # First check grandparent for grid layouts (PDF is in a cell, title in another)
-                    grandparent = parent.find_parent(['div', 'li', 'article', 'section', 'tr'])
-                    search_element = grandparent if grandparent else parent
+            # Strategy 3: Look in parent/grandparent element (handle grid layouts like Silver Spruce)
+            parent = pdf_link.find_parent(['div', 'li', 'article', 'section', 'tr'])
+            if parent:
+                grandparent = parent.find_parent(['div', 'li', 'article', 'section', 'tr'])
+                search_element = grandparent if grandparent else parent
 
-                    # Find the first substantial text in parent/grandparent (excluding the PDF link itself)
+                # Get all text from the parent/grandparent for date extraction
+                parent_text = search_element.get_text()
+
+                # Extract date from parent text - look for patterns like "December 3, 2025"
+                date_pattern = r'(January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[\s,]+(\d{1,2})[\s,]+(\d{4})'
+                date_match = re.search(date_pattern, parent_text, re.IGNORECASE)
+                if date_match:
+                    month_name = date_match.group(1)
+                    day = date_match.group(2).zfill(2)
+                    year = date_match.group(3)
+                    month_map = {
+                        'jan': '01', 'january': '01', 'feb': '02', 'february': '02',
+                        'mar': '03', 'march': '03', 'apr': '04', 'april': '04',
+                        'may': '05', 'jun': '06', 'june': '06', 'jul': '07', 'july': '07',
+                        'aug': '08', 'august': '08', 'sep': '09', 'september': '09',
+                        'oct': '10', 'october': '10', 'nov': '11', 'november': '11',
+                        'dec': '12', 'december': '12'
+                    }
+                    month_num = month_map.get(month_name.lower(), '01')
+                    extracted_date = f"{year}-{month_num}-{day}"
+
+                # Find title if not found yet
+                if not title:
                     for child in search_element.find_all(['h1', 'h2', 'h3', 'h4', 'h5', 'p', 'span', 'div', 'td']):
                         child_text = child.get_text(strip=True)
                         if child_text and len(child_text) > 20 and len(child_text) < 300:
@@ -273,8 +295,8 @@ class MiningDocumentCrawler:
                                 title = child_text
                                 break
 
-            # If we found a good title, update or add the PDF
-            if title:
+            # If we found a good title or date, update or add the PDF
+            if title or extracted_date:
                 # Normalize URLs for comparison (remove trailing slash, parameters, etc.)
                 full_url_normalized = full_url.split('?')[0].rstrip('/')
 
@@ -287,24 +309,33 @@ class MiningDocumentCrawler:
                         current_text = pdf_info.get('link_text', '')
                         # Check if current text looks like a filename
                         is_filename = current_text.endswith('.pdf') or len(current_text) < 30
-                        if not current_text or is_filename:
+                        if title and (not current_text or is_filename):
                             pdf_info['link_text'] = title
                             try:
                                 print(f"[TITLE] Updated: {current_text} -> {title[:60]}...")
                             except UnicodeEncodeError:
                                 print(f"[TITLE] Updated title")
+                        # Store extracted date if found
+                        if extracted_date and not pdf_info.get('extracted_date'):
+                            pdf_info['extracted_date'] = extracted_date
+                            print(f"[DATE] Extracted: {extracted_date}")
                         found = True
                         break
 
                 # If not found, add it
                 if not found:
-                    self.pdf_urls.append({
+                    pdf_entry = {
                         'url': full_url,
-                        'link_text': title,
+                        'link_text': title or link_text,
                         'source_page': source_url
-                    })
+                    }
+                    if extracted_date:
+                        pdf_entry['extracted_date'] = extracted_date
+                        print(f"[DATE] Extracted: {extracted_date}")
+                    self.pdf_urls.append(pdf_entry)
                     try:
-                        print(f"[TITLE] Found: {title[:60]}...")
+                        if title:
+                            print(f"[TITLE] Found: {title[:60]}...")
                     except UnicodeEncodeError:
                         print(f"[TITLE] Found title")
 
@@ -313,7 +344,7 @@ class MiningDocumentCrawler:
         Process discovered PDFs and categorize them
         Returns structured list with document type classification
         """
-        # Deduplicate PDFs - keep best title for each URL
+        # Deduplicate PDFs - keep best title and merge extracted_date
         seen_urls = {}
         for pdf in self.pdf_urls:
             url_normalized = pdf['url'].split('?')[0].rstrip('/')
@@ -323,17 +354,27 @@ class MiningDocumentCrawler:
             if url_normalized not in seen_urls:
                 seen_urls[url_normalized] = pdf
             else:
-                # URL exists - keep the one with better title
-                existing_text = seen_urls[url_normalized].get('link_text', '')
+                # URL exists - merge best data
+                existing = seen_urls[url_normalized]
+                existing_text = existing.get('link_text', '')
                 existing_is_filename = existing_text.endswith('.pdf') or len(existing_text) < 30
                 current_is_filename = link_text.endswith('.pdf') or len(link_text) < 30
 
                 # Replace if current has better title than existing
                 if existing_is_filename and not current_is_filename:
+                    # Keep extracted_date from existing if current doesn't have one
+                    if existing.get('extracted_date') and not pdf.get('extracted_date'):
+                        pdf['extracted_date'] = existing['extracted_date']
                     seen_urls[url_normalized] = pdf
                 elif not current_is_filename and len(link_text) > len(existing_text):
                     # Both are good titles, keep longer one
+                    if existing.get('extracted_date') and not pdf.get('extracted_date'):
+                        pdf['extracted_date'] = existing['extracted_date']
                     seen_urls[url_normalized] = pdf
+                else:
+                    # Keep existing but merge extracted_date if current has one
+                    if pdf.get('extracted_date') and not existing.get('extracted_date'):
+                        existing['extracted_date'] = pdf['extracted_date']
 
         # Use deduplicated list
         deduped_pdfs = list(seen_urls.values())
@@ -368,25 +409,32 @@ class MiningDocumentCrawler:
             elif any(kw in combined_text for kw in ['financial', 'annual-report', 'quarterly', '/financial']):
                 doc_type = 'financial_statement'
 
-            # Try to extract FULL DATE from filename/text (YYYYMMDD or YYYY-MM-DD format)
-            # First try YYYYMMDD format (e.g., nr-20251111.pdf)
-            date_match = re.search(r'(20\d{2})(\d{2})(\d{2})', combined_text)
-            if date_match:
-                year = date_match.group(1)
-                month = date_match.group(2)
-                day = date_match.group(3)
-                full_date = f"{year}-{month}-{day}"
+            # Try to extract FULL DATE - first check if we extracted it from HTML
+            full_date = pdf.get('extracted_date')
+            year = None
+
+            if full_date:
+                # Use extracted date from HTML (e.g., "December 3, 2025" -> "2025-12-03")
+                year = full_date[:4]
             else:
-                # Try YYYY-MM-DD format
-                date_match = re.search(r'(20\d{2})-(\d{2})-(\d{2})', combined_text)
+                # Fall back to extracting from filename/URL (YYYYMMDD or YYYY-MM-DD format)
+                date_match = re.search(r'(20\d{2})(\d{2})(\d{2})', combined_text)
                 if date_match:
-                    full_date = f"{date_match.group(1)}-{date_match.group(2)}-{date_match.group(3)}"
                     year = date_match.group(1)
+                    month = date_match.group(2)
+                    day = date_match.group(3)
+                    full_date = f"{year}-{month}-{day}"
                 else:
-                    # Fall back to just year
-                    date_match = re.search(r'(20\d{2})', combined_text)
-                    year = date_match.group(1) if date_match else None
-                    full_date = None
+                    # Try YYYY-MM-DD format
+                    date_match = re.search(r'(20\d{2})-(\d{2})-(\d{2})', combined_text)
+                    if date_match:
+                        full_date = f"{date_match.group(1)}-{date_match.group(2)}-{date_match.group(3)}"
+                        year = date_match.group(1)
+                    else:
+                        # Fall back to just year
+                        date_match = re.search(r'(20\d{2})', combined_text)
+                        year = date_match.group(1) if date_match else None
+                        full_date = None
 
             # Determine best title - prefer descriptive link_text, fallback to cleaned filename
             title = link_text
