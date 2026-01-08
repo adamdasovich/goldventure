@@ -160,6 +160,26 @@ class Command(BaseCommand):
             if keyword in name_lower:
                 return True
 
+        # Filter out navigation/media page names that aren't actual projects
+        navigation_keywords = [
+            'maps & sections', 'maps and sections', 'photo gallery', 'photo galleries',
+            'location map', 'project map', 'site map', 'image gallery', 'video gallery',
+            'media gallery', 'downloads', 'documents', 'resources', 'overview',
+            'all projects', 'our projects', 'project list'
+        ]
+        for keyword in navigation_keywords:
+            if keyword in name_lower:
+                return True
+
+        # Filter out exact matches for common non-project names
+        exact_invalid_names = [
+            'maps', 'photos', 'gallery', 'galleries', 'videos', 'media',
+            'resources', 'downloads', 'documents', 'overview', 'about',
+            'contact', 'news', 'investors', 'corporate'
+        ]
+        if name_lower.strip() in exact_invalid_names:
+            return True
+
         return False
 
     def _infer_project_stage_from_name(self, name: str) -> str:
