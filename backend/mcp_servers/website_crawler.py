@@ -456,9 +456,10 @@ class MiningDocumentCrawler:
                             month = month_map.get(month_name, '01')
                             full_date = f"{year}-{month}-{day}"
                         else:
-                            # Pattern 4: "Month Day YY" in title (e.g., "March 31 25" = March 31, 2025)
+                            # Pattern 4: "Month Day YY" in title or filename (e.g., "March 31 25" or "mar_04_20")
+                            # Accept spaces, commas, OR underscores as separators
                             date_match = re.search(
-                                r'(jan|january|feb|february|mar|march|apr|april|may|jun|june|jul|july|aug|august|sep|sept|september|oct|october|nov|november|dec|december)[\s,]+(\d{1,2})[\s,]+(\d{2})(?!\d)',
+                                r'(jan|january|feb|february|mar|march|apr|april|may|jun|june|jul|july|aug|august|sep|sept|september|oct|october|nov|november|dec|december)[\s,_]+(\d{1,2})[\s,_]+(\d{2})(?!\d)',
                                 combined_text, re.IGNORECASE
                             )
                             if date_match:
