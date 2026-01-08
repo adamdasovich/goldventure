@@ -413,12 +413,22 @@ class MiningDocumentCrawler:
             full_date = pdf.get('extracted_date')
             year = None
 
+            # Month name to number mapping
+            month_map = {
+                'jan': '01', 'january': '01', 'feb': '02', 'february': '02',
+                'mar': '03', 'march': '03', 'apr': '04', 'april': '04',
+                'may': '05', 'jun': '06', 'june': '06', 'jul': '07', 'july': '07',
+                'aug': '08', 'august': '08', 'sep': '09', 'sept': '09', 'september': '09',
+                'oct': '10', 'october': '10', 'nov': '11', 'november': '11',
+                'dec': '12', 'december': '12'
+            }
+
             if full_date:
                 # Use extracted date from HTML (e.g., "December 3, 2025" -> "2025-12-03")
                 year = full_date[:4]
             else:
                 # Fall back to extracting from filename/URL - try multiple patterns
-                # Pattern 1: YYYY_MM_DD (Silver Spruce style: 2024_11_05_nr_sse.pdf)
+                # Pattern 1: YYYY_MM_DD or YYYY-MM-DD (e.g., 2024_11_05_nr_sse.pdf)
                 date_match = re.search(r'(20\d{2})[_-](\d{2})[_-](\d{2})', combined_text)
                 if date_match:
                     year = date_match.group(1)
@@ -434,10 +444,22 @@ class MiningDocumentCrawler:
                         day = date_match.group(3)
                         full_date = f"{year}-{month}-{day}"
                     else:
-                        # Fall back to just year
-                        date_match = re.search(r'(20\d{2})', combined_text)
-                        year = date_match.group(1) if date_match else None
-                        full_date = None
+                        # Pattern 3: month-day-year format (e.g., nr-may-9-2019.pdf)
+                        date_match = re.search(
+                            r'(jan|january|feb|february|mar|march|apr|april|may|jun|june|jul|july|aug|august|sep|sept|september|oct|october|nov|november|dec|december)[_-](\d{1,2})[_-](20\d{2})',
+                            combined_text, re.IGNORECASE
+                        )
+                        if date_match:
+                            month_name = date_match.group(1).lower()
+                            day = date_match.group(2).zfill(2)
+                            year = date_match.group(3)
+                            month = month_map.get(month_name, '01')
+                            full_date = f"{year}-{month}-{day}"
+                        else:
+                            # Fall back to just year
+                            date_match = re.search(r'(20\d{2})', combined_text)
+                            year = date_match.group(1) if date_match else None
+                            full_date = None
 
             # Determine best title - prefer descriptive link_text, fallback to cleaned filename
             title = link_text
