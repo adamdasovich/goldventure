@@ -1245,19 +1245,22 @@ class CompanyDataScraper:
             news_found = []
 
             # Strategy 1: Find news items using various selectors
+            # Order matters - put specific semantic elements first, wildcards last
             news_selectors = [
-                '.news-item', '.press-release', '.news', '[class*="news"]',
-                '[class*="release"]', 'article', '.post', '.entry'
+                'article.post', 'article', '.post', '.entry', '.news-item', '.press-release',
+                '.news-release', '[class*="news-item"]', '[class*="press-release"]'
             ]
 
             for selector in news_selectors:
                 items = soup.select(selector)
                 if items:
-                    for item in items[:20]:  # Limit to 20 news items
+                    for item in items[:30]:  # Limit to 30 news items
                         news = self._extract_news_from_element(item, url)
                         if news and news.get('title') and len(news['title']) > 10:
                             news_found.append(news)
-                    break
+                    # Only break if we found meaningful news items
+                    if len(news_found) >= 3:
+                        break
 
             # Strategy 2: Handle grid-based news layouts (like Silver Spruce's uk-grid)
             # Look for grids containing date + title + VIEW/PDF links
