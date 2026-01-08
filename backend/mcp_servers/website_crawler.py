@@ -253,15 +253,23 @@ class MiningDocumentCrawler:
                         if not sibling_text.replace('-', '').replace('/', '').replace(',', '').replace(' ', '').isdigit():
                             title = sibling_text
 
-            # Strategy 3: Look in parent element
+            # Strategy 3: Look in parent element (handle grid layouts like Silver Spruce)
             if not title:
-                parent = pdf_link.find_parent(['div', 'li', 'article', 'section'])
+                parent = pdf_link.find_parent(['div', 'li', 'article', 'section', 'tr'])
                 if parent:
-                    # Find the first substantial text in parent (excluding the PDF link itself)
-                    for child in parent.find_all(['h1', 'h2', 'h3', 'h4', 'h5', 'p', 'span']):
+                    # First check grandparent for grid layouts (PDF is in a cell, title in another)
+                    grandparent = parent.find_parent(['div', 'li', 'article', 'section', 'tr'])
+                    search_element = grandparent if grandparent else parent
+
+                    # Find the first substantial text in parent/grandparent (excluding the PDF link itself)
+                    for child in search_element.find_all(['h1', 'h2', 'h3', 'h4', 'h5', 'p', 'span', 'div', 'td']):
                         child_text = child.get_text(strip=True)
-                        if child_text and len(child_text) > 20 and len(child_text) < 200:
-                            if not child_text.replace('-', '').replace('/', '').isdigit():
+                        if child_text and len(child_text) > 20 and len(child_text) < 300:
+                            # Skip if it's just numbers/dates or common link text
+                            text_clean = child_text.lower()
+                            if text_clean in ['pdf', 'download', 'view', 'read more']:
+                                continue
+                            if not child_text.replace('-', '').replace('/', '').replace(',', '').replace(' ', '').isdigit():
                                 title = child_text
                                 break
 
@@ -380,9 +388,28 @@ class MiningDocumentCrawler:
                     year = date_match.group(1) if date_match else None
                     full_date = None
 
+            # Determine best title - prefer descriptive link_text, fallback to cleaned filename
+            title = link_text
+            # If title is poor (just "PDF", "Download", too short), use filename
+            if not title or title.lower() in ['pdf', 'download', 'view', 'read more'] or len(title) < 10:
+                # Extract filename and clean it up
+                filename = url.split('/')[-1].split('?')[0]
+                if filename.endswith('.pdf'):
+                    filename = filename[:-4]
+                # Replace underscores/dashes with spaces, remove date prefix if present
+                cleaned = filename.replace('_', ' ').replace('-', ' ')
+                # Remove leading date patterns like "2024 11 05 nr sse" -> "nr sse"
+                cleaned = re.sub(r'^20\d{2}\s+\d{2}\s+\d{2}\s*', '', cleaned)
+                cleaned = re.sub(r'^nr\s+', '', cleaned, flags=re.IGNORECASE)  # Remove leading "nr"
+                cleaned = re.sub(r'\s+', ' ', cleaned).strip()  # Normalize whitespace
+                if len(cleaned) > 10:
+                    title = cleaned.title()  # Title case
+                else:
+                    title = filename  # Keep original filename if too short
+
             documents.append({
                 'url': url,
-                'title': link_text or url.split('/')[-1],
+                'title': title,
                 'document_type': doc_type,
                 'year': year,
                 'date': full_date,  # Full date if available
