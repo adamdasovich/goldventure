@@ -343,7 +343,8 @@ class MiningDocumentCrawler:
             doc_type = 'other'
 
             # News releases - HIGHEST PRIORITY for current company information
-            if any(kw in combined_text for kw in ['/news/', 'nr-', 'press-release', 'press_release', '/press-releases/', '/news-releases/']):
+            # Patterns: nr- (hyphen), _nr_ (underscore), _nr. (end of name), omg_nr, press-release variants
+            if any(kw in combined_text for kw in ['/news/', 'nr-', '_nr_', '_nr.', 'omg_nr', 'press-release', 'press_release', '/press-releases/', '/news-releases/', 'news_release', 'newsrelease']):
                 doc_type = 'news_release'
             # NI 43-101 reports
             elif any(kw in combined_text for kw in ['ni 43-101', 'ni43-101', 'ni43101', '43-101', 'technical-report']):
