@@ -1503,6 +1503,15 @@ class CompanyDataScraper:
             year = day_match.group(3)
             return f"{year}-{month}-{day}"
 
+        # Format 4: MM / DD / YYYY with spaces around slashes (11 / 19 / 2024)
+        spaced_slash_pattern = r'(\d{1,2})\s*/\s*(\d{1,2})\s*/\s*(\d{4})'
+        spaced_match = re.search(spaced_slash_pattern, text)
+        if spaced_match:
+            month = spaced_match.group(1).zfill(2)
+            day = spaced_match.group(2).zfill(2)
+            year = spaced_match.group(3)
+            return f"{year}-{month}-{day}"
+
         return None
 
     async def _scrape_contact_page(self, crawler, config, url: str):
