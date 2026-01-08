@@ -309,28 +309,28 @@ class CompanyDataScraper:
             # Extract ticker symbol (often in header or stock ticker bar)
             # Note: Be careful with OTC patterns - "OTCQB" and "OTCQX" are market tiers, not exchanges
             ticker_patterns = [
-                # TSX Venture patterns: "TSX.V: SSE", "TSX-V: AMM", "TSXV: AMM", "TSX V: AMM"
-                r'\b(TSX[.\-\s]?V|TSXV)[:\s]+([A-Z]{2,5})\b',
+                # TSX Venture patterns: "TSX.V: SSE", "TSX-V: AMM", "TSXV: AMM", "TSXV:SGN" (no space)
+                r'\b(TSX[.\-\s]?V|TSXV)[:\s]*([A-Z]{2,5})\b',
                 # Ticker.V format: "SGN.V" (common format for TSXV)
                 r'\b([A-Z]{2,5})\.(V)\b',
-                # TSX main patterns: "TSX: AMM" (only match if NOT followed by V)
-                r'\b(TSX)(?![.\-]?V)[:\s]+([A-Z]{2,5})\b',
-                # CSE patterns: "CSE: AMM"
-                r'\b(CSE)[:\s]+([A-Z]{2,5})\b',
-                # NEO patterns: "NEO: AMM"
-                r'\b(NEO)[:\s]+([A-Z]{2,5})\b',
+                # TSX main patterns: "TSX: AMM" or "TSX:AMM" (only match if NOT followed by V)
+                r'\b(TSX)(?![.\-]?V)[:\s]*([A-Z]{2,5})\b',
+                # CSE patterns: "CSE: AMM" or "CSE:AMM"
+                r'\b(CSE)[:\s]*([A-Z]{2,5})\b',
+                # NEO patterns: "NEO: AMM" or "NEO:AMM"
+                r'\b(NEO)[:\s]*([A-Z]{2,5})\b',
                 # ASX/AIM patterns
-                r'\b(ASX|AIM)[:\s]+([A-Z]{2,5})\b',
+                r'\b(ASX|AIM)[:\s]*([A-Z]{2,5})\b',
                 # OTC patterns - specifically look for OTCQB/OTCQX followed by ticker
-                r'\b(?:OTCQB|OTCQX)[:\s]+([A-Z]{3,5})\b',
+                r'\b(?:OTCQB|OTCQX)[:\s]*([A-Z]{3,5})\b',
                 # US OTC pattern: "US: SSEBF" or "OTC: SSEBF"
-                r'\b(?:US|OTC)[:\s]+([A-Z]{4,5})\b',
+                r'\b(?:US|OTC)[:\s]*([A-Z]{4,5})\b',
                 # Reverse patterns: "AMM: TSX"
                 r'\b([A-Z]{2,5})[:\s]+(TSX[.\-\s]?V|TSXV|TSX|CSE|NEO|ASX|AIM)\b',
                 # Parenthetical format: "(TSX-V: SGN)" or "(TSXV: SGN)"
-                r'\((TSX[.\-\s]?V|TSXV)[:\s]+([A-Z]{2,5})\)',
-                r'\((TSX)[:\s]+([A-Z]{2,5})\)',
-                r'\((CSE)[:\s]+([A-Z]{2,5})\)',
+                r'\((TSX[.\-\s]?V|TSXV)[:\s]*([A-Z]{2,5})\)',
+                r'\((TSX)[:\s]*([A-Z]{2,5})\)',
+                r'\((CSE)[:\s]*([A-Z]{2,5})\)',
             ]
 
             # First, try to find ticker in specific stock ticker elements (often JS-rendered)
