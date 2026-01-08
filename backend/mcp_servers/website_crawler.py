@@ -417,19 +417,22 @@ class MiningDocumentCrawler:
                 # Use extracted date from HTML (e.g., "December 3, 2025" -> "2025-12-03")
                 year = full_date[:4]
             else:
-                # Fall back to extracting from filename/URL (YYYYMMDD or YYYY-MM-DD format)
-                date_match = re.search(r'(20\d{2})(\d{2})(\d{2})', combined_text)
+                # Fall back to extracting from filename/URL - try multiple patterns
+                # Pattern 1: YYYY_MM_DD (Silver Spruce style: 2024_11_05_nr_sse.pdf)
+                date_match = re.search(r'(20\d{2})[_-](\d{2})[_-](\d{2})', combined_text)
                 if date_match:
                     year = date_match.group(1)
                     month = date_match.group(2)
                     day = date_match.group(3)
                     full_date = f"{year}-{month}-{day}"
                 else:
-                    # Try YYYY-MM-DD format
-                    date_match = re.search(r'(20\d{2})-(\d{2})-(\d{2})', combined_text)
+                    # Pattern 2: YYYYMMDD (8 consecutive digits)
+                    date_match = re.search(r'(20\d{2})(\d{2})(\d{2})', combined_text)
                     if date_match:
-                        full_date = f"{date_match.group(1)}-{date_match.group(2)}-{date_match.group(3)}"
                         year = date_match.group(1)
+                        month = date_match.group(2)
+                        day = date_match.group(3)
+                        full_date = f"{year}-{month}-{day}"
                     else:
                         # Fall back to just year
                         date_match = re.search(r'(20\d{2})', combined_text)
