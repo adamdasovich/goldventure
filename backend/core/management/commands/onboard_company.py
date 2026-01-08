@@ -178,7 +178,9 @@ class Command(BaseCommand):
             'contact', 'news', 'investors', 'corporate', 'highlights',
             'properties', 'assets', 'portfolio', 'locations', 'location',
             'recent posts', 'blog', 'articles', 'events', 'webinars',
-            'subscribe', 'newsletter', 'email signup', 'social media'
+            'subscribe', 'newsletter', 'email signup', 'social media',
+            'technical information', 'project details', 'exploration',
+            'drill program', 'drilling program', 'exploration program'
         ]
         if name_lower.strip() in exact_invalid_names:
             return True
@@ -186,6 +188,11 @@ class Command(BaseCommand):
         # Filter out project names that are actually page section labels
         section_labels = ['recent posts', 'latest news', 'featured', 'read more', 'learn more']
         if name_lower.strip() in section_labels:
+            return True
+
+        # Filter out year-based program names (e.g., "2024 Drill Program", "2025 Exploration")
+        year_program_pattern = r'^20\d{2}\s+(drill|drilling|exploration|sampling|field)\s*(program|campaign|season)?'
+        if re.search(year_program_pattern, name_lower):
             return True
 
         return False
