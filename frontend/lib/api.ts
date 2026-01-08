@@ -101,6 +101,31 @@ export const projectAPI = {
 
   getById: (id: number) =>
     apiFetch<Project>(`/projects/${id}/`),
+
+  create: (data: {
+    company: number;
+    name: string;
+    project_stage: string;
+    primary_commodity: string;
+    country: string;
+    province_state?: string;
+    description?: string;
+  }, accessToken: string) =>
+    apiFetch<Project>('/projects/', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify(data),
+    }),
+
+  delete: (id: number, accessToken: string) =>
+    apiFetch<void>(`/projects/${id}/`, {
+      method: 'DELETE',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+      },
+    }),
 };
 
 // Resource API

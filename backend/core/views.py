@@ -1587,7 +1587,12 @@ class CompanyViewSet(viewsets.ModelViewSet):
 class ProjectViewSet(viewsets.ModelViewSet):
     """API endpoint for projects"""
     queryset = Project.objects.all()
-    permission_classes = [AllowAny]
+
+    def get_permissions(self):
+        """Allow anyone to read, but only superusers can create/update/delete"""
+        if self.action in ['create', 'update', 'partial_update', 'destroy']:
+            return [IsAdminUser()]
+        return [AllowAny()]
 
     def get_serializer_class(self):
         if self.action == 'retrieve':

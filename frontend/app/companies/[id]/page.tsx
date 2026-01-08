@@ -70,6 +70,20 @@ export default function CompanyDetailPage() {
   const [savingDescription, setSavingDescription] = useState(false);
   const [descriptionError, setDescriptionError] = useState<string | null>(null);
 
+  // Project management states (superuser only)
+  const [showAddProject, setShowAddProject] = useState(false);
+  const [deletingProjectId, setDeletingProjectId] = useState<number | null>(null);
+  const [newProject, setNewProject] = useState({
+    name: '',
+    project_stage: 'early_exploration',
+    primary_commodity: 'gold',
+    country: '',
+    province_state: '',
+    description: '',
+  });
+  const [savingProject, setSavingProject] = useState(false);
+  const [projectError, setProjectError] = useState<string | null>(null);
+
   const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api';
 
   useEffect(() => {
@@ -347,6 +361,63 @@ export default function CompanyDetailPage() {
       setDescriptionError(err instanceof Error ? err.message : 'Failed to save description');
     } finally {
       setSavingDescription(false);
+    }
+  };
+
+  // Project management handlers (superuser only)
+  const handleAddProject = async () => {
+    if (!accessToken || !user?.is_superuser) return;
+
+    setSavingProject(true);
+    setProjectError(null);
+
+    try {
+      const projectData = {
+        company: parseInt(companyId),
+        name: newProject.name,
+        project_stage: newProject.project_stage,
+        primary_commodity: newProject.primary_commodity,
+        country: newProject.country,
+        province_state: newProject.province_state || undefined,
+        description: newProject.description || undefined,
+      };
+
+      const createdProject = await projectAPI.create(projectData, accessToken);
+      setProjects([...projects, createdProject]);
+      setShowAddProject(false);
+      setNewProject({
+        name: '',
+        project_stage: 'early_exploration',
+        primary_commodity: 'gold',
+        country: '',
+        province_state: '',
+        description: '',
+      });
+    } catch (err) {
+      console.error('Failed to create project:', err);
+      setProjectError(err instanceof Error ? err.message : 'Failed to create project');
+    } finally {
+      setSavingProject(false);
+    }
+  };
+
+  const handleDeleteProject = async (projectId: number) => {
+    if (!accessToken || !user?.is_superuser) return;
+
+    if (!confirm('Are you sure you want to delete this project? This action cannot be undone.')) {
+      return;
+    }
+
+    setDeletingProjectId(projectId);
+
+    try {
+      await projectAPI.delete(projectId, accessToken);
+      setProjects(projects.filter(p => p.id !== projectId));
+    } catch (err) {
+      console.error('Failed to delete project:', err);
+      alert(err instanceof Error ? err.message : 'Failed to delete project');
+    } finally {
+      setDeletingProjectId(null);
     }
   };
 
@@ -783,15 +854,167 @@ export default function CompanyDetailPage() {
             <div className="max-w-7xl mx-auto">
               {/* Projects Section */}
               <div className="mb-12">
-                <div className="mb-6">
-                  <h2 className="text-3xl font-bold text-gold-400 mb-2">Projects</h2>
-                  <p className="text-slate-400">Active mining projects and exploration sites</p>
+                <div className="flex items-center justify-between mb-6">
+                  <div>
+                    <h2 className="text-3xl font-bold text-gold-400 mb-2">Projects</h2>
+                    <p className="text-slate-400">Active mining projects and exploration sites</p>
+                  </div>
+                  {user?.is_superuser && (
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => setShowAddProject(true)}
+                    >
+                      + Add Project
+                    </Button>
+                  )}
                 </div>
+
+                {/* Add Project Form */}
+                {showAddProject && user?.is_superuser && (
+                  <Card variant="glass-card" className="mb-6">
+                    <CardHeader>
+                      <CardTitle className="text-xl text-gold-400">Add New Project</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-sm text-slate-400 mb-1">Project Name *</label>
+                            <input
+                              type="text"
+                              value={newProject.name}
+                              onChange={(e) => setNewProject({ ...newProject, name: e.target.value })}
+                              className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-gold-400"
+                              placeholder="e.g., Gold Mountain Project"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm text-slate-400 mb-1">Country *</label>
+                            <input
+                              type="text"
+                              value={newProject.country}
+                              onChange={(e) => setNewProject({ ...newProject, country: e.target.value })}
+                              className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-gold-400"
+                              placeholder="e.g., Canada"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm text-slate-400 mb-1">Province/State</label>
+                            <input
+                              type="text"
+                              value={newProject.province_state}
+                              onChange={(e) => setNewProject({ ...newProject, province_state: e.target.value })}
+                              className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-gold-400"
+                              placeholder="e.g., Ontario"
+                            />
+                          </div>
+                          <div>
+                            <label htmlFor="primary_commodity" className="block text-sm text-slate-400 mb-1">Primary Commodity *</label>
+                            <select
+                              id="primary_commodity"
+                              title="Primary Commodity"
+                              value={newProject.primary_commodity}
+                              onChange={(e) => setNewProject({ ...newProject, primary_commodity: e.target.value })}
+                              className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-gold-400"
+                            >
+                              <option value="gold">Gold</option>
+                              <option value="silver">Silver</option>
+                              <option value="copper">Copper</option>
+                              <option value="lithium">Lithium</option>
+                              <option value="nickel">Nickel</option>
+                              <option value="cobalt">Cobalt</option>
+                              <option value="rare_earths">Rare Earth Elements</option>
+                              <option value="zinc">Zinc</option>
+                              <option value="uranium">Uranium</option>
+                              <option value="multi_metal">Multi-Metal</option>
+                              <option value="other">Other</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label htmlFor="project_stage" className="block text-sm text-slate-400 mb-1">Project Stage *</label>
+                            <select
+                              id="project_stage"
+                              title="Project Stage"
+                              value={newProject.project_stage}
+                              onChange={(e) => setNewProject({ ...newProject, project_stage: e.target.value })}
+                              className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-gold-400"
+                            >
+                              <option value="grassroots">Grassroots Exploration</option>
+                              <option value="early_exploration">Early Stage Exploration</option>
+                              <option value="advanced_exploration">Advanced Exploration</option>
+                              <option value="resource">Resource Stage</option>
+                              <option value="pea">PEA Completed</option>
+                              <option value="pfs">PFS Completed</option>
+                              <option value="fs">Feasibility Study</option>
+                              <option value="permitting">Permitting</option>
+                              <option value="development">Development</option>
+                              <option value="production">Production</option>
+                            </select>
+                          </div>
+                        </div>
+                        <div>
+                          <label className="block text-sm text-slate-400 mb-1">Description</label>
+                          <textarea
+                            value={newProject.description}
+                            onChange={(e) => setNewProject({ ...newProject, description: e.target.value })}
+                            className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-gold-400 h-24"
+                            placeholder="Brief description of the project..."
+                          />
+                        </div>
+                        {projectError && (
+                          <div className="text-red-400 text-sm">{projectError}</div>
+                        )}
+                        <div className="flex gap-2">
+                          <Button
+                            variant="primary"
+                            size="sm"
+                            onClick={handleAddProject}
+                            disabled={savingProject || !newProject.name || !newProject.country}
+                          >
+                            {savingProject ? 'Adding...' : 'Add Project'}
+                          </Button>
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => {
+                              setShowAddProject(false);
+                              setProjectError(null);
+                            }}
+                          >
+                            Cancel
+                          </Button>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
 
                 {projects.length > 0 ? (
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                     {projects.map((project) => (
-                      <Card key={project.id} variant="glass-card" className="hover:scale-105 transition-transform">
+                      <Card key={project.id} variant="glass-card" className="hover:scale-105 transition-transform relative group">
+                        {/* Delete button for superusers */}
+                        {user?.is_superuser && (
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteProject(project.id)}
+                            disabled={deletingProjectId === project.id}
+                            className="absolute top-2 right-2 p-1.5 bg-red-500/20 hover:bg-red-500/40 rounded-lg text-red-400 opacity-0 group-hover:opacity-100 transition-opacity z-10"
+                            title="Delete project"
+                          >
+                            {deletingProjectId === project.id ? (
+                              <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                              </svg>
+                            ) : (
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              </svg>
+                            )}
+                          </button>
+                        )}
                         <CardHeader>
                           <div className="flex items-start justify-between mb-2">
                             <CardTitle className="text-xl text-gold-400">{project.name}</CardTitle>
