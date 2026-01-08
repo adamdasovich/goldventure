@@ -162,10 +162,12 @@ class Command(BaseCommand):
 
         # Filter out navigation/media page names that aren't actual projects
         navigation_keywords = [
-            'maps & sections', 'maps and sections', 'photo gallery', 'photo galleries',
-            'location map', 'project map', 'site map', 'image gallery', 'video gallery',
-            'media gallery', 'downloads', 'documents', 'resources', 'overview',
-            'all projects', 'our projects', 'project list'
+            'maps & sections', 'maps and sections', 'maps & figures', 'maps and figures',
+            'photo gallery', 'photo galleries', 'location map', 'project map', 'site map',
+            'image gallery', 'video gallery', 'media gallery', 'downloads', 'documents',
+            'resources', 'overview', 'all projects', 'our projects', 'project list',
+            'feasibility study', 'preliminary economic assessment', 'mineral resource estimate',
+            'technical report', 'ni 43-101'
         ]
         for keyword in navigation_keywords:
             if keyword in name_lower:
