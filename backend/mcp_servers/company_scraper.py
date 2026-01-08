@@ -138,9 +138,16 @@ class CompanyDataScraper:
             # 6. Find and scrape News section
             if 'news' in sections:
                 news_urls = self._find_section_urls(['news', 'press', 'media', 'releases'])
-                for url in news_urls[:2]:
+                # Try more news URLs since many sites have year-based archives
+                # Stop early if we find enough news items
+                for url in news_urls[:5]:
                     print(f"[SCRAPE] Scraping news page: {url}")
                     await self._scrape_news_page(crawler, crawler_config, url)
+                    # If we've found at least 10 news items with dates, we likely have good coverage
+                    news_with_dates = sum(1 for n in self.extracted_data.get('news', []) if n.get('publication_date'))
+                    if news_with_dates >= 10:
+                        print(f"[SCRAPE] Found {news_with_dates} news items with dates, stopping news scrape")
+                        break
 
             # 7. Find and scrape Contact section
             if 'contact' in sections:
@@ -178,6 +185,8 @@ class CompanyDataScraper:
 
         # Also construct common URL patterns
         current_year = datetime.utcnow().year
+        prev_year = current_year - 1
+
         for keyword in keywords:
             common_patterns = [
                 f"{self.base_url}/{keyword}/",
@@ -185,13 +194,30 @@ class CompanyDataScraper:
                 f"{self.base_url}/{keyword}s/",
                 f"{self.base_url}/{keyword}s",
             ]
-            # For news, also add year-specific patterns (current year and previous year)
-            if keyword in ['news', 'press']:
+
+            # For news, add multiple year-based URL patterns that mining company sites commonly use
+            if keyword in ['news', 'press', 'releases']:
                 common_patterns.extend([
+                    # Pattern: /news/2026/ or /news/2025/
+                    f"{self.base_url}/{keyword}/{current_year}/",
+                    f"{self.base_url}/{keyword}/{prev_year}/",
+                    # Pattern: /2026/news/ or /2025/news/ (user mentioned this pattern)
+                    f"{self.base_url}/{current_year}/{keyword}/",
+                    f"{self.base_url}/{prev_year}/{keyword}/",
+                    # Pattern: /news-2026/ or /news-2025/
+                    f"{self.base_url}/{keyword}-{current_year}/",
+                    f"{self.base_url}/{keyword}-{prev_year}/",
+                    # Pattern: /news/news-2026/ (some sites nest it)
                     f"{self.base_url}/{keyword}/{keyword}-{current_year}/",
-                    f"{self.base_url}/{keyword}/{keyword}-{current_year}",
-                    f"{self.base_url}/{keyword}/{current_year}-{keyword}/",
-                    f"{self.base_url}/{keyword}/{current_year}-{keyword}",
+                    f"{self.base_url}/{keyword}/{keyword}-{prev_year}/",
+                    # Pattern: /press-releases/ (common variation)
+                    f"{self.base_url}/press-releases/",
+                    f"{self.base_url}/press-releases/{current_year}/",
+                    f"{self.base_url}/press-releases/{prev_year}/",
+                    # Pattern: /news-releases/
+                    f"{self.base_url}/news-releases/",
+                    f"{self.base_url}/news-releases/{current_year}/",
+                    f"{self.base_url}/news-releases/{prev_year}/",
                 ])
 
             for pattern in common_patterns:
@@ -1396,22 +1422,85 @@ class CompanyDataScraper:
         """Extract news item from element."""
         news = {'source_url': source_url, 'extracted_at': datetime.utcnow().isoformat()}
 
-        # Title
-        title_elem = element.select_one('h2, h3, h4, .title, a')
+        # Title - look for link first, then headers
+        title_elem = element.select_one('h2 a, h3 a, .title a, .entry-title a, a[class*="title"]')
+        if not title_elem:
+            title_elem = element.select_one('h2, h3, h4, .title, .entry-title')
+        if not title_elem:
+            title_elem = element.select_one('a')
+
         if title_elem:
             news['title'] = title_elem.get_text(strip=True)
             if title_elem.name == 'a' and title_elem.get('href'):
                 news['source_url'] = urljoin(source_url, title_elem['href'])
 
-        # Date
-        date_elem = element.select_one('.date, time, [class*="date"]')
-        if date_elem:
-            date_text = date_elem.get_text(strip=True)
-            date_match = re.search(r'(\d{4})[/-](\d{2})[/-](\d{2})', date_text)
+        # Date - try multiple strategies
+        pub_date = None
+
+        # Strategy 1: Look for time element with datetime attribute
+        time_elem = element.select_one('time[datetime]')
+        if time_elem and time_elem.get('datetime'):
+            datetime_attr = time_elem.get('datetime')
+            # Handle ISO format: 2025-12-18T00:00:00 or 2025-12-18
+            date_match = re.search(r'(\d{4})-(\d{2})-(\d{2})', datetime_attr)
             if date_match:
-                news['publication_date'] = f"{date_match.group(1)}-{date_match.group(2)}-{date_match.group(3)}"
+                pub_date = f"{date_match.group(1)}-{date_match.group(2)}-{date_match.group(3)}"
+
+        # Strategy 2: Look for date elements by class
+        if not pub_date:
+            date_elem = element.select_one('.date, time, [class*="date"], .meta, .entry-date, span[class*="meta"]')
+            if date_elem:
+                date_text = date_elem.get_text(strip=True)
+                pub_date = self._parse_date_text(date_text)
+
+        # Strategy 3: Look for date in the entire element text
+        if not pub_date:
+            element_text = element.get_text(strip=True)
+            pub_date = self._parse_date_text(element_text)
+
+        if pub_date:
+            news['publication_date'] = pub_date
 
         return news if news.get('title') else None
+
+    def _parse_date_text(self, text: str) -> Optional[str]:
+        """Parse date from text using various formats."""
+        if not text:
+            return None
+
+        # Format 1: ISO format (2025-12-18)
+        date_match = re.search(r'(\d{4})[/-](\d{2})[/-](\d{2})', text)
+        if date_match:
+            return f"{date_match.group(1)}-{date_match.group(2)}-{date_match.group(3)}"
+
+        # Format 2: Month Day, Year (December 18, 2025)
+        month_map = {
+            'january': '01', 'february': '02', 'march': '03', 'april': '04',
+            'may': '05', 'june': '06', 'july': '07', 'august': '08',
+            'september': '09', 'october': '10', 'november': '11', 'december': '12',
+            'jan': '01', 'feb': '02', 'mar': '03', 'apr': '04',
+            'jun': '06', 'jul': '07', 'aug': '08', 'sep': '09',
+            'oct': '10', 'nov': '11', 'dec': '12'
+        }
+
+        month_pattern = r'(January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[.,]?\s+(\d{1,2})\w*[.,]?\s+(\d{4})'
+        month_match = re.search(month_pattern, text, re.IGNORECASE)
+        if month_match:
+            month = month_map.get(month_match.group(1).lower(), '01')
+            day = month_match.group(2).zfill(2)
+            year = month_match.group(3)
+            return f"{year}-{month}-{day}"
+
+        # Format 3: Day Month Year (18 December 2025)
+        day_first_pattern = r'(\d{1,2})\s+(January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[.,]?\s+(\d{4})'
+        day_match = re.search(day_first_pattern, text, re.IGNORECASE)
+        if day_match:
+            day = day_match.group(1).zfill(2)
+            month = month_map.get(day_match.group(2).lower(), '01')
+            year = day_match.group(3)
+            return f"{year}-{month}-{day}"
+
+        return None
 
     async def _scrape_contact_page(self, crawler, config, url: str):
         """Scrape contact page for address and contact info."""
