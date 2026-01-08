@@ -710,99 +710,202 @@ class CompanyDataScraper:
             soup = BeautifulSoup(result.html, 'html.parser')
             projects_found = []
 
-            # Find project containers using CSS selectors
-            project_selectors = [
-                '.project', '.property', '[class*="project"]',
-                '[class*="property"]', '.asset', 'article'
+            # Invalid project names to skip (too generic or just keywords)
+            invalid_names = [
+                'deposit', 'mine', 'project', 'property', 'claim', 'prospect',
+                'the project', 'the deposit', 'the mine', 'our project', 'our projects',
+                'projects', 'properties', 'operations', 'assets', 'home', 'about',
+                'about us', 'contact', 'news', 'investors', 'team', 'management',
+                'overview', 'gallery', 'maps', 'documents', 'introduction'
             ]
 
-            for selector in project_selectors:
-                projects = soup.select(selector)
-                if projects:
-                    for proj in projects:
-                        project = self._extract_project_from_element(proj, url)
-                        if project and project.get('name'):
-                            projects_found.append(project)
-                    break
+            # Check if this is a specific project page (e.g., /projects/pino-de-plata/)
+            # by looking at the URL structure and page content
+            url_path = urlparse(url).path.rstrip('/')
+            path_parts = [p for p in url_path.split('/') if p]
 
-            # If no projects found via CSS, try to extract from page content
-            if not projects_found:
-                # Look for project names in headers
-                headers = soup.find_all(['h1', 'h2', 'h3'])
-                page_text = soup.get_text()
+            is_project_detail_page = (
+                len(path_parts) >= 2 and
+                path_parts[0] in ['projects', 'project', 'properties', 'property'] and
+                path_parts[-1] not in ['projects', 'project', 'properties', 'property']
+            )
 
-                # Mining project keywords that often appear in project names
-                project_keywords = ['deposit', 'mine', 'project', 'property', 'claim', 'prospect']
+            if is_project_detail_page:
+                # This is a specific project page - extract project name from header or URL
+                project_name = None
+                description = None
+                location = None
 
-                # Invalid project names to skip (too generic or just keywords)
-                invalid_names = [
-                    'deposit', 'mine', 'project', 'property', 'claim', 'prospect',
-                    'the project', 'the deposit', 'the mine', 'our project', 'our projects',
-                    'projects', 'properties', 'operations', 'assets', 'home', 'about',
-                    'about us', 'contact', 'news', 'investors', 'team', 'management'
-                ]
-
-                for header in headers:
+                # Strategy 1: Look for the main header (h1 or h2) that matches the URL slug
+                url_slug = path_parts[-1].replace('-', ' ').replace('_', ' ').lower()
+                for header in soup.find_all(['h1', 'h2']):
                     header_text = header.get_text(strip=True)
                     header_lower = header_text.lower().strip()
 
-                    # Skip if the header is just a generic keyword or too short
-                    if header_lower in invalid_names or len(header_text) < 5:
+                    # Skip generic headers
+                    if header_lower in invalid_names or len(header_text) < 3:
                         continue
 
-                    # Skip if header looks like company name (all caps, contains "minerals", "mining", "resources")
-                    if header_text.isupper() and len(header_text.split()) <= 3:
-                        continue
+                    # Check if header matches URL slug or is a reasonable project name
+                    header_normalized = header_lower.replace('-', ' ').replace('_', ' ')
+                    if url_slug in header_normalized or header_normalized in url_slug:
+                        project_name = header_text
+                        break
+                    # Also accept if it's the first non-generic h2 on a project detail page
+                    if not project_name and header.name == 'h2':
+                        project_name = header_text
+                        break
 
-                    # Check if header looks like a project name
-                    if any(kw in header_lower for kw in project_keywords):
-                        # Get description from following sibling paragraphs
-                        description = ''
-                        for sibling in header.find_next_siblings(['p', 'div'])[:3]:
-                            sib_text = sibling.get_text(strip=True)
-                            if sib_text and len(sib_text) > 20:
-                                description = sib_text[:500]
-                                break
+                # Strategy 2: If no header found, derive name from URL
+                if not project_name:
+                    project_name = path_parts[-1].replace('-', ' ').replace('_', ' ').title()
 
-                        # Extract location
-                        location = None
-                        locations = ['Canada', 'USA', 'United States', 'Mexico', 'Peru', 'Chile',
-                                    'Australia', 'Nevada', 'Ontario', 'Quebec', 'British Columbia',
-                                    'Puebla', 'Sonora', 'Durango', 'Yukon', 'Alaska']
-                        combined_text = header_text + ' ' + description
-                        for loc in locations:
-                            if loc.lower() in combined_text.lower():
-                                location = loc
-                                break
+                # Extract description from page content
+                # Look for introduction/overview section or first substantial paragraph
+                intro_headers = soup.find_all(['h3', 'h4'], string=re.compile(r'introduction|overview|about', re.I))
+                if intro_headers:
+                    for para in intro_headers[0].find_next_siblings(['p'])[:3]:
+                        para_text = para.get_text(strip=True)
+                        if para_text and len(para_text) > 50:
+                            description = para_text[:1000]
+                            break
 
-                        project = {
-                            'name': header_text[:200],
-                            'description': description,
-                            'location': location,
-                            'source_url': url
-                        }
+                if not description:
+                    # Find first substantial paragraph after headers
+                    main_content = soup.find(['article', 'main', '.content', '.main-content', '[class*="content"]'])
+                    search_area = main_content if main_content else soup
+                    for para in search_area.find_all('p'):
+                        para_text = para.get_text(strip=True)
+                        if para_text and len(para_text) > 100:
+                            description = para_text[:1000]
+                            break
 
-                        # Avoid duplicates (case-insensitive)
-                        if not any(p.get('name', '').lower() == project['name'].lower() for p in projects_found):
-                            projects_found.append(project)
+                # Extract location from description or page content
+                page_text = soup.get_text()
+                locations = [
+                    'Canada', 'USA', 'United States', 'Mexico', 'Peru', 'Chile', 'Argentina',
+                    'Australia', 'Nevada', 'Ontario', 'Quebec', 'British Columbia', 'Alberta',
+                    'Saskatchewan', 'Manitoba', 'Yukon', 'Northwest Territories', 'Nunavut',
+                    'Chihuahua', 'Sonora', 'Durango', 'Puebla', 'Oaxaca', 'Guerrero',
+                    'Alaska', 'Arizona', 'Colorado', 'Idaho', 'Montana', 'Utah', 'Wyoming'
+                ]
+                for loc in locations:
+                    if loc.lower() in page_text.lower():
+                        location = loc
+                        break
 
-                # Also look for links to project subpages
+                # Extract commodity from page content
+                commodity = None
+                commodities = {
+                    'gold': ['gold', 'au ', ' au,', 'gold-'],
+                    'silver': ['silver', 'ag ', ' ag,', 'silver-'],
+                    'copper': ['copper', 'cu ', ' cu,'],
+                    'zinc': ['zinc', 'zn ', ' zn,'],
+                    'lead': ['lead', 'pb '],
+                    'nickel': ['nickel', 'ni '],
+                    'lithium': ['lithium', 'li '],
+                    'uranium': ['uranium', ' u ']
+                }
+                page_lower = page_text.lower()
+                for comm, patterns in commodities.items():
+                    if any(p in page_lower for p in patterns):
+                        commodity = comm
+                        break
+
+                if project_name and project_name.lower() not in invalid_names:
+                    project = {
+                        'name': project_name[:200],
+                        'description': description,
+                        'location': location,
+                        'commodity': commodity,
+                        'source_url': url
+                    }
+                    if not any(p.get('name', '').lower() == project['name'].lower() for p in projects_found):
+                        projects_found.append(project)
+
+            else:
+                # This is a projects listing/index page - look for project links and containers
+
+                # Strategy 1: Find project containers using CSS selectors
+                project_selectors = [
+                    '.project', '.property', '[class*="project"]',
+                    '[class*="property"]', '.asset', 'article'
+                ]
+
+                for selector in project_selectors:
+                    projects = soup.select(selector)
+                    if projects:
+                        for proj in projects:
+                            project = self._extract_project_from_element(proj, url)
+                            if project and project.get('name'):
+                                name_lower = project['name'].lower()
+                                if name_lower not in invalid_names:
+                                    projects_found.append(project)
+                        break
+
+                # Strategy 2: Look for links to project subpages
+                # This catches navigation menus with project links
                 for link in soup.find_all('a', href=True):
-                    href = link.get('href', '').lower()
+                    href = link.get('href', '')
+                    href_lower = href.lower()
                     text = link.get_text(strip=True)
                     text_lower = text.lower()
 
                     # Links that look like project pages
-                    if any(kw in href for kw in ['/project', '/property', '/asset', '/deposit', '/mine']):
-                        if text and len(text) > 5 and len(text) < 100:
+                    if any(kw in href_lower for kw in ['/project', '/property', '/asset', '/deposit', '/mine']):
+                        if text and len(text) > 2 and len(text) < 100:
                             # Skip navigation items and generic terms
                             if text_lower not in invalid_names and not text.isupper():
-                                project = {
-                                    'name': text[:200],
-                                    'source_url': urljoin(url, link['href'])
-                                }
-                                if not any(p.get('name', '').lower() == project['name'].lower() for p in projects_found):
-                                    projects_found.append(project)
+                                # Check if this is a subpage of the current projects page
+                                full_url = urljoin(url, href)
+                                # Avoid adding the current page or parent pages
+                                if full_url.rstrip('/') != url.rstrip('/') and url.rstrip('/') in full_url:
+                                    project = {
+                                        'name': text[:200],
+                                        'source_url': full_url
+                                    }
+                                    if not any(p.get('name', '').lower() == project['name'].lower() for p in projects_found):
+                                        projects_found.append(project)
+
+                # Strategy 3: If still no projects, look at headers with project keywords
+                if not projects_found:
+                    project_keywords = ['deposit', 'mine', 'project', 'property', 'claim', 'prospect']
+                    for header in soup.find_all(['h1', 'h2', 'h3']):
+                        header_text = header.get_text(strip=True)
+                        header_lower = header_text.lower().strip()
+
+                        if header_lower in invalid_names or len(header_text) < 5:
+                            continue
+                        if header_text.isupper() and len(header_text.split()) <= 3:
+                            continue
+
+                        if any(kw in header_lower for kw in project_keywords):
+                            description = ''
+                            for sibling in header.find_next_siblings(['p', 'div'])[:3]:
+                                sib_text = sibling.get_text(strip=True)
+                                if sib_text and len(sib_text) > 20:
+                                    description = sib_text[:500]
+                                    break
+
+                            location = None
+                            locations = ['Canada', 'USA', 'United States', 'Mexico', 'Peru', 'Chile',
+                                        'Australia', 'Nevada', 'Ontario', 'Quebec', 'British Columbia',
+                                        'Puebla', 'Sonora', 'Durango', 'Yukon', 'Alaska']
+                            combined_text = header_text + ' ' + description
+                            for loc in locations:
+                                if loc.lower() in combined_text.lower():
+                                    location = loc
+                                    break
+
+                            project = {
+                                'name': header_text[:200],
+                                'description': description,
+                                'location': location,
+                                'source_url': url
+                            }
+
+                            if not any(p.get('name', '').lower() == project['name'].lower() for p in projects_found):
+                                projects_found.append(project)
 
             # Add found projects
             self.extracted_data['projects'].extend(projects_found)
