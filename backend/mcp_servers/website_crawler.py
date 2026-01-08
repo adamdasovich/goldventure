@@ -336,6 +336,7 @@ class MiningDocumentCrawler:
         for pdf in deduped_pdfs:
             url = pdf['url']
             link_text = pdf['link_text']
+            source_page = pdf.get('source_page', '').lower()
             combined_text = (link_text + ' ' + url).lower()
 
             # Determine document type (check in priority order)
@@ -344,7 +345,10 @@ class MiningDocumentCrawler:
 
             # News releases - HIGHEST PRIORITY for current company information
             # Patterns: nr- (hyphen), _nr_ (underscore), _nr. (end of name), omg_nr, press-release variants
-            if any(kw in combined_text for kw in ['/news/', 'nr-', '_nr_', '_nr.', 'omg_nr', 'press-release', 'press_release', '/press-releases/', '/news-releases/', 'news_release', 'newsrelease']):
+            # Also check source page - if found on /news/ page, it's likely a news release
+            is_from_news_page = any(kw in source_page for kw in ['/news/', '/news-releases/', '/press-releases/', '/press/'])
+            has_news_pattern = any(kw in combined_text for kw in ['/news/', 'nr-', '_nr_', '_nr.', 'omg_nr', 'press-release', 'press_release', '/press-releases/', '/news-releases/', 'news_release', 'newsrelease', 'drill_results', 'drill-results', 'announces', 'announcement'])
+            if is_from_news_page or has_news_pattern:
                 doc_type = 'news_release'
             # NI 43-101 reports
             elif any(kw in combined_text for kw in ['ni 43-101', 'ni43-101', 'ni43101', '43-101', 'technical-report']):
