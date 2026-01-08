@@ -175,7 +175,8 @@ class Command(BaseCommand):
         exact_invalid_names = [
             'maps', 'photos', 'gallery', 'galleries', 'videos', 'media',
             'resources', 'downloads', 'documents', 'overview', 'about',
-            'contact', 'news', 'investors', 'corporate'
+            'contact', 'news', 'investors', 'corporate', 'highlights',
+            'properties', 'assets', 'portfolio', 'locations'
         ]
         if name_lower.strip() in exact_invalid_names:
             return True
