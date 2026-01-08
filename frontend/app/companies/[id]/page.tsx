@@ -364,9 +364,9 @@ export default function CompanyDetailPage() {
     }
   };
 
-  // Project management handlers (superuser only)
+  // Project management handlers (admins only)
   const handleAddProject = async () => {
-    if (!accessToken || !user?.is_superuser) return;
+    if (!accessToken || !canEditCompany) return;
 
     setSavingProject(true);
     setProjectError(null);
@@ -402,7 +402,7 @@ export default function CompanyDetailPage() {
   };
 
   const handleDeleteProject = async (projectId: number) => {
-    if (!accessToken || !user?.is_superuser) return;
+    if (!accessToken || !canEditCompany) return;
 
     if (!confirm('Are you sure you want to delete this project? This action cannot be undone.')) {
       return;
@@ -859,7 +859,7 @@ export default function CompanyDetailPage() {
                     <h2 className="text-3xl font-bold text-gold-400 mb-2">Projects</h2>
                     <p className="text-slate-400">Active mining projects and exploration sites</p>
                   </div>
-                  {user?.is_superuser && (
+                  {canEditCompany && (
                     <Button
                       variant="secondary"
                       size="sm"
@@ -871,7 +871,7 @@ export default function CompanyDetailPage() {
                 </div>
 
                 {/* Add Project Form */}
-                {showAddProject && user?.is_superuser && (
+                {showAddProject && canEditCompany && (
                   <Card variant="glass-card" className="mb-6">
                     <CardHeader>
                       <CardTitle className="text-xl text-gold-400">Add New Project</CardTitle>
@@ -994,8 +994,8 @@ export default function CompanyDetailPage() {
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                     {projects.map((project) => (
                       <Card key={project.id} variant="glass-card" className="hover:scale-105 transition-transform relative group">
-                        {/* Delete button for superusers */}
-                        {user?.is_superuser && (
+                        {/* Delete button for admins */}
+                        {canEditCompany && (
                           <button
                             type="button"
                             onClick={() => handleDeleteProject(project.id)}
