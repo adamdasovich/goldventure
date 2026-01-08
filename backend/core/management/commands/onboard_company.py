@@ -434,7 +434,8 @@ class Command(BaseCommand):
             'ticker_symbol': company_data.get('ticker_symbol', ''),
             'description': company_data.get('description', '')[:2000] if company_data.get('description') else '',
             'tagline': company_data.get('tagline', ''),
-            'logo_url': company_data.get('logo_url', ''),
+            # Skip data URLs for logo (base64 encoded, too long for URLField)
+            'logo_url': company_data.get('logo_url', '') if not company_data.get('logo_url', '').startswith('data:') else '',
             'website': source_url,
             'source_website_url': source_url,
             'auto_populated': True,
