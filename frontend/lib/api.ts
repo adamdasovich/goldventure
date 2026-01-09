@@ -139,6 +139,23 @@ export const projectAPI = {
         'Authorization': `Bearer ${accessToken}`,
       },
     }),
+
+  update: (id: number, data: {
+    name?: string;
+    project_stage?: string;
+    primary_commodity?: string;
+    country?: string;
+    province_state?: string;
+    description?: string;
+    is_flagship?: boolean;
+  }, accessToken: string) =>
+    apiFetch<Project>(`/projects/${id}/`, {
+      method: 'PATCH',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify(data),
+    }),
 };
 
 // Resource API

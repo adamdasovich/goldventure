@@ -84,6 +84,20 @@ export default function CompanyDetailPage() {
   const [savingProject, setSavingProject] = useState(false);
   const [projectError, setProjectError] = useState<string | null>(null);
 
+  // Edit project states
+  const [editingProject, setEditingProject] = useState<Project | null>(null);
+  const [editProjectForm, setEditProjectForm] = useState({
+    name: '',
+    project_stage: '',
+    primary_commodity: '',
+    country: '',
+    province_state: '',
+    description: '',
+    is_flagship: false,
+  });
+  const [savingEditProject, setSavingEditProject] = useState(false);
+  const [editProjectError, setEditProjectError] = useState<string | null>(null);
+
   const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api';
 
   useEffect(() => {
@@ -421,6 +435,72 @@ export default function CompanyDetailPage() {
     }
   };
 
+  // Edit project handlers
+  const handleEditProject = (project: Project) => {
+    setEditingProject(project);
+    setEditProjectForm({
+      name: project.name || '',
+      project_stage: project.project_stage || 'early_exploration',
+      primary_commodity: project.primary_commodity || 'gold',
+      country: project.country || '',
+      province_state: project.province_state || '',
+      description: project.description || '',
+      is_flagship: project.is_flagship || false,
+    });
+    setEditProjectError(null);
+  };
+
+  const handleCancelEditProject = () => {
+    setEditingProject(null);
+    setEditProjectForm({
+      name: '',
+      project_stage: '',
+      primary_commodity: '',
+      country: '',
+      province_state: '',
+      description: '',
+      is_flagship: false,
+    });
+    setEditProjectError(null);
+  };
+
+  const handleSaveEditProject = async () => {
+    if (!accessToken || !canEditCompany || !editingProject) return;
+
+    setSavingEditProject(true);
+    setEditProjectError(null);
+
+    try {
+      const updatedProject = await projectAPI.update(editingProject.id, {
+        name: editProjectForm.name,
+        project_stage: editProjectForm.project_stage,
+        primary_commodity: editProjectForm.primary_commodity,
+        country: editProjectForm.country,
+        province_state: editProjectForm.province_state || undefined,
+        description: editProjectForm.description || undefined,
+        is_flagship: editProjectForm.is_flagship,
+      }, accessToken);
+
+      // Update the project in the local state
+      setProjects(projects.map(p => p.id === editingProject.id ? updatedProject : p));
+      setEditingProject(null);
+      setEditProjectForm({
+        name: '',
+        project_stage: '',
+        primary_commodity: '',
+        country: '',
+        province_state: '',
+        description: '',
+        is_flagship: false,
+      });
+    } catch (err) {
+      console.error('Failed to update project:', err);
+      setEditProjectError(err instanceof Error ? err.message : 'Failed to update project');
+    } finally {
+      setSavingEditProject(false);
+    }
+  };
+
   return (
     <div className="min-h-screen">
       {/* Navigation */}
@@ -519,6 +599,143 @@ export default function CompanyDetailPage() {
             fetchFinancings();
           }}
         />
+      )}
+
+      {/* Edit Project Modal */}
+      {editingProject && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+          <div className="bg-slate-900 border border-slate-700 rounded-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div className="p-6 border-b border-slate-700">
+              <div className="flex items-center justify-between">
+                <h2 className="text-xl font-bold text-gold-400">Edit Project</h2>
+                <button
+                  type="button"
+                  onClick={handleCancelEditProject}
+                  className="p-2 text-slate-400 hover:text-white transition-colors"
+                  title="Close"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+            <div className="p-6 space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm text-slate-400 mb-1">Project Name *</label>
+                  <input
+                    type="text"
+                    value={editProjectForm.name}
+                    onChange={(e) => setEditProjectForm({ ...editProjectForm, name: e.target.value })}
+                    className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-gold-400"
+                    placeholder="e.g., Gold Mountain Project"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm text-slate-400 mb-1">Country *</label>
+                  <input
+                    type="text"
+                    value={editProjectForm.country}
+                    onChange={(e) => setEditProjectForm({ ...editProjectForm, country: e.target.value })}
+                    className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-gold-400"
+                    placeholder="e.g., Canada"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm text-slate-400 mb-1">Province/State</label>
+                  <input
+                    type="text"
+                    value={editProjectForm.province_state}
+                    onChange={(e) => setEditProjectForm({ ...editProjectForm, province_state: e.target.value })}
+                    className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-gold-400"
+                    placeholder="e.g., Ontario"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="edit_primary_commodity" className="block text-sm text-slate-400 mb-1">Primary Commodity *</label>
+                  <select
+                    id="edit_primary_commodity"
+                    value={editProjectForm.primary_commodity}
+                    onChange={(e) => setEditProjectForm({ ...editProjectForm, primary_commodity: e.target.value })}
+                    className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-gold-400"
+                  >
+                    <option value="gold">Gold</option>
+                    <option value="silver">Silver</option>
+                    <option value="copper">Copper</option>
+                    <option value="lithium">Lithium</option>
+                    <option value="nickel">Nickel</option>
+                    <option value="cobalt">Cobalt</option>
+                    <option value="rare_earths">Rare Earth Elements</option>
+                    <option value="zinc">Zinc</option>
+                    <option value="uranium">Uranium</option>
+                    <option value="multi_metal">Multi-Metal</option>
+                    <option value="other">Other</option>
+                  </select>
+                </div>
+                <div>
+                  <label htmlFor="edit_project_stage" className="block text-sm text-slate-400 mb-1">Project Stage *</label>
+                  <select
+                    id="edit_project_stage"
+                    value={editProjectForm.project_stage}
+                    onChange={(e) => setEditProjectForm({ ...editProjectForm, project_stage: e.target.value })}
+                    className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-gold-400"
+                  >
+                    <option value="grassroots">Grassroots Exploration</option>
+                    <option value="early_exploration">Early Stage Exploration</option>
+                    <option value="advanced_exploration">Advanced Exploration</option>
+                    <option value="resource">Resource Stage</option>
+                    <option value="pea">PEA Completed</option>
+                    <option value="pfs">PFS Completed</option>
+                    <option value="fs">Feasibility Study</option>
+                    <option value="permitting">Permitting</option>
+                    <option value="development">Development</option>
+                    <option value="production">Production</option>
+                  </select>
+                </div>
+                <div className="flex items-center gap-3">
+                  <label htmlFor="edit_is_flagship" className="block text-sm text-slate-400">Flagship Project</label>
+                  <input
+                    id="edit_is_flagship"
+                    type="checkbox"
+                    checked={editProjectForm.is_flagship}
+                    onChange={(e) => setEditProjectForm({ ...editProjectForm, is_flagship: e.target.checked })}
+                    className="w-5 h-5 rounded border-slate-700 bg-slate-800 text-gold-500 focus:ring-gold-500 focus:ring-offset-slate-900"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm text-slate-400 mb-1">Description</label>
+                <textarea
+                  value={editProjectForm.description}
+                  onChange={(e) => setEditProjectForm({ ...editProjectForm, description: e.target.value })}
+                  className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-gold-400 h-24"
+                  placeholder="Brief description of the project..."
+                />
+              </div>
+              {editProjectError && (
+                <div className="text-red-400 text-sm">{editProjectError}</div>
+              )}
+              <div className="flex gap-2 pt-2">
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={handleSaveEditProject}
+                  disabled={savingEditProject || !editProjectForm.name || !editProjectForm.country}
+                >
+                  {savingEditProject ? 'Saving...' : 'Save Changes'}
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={handleCancelEditProject}
+                >
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
 
       {error && (
@@ -994,29 +1211,44 @@ export default function CompanyDetailPage() {
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                     {projects.map((project) => (
                       <Card key={project.id} variant="glass-card" className="hover:scale-105 transition-transform relative">
-                        {/* Delete button for admins */}
+                        {/* Edit and Delete buttons for admins */}
                         {canEditCompany && (
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleDeleteProject(project.id);
-                            }}
-                            disabled={deletingProjectId === project.id}
-                            className="absolute top-3 right-3 p-2 bg-red-500/30 hover:bg-red-500/50 rounded-lg text-red-400 hover:text-red-300 transition-colors z-20"
-                            title="Delete project"
-                          >
-                            {deletingProjectId === project.id ? (
-                              <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                              </svg>
-                            ) : (
+                          <div className="absolute top-3 right-3 flex gap-2 z-20">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleEditProject(project);
+                              }}
+                              className="p-2 bg-gold-500/30 hover:bg-gold-500/50 rounded-lg text-gold-400 hover:text-gold-300 transition-colors"
+                              title="Edit project"
+                            >
                               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                               </svg>
-                            )}
-                          </button>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeleteProject(project.id);
+                              }}
+                              disabled={deletingProjectId === project.id}
+                              className="p-2 bg-red-500/30 hover:bg-red-500/50 rounded-lg text-red-400 hover:text-red-300 transition-colors"
+                              title="Delete project"
+                            >
+                              {deletingProjectId === project.id ? (
+                                <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                              ) : (
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                </svg>
+                              )}
+                            </button>
+                          </div>
                         )}
                         <CardHeader>
                           <div className="flex items-start justify-between mb-2">
