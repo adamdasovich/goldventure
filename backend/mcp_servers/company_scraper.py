@@ -138,16 +138,10 @@ class CompanyDataScraper:
             # 6. Find and scrape News section
             if 'news' in sections:
                 news_urls = self._find_section_urls(['news', 'press', 'media', 'releases'])
-                # Try more news URLs since many sites have year-based archives
-                # Stop early if we find enough news items
-                for url in news_urls[:5]:
+                # Scrape all news URLs to capture multiple years
+                for url in news_urls[:10]:
                     print(f"[SCRAPE] Scraping news page: {url}")
                     await self._scrape_news_page(crawler, crawler_config, url)
-                    # If we've found at least 10 news items with dates, we likely have good coverage
-                    news_with_dates = sum(1 for n in self.extracted_data.get('news', []) if n.get('publication_date'))
-                    if news_with_dates >= 10:
-                        print(f"[SCRAPE] Found {news_with_dates} news items with dates, stopping news scrape")
-                        break
 
             # 7. Find and scrape Contact section
             if 'contact' in sections:
@@ -2088,8 +2082,8 @@ class CompanyDataScraper:
                     if not any(n.get('source_url') == news['source_url'] for n in news_found):
                         news_found.append(news)
 
-            # Add found news to extracted data
-            self.extracted_data['news'].extend(news_found[:50])  # Limit to 50 items
+            # Add found news to extracted data - allow more items per page since we want comprehensive coverage
+            self.extracted_data['news'].extend(news_found[:100])  # Limit to 100 items per page
 
             print(f"[OK] News page scraped: {len(news_found)} items found")
 
