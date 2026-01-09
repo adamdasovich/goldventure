@@ -6264,10 +6264,229 @@ def _infer_project_stage_from_name(name: str) -> str:
     return 'early_exploration'
 
 
+def _classify_news(title: str) -> dict:
+    """
+    Classify a news release based on its title.
+    Returns a dict with news_type, is_material, financing info, and drill result info.
+    """
+    import re
+    from decimal import Decimal
+
+    title_lower = title.lower()
+    result = {
+        'news_type': 'general',
+        'is_material': False,
+        'financing_type': 'none',
+        'financing_amount': None,
+        'financing_price_per_unit': None,
+        'has_drill_results': False,
+        'best_intercept': '',
+    }
+
+    # ===== DRILL RESULTS DETECTION =====
+    drill_patterns = [
+        r'drill\s*result',
+        r'drilling\s*result',
+        r'intersect',
+        r'intercept',
+        r'assay\s*result',
+        r'returns?\s+\d+',  # "returns 5.2 g/t"
+        r'\d+\.?\d*\s*g/t',  # grade mentions
+        r'\d+\.?\d*\s*%\s*(cu|zn|pb|ni)',  # percentage grades
+        r'metres?\s+of\s+\d+',  # "10 metres of 5 g/t"
+        r'meters?\s+of\s+\d+',
+        r'grading\s+\d+',
+    ]
+    for pattern in drill_patterns:
+        if re.search(pattern, title_lower):
+            result['news_type'] = 'drill_results'
+            result['is_material'] = True
+            result['has_drill_results'] = True
+            # Try to extract best intercept
+            intercept_match = re.search(
+                r'(\d+\.?\d*)\s*(m|metres?|meters?)\s*(of|@|at)\s*(\d+\.?\d*)\s*(g/t|%)',
+                title_lower
+            )
+            if intercept_match:
+                result['best_intercept'] = intercept_match.group(0)
+            break
+
+    # ===== RESOURCE ESTIMATE DETECTION =====
+    resource_patterns = [
+        r'resource\s*estimate',
+        r'mineral\s*resource',
+        r'indicated\s*resource',
+        r'inferred\s*resource',
+        r'measured\s*resource',
+        r'resource\s*update',
+        r'ni\s*43-?101',
+        r'43-?101',
+        r'million\s*(oz|ounces)',
+        r'moz',
+        r'resource\s*of\s*\d+',
+    ]
+    if result['news_type'] == 'general':
+        for pattern in resource_patterns:
+            if re.search(pattern, title_lower):
+                result['news_type'] = 'resource_estimate'
+                result['is_material'] = True
+                break
+
+    # ===== FINANCING DETECTION =====
+    financing_patterns = {
+        'private_placement': [
+            r'private\s*placement',
+            r'non-?brokered',
+            r'closes?\s*private',
+            r'announces?\s*private',
+        ],
+        'bought_deal': [
+            r'bought\s*deal',
+            r'brokered\s*offering',
+            r'underwritten\s*offering',
+            r'prospectus\s*offering',
+        ],
+        'flow_through': [
+            r'flow-?through',
+            r'flow\s*through\s*shares?',
+            r'fts\s*financing',
+        ],
+        'rights_offering': [
+            r'rights\s*offering',
+            r'rights\s*issue',
+        ],
+        'warrant_exercise': [
+            r'warrant\s*exercise',
+            r'exercises?\s*warrants?',
+        ],
+        'debt': [
+            r'debt\s*financing',
+            r'loan\s*facility',
+            r'credit\s*facility',
+            r'convertible\s*debenture',
+        ],
+    }
+
+    for financing_type, patterns in financing_patterns.items():
+        for pattern in patterns:
+            if re.search(pattern, title_lower):
+                result['news_type'] = 'financing'
+                result['is_material'] = True
+                result['financing_type'] = financing_type
+                # Try to extract financing amount
+                amount_match = re.search(
+                    r'\$?\s*(\d+(?:,\d{3})*(?:\.\d+)?)\s*(million|m\b)',
+                    title_lower
+                )
+                if amount_match:
+                    try:
+                        amount_str = amount_match.group(1).replace(',', '')
+                        result['financing_amount'] = Decimal(amount_str) * 1000000
+                    except:
+                        pass
+                # Try to extract price per unit
+                price_match = re.search(
+                    r'\$\s*(\d+\.?\d*)\s*per\s*(unit|share)',
+                    title_lower
+                )
+                if price_match:
+                    try:
+                        result['financing_price_per_unit'] = Decimal(price_match.group(1))
+                    except:
+                        pass
+                break
+        if result['financing_type'] != 'none':
+            break
+
+    # ===== ACQUISITION/MERGER DETECTION =====
+    acquisition_patterns = [
+        r'acqui(re|sition)',
+        r'merger',
+        r'amalgamat',
+        r'take-?over',
+        r'business\s*combination',
+        r'purchase\s*agreement',
+        r'option\s*agreement',
+        r'earn-?in',
+    ]
+    if result['news_type'] == 'general':
+        for pattern in acquisition_patterns:
+            if re.search(pattern, title_lower):
+                result['news_type'] = 'acquisition'
+                result['is_material'] = True
+                break
+
+    # ===== MANAGEMENT CHANGE DETECTION =====
+    management_patterns = [
+        r'appoint',
+        r'ceo\s*(change|transition|resign|depart)',
+        r'new\s*(ceo|cfo|president|director)',
+        r'board\s*(change|appointment)',
+        r'management\s*change',
+        r'executive\s*change',
+    ]
+    if result['news_type'] == 'general':
+        for pattern in management_patterns:
+            if re.search(pattern, title_lower):
+                result['news_type'] = 'management'
+                break
+
+    # ===== EXPLORATION UPDATE =====
+    exploration_patterns = [
+        r'exploration\s*update',
+        r'exploration\s*program',
+        r'field\s*program',
+        r'sampling\s*result',
+        r'geophysic',
+        r'survey\s*result',
+        r'commence.*drill',
+        r'start.*drill',
+    ]
+    if result['news_type'] == 'general':
+        for pattern in exploration_patterns:
+            if re.search(pattern, title_lower):
+                result['news_type'] = 'exploration'
+                break
+
+    # ===== PRODUCTION UPDATE =====
+    production_patterns = [
+        r'production\s*update',
+        r'production\s*result',
+        r'quarterly\s*production',
+        r'annual\s*production',
+        r'gold\s*pour',
+        r'first\s*pour',
+        r'commercial\s*production',
+    ]
+    if result['news_type'] == 'general':
+        for pattern in production_patterns:
+            if re.search(pattern, title_lower):
+                result['news_type'] = 'production'
+                result['is_material'] = True
+                break
+
+    # ===== REGULATORY/PERMITTING =====
+    regulatory_patterns = [
+        r'permit',
+        r'environmental\s*assessment',
+        r'eia\b',
+        r'regulatory\s*approv',
+        r'license\s*grant',
+        r'licence\s*grant',
+    ]
+    if result['news_type'] == 'general':
+        for pattern in regulatory_patterns:
+            if re.search(pattern, title_lower):
+                result['news_type'] = 'regulatory'
+                break
+
+    return result
+
+
 def _save_scraped_company_data(data: dict, source_url: str, update_existing: bool, user) -> 'Company':
     """Helper function to save scraped data to database."""
     from core.models import (
-        Company, Project, CompanyPerson, CompanyDocument, CompanyNews
+        Company, Project, CompanyPerson, CompanyDocument, CompanyNews, DocumentProcessingJob
     )
 
     company_data = data.get('company', {})
@@ -6412,8 +6631,10 @@ def _save_scraped_company_data(data: dict, source_url: str, update_existing: boo
     # Store processing jobs info for later use
     data['_processing_jobs_created'] = processing_jobs_created
 
-    # Save news
+    # Save news with classification and document processing
     from datetime import datetime
+    news_processing_jobs = []
+
     for news_item in data.get('news', [])[:50]:
         pub_date = None
         if news_item.get('publication_date'):
@@ -6422,20 +6643,68 @@ def _save_scraped_company_data(data: dict, source_url: str, update_existing: boo
             except:
                 pass
 
+        # Skip news without dates
+        if not pub_date:
+            continue
+
         news_url = news_item.get('source_url', '')
+        news_title = news_item.get('title', 'Untitled')[:500]
+
         # Skip news items with URLs that are too long (max 200 chars for source_url field)
         if len(news_url) > 200:
             continue
 
-        CompanyNews.objects.update_or_create(
+        # Skip items with very short titles
+        if len(news_title) < 10:
+            continue
+
+        is_pdf = '.pdf' in news_url.lower()
+
+        # Classify the news item
+        classification = _classify_news(news_title)
+
+        # Create or update the news record with classification data
+        news_record, created = CompanyNews.objects.update_or_create(
             company=company,
             source_url=news_url,
             defaults={
-                'title': news_item.get('title', 'Untitled')[:500],  # Truncate title to max length
+                'title': news_title,
                 'publication_date': pub_date,
-                'is_pdf': '.pdf' in news_url.lower(),
+                'is_pdf': is_pdf,
+                'news_type': classification['news_type'],
+                'is_material': classification['is_material'],
+                'financing_type': classification['financing_type'],
+                'financing_amount': classification['financing_amount'],
+                'financing_price_per_unit': classification['financing_price_per_unit'],
+                'has_drill_results': classification['has_drill_results'],
+                'best_intercept': classification['best_intercept'][:200] if classification['best_intercept'] else '',
             }
         )
+
+        # Create DocumentProcessingJob for PDF news releases
+        if is_pdf and news_url and not news_record.is_processed:
+            existing_job = DocumentProcessingJob.objects.filter(url=news_url).first()
+            if not existing_job:
+                job = DocumentProcessingJob.objects.create(
+                    url=news_url,
+                    document_type='news_release',
+                    company_name=company.name,
+                    project_name='',
+                    status='pending',
+                    created_by=user,
+                )
+                news_record.processing_job = job
+                news_record.save(update_fields=['processing_job'])
+                news_processing_jobs.append({
+                    'id': job.id,
+                    'type': 'news_release',
+                    'url': news_url,
+                    'is_material': classification['is_material'],
+                })
+
+    # Add news processing jobs to the list
+    if news_processing_jobs:
+        processing_jobs_created.extend(news_processing_jobs)
 
     # Save projects
     for project_data in data.get('projects', []):

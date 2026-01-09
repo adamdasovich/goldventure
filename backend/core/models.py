@@ -4013,6 +4013,30 @@ class CompanyNews(models.Model):
     """
     News releases and press releases scraped from company websites.
     """
+    NEWS_TYPE_CHOICES = [
+        ('general', 'General News'),
+        ('drill_results', 'Drill Results'),
+        ('resource_estimate', 'Resource Estimate'),
+        ('financing', 'Financing'),
+        ('acquisition', 'Acquisition/Merger'),
+        ('management', 'Management Change'),
+        ('exploration', 'Exploration Update'),
+        ('production', 'Production Update'),
+        ('regulatory', 'Regulatory/Permitting'),
+        ('corporate', 'Corporate Update'),
+    ]
+
+    FINANCING_TYPE_CHOICES = [
+        ('none', 'No Financing'),
+        ('private_placement', 'Private Placement'),
+        ('bought_deal', 'Bought Deal'),
+        ('flow_through', 'Flow-Through'),
+        ('rights_offering', 'Rights Offering'),
+        ('debt', 'Debt Financing'),
+        ('warrant_exercise', 'Warrant Exercise'),
+        ('other', 'Other Financing'),
+    ]
+
     company = models.ForeignKey(
         Company,
         on_delete=models.CASCADE,
@@ -4029,6 +4053,26 @@ class CompanyNews(models.Model):
     # Dates
     publication_date = models.DateField(null=True, blank=True)
     publication_datetime = models.DateTimeField(null=True, blank=True)
+
+    # News classification
+    news_type = models.CharField(max_length=30, choices=NEWS_TYPE_CHOICES, default='general')
+    is_material = models.BooleanField(default=False, help_text="Material news (drill results, resource estimates, financings)")
+
+    # Financing detection
+    financing_type = models.CharField(max_length=30, choices=FINANCING_TYPE_CHOICES, default='none')
+    financing_amount = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True,
+                                           help_text="Financing amount in CAD")
+    financing_price_per_unit = models.DecimalField(max_digits=10, decimal_places=4, null=True, blank=True,
+                                                   help_text="Price per unit/share")
+
+    # Drill results detection
+    has_drill_results = models.BooleanField(default=False)
+    best_intercept = models.CharField(max_length=200, blank=True, help_text="Best drill intercept mentioned")
+
+    # Processing status
+    is_processed = models.BooleanField(default=False, help_text="Has been processed by document processor")
+    processing_job = models.ForeignKey('DocumentProcessingJob', on_delete=models.SET_NULL,
+                                       null=True, blank=True, related_name='news_items')
 
     # Categorization
     categories = models.JSONField(default=list, blank=True, help_text="Auto-detected categories")

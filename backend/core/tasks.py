@@ -203,6 +203,29 @@ def process_single_job(job: DocumentProcessingJob):
                 except Exception as e:
                     print(f"  ⚠ Failed to send NI 43-101 notification: {str(e)}")
 
+            # Update CompanyNews record if this was a news_release
+            if job.document_type == 'news_release':
+                try:
+                    from core.models import CompanyNews
+                    # Find the associated news record
+                    news_record = CompanyNews.objects.filter(processing_job=job).first()
+                    if news_record:
+                        # Mark as processed and store extracted content
+                        news_record.is_processed = True
+                        # Get extracted content from the document if available
+                        if job.document_id:
+                            document = Document.objects.filter(id=job.document_id).first()
+                            if document and document.raw_text:
+                                # Store first 10000 chars of content
+                                news_record.content = document.raw_text[:10000]
+                                # Generate summary from extracted text (first 500 chars as basic summary)
+                                if not news_record.summary and document.raw_text:
+                                    news_record.summary = document.raw_text[:500].strip() + "..."
+                        news_record.save()
+                        print(f"  ✓ Updated CompanyNews record: {news_record.title[:50]}...")
+                except Exception as e:
+                    print(f"  ⚠ Failed to update CompanyNews record: {str(e)}")
+
         else:
             # Processing failed
             error_msg = result.get('error', 'Unknown error occurred')
