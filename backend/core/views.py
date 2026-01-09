@@ -6696,6 +6696,37 @@ def _save_scraped_company_data(data: dict, source_url: str, update_existing: boo
             }
         )
 
+        # Create financing flag for superuser review if financing-related
+        if classification['news_type'] == 'financing' and pub_date:
+            financing_keywords = [
+                'private placement', 'financing', 'funding round', 'capital raise',
+                'bought deal', 'equity financing', 'debt financing', 'flow-through',
+                'warrant', 'subscription', 'offering', 'closes', 'tranche',
+                'non-brokered', 'brokered', 'strategic investment', 'strategic partner'
+            ]
+            title_lower = news_title.lower()
+            detected_keywords = [kw for kw in financing_keywords if kw in title_lower]
+
+            if detected_keywords:
+                # Create NewsRelease record (needed for NewsReleaseFlag)
+                news_release, _ = NewsRelease.objects.get_or_create(
+                    company=company,
+                    url=news_url,
+                    defaults={
+                        'title': news_title,
+                        'release_date': pub_date,
+                        'is_material': True,
+                    }
+                )
+                # Create the flag
+                NewsReleaseFlag.objects.get_or_create(
+                    news_release=news_release,
+                    defaults={
+                        'detected_keywords': detected_keywords,
+                        'status': 'pending'
+                    }
+                )
+
         # Create DocumentProcessingJob for PDF news releases
         if is_pdf and news_url and not news_record.is_processed:
             existing_job = DocumentProcessingJob.objects.filter(url=news_url).first()
