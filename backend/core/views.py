@@ -1003,18 +1003,19 @@ def check_scrape_status(request, task_id):
 @permission_classes([AllowAny])
 def company_news_releases(request, company_id):
     """
-    Get news releases for a company, separated by financial and non-financial.
+    Get news releases for a company, separated by financial and company updates.
 
     GET /api/companies/<company_id>/news-releases/
 
     Returns:
         {
-            "financial": [...5 most recent financial releases...],
-            "non_financial": [...5 most recent non-financial releases...],
+            "financial": [...5 most recent financing news from NewsRelease...],
+            "non_financial": [...10 most recent news from CompanyNews...],
             "last_updated": "2025-01-15T10:30:00Z"
         }
 
-    Falls back to scraped CompanyNews if no NewsRelease records exist.
+    Financial news comes from NewsRelease (flagged financing items).
+    Company updates always come from CompanyNews (scraped news).
     """
     from core.models import CompanyNews
 
@@ -1026,58 +1027,34 @@ def company_news_releases(request, company_id):
             status=status.HTTP_404_NOT_FOUND
         )
 
-    # Get financial news (is_material=True)
+    # Get financial news from NewsRelease (flagged financing items)
     financial_releases = NewsRelease.objects.filter(
         company=company,
         is_material=True
     ).order_by('-release_date')[:5]
-
-    # Get non-financial news (is_material=False)
-    non_financial_releases = NewsRelease.objects.filter(
-        company=company,
-        is_material=False
-    ).order_by('-release_date')[:5]
-
-    # Get last scrape time from cache
-    cache_key = f'news_scrape_{company_id}'
-    last_scrape_data = cache.get(cache_key)
-    last_updated = last_scrape_data.get('timestamp') if last_scrape_data else None
-
     financial_data = NewsReleaseSerializer(financial_releases, many=True).data
-    non_financial_data = NewsReleaseSerializer(non_financial_releases, many=True).data
 
-    # If no NewsRelease records, fall back to scraped CompanyNews
-    if not financial_data and not non_financial_data:
-        scraped_news = CompanyNews.objects.filter(company=company).order_by('-publication_date', '-extracted_at')[:10]
+    # Always get company updates from CompanyNews (scraped news)
+    scraped_news = CompanyNews.objects.filter(company=company).order_by('-publication_date')[:10]
+    non_financial_data = []
+    last_updated = None
 
-        # Classify scraped news as financial or non-financial based on title keywords
-        financial_keywords = ['financial', 'earnings', 'quarter', 'annual', 'revenue', 'profit', 'loss', 'fiscal']
+    for news in scraped_news:
+        news_item = {
+            'id': news.id,
+            'title': news.title,
+            'release_date': str(news.publication_date) if news.publication_date else None,
+            'release_type': news.news_type or 'corporate',
+            'summary': news.summary or '',
+            'url': news.source_url,
+            'is_material': news.is_material or False,
+        }
+        non_financial_data.append(news_item)
 
-        for news in scraped_news:
-            news_item = {
-                'id': news.id,
-                'title': news.title,
-                'release_date': str(news.publication_date) if news.publication_date else None,
-                'release_type': 'corporate',
-                'summary': news.summary or '',
-                'url': news.source_url,
-                'is_material': False,
-            }
-
-            # Check if financial news
-            title_lower = news.title.lower()
-            is_financial = any(keyword in title_lower for keyword in financial_keywords)
-
-            if is_financial and len(financial_data) < 5:
-                news_item['is_material'] = True
-                financial_data.append(news_item)
-            elif len(non_financial_data) < 5:
-                non_financial_data.append(news_item)
-
-        # Update last_updated from scraped news if available
-        if scraped_news.exists():
-            latest_scraped = scraped_news.first()
-            last_updated = str(latest_scraped.extracted_at) if latest_scraped else last_updated
+    # Get last_updated from scraped news
+    if scraped_news.exists():
+        latest_scraped = scraped_news.first()
+        last_updated = str(latest_scraped.extracted_at) if latest_scraped else None
 
     return Response({
         'financial': financial_data,
