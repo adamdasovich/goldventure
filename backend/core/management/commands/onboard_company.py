@@ -529,7 +529,12 @@ class Command(BaseCommand):
 
         # Save news
         news_data = data.get('news', [])
-        for news_item in news_data[:50]:  # Limit to 50 news items
+        saved_news_count = 0
+        for news_item in news_data:
+            if saved_news_count >= 50:  # Limit to 50 news items
+                break
+
+            # IMPORTANT: Skip news items without dates - they are low quality
             pub_date = None
             if news_item.get('publication_date'):
                 try:
@@ -537,8 +542,38 @@ class Command(BaseCommand):
                 except:
                     pass
 
+            if not pub_date:
+                continue  # Skip items without valid dates
+
+            news_title = news_item.get('title', '').strip()
+
+            # Skip items with no title or very short titles
+            if not news_title or len(news_title) < 10:
+                continue
+
+            # Skip titles that are just dates (bad scrape artifacts)
+            date_only_pattern = r'^(January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},?\s+\d{4}$'
+            if re.match(date_only_pattern, news_title, re.IGNORECASE):
+                continue
+
+            # Skip non-news items (investor reports, third-party coverage without attribution)
+            skip_patterns = [
+                r'Harbour Insight',  # Investor report, not a news release
+                r'^The Northern Miner\s*[–—-]',  # Third-party coverage
+                r'^Mining\.com\s*[–—-]',  # Third-party coverage
+                r'^Kitco\s*[–—-]',  # Third-party coverage
+                r'Skip to content',  # Navigation artifact
+            ]
+            should_skip = False
+            for pattern in skip_patterns:
+                if re.search(pattern, news_title, re.IGNORECASE):
+                    should_skip = True
+                    break
+            if should_skip:
+                continue
+
             # Truncate fields to fit DB constraints
-            news_title = news_item.get('title', 'Untitled')[:500]  # title max_length=500
+            news_title = news_title[:500]  # title max_length=500
             source_url = news_item.get('source_url', '')[:200]  # source_url max_length=200
             CompanyNews.objects.update_or_create(
                 company=company,
@@ -549,6 +584,7 @@ class Command(BaseCommand):
                     'is_pdf': '.pdf' in source_url.lower(),
                 }
             )
+            saved_news_count += 1
 
         # Save projects
         projects_data = data.get('projects', [])

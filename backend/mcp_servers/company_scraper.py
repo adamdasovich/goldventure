@@ -197,27 +197,29 @@ class CompanyDataScraper:
 
             # For news, add multiple year-based URL patterns that mining company sites commonly use
             if keyword in ['news', 'press', 'releases']:
+                # Try current year, previous year, and year before that for better coverage
+                years_to_try = [current_year, prev_year, prev_year - 1]
+
+                for year in years_to_try:
+                    common_patterns.extend([
+                        # Pattern: /news/2025/ or /news/2024/
+                        f"{self.base_url}/{keyword}/{year}/",
+                        # Pattern: /2025/news/ or /2024/news/
+                        f"{self.base_url}/{year}/{keyword}/",
+                        # Pattern: /news-2025/ or /news-2024/
+                        f"{self.base_url}/{keyword}-{year}/",
+                        # Pattern: /news/news-2025/ (ATEX Resources uses this pattern)
+                        f"{self.base_url}/{keyword}/{keyword}-{year}/",
+                        # Pattern: /press-releases/2025/
+                        f"{self.base_url}/press-releases/{year}/",
+                        # Pattern: /news-releases/2025/
+                        f"{self.base_url}/news-releases/{year}/",
+                    ])
+
+                # Also add non-year-specific news URLs
                 common_patterns.extend([
-                    # Pattern: /news/2026/ or /news/2025/
-                    f"{self.base_url}/{keyword}/{current_year}/",
-                    f"{self.base_url}/{keyword}/{prev_year}/",
-                    # Pattern: /2026/news/ or /2025/news/ (user mentioned this pattern)
-                    f"{self.base_url}/{current_year}/{keyword}/",
-                    f"{self.base_url}/{prev_year}/{keyword}/",
-                    # Pattern: /news-2026/ or /news-2025/
-                    f"{self.base_url}/{keyword}-{current_year}/",
-                    f"{self.base_url}/{keyword}-{prev_year}/",
-                    # Pattern: /news/news-2026/ (some sites nest it)
-                    f"{self.base_url}/{keyword}/{keyword}-{current_year}/",
-                    f"{self.base_url}/{keyword}/{keyword}-{prev_year}/",
-                    # Pattern: /press-releases/ (common variation)
                     f"{self.base_url}/press-releases/",
-                    f"{self.base_url}/press-releases/{current_year}/",
-                    f"{self.base_url}/press-releases/{prev_year}/",
-                    # Pattern: /news-releases/
                     f"{self.base_url}/news-releases/",
-                    f"{self.base_url}/news-releases/{current_year}/",
-                    f"{self.base_url}/news-releases/{prev_year}/",
                 ])
 
             for pattern in common_patterns:
@@ -1390,6 +1392,15 @@ class CompanyDataScraper:
                     }
 
                     # Extract date from URL or text
+                    month_map = {
+                        'january': '01', 'february': '02', 'march': '03', 'april': '04',
+                        'may': '05', 'june': '06', 'july': '07', 'august': '08',
+                        'september': '09', 'october': '10', 'november': '11', 'december': '12',
+                        'jan': '01', 'feb': '02', 'mar': '03', 'apr': '04',
+                        'jun': '06', 'jul': '07', 'aug': '08', 'sep': '09',
+                        'oct': '10', 'nov': '11', 'dec': '12'
+                    }
+
                     # Try ISO format first (2025-10-03)
                     date_match = re.search(r'(20\d{2})[/-](\d{2})[/-](\d{2})', href + text)
                     if date_match:
@@ -1401,13 +1412,25 @@ class CompanyDataScraper:
                             text, re.IGNORECASE
                         )
                         if month_match:
-                            month_map = {'january': '01', 'february': '02', 'march': '03', 'april': '04',
-                                        'may': '05', 'june': '06', 'july': '07', 'august': '08',
-                                        'september': '09', 'october': '10', 'november': '11', 'december': '12'}
                             month = month_map.get(month_match.group(1).lower(), '01')
                             day = month_match.group(2).zfill(2)
                             year = month_match.group(3)
                             news['publication_date'] = f"{year}-{month}-{day}"
+                        else:
+                            # Try abbreviated month with concatenated day/year (Jan262023 or Jan 262023)
+                            # This pattern is used by Grizzly Discoveries
+                            abbrev_match = re.search(
+                                r'^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s*(\d{1,2})(\d{4})',
+                                title, re.IGNORECASE
+                            )
+                            if abbrev_match:
+                                month = month_map.get(abbrev_match.group(1).lower(), '01')
+                                day = abbrev_match.group(2).zfill(2)
+                                year = abbrev_match.group(3)
+                                news['publication_date'] = f"{year}-{month}-{day}"
+                                # Also clean up the title by removing the date prefix
+                                title = title[abbrev_match.end():].strip()
+                                news['title'] = title[:500] if title else news['title']
 
                     # Avoid duplicates
                     if not any(n.get('source_url') == news['source_url'] for n in news_found):
@@ -1464,7 +1487,12 @@ class CompanyDataScraper:
         if pub_date:
             news['publication_date'] = pub_date
 
-        return news if news.get('title') else None
+        # IMPORTANT: Only return news items that have BOTH a title AND a date
+        # News without dates are low quality and should be skipped
+        if not news.get('title') or not news.get('publication_date'):
+            return None
+
+        return news
 
     def _parse_date_text(self, text: str) -> Optional[str]:
         """Parse date from text using various formats."""
@@ -1503,7 +1531,17 @@ class CompanyDataScraper:
             year = day_match.group(3)
             return f"{year}-{month}-{day}"
 
-        # Format 4: MM / DD / YYYY with spaces around slashes (11 / 19 / 2024)
+        # Format 4: Abbreviated month with concatenated day/year (Jan262023 or Jan 262023)
+        # This pattern is used by Grizzly Discoveries
+        abbrev_concat_pattern = r'(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s*(\d{1,2})(\d{4})'
+        abbrev_match = re.search(abbrev_concat_pattern, text, re.IGNORECASE)
+        if abbrev_match:
+            month = month_map.get(abbrev_match.group(1).lower(), '01')
+            day = abbrev_match.group(2).zfill(2)
+            year = abbrev_match.group(3)
+            return f"{year}-{month}-{day}"
+
+        # Format 5: MM / DD / YYYY with spaces around slashes (11 / 19 / 2024)
         spaced_slash_pattern = r'(\d{1,2})\s*/\s*(\d{1,2})\s*/\s*(\d{4})'
         spaced_match = re.search(spaced_slash_pattern, text)
         if spaced_match:
