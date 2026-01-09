@@ -865,6 +865,13 @@ class CompanyDataScraper:
                     'president vice president', 'corporate secretary',
                     'click here to', 'go back to', 'return to homepage',
                     'sign-up to follow', 'subscribe to', 'newsletter sign up',
+                    # Technical/geological content (drill results, resource estimates)
+                    'block model', 'exploration target', 'drill program', 'drill hole',
+                    'g/t ag', 'g/t au', 'g/t zn', 'g/t cu', 'g/t pb',  # grades
+                    'mineral resource', 'ore reserves', 'jorc', 'ni 43-101', 'ni43-101',
+                    'inferred resource', 'indicated resource', 'measured resource',
+                    'tonnes @', 'mt @', 'zneq', 'aueq', 'ageq', 'cueq',  # equiv grades
+                    'omnigeo', 'intercept', 'assay', 'mineralization',
                 ]
                 if any(ind in desc_lower for ind in garbage_indicators):
                     return False
