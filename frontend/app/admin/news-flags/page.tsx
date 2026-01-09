@@ -359,7 +359,7 @@ export default function NewsFlagsPage() {
               {/* Amount Raised */}
               <div>
                 <label className="block text-sm font-medium text-slate-300 mb-1">
-                  Amount Raised (USD) *
+                  Amount Raised (CAD) *
                 </label>
                 <input
                   type="number"
