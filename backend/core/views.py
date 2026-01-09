@@ -5990,14 +5990,18 @@ class StoreAdminOrderViewSet(viewsets.ModelViewSet):
 @permission_classes([IsAuthenticated])
 def scrape_company_preview(request):
     """
-    Preview company data scraped from a website (dry run).
-    Does not save to database.
+    Start an async company scrape preview job.
+    Returns immediately with a job_id that can be polled for status.
 
     POST /api/admin/companies/scrape-preview/
 
     Body:
     - url: Company website URL
     - sections: Optional list of sections to scrape
+
+    Returns:
+    - job_id: ID of the scraping job
+    - status: 'pending' initially
     """
     if not (request.user.is_superuser or request.user.is_staff):
         return Response(
@@ -6014,18 +6018,27 @@ def scrape_company_preview(request):
 
     sections = request.data.get('sections')
 
-    import asyncio
-    from mcp_servers.company_scraper import scrape_company_website
+    from core.models import ScrapingJob
+    from core.tasks import scrape_company_website_task
 
     try:
-        # Run the scraper
-        result = asyncio.run(scrape_company_website(url, sections=sections))
+        # Create a scraping job record
+        job = ScrapingJob.objects.create(
+            company_name_input=url,
+            website_url=url,
+            status='pending',
+            sections_to_process=sections or ['all'],
+            initiated_by=request.user
+        )
+
+        # Queue the Celery task
+        scrape_company_website_task.delay(job.id, sections=sections)
 
         return Response({
             'success': True,
-            'data': result['data'],
-            'errors': result['errors'],
-            'urls_visited': result['urls_visited'],
+            'job_id': job.id,
+            'status': 'pending',
+            'message': 'Scraping job queued. Poll /api/admin/companies/scraping-jobs/<job_id>/ for status.'
         })
 
     except Exception as e:

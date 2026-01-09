@@ -834,3 +834,99 @@ def scrape_mining_news_task(self):
                 'error': str(e),
                 'message': f'Mining news scrape failed after retries: {str(e)}'
             }
+
+
+@shared_task(bind=True, max_retries=2, default_retry_delay=60)
+def scrape_company_website_task(self, job_id: int, sections: list = None):
+    """
+    Background task to scrape a company website using Crawl4AI.
+    This task runs the heavy headless browser scraping in the background,
+    preventing timeouts and server resource exhaustion.
+
+    Args:
+        job_id (int): ID of the ScrapingJob record
+        sections (list, optional): List of sections to scrape
+
+    Returns:
+        dict: Status information about the scraping operation
+    """
+    from mcp_servers.company_scraper import scrape_company_website
+    from .models import ScrapingJob
+
+    print(f"[ASYNC SCRAPE] Starting company scrape task for job {job_id}...")
+
+    try:
+        # Get the scraping job
+        job = ScrapingJob.objects.get(id=job_id)
+        job.status = 'running'
+        job.started_at = timezone.now()
+        job.save()
+
+        url = job.website_url
+        print(f"[ASYNC SCRAPE] Scraping URL: {url}")
+
+        # Run the async scraper
+        result = asyncio.run(scrape_company_website(url, sections=sections))
+
+        # Update job with scraped data
+        job.data_extracted = result['data']
+        job.error_messages = result['errors']
+        job.sections_completed = sections or ['all']
+        job.status = 'success'
+        job.completed_at = timezone.now()
+
+        # Count extracted items
+        data = result['data']
+        job.documents_found = len(data.get('documents', []))
+        job.people_found = len(data.get('people', []))
+        job.news_found = len(data.get('news', []))
+        job.save()
+
+        print(f"[ASYNC SCRAPE] Job {job_id} completed successfully")
+        print(f"  - Documents: {job.documents_found}")
+        print(f"  - People: {job.people_found}")
+        print(f"  - News: {job.news_found}")
+
+        return {
+            'status': 'success',
+            'job_id': job_id,
+            'data': result['data'],
+            'errors': result['errors'],
+            'urls_visited': result['urls_visited'],
+            'message': f"Successfully scraped company website"
+        }
+
+    except ScrapingJob.DoesNotExist:
+        print(f"[ASYNC SCRAPE] Job {job_id} not found")
+        return {
+            'status': 'error',
+            'job_id': job_id,
+            'error': f'ScrapingJob with ID {job_id} not found'
+        }
+
+    except Exception as e:
+        print(f"[ASYNC SCRAPE] Job {job_id} failed: {str(e)}")
+        import traceback
+        traceback.print_exc()
+
+        # Update job with failure
+        try:
+            job = ScrapingJob.objects.get(id=job_id)
+            job.status = 'failed'
+            job.completed_at = timezone.now()
+            job.error_messages = [str(e)]
+            job.error_traceback = traceback.format_exc()
+            job.save()
+        except:
+            pass
+
+        # Retry on failure
+        try:
+            self.retry(exc=e)
+        except self.MaxRetriesExceededError:
+            return {
+                'status': 'error',
+                'job_id': job_id,
+                'error': str(e),
+                'message': f'Company scrape failed after retries: {str(e)}'
+            }

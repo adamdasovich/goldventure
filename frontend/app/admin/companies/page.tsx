@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -64,6 +64,15 @@ interface PreviewResult {
   completeness_score: number;
 }
 
+interface ScrapingJobStatus {
+  id: number;
+  status: 'pending' | 'running' | 'success' | 'failed' | 'partial' | 'cancelled';
+  started_at: string | null;
+  completed_at: string | null;
+  data_extracted: PreviewData | null;
+  error_messages: string[];
+}
+
 export default function CompanyOnboardingPage() {
   const { accessToken } = useAuth();
   const [url, setUrl] = useState('');
@@ -72,6 +81,73 @@ export default function CompanyOnboardingPage() {
   const [previewData, setPreviewData] = useState<PreviewResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saveResult, setSaveResult] = useState<{ success: boolean; company_id?: number; company_name?: string } | null>(null);
+  const [scrapeJobId, setScrapeJobId] = useState<number | null>(null);
+  const [scrapeStatus, setScrapeStatus] = useState<string>('');
+  const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Cleanup polling on unmount
+  useEffect(() => {
+    return () => {
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+      }
+    };
+  }, []);
+
+  // Poll for job status
+  const pollJobStatus = useCallback(async (jobId: number) => {
+    try {
+      const response = await fetch(`/api/admin/companies/scraping-jobs/${jobId}/`, {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to check scrape status');
+      }
+
+      const jobData: ScrapingJobStatus = await response.json();
+
+      if (jobData.status === 'running' || jobData.status === 'pending') {
+        setScrapeStatus(jobData.status === 'running' ? 'Scraping website...' : 'Waiting in queue...');
+        return; // Keep polling
+      }
+
+      // Job completed - stop polling
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+        pollIntervalRef.current = null;
+      }
+
+      if (jobData.status === 'success' && jobData.data_extracted) {
+        // Calculate completeness score
+        const data = jobData.data_extracted;
+        let score = 0;
+        if (data.company?.name) score += 20;
+        if (data.company?.ticker_symbol) score += 15;
+        if (data.company?.description) score += 15;
+        if (data.people?.length > 0) score += 20;
+        if (data.documents?.length > 0) score += 15;
+        if (data.projects?.length > 0) score += 15;
+
+        setPreviewData({
+          data: jobData.data_extracted,
+          errors: jobData.error_messages || [],
+          completeness_score: score,
+        });
+        setScrapeStatus('');
+      } else if (jobData.status === 'failed') {
+        setError(jobData.error_messages?.[0] || 'Scraping failed');
+        setScrapeStatus('');
+      }
+
+      setIsLoading(false);
+      setScrapeJobId(null);
+    } catch (err) {
+      console.error('Error polling job status:', err);
+    }
+  }, [accessToken]);
 
   const handlePreview = async () => {
     if (!url.trim()) {
@@ -83,8 +159,10 @@ export default function CompanyOnboardingPage() {
     setError(null);
     setPreviewData(null);
     setSaveResult(null);
+    setScrapeStatus('Starting scrape...');
 
     try {
+      // Start the async scrape job
       const response = await fetch('/api/admin/companies/scrape-preview/', {
         method: 'POST',
         headers: {
@@ -96,15 +174,25 @@ export default function CompanyOnboardingPage() {
 
       if (!response.ok) {
         const errData = await response.json();
-        throw new Error(errData.error || 'Failed to scrape website');
+        throw new Error(errData.error || 'Failed to start scrape');
       }
 
       const data = await response.json();
-      setPreviewData(data);
+      const jobId = data.job_id;
+      setScrapeJobId(jobId);
+      setScrapeStatus('Scrape job queued...');
+
+      // Start polling for job completion (every 3 seconds)
+      pollIntervalRef.current = setInterval(() => {
+        pollJobStatus(jobId);
+      }, 3000);
+
+      // Also poll immediately
+      setTimeout(() => pollJobStatus(jobId), 500);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
-    } finally {
       setIsLoading(false);
+      setScrapeStatus('');
     }
   };
 
@@ -139,10 +227,18 @@ export default function CompanyOnboardingPage() {
   };
 
   const handleReset = () => {
+    // Stop any active polling
+    if (pollIntervalRef.current) {
+      clearInterval(pollIntervalRef.current);
+      pollIntervalRef.current = null;
+    }
     setUrl('');
     setPreviewData(null);
     setError(null);
     setSaveResult(null);
+    setScrapeJobId(null);
+    setScrapeStatus('');
+    setIsLoading(false);
   };
 
   return (
@@ -232,7 +328,7 @@ export default function CompanyOnboardingPage() {
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                   </svg>
-                  Scraping...
+                  {scrapeStatus || 'Scraping...'}
                 </>
               ) : (
                 <>
