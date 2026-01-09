@@ -220,6 +220,13 @@ class CompanyDataScraper:
                 common_patterns.extend([
                     f"{self.base_url}/press-releases/",
                     f"{self.base_url}/news-releases/",
+                    # Additional patterns for sites with nested news structures
+                    f"{self.base_url}/news-media/news-releases/",
+                    f"{self.base_url}/news-media/press-releases/",
+                    f"{self.base_url}/media/news-releases/",
+                    f"{self.base_url}/media/press-releases/",
+                    f"{self.base_url}/investors/news/",
+                    f"{self.base_url}/investors/press-releases/",
                 ])
 
             for pattern in common_patterns:
@@ -539,6 +546,55 @@ class CompanyDataScraper:
             # Extract longer description - try multiple strategies
             description = ''
 
+            # Helper function to detect if text is a biography
+            def is_biography_text(text):
+                """Check if text appears to be a person's biography."""
+                if not text or len(text) < 50:
+                    return False
+                text_lower = text.lower()
+
+                # Bio indicator patterns
+                bio_indicators = [
+                    'years of experience', 'years experience', 'extensive experience',
+                    r'over \d+ years', r'more than \d+ years',
+                    'has served as', 'served as', 'previously served',
+                    'formerly', 'former', 'prior to', 'prior to that',
+                    'currently serves', 'currently the', 'was the',
+                    r'joined .* in \d{4}', 'joined the company',
+                    'holds a degree', 'received his', 'received her', 'earned his', 'earned her',
+                    'graduated from', 'bachelor', 'master', 'mba', r'ph\.?d',
+                    'professional geologist', r'p\.geo', r'p\.eng',
+                    r'^he has', r'^she has', r'^he is', r'^she is', r'^mr\.', r'^ms\.', r'^mrs\.',
+                    'his career', 'her career', 'his expertise', 'her expertise',
+                    'brings .* years', 'brings extensive', 'brings over',
+                    'responsible for', 'oversees', 'manages', 'leads the',
+                    'board of directors', 'advisory board', 'audit committee',
+                    r'^[A-Z][a-z]+\s+[A-Z][a-z]+\s+(has|is|was|brings|joined|serves)',
+                    'successful entrepreneur', 'founded several', 'founded multiple',
+                    'worked at', 'worked for', 'employed at', 'employed by',
+                    r'spent \d+ years', 'where he', 'where she',
+                    'managing director', 'vice president', 'chief financial officer',
+                    'chief executive', 'portfolio manager', 'investment banker',
+                ]
+
+                for ind in bio_indicators:
+                    if re.search(ind, text_lower):
+                        return True
+
+                # Check if text starts with a person's name pattern
+                name_start_pattern = r'^[A-Z][a-z]+\s+(?:\([^)]+\)\s+)?[A-Z][a-z]+(?:\s+[A-Z][a-z]+)?\s+(is|has|was|brings|joined|serves|holds)'
+                if re.match(name_start_pattern, text):
+                    return True
+
+                # Check for multiple executive titles in short text (likely team page content)
+                exec_titles = ['ceo', 'cfo', 'coo', 'president', 'chairman', 'director',
+                              'vice president', 'vp', 'chief', 'officer', 'executive']
+                title_count = sum(1 for t in exec_titles if t in text_lower)
+                if title_count >= 2 and len(text) < 300:
+                    return True
+
+                return False
+
             # Strategy 1: Look for specific content areas
             content_selectors = [
                 'article', '.content', '.main-content', '#content',
@@ -547,12 +603,20 @@ class CompanyDataScraper:
             for selector in content_selectors:
                 element = soup.select_one(selector)
                 if element:
-                    # Get all paragraphs
+                    # Get all paragraphs but filter out biographies
                     paragraphs = element.find_all('p')
                     if paragraphs:
-                        desc_text = ' '.join(p.get_text(strip=True) for p in paragraphs[:5])
-                        if len(desc_text) > len(description):
-                            description = desc_text
+                        valid_paras = []
+                        for p in paragraphs[:10]:  # Check up to 10 paragraphs
+                            p_text = p.get_text(strip=True)
+                            if len(p_text) > 50 and not is_biography_text(p_text):
+                                valid_paras.append(p_text)
+                            if len(valid_paras) >= 5:
+                                break
+                        if valid_paras:
+                            desc_text = ' '.join(valid_paras)
+                            if len(desc_text) > len(description):
+                                description = desc_text
                     break
 
             # Strategy 2: If no specific container, look for first substantial paragraphs on page
@@ -1536,24 +1600,44 @@ class CompanyDataScraper:
                 for grid in grids[:50]:  # Limit to 50 grids
                     grid_text = grid.get_text(strip=True)
 
-                    # Skip if no date-like pattern
-                    date_pattern = r'(January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},?\s+\d{4}'
-                    date_match = re.search(date_pattern, grid_text, re.IGNORECASE)
-                    if not date_match:
+                    # Skip if no date-like pattern - check multiple formats
+                    # Format 1: Month Day, Year (January 8, 2025)
+                    date_pattern_long = r'(January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},?\s+\d{4}'
+                    # Format 2: MM.DD.YY (12.17.25)
+                    date_pattern_dot = r'\d{1,2}\.\d{1,2}\.\d{2}(?!\d)'
+                    # Format 3: YYYY-MM-DD
+                    date_pattern_iso = r'\d{4}-\d{2}-\d{2}'
+
+                    date_match = re.search(date_pattern_long, grid_text, re.IGNORECASE)
+                    date_match_dot = re.search(date_pattern_dot, grid_text)
+                    date_match_iso = re.search(date_pattern_iso, grid_text)
+
+                    if not date_match and not date_match_dot and not date_match_iso:
                         continue
 
                     # Skip if it contains navigation text
                     if any(x in grid_text.lower() for x in ['contact', 'subscribe', 'menu', 'navigation']):
                         continue
 
-                    # Find the date
+                    # Find the date using the matched pattern
                     pub_date = None
-                    date_str = date_match.group(0)
-                    try:
-                        # datetime is already imported at module level
-                        pub_date = datetime.strptime(date_str.replace(',', ''), '%B %d %Y').strftime('%Y-%m-%d')
-                    except:
-                        pass
+                    if date_match:
+                        date_str = date_match.group(0)
+                        try:
+                            pub_date = datetime.strptime(date_str.replace(',', ''), '%B %d %Y').strftime('%Y-%m-%d')
+                        except:
+                            pass
+                    elif date_match_dot:
+                        # Parse MM.DD.YY format
+                        date_str = date_match_dot.group(0)
+                        parts = date_str.split('.')
+                        if len(parts) == 3:
+                            month, day, year_short = parts
+                            year_int = int(year_short)
+                            year = f"20{year_short}" if year_int <= 50 else f"19{year_short}"
+                            pub_date = f"{year}-{month.zfill(2)}-{day.zfill(2)}"
+                    elif date_match_iso:
+                        pub_date = date_match_iso.group(0)
 
                     # Find title (usually the longest text that's not date/VIEW/PDF)
                     title = None
@@ -1563,7 +1647,12 @@ class CompanyDataScraper:
                         # Skip date divs, VIEW, PDF
                         if div_text.lower() in ['view', 'pdf', 'download'] or len(div_text) < 20:
                             continue
-                        if re.match(date_pattern, div_text, re.IGNORECASE):
+                        # Skip if text is just a date in any format
+                        if re.match(date_pattern_long, div_text, re.IGNORECASE):
+                            continue
+                        if re.match(r'^\d{1,2}\.\d{1,2}\.\d{2,4}$', div_text):  # MM.DD.YY or MM.DD.YYYY
+                            continue
+                        if re.match(r'^\d{4}-\d{2}-\d{2}$', div_text):  # YYYY-MM-DD
                             continue
                         if len(div_text) > 20 and len(div_text) < 500:
                             title = div_text
@@ -1813,6 +1902,28 @@ class CompanyDataScraper:
             month = spaced_match.group(1).zfill(2)
             day = spaced_match.group(2).zfill(2)
             year = spaced_match.group(3)
+            return f"{year}-{month}-{day}"
+
+        # Format 6: MM.DD.YY with dots and 2-digit year (12.17.25)
+        # Used by Nobel Resources and some other sites
+        dot_short_year_pattern = r'(\d{1,2})\.(\d{1,2})\.(\d{2})(?!\d)'
+        dot_match = re.search(dot_short_year_pattern, text)
+        if dot_match:
+            month = dot_match.group(1).zfill(2)
+            day = dot_match.group(2).zfill(2)
+            year_short = dot_match.group(3)
+            # Convert 2-digit year to 4-digit (assume 20xx for years 00-50, 19xx for 51-99)
+            year_int = int(year_short)
+            year = f"20{year_short}" if year_int <= 50 else f"19{year_short}"
+            return f"{year}-{month}-{day}"
+
+        # Format 7: MM.DD.YYYY with dots and 4-digit year (12.17.2025)
+        dot_full_year_pattern = r'(\d{1,2})\.(\d{1,2})\.(\d{4})'
+        dot_full_match = re.search(dot_full_year_pattern, text)
+        if dot_full_match:
+            month = dot_full_match.group(1).zfill(2)
+            day = dot_full_match.group(2).zfill(2)
+            year = dot_full_match.group(3)
             return f"{year}-{month}-{day}"
 
         return None
