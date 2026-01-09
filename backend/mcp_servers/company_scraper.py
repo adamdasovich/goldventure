@@ -1147,6 +1147,14 @@ class CompanyDataScraper:
             'overview', 'gallery', 'maps', 'documents', 'introduction',
             'maps & sections', 'maps and sections', 'photo gallery', 'video gallery',
             'downloads', 'resources', 'media', 'highlights', 'location map',
+            # Technical/scientific section names (not actual projects)
+            'alteration', 'metallurgy', 'mineralization', 'geological setting',
+            'geology', 'geochemistry', 'geophysics', 'stratigraphy', 'structure',
+            'technical reports', 'image gallery', 'photo gallery', 'maps & figures',
+            'resource', 'resource estimate', 'mineral resource', 'reserves',
+            'drilling', 'exploration', 'development', 'production', 'processing',
+            'infrastructure', 'environment', 'permitting', 'social', 'sustainability',
+            'history', 'project history', 'background', 'corporate', 'summary',
         ]
         if name_lower in invalid_exact_names:
             return False
@@ -1554,8 +1562,20 @@ class CompanyDataScraper:
                         if text and len(text) > 2 and len(text) < 100:
                             # Use the new intelligent validation method
                             if self._is_valid_project_name(text):
-                                # Check if this is a subpage of the current projects page
+                                # Check URL depth - we only want top-level project pages
+                                # e.g., /projects/golden-summit/ is good (depth 2)
+                                # but /projects/golden-summit/alteration/ is a sub-section (depth 3)
                                 full_url = urljoin(url, href)
+                                parsed_href = urlparse(full_url)
+                                href_path = parsed_href.path.rstrip('/')
+                                href_parts = [p for p in href_path.split('/') if p]
+
+                                # Only accept depth 2 (e.g., /projects/golden-summit)
+                                # Skip depth 3+ (e.g., /projects/golden-summit/alteration)
+                                if len(href_parts) > 2:
+                                    # This is likely a sub-section page, skip it
+                                    continue
+
                                 # Avoid adding the current page or parent pages
                                 if full_url.rstrip('/') != url.rstrip('/') and url.rstrip('/') in full_url:
                                     project = {
@@ -1895,6 +1915,56 @@ class CompanyDataScraper:
                         if title.lower().endswith(('pdf', '.pdf', 'view', 'read more')):
                             title = title[:-4].strip() if title.lower().endswith('.pdf') else title[:-3].strip()
 
+                        news = {
+                            'title': title[:500],
+                            'publication_date': pub_date,
+                            'source_url': source_url or url,
+                            'extracted_at': datetime.utcnow().isoformat(),
+                        }
+                        # Avoid duplicates
+                        if not any(n.get('title', '').lower() == title.lower() for n in news_found):
+                            news_found.append(news)
+
+            # Strategy 4: Handle flex-wrap div news layouts (like Freegold Ventures)
+            # Pattern: div.flex.flex-wrap containing date div + title link
+            if not news_found or len(news_found) < 3:
+                flex_rows = soup.find_all('div', class_=lambda c: c and 'flex' in c and 'flex-wrap' in c)
+                for row in flex_rows[:100]:
+                    row_text = row.get_text(strip=True)
+
+                    # Look for "Month Day, Year" date format
+                    date_pattern = r'(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{1,2}),?\s+(\d{4})'
+                    date_match = re.search(date_pattern, row_text, re.IGNORECASE)
+
+                    if not date_match:
+                        continue
+
+                    # Parse the date
+                    month_map = {
+                        'jan': '01', 'feb': '02', 'mar': '03', 'apr': '04',
+                        'may': '05', 'jun': '06', 'jul': '07', 'aug': '08',
+                        'sep': '09', 'oct': '10', 'nov': '11', 'dec': '12'
+                    }
+                    month = month_map.get(date_match.group(1).lower()[:3], '01')
+                    day = date_match.group(2).zfill(2)
+                    year = date_match.group(3)
+                    pub_date = f"{year}-{month}-{day}"
+
+                    # Find the news link in this row
+                    news_link = None
+                    title = None
+                    source_url = None
+
+                    for link in row.find_all('a', href=True):
+                        href = link.get('href', '')
+                        link_text = link.get_text(strip=True)
+                        # Look for links to news articles (not navigation)
+                        if '/news/' in href and len(link_text) > 20:
+                            title = link_text
+                            source_url = urljoin(url, href)
+                            break
+
+                    if title and pub_date:
                         news = {
                             'title': title[:500],
                             'publication_date': pub_date,
