@@ -307,8 +307,8 @@ export default function CompanyFinancingPage() {
     }
   };
 
-  const formatCurrency = (amount: number, currency: string = 'USD') => {
-    return new Intl.NumberFormat('en-US', {
+  const formatCurrency = (amount: number, currency: string = 'CAD') => {
+    return new Intl.NumberFormat('en-CA', {
       style: 'currency',
       currency: currency,
       minimumFractionDigits: 0,
@@ -740,7 +740,7 @@ export default function CompanyFinancingPage() {
                           {isEditing ? (
                             <div className="mt-3 space-y-3">
                               <div>
-                                <label className="block text-sm text-slate-400 mb-1">Investment Amount (USD)</label>
+                                <label className="block text-sm text-slate-400 mb-1">Investment Amount (CAD)</label>
                                 <input
                                   type="number"
                                   value={editAmount}
