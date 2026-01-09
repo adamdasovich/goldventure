@@ -386,14 +386,14 @@ class CompanyDataScraper:
                         ticker_text += " " + elem_text
 
             # Check for stock quote iframes (common pattern for mining company websites)
-            # These load ticker info from external services like quotemedia, adnetcms, etc.
+            # These load ticker info from external services like quotemedia, adnetcms, brighterir, etc.
             stock_iframes = soup.find_all('iframe', class_=lambda x: x and any(
-                kw in ' '.join(x).lower() for kw in ['quote', 'stock', 'ticker']
+                kw in ' '.join(x).lower() for kw in ['quote', 'stock', 'ticker', 'bir-']
             ))
             if not stock_iframes:
                 # Also check for iframes with stock-related src URLs
                 stock_iframes = soup.find_all('iframe', src=lambda x: x and any(
-                    kw in x.lower() for kw in ['quote', 'stock', 'feed.adnet']
+                    kw in x.lower() for kw in ['quote', 'stock', 'feed.adnet', 'brighterir', 'quotemedia']
                 ))
 
             # Fetch iframe content if found
@@ -417,49 +417,102 @@ class CompanyDataScraper:
                     except Exception as e:
                         print(f"[WARN] Failed to fetch iframe: {iframe_src}: {e}")
 
-            # Combine ticker element text with full page text for pattern matching
-            page_text = ticker_text + " " + soup.get_text()
-            for pattern in ticker_patterns:
-                match = re.search(pattern, page_text, re.IGNORECASE)
+            # Helper function to normalize exchange names
+            def normalize_exchange(ex):
+                ex_clean = ex.upper().replace(' ', '').replace('-', '').replace('.', '')
+                # Map variations to standard codes
+                if ex_clean in ['TSXV', 'TSXV', 'TSXVENTURE']:
+                    return 'TSXV'
+                if ex_clean == 'TSX':
+                    return 'TSX'
+                if ex_clean == 'CSE':
+                    return 'CSE'
+                if ex_clean == 'NEO':
+                    return 'NEO'
+                if ex_clean in ['ASX', 'AIM']:
+                    return ex_clean
+                return ex_clean
+
+            # Helper function to extract ticker from match
+            def extract_ticker_from_match(match, pattern_idx):
+                groups = match.groups()
+                # Handle OTCQB/OTCQX/US pattern (only has ticker, no exchange group)
+                if len(groups) == 1:
+                    return groups[0].upper(), 'OTC'
+
+                # Determine which group is exchange vs ticker
+                exchange_keywords = ['TSX', 'TSXV', 'CSE', 'NEO', 'ASX', 'AIM', 'V']
+                g0_upper = groups[0].upper().replace(' ', '').replace('-', '').replace('.', '')
+                g1_upper = groups[1].upper().replace(' ', '').replace('-', '').replace('.', '')
+
+                # Check for .V format (ticker.V means TSXV)
+                if g1_upper == 'V':
+                    return groups[0].upper(), 'TSXV'
+                elif any(kw in g0_upper for kw in exchange_keywords):
+                    return groups[1].upper(), normalize_exchange(groups[0])
+                else:
+                    return groups[0].upper(), normalize_exchange(groups[1])
+
+            # Canadian exchange patterns (prioritized - these are primary listings)
+            canadian_patterns = ticker_patterns[:6]  # TSX, TSXV, CSE, NEO patterns
+            # OTC patterns (secondary - often dual-listed)
+            otc_patterns = ticker_patterns[6:8]  # OTCQB/OTCQX patterns
+            # Other patterns
+            other_patterns = ticker_patterns[8:]
+
+            # Priority 1: Look for Canadian exchange tickers in targeted ticker elements
+            ticker_found = False
+            for idx, pattern in enumerate(canadian_patterns):
+                match = re.search(pattern, ticker_text, re.IGNORECASE)
                 if match:
-                    groups = match.groups()
-                    # Handle OTCQB/OTCQX/US pattern (only has ticker, no exchange group)
-                    if len(groups) == 1:
-                        self.extracted_data['company']['ticker_symbol'] = groups[0].upper()
-                        self.extracted_data['company']['exchange'] = 'OTC'
-                    else:
-                        # Normalize exchange name
-                        def normalize_exchange(ex):
-                            ex_clean = ex.upper().replace(' ', '').replace('-', '').replace('.', '')
-                            # Map variations to standard codes
-                            if ex_clean in ['TSXV', 'TSXV', 'TSXVENTURE']:
-                                return 'TSXV'
-                            if ex_clean == 'TSX':
-                                return 'TSX'
-                            if ex_clean == 'CSE':
-                                return 'CSE'
-                            if ex_clean == 'NEO':
-                                return 'NEO'
-                            if ex_clean in ['ASX', 'AIM']:
-                                return ex_clean
-                            return ex_clean
-
-                        # Determine which group is exchange vs ticker
-                        exchange_keywords = ['TSX', 'TSXV', 'CSE', 'NEO', 'ASX', 'AIM', 'V']
-                        g0_upper = groups[0].upper().replace(' ', '').replace('-', '').replace('.', '')
-                        g1_upper = groups[1].upper().replace(' ', '').replace('-', '').replace('.', '')
-
-                        # Check for .V format (ticker.V means TSXV)
-                        if g1_upper == 'V':
-                            self.extracted_data['company']['ticker_symbol'] = groups[0].upper()
-                            self.extracted_data['company']['exchange'] = 'TSXV'
-                        elif any(kw in g0_upper for kw in exchange_keywords):
-                            self.extracted_data['company']['exchange'] = normalize_exchange(groups[0])
-                            self.extracted_data['company']['ticker_symbol'] = groups[1].upper()
-                        else:
-                            self.extracted_data['company']['ticker_symbol'] = groups[0].upper()
-                            self.extracted_data['company']['exchange'] = normalize_exchange(groups[1])
+                    ticker, exchange = extract_ticker_from_match(match, idx)
+                    self.extracted_data['company']['ticker_symbol'] = ticker
+                    self.extracted_data['company']['exchange'] = exchange
+                    ticker_found = True
+                    print(f"[TICKER] Found Canadian exchange in ticker elements: {exchange}:{ticker}")
                     break
+
+            # Priority 2: Look for Canadian exchange tickers in full page text
+            if not ticker_found:
+                full_page_text = soup.get_text()
+                for idx, pattern in enumerate(canadian_patterns):
+                    match = re.search(pattern, full_page_text, re.IGNORECASE)
+                    if match:
+                        ticker, exchange = extract_ticker_from_match(match, idx)
+                        self.extracted_data['company']['ticker_symbol'] = ticker
+                        self.extracted_data['company']['exchange'] = exchange
+                        ticker_found = True
+                        print(f"[TICKER] Found Canadian exchange in page text: {exchange}:{ticker}")
+                        break
+
+            # Priority 3: Look for OTC tickers ONLY in targeted ticker elements (not full page)
+            # This prevents picking up random OTC-like text from page content
+            if not ticker_found:
+                for idx, pattern in enumerate(otc_patterns):
+                    match = re.search(pattern, ticker_text, re.IGNORECASE)
+                    if match:
+                        ticker, exchange = extract_ticker_from_match(match, idx + 6)
+                        self.extracted_data['company']['ticker_symbol'] = ticker
+                        self.extracted_data['company']['exchange'] = exchange
+                        ticker_found = True
+                        print(f"[TICKER] Found OTC in ticker elements: {exchange}:{ticker}")
+                        break
+
+            # Priority 4: Other patterns (reverse patterns, parenthetical)
+            if not ticker_found:
+                combined_text = ticker_text + " " + soup.get_text()
+                for idx, pattern in enumerate(other_patterns):
+                    match = re.search(pattern, combined_text, re.IGNORECASE)
+                    if match:
+                        ticker, exchange = extract_ticker_from_match(match, idx + 8)
+                        self.extracted_data['company']['ticker_symbol'] = ticker
+                        self.extracted_data['company']['exchange'] = exchange
+                        ticker_found = True
+                        print(f"[TICKER] Found via other pattern: {exchange}:{ticker}")
+                        break
+
+            if not ticker_found:
+                print(f"[TICKER] No ticker found on page")
 
             # Extract navigation links for later use
             nav_links = []
