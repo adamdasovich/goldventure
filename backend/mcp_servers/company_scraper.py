@@ -341,6 +341,44 @@ class CompanyDataScraper:
                 if not any(kw in desc_lower for kw in garbage_keywords):
                     self.extracted_data['company']['description'] = desc_content
 
+            # Also try to extract company description from homepage content
+            # Look for "About" sections or first substantial paragraphs
+            about_selectors = [
+                '[class*="about"]', 'section[id*="about"]', '#about',
+                '.company-description', '.overview', '[class*="overview"]',
+                '.intro', '[class*="intro"]', 'main section'
+            ]
+            homepage_desc = None
+            for selector in about_selectors:
+                section = soup.select_one(selector)
+                if section:
+                    paragraphs = section.find_all('p')
+                    for p in paragraphs[:5]:
+                        p_text = p.get_text(strip=True)
+                        # Look for company-related text (not bios)
+                        p_lower = p_text.lower()
+                        if len(p_text) > 80:
+                            # Check if it talks about the company (not a person)
+                            company_indicators = ['company', 'corporation', 'advancing', 'developing',
+                                                 'exploring', 'project', 'mine', 'mineral', 'resource',
+                                                 'property', 'hectare', 'land package', 'producer',
+                                                 'exploration', 'production', 'asset', 'operations']
+                            bio_indicators = ['cpa', 'cfo', 'ceo', 'years of experience',
+                                             'previously served', 'his career', 'her career',
+                                             'results oriented', 'accomplished', 'executive']
+                            has_company = any(ind in p_lower for ind in company_indicators)
+                            has_bio = any(ind in p_lower for ind in bio_indicators)
+                            if has_company and not has_bio:
+                                homepage_desc = p_text
+                                break
+                    if homepage_desc:
+                        break
+
+            # Use homepage description if it's better than meta description
+            current_desc = self.extracted_data['company'].get('description', '')
+            if homepage_desc and (not current_desc or len(homepage_desc) > len(current_desc)):
+                self.extracted_data['company']['description'] = homepage_desc
+
             # Extract ticker symbol (often in header or stock ticker bar)
             # Note: Be careful with OTC patterns - "OTCQB" and "OTCQX" are market tiers, not exchanges
             ticker_patterns = [
@@ -658,6 +696,15 @@ class CompanyDataScraper:
                     r'spent \d+ years', 'where he', 'where she',
                     'managing director', 'vice president', 'chief financial officer',
                     'chief executive', 'portfolio manager', 'investment banker',
+                    # Professional credential patterns (CPAs, engineers, etc.)
+                    r'\bcpa\b', r'\bca\b.*finance', 'chartered accountant', 'certified public accountant',
+                    'senior finance leadership', 'finance leadership', 'finance executive',
+                    # Accomplishment/result patterns for bios
+                    'results oriented', 'results-oriented', 'accomplished', 'accomplished mining',
+                    'demonstrated history', 'proven track record', 'track record of',
+                    # Mining executive bio patterns
+                    'mining executive', 'mining professional', 'exploration geologist',
+                    'mine development', 'mining industry', 'mining operations',
                 ]
 
                 for ind in bio_indicators:
@@ -767,6 +814,15 @@ class CompanyDataScraper:
                             # Work history
                             'worked at', 'worked for', 'employed at', 'employed by',
                             'spent \\d+ years', 'where he', 'where she',
+                            # Professional credential patterns (CPAs, engineers, etc.)
+                            '\\bcpa\\b', '\\bca\\b.*finance', 'chartered accountant', 'certified public accountant',
+                            'senior finance leadership', 'finance leadership', 'finance executive',
+                            # Accomplishment/result patterns for bios
+                            'results oriented', 'results-oriented', 'accomplished', 'accomplished mining',
+                            'demonstrated history', 'proven track record', 'track record of',
+                            # Mining executive bio patterns
+                            'mining executive', 'mining professional', 'exploration geologist',
+                            'mine development', 'mining industry', 'mining operations',
                         ]
 
                         is_bio = False
@@ -821,11 +877,24 @@ class CompanyDataScraper:
                     return False
                 return True
 
-            if description and len(description) > len(self.extracted_data['company'].get('description', '')):
-                if is_valid_description(description):
-                    self.extracted_data['company']['description'] = description[:1000]
-                elif not is_valid_description(self.extracted_data['company'].get('description', '')):
-                    # Current description is also garbage, keep new one anyway
+            # Check if current description is already good (from homepage)
+            # Don't replace a good homepage description with content from about pages
+            # (which often have team/bio mixed in)
+            current_desc = self.extracted_data['company'].get('description', '')
+            current_is_good = is_valid_description(current_desc) and len(current_desc) > 100
+
+            # Only update description if:
+            # 1. We found a valid one AND
+            # 2. Either we don't have one OR the new one is significantly better
+            if description and is_valid_description(description):
+                # If we already have a good description, only replace if new one is much longer
+                # and doesn't look like it came from a team page
+                if current_is_good:
+                    # Only replace if new description is at least 50% longer
+                    if len(description) > len(current_desc) * 1.5:
+                        self.extracted_data['company']['description'] = description[:1000]
+                else:
+                    # Current description is missing or garbage, use new one
                     self.extracted_data['company']['description'] = description[:1000]
 
             # Look for incorporation/founding info
@@ -1760,6 +1829,82 @@ class CompanyDataScraper:
                         if not any(n.get('title', '').lower() == title.lower() for n in news_found):
                             news_found.append(news)
 
+            # Strategy 3: Handle list-based news layouts with PDF links (like Silverco)
+            # Look for <li> items containing date + title + PDF link
+            if not news_found or len(news_found) < 3:
+                list_items = soup.find_all('li')
+                for li in list_items[:100]:  # Limit to 100 list items
+                    li_text = li.get_text(strip=True)
+
+                    # Skip if too short or no link
+                    links = li.find_all('a', href=True)
+                    if not links or len(li_text) < 20:
+                        continue
+
+                    # Look for MM/DD/YY date format at the start (like "01/06/26")
+                    date_match_slash = re.match(r'^(\d{1,2})/(\d{1,2})/(\d{2})\s*', li_text)
+
+                    pub_date = None
+                    title = None
+                    source_url = None
+
+                    if date_match_slash:
+                        month = date_match_slash.group(1).zfill(2)
+                        day = date_match_slash.group(2).zfill(2)
+                        year_short = date_match_slash.group(3)
+                        year_int = int(year_short)
+                        year = f"20{year_short}" if year_int <= 50 else f"19{year_short}"
+                        pub_date = f"{year}-{month}-{day}"
+
+                        # Get the title - text after the date
+                        remaining_text = li_text[date_match_slash.end():].strip()
+                        # Title is usually before any PDF/link markers
+                        title = remaining_text
+
+                        # Find the PDF or news link
+                        for link in links:
+                            href = link.get('href', '')
+                            link_text = link.get_text(strip=True)
+                            # Prefer links to PDFs or resource files
+                            if '.pdf' in href.lower() or '/_resources/' in href.lower():
+                                source_url = urljoin(url, href)
+                                # The link text is often the title
+                                if len(link_text) > 20:
+                                    title = link_text
+                                break
+                            # Or news release URLs
+                            elif '/news' in href.lower() or '/release' in href.lower():
+                                source_url = urljoin(url, href)
+                                if len(link_text) > 20:
+                                    title = link_text
+                                break
+
+                        # If no source URL found but we have a link, use first meaningful link
+                        if not source_url and links:
+                            for link in links:
+                                href = link.get('href', '')
+                                link_text = link.get_text(strip=True)
+                                if href and not href.startswith('#') and len(link_text) > 10:
+                                    source_url = urljoin(url, href)
+                                    title = link_text
+                                    break
+
+                    if title and pub_date:
+                        # Clean up title - remove common suffixes
+                        title = title.strip()
+                        if title.lower().endswith(('pdf', '.pdf', 'view', 'read more')):
+                            title = title[:-4].strip() if title.lower().endswith('.pdf') else title[:-3].strip()
+
+                        news = {
+                            'title': title[:500],
+                            'publication_date': pub_date,
+                            'source_url': source_url or url,
+                            'extracted_at': datetime.utcnow().isoformat(),
+                        }
+                        # Avoid duplicates
+                        if not any(n.get('title', '').lower() == title.lower() for n in news_found):
+                            news_found.append(news)
+
             # Find news links - look for links that appear to be news items
             # Common patterns: links with dates, links in list items, links with news-like URLs
             for link in soup.find_all('a', href=True):
@@ -1940,6 +2085,19 @@ class CompanyDataScraper:
         date_match = re.search(r'(\d{4})[/-](\d{2})[/-](\d{2})', text)
         if date_match:
             return f"{date_match.group(1)}-{date_match.group(2)}-{date_match.group(3)}"
+
+        # Format 1.5: MM/DD/YY or MM/DD/YYYY format (01/06/26 or 01/06/2026)
+        slash_date = re.search(r'(\d{1,2})/(\d{1,2})/(\d{2,4})', text)
+        if slash_date:
+            month = slash_date.group(1).zfill(2)
+            day = slash_date.group(2).zfill(2)
+            year_str = slash_date.group(3)
+            if len(year_str) == 2:
+                year_int = int(year_str)
+                year = f"20{year_str}" if year_int <= 50 else f"19{year_str}"
+            else:
+                year = year_str
+            return f"{year}-{month}-{day}"
 
         # Format 2: Month Day, Year (December 18, 2025)
         month_map = {
