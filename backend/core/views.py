@@ -5635,9 +5635,15 @@ def store_webhook(request):
 # STORE ADMIN VIEWS
 # ============================================================================
 
-class IsAdminUser:
+class IsAdminUser(permissions.BasePermission):
     """Custom permission to only allow admin/staff users"""
     def has_permission(self, request, view):
+        return request.user and request.user.is_authenticated and (
+            request.user.is_staff or request.user.is_superuser
+        )
+
+    def has_object_permission(self, request, view, obj):
+        """Admin users have permission on all objects"""
         return request.user and request.user.is_authenticated and (
             request.user.is_staff or request.user.is_superuser
         )
