@@ -790,6 +790,20 @@ export default function CompanyDetailPage() {
               <div className="flex items-start justify-between mb-6">
                 <div className="flex-1">
                   <div className="flex items-center gap-4 mb-3">
+                    {/* Company Logo */}
+                    {company.logo_url ? (
+                      <img
+                        src={company.logo_url}
+                        alt={company.name}
+                        className="w-16 h-16 rounded-lg object-contain bg-white p-2"
+                      />
+                    ) : (
+                      <div className="w-16 h-16 rounded-lg bg-gradient-to-br from-gold-500/20 to-copper-500/20 flex items-center justify-center">
+                        <span className="text-2xl font-bold text-gold-400">
+                          {company.name.charAt(0)}
+                        </span>
+                      </div>
+                    )}
                     <h1 className="text-4xl font-bold text-gradient-gold">{company.name}</h1>
                     {/* Ticker & Exchange Info */}
                     <span className="text-xl font-mono text-gold-400 font-semibold">{company.exchange.toUpperCase()}:{company.ticker_symbol}</span>

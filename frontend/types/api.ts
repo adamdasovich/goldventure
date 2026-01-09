@@ -15,6 +15,7 @@ export interface Company {
   project_count?: number;
   presentation_url?: string | null;
   fact_sheet_url?: string | null;
+  logo_url?: string | null;
 }
 
 // Project Types

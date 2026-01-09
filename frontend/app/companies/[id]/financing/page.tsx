@@ -19,6 +19,18 @@ interface Company {
   logo_url?: string;
 }
 
+interface StockQuote {
+  ticker: string;
+  exchange: string;
+  price: number;
+  change: number;
+  change_percent: number;
+  volume: number;
+  date: string;
+  source: string;
+  cached: boolean;
+}
+
 interface Financing {
   id: number;
   financing_type: string;
@@ -82,6 +94,8 @@ export default function CompanyFinancingPage() {
   const [editAmount, setEditAmount] = useState('');
   const [isUpdating, setIsUpdating] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
+  const [stockQuote, setStockQuote] = useState<StockQuote | null>(null);
+  const [stockLoading, setStockLoading] = useState(false);
 
   useEffect(() => {
     if (!user) {
@@ -93,8 +107,24 @@ export default function CompanyFinancingPage() {
   useEffect(() => {
     if (companyId) {
       fetchCompanyAndFinancings();
+      fetchStockQuote();
     }
   }, [companyId]);
+
+  const fetchStockQuote = async () => {
+    try {
+      setStockLoading(true);
+      const res = await fetch(`${API_URL}/companies/${companyId}/stock-quote/`);
+      if (res.ok) {
+        const data = await res.json();
+        setStockQuote(data);
+      }
+    } catch (err) {
+      console.error('Failed to fetch stock quote:', err);
+    } finally {
+      setStockLoading(false);
+    }
+  };
 
   const fetchCompanyAndFinancings = async () => {
     try {
@@ -445,7 +475,7 @@ export default function CompanyFinancingPage() {
                 </span>
               </div>
             )}
-            <div>
+            <div className="flex-1">
               <div className="flex items-center gap-3">
                 <h1 className="text-2xl font-bold text-white">{company?.name}</h1>
                 <Badge variant="copper">
@@ -458,6 +488,22 @@ export default function CompanyFinancingPage() {
               >
                 View Company Profile
               </Link>
+            </div>
+            {/* Stock Price Display */}
+            <div className="text-right">
+              <div className="text-sm text-slate-400 mb-1">Stock Price</div>
+              {stockLoading ? (
+                <div className="text-2xl font-bold text-slate-500 animate-pulse">---</div>
+              ) : stockQuote ? (
+                <div>
+                  <div className="text-2xl font-bold text-gold-400">${stockQuote.price.toFixed(3)}</div>
+                  <div className={`text-sm font-medium ${stockQuote.change >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                    {stockQuote.change >= 0 ? '+' : ''}{stockQuote.change.toFixed(3)} ({stockQuote.change_percent >= 0 ? '+' : ''}{stockQuote.change_percent.toFixed(2)}%)
+                  </div>
+                </div>
+              ) : (
+                <div className="text-xl font-bold text-slate-500">N/A</div>
+              )}
             </div>
           </div>
         </div>
