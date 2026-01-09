@@ -6664,6 +6664,15 @@ def _save_scraped_company_data(data: dict, source_url: str, update_existing: boo
         if len(news_title) < 10:
             continue
 
+        # Skip titles that are just dates (e.g., "January 8, 2026", "December 23, 2025")
+        import re
+        date_only_pattern = re.compile(
+            r'^(January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},?\s+\d{4}$',
+            re.IGNORECASE
+        )
+        if date_only_pattern.match(news_title.strip()):
+            continue
+
         is_pdf = '.pdf' in news_url.lower()
 
         # Classify the news item
