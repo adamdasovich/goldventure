@@ -131,8 +131,17 @@ export default function CompanyOnboardingPage() {
         if (data.documents?.length > 0) score += 15;
         if (data.projects?.length > 0) score += 15;
 
+        // Ensure all required fields exist with defaults
+        const safeData: PreviewData = {
+          company: data.company || { name: 'Unknown' },
+          people: data.people || [],
+          documents: data.documents || [],
+          news: data.news || [],
+          projects: data.projects || [],
+        };
+
         setPreviewData({
-          data: jobData.data_extracted,
+          data: safeData,
           errors: jobData.error_messages || [],
           completeness_score: score,
         });
