@@ -6486,6 +6486,14 @@ def _save_scraped_company_data(data: dict, source_url: str, update_existing: boo
         NewsRelease, NewsReleaseFlag
     )
 
+    # Validate scraped data using Claude-powered validation
+    # This filters out invalid projects, news with date-only titles, and garbage descriptions
+    try:
+        from core.claude_validator import validate_scraped_data
+        data = validate_scraped_data(data, source_url)
+    except Exception as e:
+        print(f"[SAVE COMPANY] Claude validation failed, using raw data: {e}")
+
     company_data = data.get('company', {})
 
     if not company_data.get('name'):
