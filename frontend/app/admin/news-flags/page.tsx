@@ -74,7 +74,7 @@ export default function NewsFlagsPage() {
         `${process.env.NEXT_PUBLIC_API_URL}/news-flags/?status=${statusFilter}`,
         {
           headers: {
-            'Authorization': `Bearer ${localStorage.getItem('access_token')}`
+            'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
           }
         }
       );
@@ -110,7 +110,7 @@ export default function NewsFlagsPage() {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${localStorage.getItem('access_token')}`
+            'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
           },
           body: JSON.stringify(financingForm)
         }
@@ -143,7 +143,7 @@ export default function NewsFlagsPage() {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${localStorage.getItem('access_token')}`
+            'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
           },
           body: JSON.stringify({ notes: dismissNotes })
         }
