@@ -7318,3 +7318,40 @@ class NewsReleaseFlagViewSet(viewsets.ReadOnlyModelViewSet):
                 {'error': f'Error dismissing flag: {str(e)}'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+    @action(detail=True, methods=['post'], url_path='mark-reviewed')
+    def mark_reviewed(self, request, pk=None):
+        """
+        Mark a flagged news release as reviewed after financing was created separately.
+        Used when CreateFinancingModal creates financing via /api/financings/ endpoint.
+        """
+        from core.models import NewsReleaseFlag
+
+        flag = self.get_object()
+
+        if flag.status != 'pending':
+            return Response(
+                {'error': 'This flag has already been reviewed'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        notes = request.data.get('notes', 'Financing created from news flag')
+
+        try:
+            # Mark as reviewed (without linking specific financing since it was created separately)
+            flag.status = 'reviewed_financing'
+            flag.reviewed_by = request.user
+            flag.reviewed_at = timezone.now()
+            flag.review_notes = notes
+            flag.save()
+
+            return Response({
+                'message': 'Flag marked as reviewed',
+                'flag_id': flag.id
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response(
+                {'error': f'Error marking flag as reviewed: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )

@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/Button';
+import { CreateFinancingModal } from '@/components/company/CreateFinancingModal';
 
 interface NewsReleaseFlag {
   id: number;
@@ -21,21 +22,6 @@ interface NewsReleaseFlag {
   review_notes: string;
 }
 
-interface FinancingFormData {
-  financing_type: string;
-  status: string;
-  announced_date: string;
-  amount_raised_usd: string;
-  price_per_share: string;
-  shares_issued: string;
-  has_warrants: boolean;
-  warrant_strike_price: string;
-  use_of_proceeds: string;
-  lead_agent: string;
-  notes: string;
-  review_notes: string;
-}
-
 export default function NewsFlagsPage() {
   const { user } = useAuth();
   const [flags, setFlags] = useState<NewsReleaseFlag[]>([]);
@@ -43,25 +29,12 @@ export default function NewsFlagsPage() {
   const [error, setError] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>('pending');
   const [selectedFlag, setSelectedFlag] = useState<NewsReleaseFlag | null>(null);
-  const [showFinancingForm, setShowFinancingForm] = useState(false);
+  const [showFinancingModal, setShowFinancingModal] = useState(false);
   const [showDismissModal, setShowDismissModal] = useState(false);
   const [dismissNotes, setDismissNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
-  const [financingForm, setFinancingForm] = useState<FinancingFormData>({
-    financing_type: 'private_placement',
-    status: 'announced',
-    announced_date: '',
-    amount_raised_usd: '',
-    price_per_share: '',
-    shares_issued: '',
-    has_warrants: false,
-    warrant_strike_price: '',
-    use_of_proceeds: '',
-    lead_agent: '',
-    notes: '',
-    review_notes: 'Financing created from flagged news release'
-  });
+  const accessToken = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null;
 
   useEffect(() => {
     fetchFlags();
@@ -90,46 +63,40 @@ export default function NewsFlagsPage() {
     }
   };
 
-  const handleOpenFinancingForm = (flag: NewsReleaseFlag) => {
+  const handleOpenFinancingModal = (flag: NewsReleaseFlag) => {
     setSelectedFlag(flag);
-    setFinancingForm({
-      ...financingForm,
-      announced_date: flag.news_date
-    });
-    setShowFinancingForm(true);
+    setShowFinancingModal(true);
   };
 
-  const handleCreateFinancing = async () => {
-    if (!selectedFlag) return;
-
-    try {
-      setSubmitting(true);
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/news-flags/${selectedFlag.id}/create-financing/`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
-          },
-          body: JSON.stringify(financingForm)
-        }
-      );
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to create financing');
+  const handleFinancingCreated = async () => {
+    // After financing is created via CreateFinancingModal, mark the flag as reviewed
+    if (selectedFlag) {
+      try {
+        // Mark the flag as reviewed_financing
+        await fetch(
+          `${process.env.NEXT_PUBLIC_API_URL}/news-flags/${selectedFlag.id}/mark-reviewed/`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
+            },
+            body: JSON.stringify({ notes: 'Financing created from news flag' })
+          }
+        );
+      } catch (err) {
+        console.error('Failed to mark flag as reviewed:', err);
       }
-
-      alert('Financing created successfully!');
-      setShowFinancingForm(false);
-      setSelectedFlag(null);
-      fetchFlags();
-    } catch (err: any) {
-      alert(`Error: ${err.message}`);
-    } finally {
-      setSubmitting(false);
     }
+
+    setShowFinancingModal(false);
+    setSelectedFlag(null);
+    fetchFlags();
+  };
+
+  const handleCloseFinancingModal = () => {
+    setShowFinancingModal(false);
+    setSelectedFlag(null);
   };
 
   const handleDismissFlag = async () => {
@@ -245,7 +212,7 @@ export default function NewsFlagsPage() {
                   <div className="flex gap-2">
                     <Button
                       variant="primary"
-                      onClick={() => handleOpenFinancingForm(flag)}
+                      onClick={() => handleOpenFinancingModal(flag)}
                       size="sm"
                     >
                       Create Financing
@@ -306,190 +273,15 @@ export default function NewsFlagsPage() {
         </div>
       )}
 
-      {/* Financing Creation Modal */}
-      {showFinancingForm && selectedFlag && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-          <div className="bg-slate-800 rounded-lg p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-            <h2 className="text-xl font-bold text-slate-100 mb-4">
-              Create Financing Record
-            </h2>
-            <p className="text-slate-400 mb-6">
-              {selectedFlag.company_name} - {selectedFlag.news_title}
-            </p>
-
-            <div className="space-y-4">
-              {/* Financing Type */}
-              <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1">
-                  Financing Type
-                </label>
-                <select
-                  value={financingForm.financing_type}
-                  onChange={(e) => setFinancingForm({ ...financingForm, financing_type: e.target.value })}
-                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-slate-100"
-                >
-                  <option value="private_placement">Private Placement</option>
-                  <option value="bought_deal">Bought Deal</option>
-                  <option value="rights_offering">Rights Offering</option>
-                  <option value="flow_through">Flow-Through Shares</option>
-                  <option value="warrant_exercise">Warrant Exercise</option>
-                  <option value="debt">Debt Financing</option>
-                  <option value="royalty_stream">Royalty/Stream</option>
-                  <option value="other">Other</option>
-                </select>
-              </div>
-
-              {/* Status */}
-              <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1">
-                  Status
-                </label>
-                <select
-                  value={financingForm.status}
-                  onChange={(e) => setFinancingForm({ ...financingForm, status: e.target.value })}
-                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-slate-100"
-                >
-                  <option value="announced">Announced</option>
-                  <option value="closing">Closing</option>
-                  <option value="closed">Closed</option>
-                  <option value="cancelled">Cancelled</option>
-                </select>
-              </div>
-
-              {/* Amount Raised */}
-              <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1">
-                  Amount Raised (CAD) *
-                </label>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={financingForm.amount_raised_usd}
-                  onChange={(e) => setFinancingForm({ ...financingForm, amount_raised_usd: e.target.value })}
-                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-slate-100"
-                  required
-                />
-              </div>
-
-              {/* Price Per Share */}
-              <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1">
-                  Price Per Share
-                </label>
-                <input
-                  type="number"
-                  step="0.0001"
-                  value={financingForm.price_per_share}
-                  onChange={(e) => setFinancingForm({ ...financingForm, price_per_share: e.target.value })}
-                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-slate-100"
-                />
-              </div>
-
-              {/* Shares Issued */}
-              <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1">
-                  Shares Issued
-                </label>
-                <input
-                  type="number"
-                  value={financingForm.shares_issued}
-                  onChange={(e) => setFinancingForm({ ...financingForm, shares_issued: e.target.value })}
-                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-slate-100"
-                />
-              </div>
-
-              {/* Has Warrants */}
-              <div className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  id="has_warrants"
-                  checked={financingForm.has_warrants}
-                  onChange={(e) => setFinancingForm({ ...financingForm, has_warrants: e.target.checked })}
-                  className="w-4 h-4"
-                />
-                <label htmlFor="has_warrants" className="text-sm text-slate-300">
-                  Includes Warrants
-                </label>
-              </div>
-
-              {/* Warrant Strike Price */}
-              {financingForm.has_warrants && (
-                <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1">
-                    Warrant Strike Price
-                  </label>
-                  <input
-                    type="number"
-                    step="0.0001"
-                    value={financingForm.warrant_strike_price}
-                    onChange={(e) => setFinancingForm({ ...financingForm, warrant_strike_price: e.target.value })}
-                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-slate-100"
-                  />
-                </div>
-              )}
-
-              {/* Lead Agent */}
-              <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1">
-                  Lead Agent/Broker
-                </label>
-                <input
-                  type="text"
-                  value={financingForm.lead_agent}
-                  onChange={(e) => setFinancingForm({ ...financingForm, lead_agent: e.target.value })}
-                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-slate-100"
-                />
-              </div>
-
-              {/* Use of Proceeds */}
-              <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1">
-                  Use of Proceeds
-                </label>
-                <textarea
-                  value={financingForm.use_of_proceeds}
-                  onChange={(e) => setFinancingForm({ ...financingForm, use_of_proceeds: e.target.value })}
-                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-slate-100"
-                  rows={3}
-                />
-              </div>
-
-              {/* Notes */}
-              <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1">
-                  Notes
-                </label>
-                <textarea
-                  value={financingForm.notes}
-                  onChange={(e) => setFinancingForm({ ...financingForm, notes: e.target.value })}
-                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-slate-100"
-                  rows={2}
-                />
-              </div>
-            </div>
-
-            <div className="flex gap-3 mt-6">
-              <Button
-                variant="primary"
-                onClick={handleCreateFinancing}
-                disabled={submitting || !financingForm.amount_raised_usd}
-                className="flex-1"
-              >
-                {submitting ? 'Creating...' : 'Create Financing'}
-              </Button>
-              <Button
-                variant="secondary"
-                onClick={() => {
-                  setShowFinancingForm(false);
-                  setSelectedFlag(null);
-                }}
-                disabled={submitting}
-              >
-                Cancel
-              </Button>
-            </div>
-          </div>
-        </div>
+      {/* Create Financing Modal - using the same component as company detail pages */}
+      {showFinancingModal && selectedFlag && (
+        <CreateFinancingModal
+          companyId={selectedFlag.company_id}
+          companyName={selectedFlag.company_name}
+          accessToken={accessToken}
+          onClose={handleCloseFinancingModal}
+          onCreateComplete={handleFinancingCreated}
+        />
       )}
 
       {/* Dismiss Modal */}
