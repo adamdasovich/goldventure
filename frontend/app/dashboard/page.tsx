@@ -13,6 +13,8 @@ import { accessRequestAPI } from '@/lib/api';
 import type { CompanyAccessRequest } from '@/types/api';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+// Base URL for Django admin (strip /api suffix if present)
+const ADMIN_BASE_URL = API_URL.replace(/\/api\/?$/, '');
 
 interface DashboardStats {
   totalListings: number;
@@ -581,7 +583,7 @@ export default function DashboardPage() {
                     </svg>
                     Review Financing Flags
                   </Button>
-                  <Button variant="secondary" onClick={() => window.open(`${API_URL}/admin/core/documentprocessingjob/`, '_blank')}>
+                  <Button variant="secondary" onClick={() => window.open(`${ADMIN_BASE_URL}/admin/core/documentprocessingjob/`, '_blank')}>
                     <svg className="w-4 h-4 mr-2 inline" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                     </svg>
