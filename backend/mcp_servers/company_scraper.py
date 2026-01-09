@@ -433,12 +433,29 @@ class CompanyDataScraper:
                     return ex_clean
                 return ex_clean
 
+            # Helper function to validate ticker symbol
+            def is_valid_ticker(ticker):
+                """Check if a string looks like a valid stock ticker."""
+                if not ticker or len(ticker) < 2 or len(ticker) > 5:
+                    return False
+                # Must be all letters
+                if not ticker.isalpha():
+                    return False
+                # Should not be a common word or exchange name
+                invalid_tickers = ['OTCQX', 'OTCQB', 'TSX', 'TSXV', 'CSE', 'NEO', 'NYSE', 'NASDAQ', 'ASX', 'AIM', 'OTC', 'US', 'GOLD']
+                if ticker.upper() in invalid_tickers:
+                    return False
+                return True
+
             # Helper function to extract ticker from match
             def extract_ticker_from_match(match, pattern_idx):
                 groups = match.groups()
                 # Handle OTCQB/OTCQX/US pattern (only has ticker, no exchange group)
                 if len(groups) == 1:
-                    return groups[0].upper(), 'OTC'
+                    ticker = groups[0].upper()
+                    if not is_valid_ticker(ticker):
+                        return None, None
+                    return ticker, 'OTC'
 
                 # Determine which group is exchange vs ticker
                 exchange_keywords = ['TSX', 'TSXV', 'CSE', 'NEO', 'ASX', 'AIM', 'V']
@@ -447,11 +464,20 @@ class CompanyDataScraper:
 
                 # Check for .V format (ticker.V means TSXV)
                 if g1_upper == 'V':
-                    return groups[0].upper(), 'TSXV'
+                    ticker = groups[0].upper()
+                    if not is_valid_ticker(ticker):
+                        return None, None
+                    return ticker, 'TSXV'
                 elif any(kw in g0_upper for kw in exchange_keywords):
-                    return groups[1].upper(), normalize_exchange(groups[0])
+                    ticker = groups[1].upper()
+                    if not is_valid_ticker(ticker):
+                        return None, None
+                    return ticker, normalize_exchange(groups[0])
                 else:
-                    return groups[0].upper(), normalize_exchange(groups[1])
+                    ticker = groups[0].upper()
+                    if not is_valid_ticker(ticker):
+                        return None, None
+                    return ticker, normalize_exchange(groups[1])
 
             # Canadian exchange patterns (prioritized - these are primary listings)
             canadian_patterns = ticker_patterns[:6]  # TSX, TSXV, CSE, NEO patterns
@@ -466,11 +492,12 @@ class CompanyDataScraper:
                 match = re.search(pattern, ticker_text, re.IGNORECASE)
                 if match:
                     ticker, exchange = extract_ticker_from_match(match, idx)
-                    self.extracted_data['company']['ticker_symbol'] = ticker
-                    self.extracted_data['company']['exchange'] = exchange
-                    ticker_found = True
-                    print(f"[TICKER] Found Canadian exchange in ticker elements: {exchange}:{ticker}")
-                    break
+                    if ticker and exchange:  # Validate extraction succeeded
+                        self.extracted_data['company']['ticker_symbol'] = ticker
+                        self.extracted_data['company']['exchange'] = exchange
+                        ticker_found = True
+                        print(f"[TICKER] Found Canadian exchange in ticker elements: {exchange}:{ticker}")
+                        break
 
             # Priority 2: Look for Canadian exchange tickers in full page text
             if not ticker_found:
@@ -479,11 +506,12 @@ class CompanyDataScraper:
                     match = re.search(pattern, full_page_text, re.IGNORECASE)
                     if match:
                         ticker, exchange = extract_ticker_from_match(match, idx)
-                        self.extracted_data['company']['ticker_symbol'] = ticker
-                        self.extracted_data['company']['exchange'] = exchange
-                        ticker_found = True
-                        print(f"[TICKER] Found Canadian exchange in page text: {exchange}:{ticker}")
-                        break
+                        if ticker and exchange:  # Validate extraction succeeded
+                            self.extracted_data['company']['ticker_symbol'] = ticker
+                            self.extracted_data['company']['exchange'] = exchange
+                            ticker_found = True
+                            print(f"[TICKER] Found Canadian exchange in page text: {exchange}:{ticker}")
+                            break
 
             # Priority 3: Look for OTC tickers ONLY in targeted ticker elements (not full page)
             # This prevents picking up random OTC-like text from page content
@@ -492,11 +520,12 @@ class CompanyDataScraper:
                     match = re.search(pattern, ticker_text, re.IGNORECASE)
                     if match:
                         ticker, exchange = extract_ticker_from_match(match, idx + 6)
-                        self.extracted_data['company']['ticker_symbol'] = ticker
-                        self.extracted_data['company']['exchange'] = exchange
-                        ticker_found = True
-                        print(f"[TICKER] Found OTC in ticker elements: {exchange}:{ticker}")
-                        break
+                        if ticker and exchange:  # Validate extraction succeeded
+                            self.extracted_data['company']['ticker_symbol'] = ticker
+                            self.extracted_data['company']['exchange'] = exchange
+                            ticker_found = True
+                            print(f"[TICKER] Found OTC in ticker elements: {exchange}:{ticker}")
+                            break
 
             # Priority 4: Other patterns (reverse patterns, parenthetical)
             if not ticker_found:
@@ -505,11 +534,12 @@ class CompanyDataScraper:
                     match = re.search(pattern, combined_text, re.IGNORECASE)
                     if match:
                         ticker, exchange = extract_ticker_from_match(match, idx + 8)
-                        self.extracted_data['company']['ticker_symbol'] = ticker
-                        self.extracted_data['company']['exchange'] = exchange
-                        ticker_found = True
-                        print(f"[TICKER] Found via other pattern: {exchange}:{ticker}")
-                        break
+                        if ticker and exchange:  # Validate extraction succeeded
+                            self.extracted_data['company']['ticker_symbol'] = ticker
+                            self.extracted_data['company']['exchange'] = exchange
+                            ticker_found = True
+                            print(f"[TICKER] Found via other pattern: {exchange}:{ticker}")
+                            break
 
             if not ticker_found:
                 print(f"[TICKER] No ticker found on page")
