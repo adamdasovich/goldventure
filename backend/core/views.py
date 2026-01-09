@@ -6505,7 +6505,8 @@ def _classify_news(title: str) -> dict:
 def _save_scraped_company_data(data: dict, source_url: str, update_existing: bool, user) -> 'Company':
     """Helper function to save scraped data to database."""
     from core.models import (
-        Company, Project, CompanyPerson, CompanyDocument, CompanyNews, DocumentProcessingJob
+        Company, Project, CompanyPerson, CompanyDocument, CompanyNews, DocumentProcessingJob,
+        NewsRelease, NewsReleaseFlag
     )
 
     company_data = data.get('company', {})
