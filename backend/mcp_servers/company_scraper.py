@@ -2112,17 +2112,67 @@ class CompanyDataScraper:
         """Extract news item from element."""
         news = {'source_url': source_url, 'extracted_at': datetime.utcnow().isoformat()}
 
-        # Title - look for link first, then headers
-        title_elem = element.select_one('h2 a, h3 a, .title a, .entry-title a, a[class*="title"]')
-        if not title_elem:
-            title_elem = element.select_one('h2, h3, h4, .title, .entry-title')
-        if not title_elem:
-            title_elem = element.select_one('a')
+        def is_date_only_title(text: str) -> bool:
+            """Check if text is just a date (not a real title)."""
+            if not text:
+                return True
+            text = text.strip()
+            # Pattern for "Month Day, Year" format
+            date_pattern = re.compile(
+                r'^(January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},?\s+\d{4}$',
+                re.IGNORECASE
+            )
+            if date_pattern.match(text):
+                return True
+            # Pattern for YYYY-MM-DD
+            if re.match(r'^\d{4}-\d{2}-\d{2}$', text):
+                return True
+            # Pattern for MM/DD/YYYY
+            if re.match(r'^\d{1,2}/\d{1,2}/\d{4}$', text):
+                return True
+            return False
 
-        if title_elem:
-            news['title'] = title_elem.get_text(strip=True)
-            if title_elem.name == 'a' and title_elem.get('href'):
-                news['source_url'] = urljoin(source_url, title_elem['href'])
+        # Title - look for link first, then headers
+        # Try multiple selectors in order of preference
+        title_selectors = [
+            'h2 a', 'h3 a', '.title a', '.entry-title a', 'a[class*="title"]',
+            'h2', 'h3', 'h4', '.title', '.entry-title',
+            '.elementor-heading-title',  # Elementor sites
+            'a'
+        ]
+
+        title_elem = None
+        title_text = None
+        title_url = None
+
+        for selector in title_selectors:
+            elem = element.select_one(selector)
+            if elem:
+                text = elem.get_text(strip=True)
+                # Skip date-only titles and try next selector
+                if text and len(text) > 10 and not is_date_only_title(text):
+                    title_elem = elem
+                    title_text = text
+                    if elem.name == 'a' and elem.get('href'):
+                        title_url = urljoin(source_url, elem['href'])
+                    break
+
+        # If still no title, try finding the longest non-date text in links
+        if not title_text:
+            for link in element.select('a'):
+                text = link.get_text(strip=True)
+                if text and len(text) > 20 and not is_date_only_title(text):
+                    # Skip "Continue Reading", "Read More", etc.
+                    if text.lower() not in ['continue reading', 'read more', 'view', 'pdf', 'download']:
+                        title_text = text
+                        if link.get('href'):
+                            title_url = urljoin(source_url, link['href'])
+                        break
+
+        if title_text:
+            news['title'] = title_text
+            if title_url:
+                news['source_url'] = title_url
 
         # Date - try multiple strategies
         pub_date = None
