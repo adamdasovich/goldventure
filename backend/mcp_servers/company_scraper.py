@@ -472,21 +472,13 @@ class CompanyDataScraper:
             page_text = soup.get_text()
             project_keywords = ['deposit', 'mine', 'project', 'property']
 
-            # Invalid project names to skip (too generic or just keywords)
-            invalid_project_names = [
-                'deposit', 'mine', 'project', 'property', 'claim', 'prospect',
-                'the project', 'the deposit', 'the mine', 'our project', 'our projects',
-                'projects', 'properties', 'operations', 'assets', 'home', 'about',
-                'about us', 'contact', 'news', 'investors', 'team', 'management'
-            ]
-
             # Look for project mentions in headers
             for header in soup.find_all(['h1', 'h2', 'h3']):
                 header_text = header.get_text(strip=True)
                 header_lower = header_text.lower().strip()
 
-                # Skip invalid/generic names
-                if header_lower in invalid_project_names or len(header_text) < 5:
+                # Use intelligent validation to skip invalid project names
+                if not self._is_valid_project_name(header_text):
                     continue
 
                 # Skip all-caps short headers (likely company name)
@@ -564,6 +556,7 @@ class CompanyDataScraper:
                     break
 
             # Strategy 2: If no specific container, look for first substantial paragraphs on page
+            # But SKIP paragraphs that are in team/leadership/management sections
             if not description or len(description) < 100:
                 all_paragraphs = soup.find_all('p')
                 substantial_paras = []
@@ -572,10 +565,83 @@ class CompanyDataScraper:
                     # Look for company-describing paragraphs (not navigation, not person bios)
                     if len(text) > 80:
                         text_lower = text.lower()
-                        # Skip person biography paragraphs
-                        bio_indicators = ['years of experience', 'has served as', 'formerly',
-                                         'prior to that', 'currently serves', 'board of directors']
-                        if not any(ind in text_lower for ind in bio_indicators):
+
+                        # Check if this paragraph is inside a team/leadership section
+                        # by looking at parent containers
+                        in_team_section = False
+                        for parent in p.parents:
+                            if parent.name in ['section', 'div', 'article']:
+                                parent_class = ' '.join(parent.get('class', []))
+                                parent_id = parent.get('id', '')
+                                parent_text = parent_class + ' ' + parent_id
+                                team_indicators = ['team', 'leadership', 'management', 'executive',
+                                                  'director', 'officer', 'board', 'people', 'staff']
+                                if any(ind in parent_text.lower() for ind in team_indicators):
+                                    in_team_section = True
+                                    break
+                                # Also check for nearby headers that indicate team section
+                                prev_header = parent.find_previous(['h1', 'h2', 'h3'])
+                                if prev_header:
+                                    header_text = prev_header.get_text(strip=True).lower()
+                                    if any(ind in header_text for ind in team_indicators):
+                                        in_team_section = True
+                                        break
+
+                        if in_team_section:
+                            continue
+
+                        # Comprehensive bio detection - much more thorough than before
+                        bio_indicators = [
+                            # Experience patterns
+                            'years of experience', 'years experience', 'extensive experience',
+                            'over \\d+ years', 'more than \\d+ years',
+                            # Role/position history
+                            'has served as', 'served as', 'previously served',
+                            'formerly', 'former', 'prior to', 'prior to that',
+                            'currently serves', 'currently the', 'is the', 'was the',
+                            'joined .* in \\d{4}', 'joined the company',
+                            # Education/credentials
+                            'holds a degree', 'received his', 'received her', 'earned his', 'earned her',
+                            'graduated from', 'bachelor', 'master', 'mba', 'ph\\.?d',
+                            'professional geologist', 'p\\.geo', 'p\\.eng',
+                            # Personal pronouns indicating biography
+                            '^he has', '^she has', '^he is', '^she is', '^mr\\.', '^ms\\.', '^mrs\\.',
+                            'his career', 'her career', 'his expertise', 'her expertise',
+                            'his role', 'her role', 'his responsibilities', 'her responsibilities',
+                            # Career narrative
+                            'brings .* years', 'brings extensive', 'brings over',
+                            'responsible for', 'oversees', 'manages', 'leads the',
+                            'board of directors', 'advisory board', 'audit committee',
+                            # Name patterns (John Smith has...)
+                            r'^[A-Z][a-z]+\s+[A-Z][a-z]+\s+(has|is|was|brings|joined|serves)',
+                            # Entrepreneur/founder bio patterns
+                            'successful entrepreneur', 'founded several', 'founded multiple',
+                            'led the .* division', 'exploration division', 'mining division',
+                            # Work history
+                            'worked at', 'worked for', 'employed at', 'employed by',
+                            'spent \\d+ years', 'where he', 'where she',
+                        ]
+
+                        is_bio = False
+                        for ind in bio_indicators:
+                            if re.search(ind, text_lower):
+                                is_bio = True
+                                break
+
+                        # Additional check: if text starts with a person's name pattern
+                        # Pattern: "FirstName LastName is/has/was/brings..."
+                        name_start_pattern = r'^[A-Z][a-z]+\s+(?:\([^)]+\)\s+)?[A-Z][a-z]+(?:\s+[A-Z][a-z]+)?\s+(is|has|was|brings|joined|serves|holds)'
+                        if re.match(name_start_pattern, text):
+                            is_bio = True
+
+                        # Check if text mentions too many executive titles (likely team page content)
+                        exec_titles = ['ceo', 'cfo', 'coo', 'president', 'chairman', 'director',
+                                      'vice president', 'vp', 'chief', 'officer', 'executive']
+                        title_count = sum(1 for t in exec_titles if t in text_lower)
+                        if title_count >= 2 and len(text) < 300:
+                            is_bio = True
+
+                        if not is_bio:
                             substantial_paras.append(text)
                             if len(substantial_paras) >= 3:
                                 break
@@ -824,6 +890,139 @@ class CompanyDataScraper:
         text_lower = text.lower()
         return any(kw in text_lower for kw in title_keywords)
 
+    def _is_valid_project_name(self, name: str) -> bool:
+        """
+        Intelligently validate if a string is a valid project name.
+        Returns False for narrative text, taglines, section headers, and generic terms.
+
+        Good project names are typically:
+        - Short (1-5 words, usually < 40 characters)
+        - Proper nouns (place names, geographic features)
+        - End with words like "Project", "Mine", "Property", "Deposit" (optional)
+
+        Bad project names are:
+        - Long narrative sentences
+        - Taglines/slogans ("Picking Up Where Historic Miners Left Off")
+        - Section headers ("Our Projects", "Maps & Sections")
+        - Generic descriptive text
+        """
+        if not name or len(name) < 2:
+            return False
+
+        name_lower = name.lower().strip()
+        name_stripped = name.strip()
+
+        # ===== LENGTH HEURISTICS =====
+        # Real project names are short - typically 1-5 words
+        word_count = len(name_stripped.split())
+        if word_count > 8:  # More than 8 words is almost certainly narrative
+            return False
+
+        # Names over 60 chars are suspicious (unless they're project + location)
+        if len(name_stripped) > 60 and word_count > 5:
+            return False
+
+        # ===== GENERIC/NAVIGATION TERMS =====
+        invalid_exact_names = [
+            'deposit', 'mine', 'project', 'property', 'claim', 'prospect',
+            'the project', 'the deposit', 'the mine', 'our project', 'our projects',
+            'projects', 'properties', 'operations', 'assets', 'home', 'about',
+            'about us', 'contact', 'news', 'investors', 'team', 'management',
+            'overview', 'gallery', 'maps', 'documents', 'introduction',
+            'maps & sections', 'maps and sections', 'photo gallery', 'video gallery',
+            'downloads', 'resources', 'media', 'highlights', 'location map',
+        ]
+        if name_lower in invalid_exact_names:
+            return False
+
+        # ===== NARRATIVE/TAGLINE DETECTION =====
+        # Taglines often have certain patterns
+        narrative_patterns = [
+            # Starting with action verbs (tagline indicator)
+            r'^(picking|unlocking|discovering|exploring|developing|building|creating|leading|driving)',
+            # Starting with gerunds
+            r'^(advancing|expanding|growing|transforming|delivering|pursuing)',
+            # Promotional phrases
+            r'where .* left off', r'the future of', r'premier', r'world-?class',
+            r'next generation', r'cutting[- ]edge', r'industry[- ]leading',
+            # Descriptive narrative
+            r'^a\s+', r'^an\s+', r'^the\s+(?![\w]+\s+(?:project|mine|property|deposit))',
+            # Question forms
+            r'\?$',
+            # Sentences (contains punctuation patterns typical of sentences)
+            r'\.\s+[A-Z]',  # Period followed by capital letter (multiple sentences)
+        ]
+        for pattern in narrative_patterns:
+            if re.search(pattern, name_lower):
+                return False
+
+        # ===== MEDIA/DOCUMENT CONTENT =====
+        media_indicators = [
+            'video presentation', 'technical presentation', 'corporate presentation',
+            'investor presentation', 'press release', 'news release',
+            'annual report', 'quarterly report', 'financial statement',
+            'webinar', 'interview', 'pdf', 'download', 'view more', 'read more',
+            'click here', 'learn more', 'see details',
+        ]
+        for indicator in media_indicators:
+            if indicator in name_lower:
+                return False
+
+        # ===== STRUCTURAL INDICATORS OF BAD NAMES =====
+        # Names with "unpatented mining claims" are descriptive text, not project names
+        if 'unpatented' in name_lower or 'staked claims' in name_lower:
+            return False
+
+        # Names that are mostly lowercase words (proper nouns should be capitalized)
+        words = name_stripped.split()
+        if len(words) >= 3:
+            lowercase_words = [w for w in words if w[0].islower() and w.lower() not in ['the', 'of', 'at', 'in', 'and', 'or', 'for', 'to', 'a', 'an']]
+            if len(lowercase_words) >= len(words) * 0.6:  # More than 60% lowercase = likely narrative
+                return False
+
+        # ===== GEOCHEMISTRY/SAMPLE DATA (from onboard_company.py) =====
+        geochemistry_patterns = [
+            r'^\d+\s*[-–]\s*\d+',  # Number ranges like "1-50" or "100-200"
+            r'^\d+[a-z]*\s*$',  # Just numbers with optional letter suffix
+            r'sample\s*(id|no|number|#)',
+            r'\b(au|ag|cu|pb|zn|ni|co)\s*[-–]\s*\d+',
+            r'\bsed\s+(au|ag|cu|pb|zn)',
+            r'\b(lake|stream|soil|rock)\s+sed\b',
+        ]
+        for pattern in geochemistry_patterns:
+            if re.search(pattern, name_lower):
+                return False
+
+        # ===== YEAR-BASED PROGRAM NAMES =====
+        # e.g., "2024 Drill Program", "2025 Exploration"
+        year_program_pattern = r'^20\d{2}\s+(drill|drilling|exploration|sampling|field)\s*(program|campaign|season)?'
+        if re.search(year_program_pattern, name_lower):
+            return False
+
+        # ===== POSITIVE INDICATORS (boost confidence) =====
+        # Names ending with project-related words are more likely valid
+        project_suffixes = ['project', 'mine', 'property', 'deposit', 'prospect', 'claims', 'trend', 'belt', 'district']
+        has_project_suffix = any(name_lower.endswith(suffix) for suffix in project_suffixes)
+
+        # Names that look like place names (capitalized proper nouns)
+        looks_like_place_name = (
+            len(words) >= 1 and
+            len(words) <= 4 and
+            words[0][0].isupper() and
+            len(name_stripped) < 50
+        )
+
+        # If it has a project suffix or looks like a place name, it's probably valid
+        if has_project_suffix or looks_like_place_name:
+            return True
+
+        # For names without clear positive indicators, be more conservative
+        # Allow if short and doesn't have negative indicators
+        if word_count <= 4 and len(name_stripped) < 40:
+            return True
+
+        return False
+
     async def _scrape_investor_page(self, crawler, config, url: str):
         """Scrape investor relations page for documents and financial info."""
         if url in self.visited_urls:
@@ -1022,12 +1221,8 @@ class CompanyDataScraper:
                     header_text = header.get_text(strip=True)
                     header_lower = header_text.lower().strip()
 
-                    # Skip generic headers
-                    if header_lower in invalid_names or len(header_text) < 3:
-                        continue
-
-                    # Skip media content headers (videos, presentations, etc.)
-                    if any(kw in header_lower for kw in media_keywords):
+                    # Use intelligent validation
+                    if not self._is_valid_project_name(header_text):
                         continue
 
                     # Check if header matches URL slug or is a reasonable project name
@@ -1035,14 +1230,17 @@ class CompanyDataScraper:
                     if url_slug in header_normalized or header_normalized in url_slug:
                         project_name = header_text
                         break
-                    # Also accept if it's the first non-generic h2 on a project detail page
-                    if not project_name and header.name == 'h2':
+                    # Also accept if it's the first valid h1 on a project detail page
+                    if not project_name and header.name == 'h1':
                         project_name = header_text
                         break
 
-                # Strategy 2: If no header found, derive name from URL
+                # Strategy 2: If no header found, derive name from URL slug
                 if not project_name:
-                    project_name = path_parts[-1].replace('-', ' ').replace('_', ' ').title()
+                    slug_name = path_parts[-1].replace('-', ' ').replace('_', ' ').title()
+                    # Validate the slug-derived name too
+                    if self._is_valid_project_name(slug_name):
+                        project_name = slug_name
 
                 # Extract description from page content
                 # Look for introduction/overview section or first substantial paragraph
@@ -1096,9 +1294,8 @@ class CompanyDataScraper:
                         commodity = comm
                         break
 
-                # Check if project name is valid (not generic and not media content)
-                is_media_content = project_name and any(kw in project_name.lower() for kw in media_keywords)
-                if project_name and project_name.lower() not in invalid_names and not is_media_content:
+                # Project name has already been validated, just add it
+                if project_name:
                     project = {
                         'name': project_name[:200],
                         'description': description,
@@ -1124,9 +1321,8 @@ class CompanyDataScraper:
                         for proj in projects:
                             project = self._extract_project_from_element(proj, url)
                             if project and project.get('name'):
-                                name_lower = project['name'].lower()
-                                is_media = any(kw in name_lower for kw in media_keywords)
-                                if name_lower not in invalid_names and not is_media:
+                                # Use the new intelligent validation method
+                                if self._is_valid_project_name(project['name']):
                                     projects_found.append(project)
                         break
 
@@ -1136,14 +1332,12 @@ class CompanyDataScraper:
                     href = link.get('href', '')
                     href_lower = href.lower()
                     text = link.get_text(strip=True)
-                    text_lower = text.lower()
 
                     # Links that look like project pages
                     if any(kw in href_lower for kw in ['/project', '/property', '/asset', '/deposit', '/mine']):
                         if text and len(text) > 2 and len(text) < 100:
-                            # Skip navigation items, generic terms, and media content
-                            is_media = any(kw in text_lower for kw in media_keywords)
-                            if text_lower not in invalid_names and not text.isupper() and not is_media:
+                            # Use the new intelligent validation method
+                            if self._is_valid_project_name(text):
                                 # Check if this is a subpage of the current projects page
                                 full_url = urljoin(url, href)
                                 # Avoid adding the current page or parent pages
@@ -1162,13 +1356,12 @@ class CompanyDataScraper:
                         header_text = header.get_text(strip=True)
                         header_lower = header_text.lower().strip()
 
-                        if header_lower in invalid_names or len(header_text) < 5:
+                        # Use the new intelligent validation
+                        if not self._is_valid_project_name(header_text):
                             continue
+
+                        # Skip all-caps short headers (likely company name)
                         if header_text.isupper() and len(header_text.split()) <= 3:
-                            continue
-                        # Skip media content
-                        is_media = any(kw in header_lower for kw in media_keywords)
-                        if is_media:
                             continue
 
                         if any(kw in header_lower for kw in project_keywords):
@@ -1208,26 +1401,98 @@ class CompanyDataScraper:
             self.errors.append(f"Projects page error ({url}): {str(e)}")
 
     def _extract_project_from_element(self, element, source_url: str) -> Optional[Dict]:
-        """Extract project info from element."""
+        """
+        Extract project info from element.
+        Uses intelligent heuristics to find the actual project name vs taglines/descriptions.
+        """
         project = {'source_url': source_url}
 
-        # Name
-        name_elem = element.select_one('h2, h3, h4, .title, .name')
-        if name_elem:
-            project['name'] = name_elem.get_text(strip=True)
+        # ===== NAME EXTRACTION (with intelligent validation) =====
+        # Try multiple strategies to find the actual project name
+        candidate_names = []
 
-        # Description
-        desc_elem = element.select_one('p, .description')
+        # Strategy 1: Look for headers with project-specific classes first
+        for selector in ['.project-name', '.property-name', '[class*="project-title"]',
+                        '[class*="property-title"]', 'h2.name', 'h3.name']:
+            name_elem = element.select_one(selector)
+            if name_elem:
+                text = name_elem.get_text(strip=True)
+                if text and self._is_valid_project_name(text):
+                    candidate_names.append((text, 3))  # High priority
+
+        # Strategy 2: Check for links that might contain the project name
+        # (often the actual name is in the link to the detail page)
+        for link in element.select('a[href*="project"], a[href*="property"]'):
+            text = link.get_text(strip=True)
+            if text and self._is_valid_project_name(text):
+                candidate_names.append((text, 2))  # Medium priority
+                # Also capture the URL for later
+                href = link.get('href', '')
+                if href:
+                    project['source_url'] = urljoin(source_url, href)
+
+        # Strategy 3: Standard header extraction with validation
+        for selector in ['h2', 'h3', 'h4', '.title', '.name']:
+            name_elem = element.select_one(selector)
+            if name_elem:
+                text = name_elem.get_text(strip=True)
+                if text and self._is_valid_project_name(text):
+                    candidate_names.append((text, 1))  # Lower priority
+
+        # Strategy 4: Derive from URL slug if we have a project detail link
+        if project.get('source_url') and 'project' in project['source_url'].lower():
+            url_path = urlparse(project['source_url']).path
+            parts = [p for p in url_path.split('/') if p]
+            if len(parts) >= 2:
+                slug = parts[-1].replace('-', ' ').replace('_', ' ').title()
+                if self._is_valid_project_name(slug):
+                    candidate_names.append((slug, 0))  # Fallback priority
+
+        # Select the best candidate (highest priority, then shortest)
+        if candidate_names:
+            # Sort by priority (desc) then length (asc) - prefer short, high-priority names
+            candidate_names.sort(key=lambda x: (-x[1], len(x[0])))
+            project['name'] = candidate_names[0][0]
+
+        # ===== DESCRIPTION EXTRACTION =====
+        # Find first substantial paragraph that's not just the project name
+        desc_elem = element.select_one('p, .description, .excerpt, .summary')
         if desc_elem:
-            project['description'] = desc_elem.get_text(strip=True)[:500]
+            desc_text = desc_elem.get_text(strip=True)
+            # Make sure description is different from name and substantial
+            if desc_text and len(desc_text) > 20 and desc_text != project.get('name'):
+                project['description'] = desc_text[:500]
 
-        # Location - look for country/region mentions
+        # ===== LOCATION EXTRACTION =====
         text = element.get_text()
-        locations = ['Canada', 'USA', 'United States', 'Mexico', 'Peru', 'Chile',
-                     'Australia', 'Nevada', 'Ontario', 'Quebec', 'British Columbia']
+        locations = [
+            'Canada', 'USA', 'United States', 'Mexico', 'Peru', 'Chile', 'Argentina',
+            'Australia', 'Nevada', 'Ontario', 'Quebec', 'British Columbia', 'Alberta',
+            'Saskatchewan', 'Manitoba', 'Yukon', 'Northwest Territories', 'Nunavut',
+            'Arizona', 'Colorado', 'Idaho', 'Montana', 'Utah', 'Wyoming', 'Alaska',
+            'Sonora', 'Chihuahua', 'Durango', 'Puebla', 'Oaxaca', 'Guerrero',
+        ]
         for loc in locations:
             if loc.lower() in text.lower():
                 project['location'] = loc
+                break
+
+        # ===== COMMODITY EXTRACTION =====
+        text_lower = text.lower()
+        commodities = {
+            'gold': ['gold', ' au ', 'au,', 'au-'],
+            'silver': ['silver', ' ag ', 'ag,', 'ag-'],
+            'copper': ['copper', ' cu ', 'cu,'],
+            'zinc': ['zinc', ' zn ', 'zn,'],
+            'lead': ['lead', ' pb '],
+            'nickel': ['nickel', ' ni '],
+            'lithium': ['lithium', ' li '],
+            'uranium': ['uranium'],
+            'rare_earths': ['rare earth', 'ree'],
+        }
+        for comm, patterns in commodities.items():
+            if any(p in text_lower for p in patterns):
+                project['commodity'] = comm
                 break
 
         return project if project.get('name') else None
