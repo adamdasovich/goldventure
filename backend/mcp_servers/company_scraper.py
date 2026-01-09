@@ -858,9 +858,13 @@ class CompanyDataScraper:
                 garbage_indicators = [
                     'page not found', '404', 'sorry', 'apologies',
                     "can't find", "cannot find", 'check your spelling',
+                    "couldn't find", "could not find", 'the page you were looking for',
+                    'use the navigation', 'explore other pages', 'page does not exist',
+                    'this page has been moved', 'page has been removed',
                     'chairman ceo cfo', 'ceo cfo', 'director director',
                     'president vice president', 'corporate secretary',
-                    'click here to', 'go back to', 'return to homepage'
+                    'click here to', 'go back to', 'return to homepage',
+                    'sign-up to follow', 'subscribe to', 'newsletter sign up',
                 ]
                 if any(ind in desc_lower for ind in garbage_indicators):
                     return False
@@ -1149,6 +1153,13 @@ class CompanyDataScraper:
             'drilling', 'exploration', 'development', 'production', 'processing',
             'infrastructure', 'environment', 'permitting', 'social', 'sustainability',
             'history', 'project history', 'background', 'corporate', 'summary',
+            # Regulatory/legal disclosure sections (not projects)
+            'national instrument 43-101', 'ni 43-101', '43-101', 'ni43-101',
+            'national instrument 43-101 disclosure', 'ni 43-101 disclosure',
+            'qualified person', 'qualified persons', 'qp', 'qp statement',
+            'cautionary statement', 'forward-looking statements', 'forward looking',
+            'disclaimer', 'legal', 'terms of use', 'privacy policy',
+            'technical disclosure', 'mineral resource disclosure',
         ]
         if name_lower in invalid_exact_names:
             return False
