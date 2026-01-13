@@ -1560,9 +1560,18 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
                 # STRATEGY 5a: 55 North Mining - Homepage PDF news pattern
                 # News links to PDFs with date in span, title as text
                 # ============================================================
-                for news_div in soup.select('div.news, .latest-news div.news'):
+                for news_div in soup.select('div.news'):
                     try:
-                        link = news_div.select_one('a[href*=".pdf"]')
+                        # Find PDF link - try multiple approaches
+                        link = news_div.select_one('a[href$=".pdf"]')  # ends with .pdf
+                        if not link:
+                            link = news_div.select_one('a[href*=".pdf"]')  # contains .pdf
+                        if not link:
+                            # Fallback: any link with pdf in href
+                            for a in news_div.select('a'):
+                                if '.pdf' in a.get('href', '').lower():
+                                    link = a
+                                    break
                         if not link:
                             continue
 
