@@ -4602,3 +4602,29 @@ class NewsReleaseFlag(models.Model):
         self.reviewed_at = timezone.now()
         self.review_notes = notes
         self.save()
+        
+        # Record URL as permanently dismissed to prevent re-flagging
+        if self.news_release and self.news_release.url:
+            DismissedNewsURL.objects.get_or_create(
+                url=self.news_release.url,
+                defaults={
+                    'company': self.news_release.company,
+                    'dismissed_by': reviewer,
+                    'reason': 'false_positive'
+                }
+            )
+
+
+class DismissedNewsURL(models.Model):
+    url = models.URLField(unique=True)
+    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name="dismissed_news_urls")
+    dismissed_at = models.DateTimeField(auto_now_add=True)
+    dismissed_by = models.ForeignKey("User", on_delete=models.SET_NULL, null=True, blank=True)
+    reason = models.CharField(max_length=100, default="false_positive")
+    
+    class Meta:
+        db_table = "dismissed_news_urls"
+    
+    def __str__(self):
+        return self.url
+

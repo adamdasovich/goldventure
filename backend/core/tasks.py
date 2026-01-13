@@ -187,7 +187,7 @@ def process_single_job(job: DocumentProcessingJob):
 
             job.save()
 
-            print(f"✓ Job {job.id} completed successfully")
+            print(f" Job {job.id} completed successfully")
             print(f"  - Document ID: {job.document_id}")
             print(f"  - Resources created: {job.resources_created}")
             print(f"  - Chunks created: {job.chunks_created}")
@@ -201,7 +201,7 @@ def process_single_job(job: DocumentProcessingJob):
                     if document.company:
                         send_ni43101_discovery_notification(document, document.company)
                 except Exception as e:
-                    print(f"  ⚠ Failed to send NI 43-101 notification: {str(e)}")
+                    print(f"   Failed to send NI 43-101 notification: {str(e)}")
 
             # Update CompanyNews record if this was a news_release
             if job.document_type == 'news_release':
@@ -222,9 +222,9 @@ def process_single_job(job: DocumentProcessingJob):
                                 if not news_record.summary and document.raw_text:
                                     news_record.summary = document.raw_text[:500].strip() + "..."
                         news_record.save()
-                        print(f"  ✓ Updated CompanyNews record: {news_record.title[:50]}...")
+                        print(f"   Updated CompanyNews record: {news_record.title[:50]}...")
                 except Exception as e:
-                    print(f"  ⚠ Failed to update CompanyNews record: {str(e)}")
+                    print(f"   Failed to update CompanyNews record: {str(e)}")
 
         else:
             # Processing failed
@@ -239,7 +239,7 @@ def process_single_job(job: DocumentProcessingJob):
 
             job.save()
 
-            print(f"✗ Job {job.id} failed: {error_msg}")
+            print(f" Job {job.id} failed: {error_msg}")
 
     except Exception as e:
         # Handle unexpected errors
@@ -253,7 +253,7 @@ def process_single_job(job: DocumentProcessingJob):
 
         job.save()
 
-        print(f"✗ Job {job.id} failed with exception: {str(e)}")
+        print(f" Job {job.id} failed with exception: {str(e)}")
         import traceback
         traceback.print_exc()
 
@@ -326,21 +326,31 @@ def scrape_company_news_task(self, company_id):
 
             # If no date provided, use today's date as fallback
             if not release_date:
-                release_date = timezone.now().date()
+                continue  # Skip entries without valid dates
 
             # Create or update news release (using URL as unique identifier)
-            obj, created = NewsRelease.objects.update_or_create(
-                company=company,
-                url=url,
-                defaults={
-                    'title': title,
-                    'release_type': release_type,
-                    'release_date': release_date,
-                    'summary': '',
-                    'is_material': is_financial,
-                    'full_text': ''
-                }
-            )
+            # First check if record exists - don't overwrite existing dates
+            existing = NewsRelease.objects.filter(company=company, url=url).first()
+            if existing:
+                # Only update title if needed, preserve existing date
+                if existing.title != title:
+                    existing.title = title
+                    existing.save(update_fields=['title', 'updated_at'])
+                obj = existing
+                created = False
+            else:
+                # Create new record
+                obj = NewsRelease.objects.create(
+                    company=company,
+                    url=url,
+                    title=title,
+                    release_type=release_type,
+                    release_date=release_date,
+                    summary='',
+                    is_material=is_financial,
+                    full_text=''
+                )
+                created = True
 
             if created:
                 created_count += 1
@@ -395,8 +405,12 @@ def scrape_company_news_task(self, company_id):
 
                 # If financing keywords detected, create flag for superuser review
                 if detected_keywords:
-                    from core.models import NewsReleaseFlag
+                    from core.models import NewsReleaseFlag, DismissedNewsURL
 
+                    # Check if URL was dismissed
+                    if DismissedNewsURL.objects.filter(url=url).exists():
+                        print(f"  [SKIP] Previously dismissed URL")
+                        continue
                     # Only create flag if one doesn't already exist
                     flag, flag_created = NewsReleaseFlag.objects.get_or_create(
                         news_release=obj,
@@ -406,7 +420,7 @@ def scrape_company_news_task(self, company_id):
                         }
                     )
 
-                    print(f"  🚩 Flagged financing-related news: {title[:60]}...")
+                    print(f"   Flagged financing-related news: {title[:60]}...")
                     print(f"     Keywords: {', '.join(detected_keywords)}")
 
                     # Send email notification for new flags only
@@ -415,7 +429,7 @@ def scrape_company_news_task(self, company_id):
                             from core.notifications import send_financing_flag_notification
                             send_financing_flag_notification(flag, company, obj)
                         except Exception as e:
-                            print(f"     ⚠ Failed to send financing flag notification: {str(e)}")
+                            print(f"      Failed to send financing flag notification: {str(e)}")
 
             else:
                 updated_count += 1
@@ -684,23 +698,33 @@ def scrape_single_company_news_task(self, company_id: int):
                 try:
                     release_date = datetime.strptime(date_str, '%Y-%m-%d').date()
                 except:
-                    release_date = timezone.now().date()
+                    continue  # Skip entries without valid dates
             else:
-                release_date = timezone.now().date()
+                continue  # Skip entries without valid dates
 
             # Create or update news release
-            obj, created = NewsRelease.objects.update_or_create(
-                company=company,
-                url=url,
-                defaults={
-                    'title': title,
-                    'release_type': release_type,
-                    'release_date': release_date,
-                    'summary': '',
-                    'is_material': False,
-                    'full_text': ''
-                }
-            )
+            # First check if record exists - don't overwrite existing dates
+            existing = NewsRelease.objects.filter(company=company, url=url).first()
+            if existing:
+                # Only update title if needed, preserve existing date
+                if existing.title != title:
+                    existing.title = title
+                    existing.save(update_fields=['title', 'updated_at'])
+                obj = existing
+                created = False
+            else:
+                # Create new record
+                obj = NewsRelease.objects.create(
+                    company=company,
+                    url=url,
+                    title=title,
+                    release_type=release_type,
+                    release_date=release_date,
+                    summary='',
+                    is_material=False,
+                    full_text=''
+                )
+                created = True
 
             if created:
                 created_count += 1
@@ -717,25 +741,29 @@ def scrape_single_company_news_task(self, company_id: int):
                 detected_keywords = [kw for kw in financing_keywords if kw in title_lower]
 
                 if detected_keywords:
-                    from core.models import NewsReleaseFlag
-                    flag, flag_created = NewsReleaseFlag.objects.get_or_create(
-                        news_release=obj,
-                        defaults={
-                            'detected_keywords': detected_keywords,
-                            'status': 'pending'
-                        }
-                    )
-                    if flag_created:
-                        print(f"  🚩 Flagged: {title[:50]}...")
-                        try:
-                            from core.notifications import send_financing_flag_notification
-                            send_financing_flag_notification(flag, company, obj)
-                        except Exception as e:
-                            print(f"  ⚠ Notification error: {str(e)}")
+                    from core.models import NewsReleaseFlag, DismissedNewsURL
+                    # Check if this URL was previously dismissed - never re-flag dismissed news
+                    if DismissedNewsURL.objects.filter(url=url).exists():
+                        print(f"  [SKIP] Previously dismissed: {title[:50]}...")
+                    else:
+                        flag, flag_created = NewsReleaseFlag.objects.get_or_create(
+                            news_release=obj,
+                            defaults={
+                                'detected_keywords': detected_keywords,
+                                'status': 'pending'
+                            }
+                        )
+                        if flag_created:
+                            print(f"  [FLAG] Flagged: {title[:50]}...")
+                            try:
+                                from core.notifications import send_financing_flag_notification
+                                send_financing_flag_notification(flag, company, obj)
+                            except Exception as e:
+                                print(f"  [WARN] Notification error: {str(e)}")
             else:
                 updated_count += 1
 
-        print(f"  ✓ {company.name}: {created_count} new, {updated_count} updated")
+        print(f"   {company.name}: {created_count} new, {updated_count} updated")
         return {
             'company_id': company_id,
             'company_name': company.name,
@@ -747,7 +775,7 @@ def scrape_single_company_news_task(self, company_id: int):
     except Company.DoesNotExist:
         return {'company_id': company_id, 'status': 'error', 'message': 'Company not found'}
     except Exception as e:
-        print(f"  ✗ Error scraping company {company_id}: {str(e)}")
+        print(f"   Error scraping company {company_id}: {str(e)}")
         return {'company_id': company_id, 'status': 'error', 'message': str(e)}
 
 

@@ -154,6 +154,7 @@ class CompanyDetailSerializer(serializers.ModelSerializer):
     financings = FinancingSerializer(many=True, read_only=True)
     presentation_url = serializers.SerializerMethodField()
     fact_sheet_url = serializers.SerializerMethodField()
+    technical_report_url = serializers.SerializerMethodField()
 
     class Meta:
         model = Company
@@ -170,6 +171,13 @@ class CompanyDetailSerializer(serializers.ModelSerializer):
         """Get the latest fact sheet URL"""
         doc = obj.scraped_documents.filter(
             document_type='fact_sheet'
+        ).order_by('-year', '-created_at').first()
+        return doc.source_url if doc else None
+
+    def get_technical_report_url(self, obj):
+        """Get the latest NI 43-101 technical report URL"""
+        doc = obj.scraped_documents.filter(
+            document_type='ni43101'
         ).order_by('-year', '-created_at').first()
         return doc.source_url if doc else None
 

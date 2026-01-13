@@ -17,6 +17,53 @@ if sys.platform == 'win32':
     sys.stdout.reconfigure(encoding='utf-8', errors='replace')
 
 
+# ============================================================================
+# NEWS TITLE VALIDATION
+# ============================================================================
+
+JUNK_TITLE_PATTERNS = [
+    'skip to content', 'subscribe for updates', 'subscribe', 'menu',
+    'navigation', 'search', 'close', 'home', 'contact', 'about us',
+    'privacy policy', 'terms', 'cookie', 'accept', 'decline',
+    'read more', 'learn more', 'click here', 'download', 'load more',
+    'next page', 'previous', 'back', 'forward', 'share', 'print',
+    'email', 'twitter', 'facebook', 'linkedin', 'instagram',
+    'older entries', 'newer entries', 'corporate presentation',
+    'investor presentation', 'fact sheet', 'news release +',
+    'view all', 'see all', 'load more news', 'more news', 'all news'
+]
+
+def is_valid_news_title(title):
+    if not title:
+        return False
+    title_clean = title.strip()
+    title_lower = title_clean.lower()
+    if len(title_clean) < 25:
+        return False
+    for pattern in JUNK_TITLE_PATTERNS:
+        if title_lower == pattern or title_lower.startswith(pattern):
+            return False
+        if pattern in title_lower and len(title_clean) < 40:
+            return False
+    if re.match(r'^(january|february|march|april|may|june|july|august|september|october|november|december)[\s,]+\d{1,2}[\s,]+\d{4}$', title_lower, re.IGNORECASE):
+        return False
+    if title_lower.startswith('day:'):
+        return False
+    if re.match(r'^\d{4}$', title_clean):
+        return False
+    return True
+
+def is_valid_news_url(url):
+    if not url:
+        return False
+    url_lower = url.lower().rstrip('/')
+    if url_lower.endswith('/news') or url_lower.endswith('/press-releases') or url_lower.endswith('/news-releases') or url_lower.endswith('/media'):
+        return False
+    if re.search(r'/news/\d{4}$', url_lower) or re.search(r'/\d{4}/news$', url_lower):
+        return False
+    return True
+
+
 class MiningDocumentCrawler:
     """
     Crawler specialized for discovering mining company documents
@@ -458,9 +505,12 @@ class MiningDocumentCrawler:
             elif any(kw in combined_text for kw in ['financial', 'annual-report', 'quarterly', '/financial']):
                 doc_type = 'financial_statement'
 
-            # Try to extract FULL DATE - first check if we extracted it from HTML
-            full_date = pdf.get('extracted_date')
+            # Try to extract FULL DATE - PRIORITIZE URL-based dates over HTML-extracted dates
+            # URL dates (like nr-20250815.pdf) are more reliable than HTML page scraping
+            full_date = None
             year = None
+            
+            # First try URL-based patterns (most reliable)
 
             # Month name to number mapping
             month_map = {
@@ -532,10 +582,16 @@ class MiningDocumentCrawler:
                                     month = month_map.get(month_name, '01')
                                     full_date = f"{year}-{month}-{day}"
                                 else:
-                                    # Fall back to just year
-                                    date_match = re.search(r'(20\d{2})', combined_text)
-                                    year = date_match.group(1) if date_match else None
-                                    full_date = None
+                                    # Fall back to HTML-extracted date if available (less reliable)
+                                    html_date = pdf.get('extracted_date')
+                                    if html_date:
+                                        full_date = html_date
+                                        year = html_date[:4]
+                                    else:
+                                        # Last resort: just extract year from URL
+                                        date_match = re.search(r'(20\d{2})', combined_text)
+                                        year = date_match.group(1) if date_match else None
+                                        full_date = None
 
             # Determine best title - prefer descriptive link_text, fallback to cleaned filename
             title = link_text
@@ -846,6 +902,7 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
             f'{url}/press-releases',
             f'{url}/investors/news',
             f'{url}/investors/news-releases',
+            f'{url}/news-list',  # Elementor-based news pages
         ]
 
         # Add year-specific patterns
@@ -928,14 +985,15 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
                                 month_num = month_map.get(month_name[:3].lower(), '01')
                                 date_str = f"{year}-{month_num}-{day}"
 
-                    # If still no date found, fetch the actual article page and extract date
-                    if not date_str:
-                        date_str = await _extract_date_from_article_page(crawler, full_url, crawler_config)
-                        if date_str:
-                            # Extract year from the date string
-                            year_match = re.search(r'^(\d{4})', date_str)
-                            if year_match:
-                                year = year_match.group(1)
+                    # DISABLED: Fetching individual article pages was returning wrong dates
+                    # The _extract_date_from_article_page function picks up footer/sidebar dates
+                    # Instead, we only trust dates from: URL patterns, parent element text, or skip
+                    # if not date_str:
+                    #     date_str = await _extract_date_from_article_page(crawler, full_url, crawler_config)
+                    #     if date_str:
+                    #         year_match = re.search(r'^(\d{4})', date_str)
+                    #         if year_match:
+                    #             year = year_match.group(1)
 
                     # If we have a date, check if it's within our time range
                     if date_str:
@@ -953,7 +1011,9 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
                         except:
                             pass
 
-                    # Add this news release
+                    # Validate and add this news release
+                    if not is_valid_news_title(link_text) or not is_valid_news_url(full_url):
+                        continue
                     news_releases.append({
                         'title': link_text,
                         'url': full_url,
@@ -963,6 +1023,94 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
                     })
 
                     print(f"[HTML NEWS] Found: {link_text[:60]}... | {date_str or year or 'unknown date'}")
+
+                # Strategy 2: Handle Elementor-based news layouts
+                # Look for h2/h3 with elementor-heading-title class containing links
+                elementor_headings = soup.find_all(['h2', 'h3'], class_=re.compile(r'elementor-heading-title'))
+                for heading in elementor_headings[:50]:
+                    heading_link = heading.find('a', href=True)
+                    if not heading_link:
+                        continue
+
+                    title = heading_link.get_text(strip=True)
+                    href = heading_link.get('href', '')
+
+                    # Skip very short titles or year-only entries
+                    if not title or len(title) < 15 or re.match(r'^\d{4}$', title):
+                        continue
+
+                    # Skip navigation links
+                    skip_patterns = ['skip to content', 'menu', 'contact', 'home', 'about', 'subscribe']
+                    if any(p in title.lower() for p in skip_patterns):
+                        continue
+
+                    # Build full URL
+                    if href.startswith('http'):
+                        full_url = href
+                    elif href.startswith('/'):
+                        full_url = urljoin(url, href)
+                    else:
+                        full_url = urljoin(news_url, href)
+
+                    # Skip if already found
+                    if any(n['url'] == full_url for n in news_releases):
+                        continue
+
+                    # Try to extract date from nearby elements (icon-box-title for Elementor)
+                    date_str = None
+                    year = None
+
+                    # Look up the DOM tree for date containers
+                    search_container = heading
+                    for _ in range(5):
+                        if search_container.parent:
+                            search_container = search_container.parent
+                        else:
+                            break
+
+                    # Look for date text in icon-box-title elements
+                    date_elements = search_container.find_all(['span', 'h3', 'p', 'div'],
+                        class_=re.compile(r'icon-box-title|date|time', re.I))
+                    for elem in date_elements:
+                        elem_text = elem.get_text(strip=True)
+                        # Match "December 29, 2025" format
+                        date_match = re.search(
+                            r'(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{1,2}),?\s*(20\d{2})',
+                            elem_text, re.IGNORECASE
+                        )
+                        if date_match:
+                            month_name = date_match.group(1)
+                            day = date_match.group(2).zfill(2)
+                            year = date_match.group(3)
+                            month_map = {
+                                'january': '01', 'february': '02', 'march': '03', 'april': '04',
+                                'may': '05', 'june': '06', 'july': '07', 'august': '08',
+                                'september': '09', 'october': '10', 'november': '11', 'december': '12'
+                            }
+                            month_num = month_map.get(month_name.lower(), '01')
+                            date_str = f"{year}-{month_num}-{day}"
+                            break
+
+                    # Check date range
+                    if date_str:
+                        try:
+                            article_date = datetime.strptime(date_str, '%Y-%m-%d')
+                            if article_date < cutoff_date:
+                                continue
+                        except:
+                            pass
+
+                    # Validate before adding
+                    if not is_valid_news_title(title) or not is_valid_news_url(full_url):
+                        continue
+                    news_releases.append({
+                        'title': title,
+                        'url': full_url,
+                        'date': date_str,
+                        'document_type': 'news_release',
+                        'year': year
+                    })
+                    print(f"[ELEMENTOR NEWS] Found: {title[:60]}... | {date_str or 'unknown date'}")
 
             except Exception as e:
                 # Silently continue if this news URL doesn't exist
