@@ -1258,6 +1258,11 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
         # Normalize URL - remove trailing slashes to avoid double slashes
         url = url.rstrip('/')
 
+        # Extract domain for WordPress subdomain check (Angkor pattern)
+        from urllib.parse import urlparse
+        parsed_url = urlparse(url)
+        domain = parsed_url.netloc.replace('www.', '')
+
         # Streamlined news page patterns
         news_page_patterns = [
             f'{url}/news/',
@@ -1268,6 +1273,11 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
             f'{url}/investors/news-releases/',  # Canada Nickel
             f'{url}/news/press-releases/',
             f'{url}/news/{current_year}/',  # Garibaldi (year-based)
+            f'{url}/news-{current_year}/',  # ATEX Resources (year-suffix pattern)
+            f'{url}/news-{current_year - 1}/',  # ATEX Resources (previous year)
+            f'https://wp.{domain}/news-releases/',  # Angkor Resources (WP subdomain)
+            f'https://wp.{domain}/press-releases/',  # Angkor Resources (WP subdomain)
+            url,  # Homepage fallback for 55 North Mining style sites
         ]
 
         for news_url in news_page_patterns:
@@ -1532,6 +1542,200 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
                             'year': date_str[:4] if date_str else None
                         })
                         print(f"[UK-GRID] {title[:50]}... | {date_str}")
+                    except Exception:
+                        continue
+
+                # ============================================================
+                # STRATEGY 5a: 55 North Mining - Homepage PDF news pattern
+                # News links to PDFs with date in span, title as text
+                # ============================================================
+                for news_div in soup.select('div.news, .latest-news div.news'):
+                    try:
+                        link = news_div.select_one('a[href*=".pdf"]')
+                        if not link:
+                            continue
+
+                        href = link.get('href', '')
+                        if not href:
+                            continue
+
+                        # Build full URL for PDF
+                        if not href.startswith('http'):
+                            href = urljoin(news_url, href)
+
+                        # Extract date from span inside link
+                        date_str = None
+                        date_span = link.select_one('span')
+                        if date_span:
+                            date_text = date_span.get_text(strip=True).lstrip('\xa0').strip()
+                            date_str = parse_date_standalone(date_text)
+
+                        # Extract title - get text after the icon/date
+                        full_text = link.get_text(separator=' ', strip=True)
+                        # Remove date portion and clean up
+                        title = full_text
+                        if date_span:
+                            date_text = date_span.get_text(strip=True)
+                            title = full_text.replace(date_text, '').strip()
+
+                        # Clean up title
+                        title = re.sub(r'^\s*[\-–—]\s*', '', title).strip()
+
+                        if not title or len(title) < 15:
+                            continue
+
+                        url_normalized = href.split('?')[0].rstrip('/')
+                        if url_normalized in seen_urls:
+                            continue
+
+                        # Check date range
+                        if date_str:
+                            try:
+                                if datetime.strptime(date_str, '%Y-%m-%d') < cutoff_date:
+                                    continue
+                            except:
+                                pass
+
+                        seen_urls.add(url_normalized)
+                        news_releases.append({
+                            'title': clean_news_title(title, href),
+                            'url': href,
+                            'date': date_str,
+                            'document_type': 'news_release',
+                            'year': date_str[:4] if date_str else None
+                        })
+                        print(f"[PDF-NEWS] {title[:50]}... | {date_str or 'no date'}")
+                    except Exception:
+                        continue
+
+                # ============================================================
+                # STRATEGY 5b: ATEX Resources - Article with time element
+                # Uses <article> tags with <time datetime="..."> elements
+                # ============================================================
+                for article in soup.select('article.post-format-standard, article.post'):
+                    try:
+                        # Get link from post-content div
+                        content_div = article.select_one('.post-content, .entry-content, .article-content')
+                        if not content_div:
+                            content_div = article
+
+                        link = content_div.select_one('a[href]')
+                        if not link:
+                            continue
+
+                        title = link.get_text(strip=True)
+                        href = link.get('href', '')
+
+                        if not title or len(title) < 15:
+                            continue
+
+                        # Skip media/video content
+                        if any(skip in href.lower() for skip in ['/media/', 'youtube.com', 'vimeo.com']):
+                            continue
+
+                        # Get date from time element
+                        date_str = None
+                        time_elem = article.select_one('time[datetime]')
+                        if time_elem:
+                            datetime_attr = time_elem.get('datetime', '')
+                            date_match = re.search(r'(\d{4})-(\d{2})-(\d{2})', datetime_attr)
+                            if date_match:
+                                date_str = f"{date_match.group(1)}-{date_match.group(2)}-{date_match.group(3)}"
+
+                        # Fallback to time element text
+                        if not date_str and time_elem:
+                            date_str = parse_date_standalone(time_elem.get_text(strip=True))
+
+                        # Build full URL
+                        if not href.startswith('http'):
+                            href = urljoin(news_url, href)
+
+                        url_normalized = href.split('?')[0].rstrip('/')
+                        if url_normalized in seen_urls:
+                            continue
+
+                        # Check date range
+                        if date_str:
+                            try:
+                                if datetime.strptime(date_str, '%Y-%m-%d') < cutoff_date:
+                                    continue
+                            except:
+                                pass
+
+                        seen_urls.add(url_normalized)
+                        news_releases.append({
+                            'title': clean_news_title(title, href),
+                            'url': href,
+                            'date': date_str,
+                            'document_type': 'news_release',
+                            'year': date_str[:4] if date_str else None
+                        })
+                        print(f"[ARTICLE] {title[:50]}... | {date_str or 'no date'}")
+                    except Exception:
+                        continue
+
+                # ============================================================
+                # STRATEGY 5c: WordPress archive lists (Angkor WP subdomain)
+                # Standard WP article/entry list with h2.entry-title
+                # ============================================================
+                for entry in soup.select('article.post, .post, .hentry, .type-post'):
+                    try:
+                        # Get title link
+                        title_elem = entry.select_one('h2.entry-title a, h2 a, .entry-title a, h3 a')
+                        if not title_elem:
+                            continue
+
+                        title = title_elem.get_text(strip=True)
+                        href = title_elem.get('href', '')
+
+                        if not title or len(title) < 15:
+                            continue
+
+                        # Get date
+                        date_str = None
+
+                        # Try time element
+                        time_elem = entry.select_one('time.entry-date, time, .posted-on time')
+                        if time_elem:
+                            datetime_attr = time_elem.get('datetime', '')
+                            if datetime_attr:
+                                date_match = re.search(r'(\d{4})-(\d{2})-(\d{2})', datetime_attr)
+                                if date_match:
+                                    date_str = f"{date_match.group(1)}-{date_match.group(2)}-{date_match.group(3)}"
+                            if not date_str:
+                                date_str = parse_date_standalone(time_elem.get_text(strip=True))
+
+                        # Try date class elements
+                        if not date_str:
+                            date_elem = entry.select_one('.entry-date, .post-date, .date, .posted-on')
+                            if date_elem:
+                                date_str = parse_date_standalone(date_elem.get_text(strip=True))
+
+                        # Build full URL
+                        if not href.startswith('http'):
+                            href = urljoin(news_url, href)
+
+                        url_normalized = href.split('?')[0].rstrip('/')
+                        if url_normalized in seen_urls:
+                            continue
+
+                        # Check date range
+                        if date_str:
+                            try:
+                                if datetime.strptime(date_str, '%Y-%m-%d') < cutoff_date:
+                                    continue
+                            except:
+                                pass
+
+                        seen_urls.add(url_normalized)
+                        news_releases.append({
+                            'title': clean_news_title(title, href),
+                            'url': href,
+                            'date': date_str,
+                            'document_type': 'news_release',
+                            'year': date_str[:4] if date_str else None
+                        })
+                        print(f"[WP-ENTRY] {title[:50]}... | {date_str or 'no date'}")
                     except Exception:
                         continue
 
