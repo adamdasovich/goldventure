@@ -1576,6 +1576,7 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
                                     link = a
                                     break
                         if not link:
+                            print(f"[DEBUG-PDF] No PDF link in div")
                             continue
 
                         href = link.get('href', '')
@@ -1628,7 +1629,8 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
                             'year': date_str[:4] if date_str else None
                         })
                         print(f"[PDF-NEWS] {title[:50]}... | {date_str or 'no date'}")
-                    except Exception:
+                    except Exception as e:
+                        print(f"[DEBUG-PDF] Exception: {e}")
                         continue
 
                 # ============================================================
