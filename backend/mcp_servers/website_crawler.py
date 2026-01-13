@@ -1576,7 +1576,6 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
                                     link = a
                                     break
                         if not link:
-                            print(f"[DEBUG-PDF] No PDF link in div")
                             continue
 
                         href = link.get('href', '')
@@ -1606,16 +1605,19 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
                         title = re.sub(r'^\s*[\-–—]\s*', '', title).strip()
 
                         if not title or len(title) < 15:
+                            print(f"[DEBUG-PDF] Title too short: {len(title) if title else 0}")
                             continue
 
                         url_normalized = href.split('?')[0].rstrip('/')
                         if url_normalized in seen_urls:
+                            print(f"[DEBUG-PDF] Already seen: {url_normalized}")
                             continue
 
                         # Check date range
                         if date_str:
                             try:
                                 if datetime.strptime(date_str, '%Y-%m-%d') < cutoff_date:
+                                    print(f"[DEBUG-PDF] Date too old: {date_str}")
                                     continue
                             except:
                                 pass
@@ -1631,6 +1633,8 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
                         print(f"[PDF-NEWS] {title[:50]}... | {date_str or 'no date'}")
                     except Exception as e:
                         print(f"[DEBUG-PDF] Exception: {e}")
+                        import traceback
+                        traceback.print_exc()
                         continue
 
                 # ============================================================
