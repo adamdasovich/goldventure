@@ -19,3 +19,19 @@ Thumbs.db
 
 # Logs
 *.log
+
+# ChromaDB database files
+backend/chroma_db/
+
+# Celery
+backend/celerybeat-schedule
+
+# Backup files
+*.backup
+
+# Temporary scripts
+backend/company_scraper.py
+backend/onboard_company.py
+
+# PM2 ecosystem config (server-specific)
+ecosystem.config.js
