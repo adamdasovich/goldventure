@@ -1719,7 +1719,7 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
 
                         # Try date class elements
                         if not date_str:
-                            date_elem = entry.select_one('.entry-date, .post-date, .date, .posted-on')
+                            date_elem = entry.select_one('.entry-date, .post-date, .date, .posted-on, span.published, .post-meta span')
                             if date_elem:
                                 date_str = parse_date_standalone(date_elem.get_text(strip=True))
 
