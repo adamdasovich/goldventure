@@ -1560,17 +1560,11 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
                 # STRATEGY 5a: 55 North Mining - Homepage PDF news pattern
                 # News links to PDFs with date in span, title as text
                 # ============================================================
-                pdf_divs = soup.select('div.news')
-                if pdf_divs:
-                    print(f"[DEBUG-PDF] Found {len(pdf_divs)} div.news elements on {news_url}")
-                for news_div in pdf_divs:
+                for news_div in soup.select('div.news'):
                     try:
-                        # Find PDF link - try multiple approaches
-                        link = news_div.select_one('a[href$=".pdf"]')  # ends with .pdf
+                        # Find PDF link
+                        link = news_div.select_one('a[href$=".pdf"], a[href*=".pdf"]')
                         if not link:
-                            link = news_div.select_one('a[href*=".pdf"]')  # contains .pdf
-                        if not link:
-                            # Fallback: any link with pdf in href
                             for a in news_div.select('a'):
                                 if '.pdf' in a.get('href', '').lower():
                                     link = a
@@ -1582,7 +1576,6 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
                         if not href:
                             continue
 
-                        # Build full URL for PDF
                         if not href.startswith('http'):
                             href = urljoin(news_url, href)
 
@@ -1593,31 +1586,24 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
                             date_text = date_span.get_text(strip=True).lstrip('\xa0').strip()
                             date_str = parse_date_standalone(date_text)
 
-                        # Extract title - get text after the icon/date
+                        # Extract title
                         full_text = link.get_text(separator=' ', strip=True)
-                        # Remove date portion and clean up
                         title = full_text
                         if date_span:
                             date_text = date_span.get_text(strip=True)
                             title = full_text.replace(date_text, '').strip()
-
-                        # Clean up title
                         title = re.sub(r'^\s*[\-–—]\s*', '', title).strip()
 
                         if not title or len(title) < 15:
-                            print(f"[DEBUG-PDF] Title too short: {len(title) if title else 0}")
                             continue
 
                         url_normalized = href.split('?')[0].rstrip('/')
                         if url_normalized in seen_urls:
-                            print(f"[DEBUG-PDF] Already seen: {url_normalized}")
                             continue
 
-                        # Check date range
                         if date_str:
                             try:
                                 if datetime.strptime(date_str, '%Y-%m-%d') < cutoff_date:
-                                    print(f"[DEBUG-PDF] Date too old: {date_str}")
                                     continue
                             except:
                                 pass
@@ -1631,10 +1617,7 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
                             'year': date_str[:4] if date_str else None
                         })
                         print(f"[PDF-NEWS] {title[:50]}... | {date_str or 'no date'}")
-                    except Exception as e:
-                        print(f"[DEBUG-PDF] Exception: {e}")
-                        import traceback
-                        traceback.print_exc()
+                    except Exception:
                         continue
 
                 # ============================================================
