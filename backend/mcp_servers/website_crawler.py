@@ -190,6 +190,17 @@ def parse_date_standalone(text: str) -> Optional[str]:
         year = match.group(3)
         return f"{year}-{month}-{day}"
 
+    # Mon DD, YYYY - with comma (55 North Mining: Jul 7, 2025)
+    match = re.match(
+        r'^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{1,2}),\s*(20\d{2})$',
+        text, re.IGNORECASE
+    )
+    if match:
+        month = MONTH_MAP.get(match.group(1).lower(), '01')
+        day = match.group(2).zfill(2)
+        year = match.group(3)
+        return f"{year}-{month}-{day}"
+
     # MM/DD/YYYY
     match = re.match(r'^(\d{1,2})/(\d{1,2})/(20\d{2})$', text)
     if match:
