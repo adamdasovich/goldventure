@@ -4,8 +4,10 @@ import PropertyDetailClient from './PropertyDetailClient';
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
 async function getProperty(slug: string) {
+  const fetchUrl = `${API_URL}/properties/listings/${slug}/`;
+  
   try {
-    const response = await fetch(`${API_URL}/properties/listings/${slug}/`, {
+    const response = await fetch(fetchUrl, {
       cache: 'no-store'
     });
 
@@ -20,8 +22,13 @@ async function getProperty(slug: string) {
   }
 }
 
-export async function generateMetadata({ params }: { params: { slug: string } }): Promise<Metadata> {
-  const property = await getProperty(params.slug);
+type Props = {
+  params: Promise<{ slug: string }>;
+};
+
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const { slug } = await params;
+  const property = await getProperty(slug);
 
   if (!property) {
     return {
@@ -29,15 +36,6 @@ export async function generateMetadata({ params }: { params: { slug: string } })
       description: 'The requested property listing could not be found.',
     };
   }
-
-  const formatPrice = (price: number | null, currency: string) => {
-    if (!price) return 'Contact for Price';
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: currency || 'CAD',
-      maximumFractionDigits: 0,
-    }).format(price);
-  };
 
   const title = `${property.title} - ${property.province_state}, ${property.country_display}`;
   const description = property.summary || property.description?.slice(0, 155) ||
@@ -57,7 +55,7 @@ export async function generateMetadata({ params }: { params: { slug: string } })
       description,
       type: 'article',
       images,
-      url: `https://juniorminingintelligence.com/properties/${params.slug}`,
+      url: `https://juniorminingintelligence.com/properties/${slug}`,
     },
     twitter: {
       card: 'summary_large_image',
@@ -66,7 +64,7 @@ export async function generateMetadata({ params }: { params: { slug: string } })
       images,
     },
     alternates: {
-      canonical: `https://juniorminingintelligence.com/properties/${params.slug}`,
+      canonical: `https://juniorminingintelligence.com/properties/${slug}`,
     },
   };
 }

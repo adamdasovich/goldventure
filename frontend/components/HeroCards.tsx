@@ -174,8 +174,8 @@ export function HeroCards({ onLoginClick, onRegisterClick }: HeroCardsProps) {
         </CardHeader>
         <CardContent className="pt-2">
           {data?.upcoming_events && data.upcoming_events.length > 0 ? (
-            <div className="space-y-3">
-              {data.upcoming_events.slice(0, 3).map((event) => (
+            <div className="max-h-[280px] overflow-y-auto space-y-3 pr-1">
+              {data.upcoming_events.map((event) => (
                 <Link
                   key={event.id}
                   href={`/companies/${event.company_id}`}
@@ -238,8 +238,8 @@ export function HeroCards({ onLoginClick, onRegisterClick }: HeroCardsProps) {
         </CardHeader>
         <CardContent className="pt-2">
           {data?.active_financings && data.active_financings.length > 0 ? (
-            <div className="space-y-3">
-              {data.active_financings.slice(0, 3).map((financing) => (
+            <div className="max-h-[280px] overflow-y-auto space-y-3 pr-1">
+              {data.active_financings.map((financing) => (
                 <Link
                   key={financing.id}
                   href={`/companies/${financing.company_id}/financing`}
@@ -271,11 +271,6 @@ export function HeroCards({ onLoginClick, onRegisterClick }: HeroCardsProps) {
                   </div>
                 </Link>
               ))}
-              {data.active_financings.length > 3 && (
-                <p className="text-xs text-slate-500 text-center mt-2">
-                  +{data.active_financings.length - 3} more opportunities
-                </p>
-              )}
             </div>
           ) : (
             <div className="text-center py-8 text-slate-500">
@@ -309,7 +304,7 @@ export function HeroCards({ onLoginClick, onRegisterClick }: HeroCardsProps) {
               onClick={(e) => handleCardClick(e, true, `/properties/${data.featured_property!.slug}`)}
               className="block"
             >
-              <div className="space-y-3">
+              <div className="max-h-[280px] overflow-y-auto space-y-3 pr-1">
                 {/* Property Image */}
                 {data.featured_property.primary_image_url ? (
                   <div className="relative h-32 rounded-lg overflow-hidden">
