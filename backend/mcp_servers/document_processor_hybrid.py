@@ -169,19 +169,58 @@ class HybridDocumentProcessor(BaseMCPServer):
     # =============================================================================
 
     def _download_pdf(self, url: str) -> Path:
-        """Download PDF to temporary file"""
-        try:
-            response = requests.get(url, timeout=30)
-            response.raise_for_status()
+        """Download PDF to temporary file with retry logic and proper headers"""
+        import time
 
-            # Create temp file
-            temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.pdf')
-            temp_file.write(response.content)
-            temp_file.close()
+        # Use realistic browser headers to avoid 403 blocks
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': 'application/pdf,application/octet-stream,*/*',
+            'Accept-Language': 'en-US,en;q=0.9',
+            'Accept-Encoding': 'gzip, deflate, br',
+            'Connection': 'keep-alive',
+            'Referer': '/'.join(url.split('/')[:3]) + '/',  # Set referer to domain root
+        }
 
-            return Path(temp_file.name)
-        except Exception as e:
-            raise Exception(f"Failed to download PDF: {str(e)}")
+        max_retries = 3
+        last_error = None
+
+        for attempt in range(max_retries):
+            try:
+                response = requests.get(url, headers=headers, timeout=60, allow_redirects=True)
+                response.raise_for_status()
+
+                # Create temp file
+                temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.pdf')
+                temp_file.write(response.content)
+                temp_file.close()
+
+                return Path(temp_file.name)
+            except requests.exceptions.HTTPError as e:
+                last_error = e
+                if e.response.status_code == 403:
+                    # Exponential backoff for 403 errors
+                    wait_time = 2 ** attempt
+                    print(f"[PDF DOWNLOAD] 403 Forbidden, retrying in {wait_time}s... (attempt {attempt + 1}/{max_retries})")
+                    time.sleep(wait_time)
+                    continue
+                elif e.response.status_code == 404:
+                    # Don't retry 404s
+                    raise Exception(f"Failed to download PDF: {str(e)}")
+                else:
+                    # Other HTTP errors - retry with backoff
+                    time.sleep(2 ** attempt)
+                    continue
+            except requests.exceptions.Timeout:
+                last_error = Exception(f"Request timed out after 60s")
+                time.sleep(2 ** attempt)
+                continue
+            except Exception as e:
+                last_error = e
+                time.sleep(2 ** attempt)
+                continue
+
+        raise Exception(f"Failed to download PDF after {max_retries} attempts: {str(last_error)}")
 
     def _process_with_docling(self, pdf_path: Path) -> Dict:
         """Extract structure and content using Docling"""

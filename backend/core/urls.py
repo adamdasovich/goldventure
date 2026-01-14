@@ -131,6 +131,9 @@ urlpatterns = [
     path('admin/companies/failed-discoveries/', views.list_failed_discoveries, name='list_failed_discoveries'),
     path('admin/companies/failed-discoveries/<int:discovery_id>/retry/', views.retry_failed_discovery, name='retry_failed_discovery'),
 
+    # Document Processing Summary (Superuser Dashboard)
+    path('admin/document-summary/', views.document_processing_summary, name='document_processing_summary'),
+
     # ViewSet routes
     path('', include(router.urls)),
 ]
