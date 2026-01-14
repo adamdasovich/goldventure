@@ -1010,14 +1010,25 @@ async def crawl_news_releases(url: str, months: int = 6, max_depth: int = 2) -> 
     # Use optimized HTML-only extraction (much faster than recursive PDF crawl)
     html_news = await crawl_html_news_pages(url, months=months)
 
-    # Deduplicate by URL
+    # Deduplicate by URL AND title (same news can have multiple URLs)
     seen_urls = set()
+    seen_titles = set()
     unique_news = []
     for news in html_news:
         url_normalized = news['url'].split('?')[0].rstrip('/')
-        if url_normalized not in seen_urls:
-            seen_urls.add(url_normalized)
-            unique_news.append(news)
+        # Normalize title for comparison (lowercase, remove extra spaces)
+        title_normalized = re.sub(r'\s+', ' ', news.get('title', '').lower().strip())
+        
+        # Skip if we've seen this URL or a very similar title
+        if url_normalized in seen_urls:
+            continue
+        if title_normalized and title_normalized in seen_titles:
+            continue
+            
+        seen_urls.add(url_normalized)
+        if title_normalized:
+            seen_titles.add(title_normalized)
+        unique_news.append(news)
 
     # Sort: items with dates first (newest first), then items without dates
     with_dates = sorted([n for n in unique_news if n.get('date')], key=lambda x: x['date'], reverse=True)
