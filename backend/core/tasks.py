@@ -460,6 +460,18 @@ def scrape_company_news_task(self, company_id):
             else:
                 updated_count += 1
 
+        # Auto-process news content into vector database for semantic search
+        if created_count > 0:
+            try:
+                from mcp_servers.news_content_processor import NewsContentProcessor
+                processor = NewsContentProcessor(company_id=company.id)
+                process_result = processor._process_company_news(company.name, limit=created_count + 5)
+                chunks_created = process_result.get('chunks_created', 0)
+                print(f"  Processed {process_result.get('news_items_processed', 0)} news items into {chunks_created} searchable chunks")
+            except Exception as e:
+                print(f"  Warning: News content processing failed: {str(e)}")
+                # Don't fail the whole task if content processing fails
+
         return {
             'status': 'success',
             'company': company.name,

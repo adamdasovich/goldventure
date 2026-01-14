@@ -1234,9 +1234,9 @@ def _extract_news_from_element(element, source_url: str, base_url: str) -> Optio
         if not is_valid_news_title(title):
             return None
 
-        # Build full URL
+        # Build full URL - use source_url (current page) for proper path resolution
         if link_url and not link_url.startswith('http'):
-            link_url = urljoin(base_url, link_url)
+            link_url = urljoin(source_url, link_url)
 
         return {
             'title': title,
@@ -1356,7 +1356,7 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
                     seen_urls.add(url_normalized)
                     news_releases.append({
                         'title': title,
-                        'url': href,
+                        'url': urljoin(news_url, href),
                         'date': date_str,
                         'document_type': 'news_release',
                         'year': date_str[:4] if date_str else None
@@ -1420,7 +1420,7 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
                         seen_urls.add(url_normalized)
                         news_releases.append({
                             'title': clean_news_title(title, href),
-                            'url': href,
+                            'url': urljoin(news_url, href),
                             'date': date_str,
                             'document_type': 'news_release',
                             'year': date_str[:4] if date_str else None
@@ -1493,7 +1493,7 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
                         seen_urls.add(url_normalized)
                         news_releases.append({
                             'title': clean_news_title(title, href),
-                            'url': href,
+                            'url': urljoin(news_url, href),
                             'date': date_str,
                             'document_type': 'news_release',
                             'year': year_str
@@ -1558,7 +1558,7 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
                         seen_urls.add(url_normalized)
                         news_releases.append({
                             'title': clean_news_title(title, href),
-                            'url': href,
+                            'url': urljoin(news_url, href),
                             'date': date_str,
                             'document_type': 'news_release',
                             'year': date_str[:4] if date_str else None
@@ -1622,7 +1622,7 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
                         seen_urls.add(url_normalized)
                         news_releases.append({
                             'title': clean_news_title(title, href),
-                            'url': href,
+                            'url': urljoin(news_url, href),
                             'date': date_str,
                             'document_type': 'news_release',
                             'year': date_str[:4] if date_str else None
@@ -1688,7 +1688,7 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
                         seen_urls.add(url_normalized)
                         news_releases.append({
                             'title': clean_news_title(title, href),
-                            'url': href,
+                            'url': urljoin(news_url, href),
                             'date': date_str,
                             'document_type': 'news_release',
                             'year': date_str[:4] if date_str else None
@@ -1753,7 +1753,7 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
                         seen_urls.add(url_normalized)
                         news_releases.append({
                             'title': clean_news_title(title, href),
-                            'url': href,
+                            'url': urljoin(news_url, href),
                             'date': date_str,
                             'document_type': 'news_release',
                             'year': date_str[:4] if date_str else None
