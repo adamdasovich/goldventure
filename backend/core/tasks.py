@@ -352,6 +352,18 @@ def scrape_company_news_task(self, company_id):
                 )
                 created = True
 
+            # Also create/update CompanyNews record (used by frontend API)
+            from core.models import CompanyNews
+            CompanyNews.objects.update_or_create(
+                company=company,
+                source_url=url,
+                defaults={
+                    "title": title,
+                    "publication_date": release_date,
+                    "news_type": "corporate",
+                }
+            )
+
             if created:
                 created_count += 1
 

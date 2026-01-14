@@ -6640,7 +6640,30 @@ def _save_scraped_company_data(data: dict, source_url: str, update_existing: boo
     from datetime import datetime
     news_processing_jobs = []
 
-    for news_item in data.get('news', [])[:50]:
+    # FALLBACK: If company_scraper found no news, use website_crawler which has better extraction
+    news_items = data.get('news', [])
+    if not news_items and company and company.website:
+        try:
+            import asyncio
+            from mcp_servers.website_crawler import crawl_news_releases
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                crawler_news = loop.run_until_complete(crawl_news_releases(company.website, months=12))
+                news_items = []
+                for item in crawler_news:
+                    news_items.append({
+                        'title': item.get('title', ''),
+                        'source_url': item.get('url', ''),
+                        'publication_date': item.get('date'),
+                    })
+                print(f"[FALLBACK] website_crawler found {len(news_items)} news items")
+            finally:
+                loop.close()
+        except Exception as e:
+            print(f"[FALLBACK] website_crawler error: {e}")
+
+    for news_item in news_items[:50]:
         pub_date = None
         if news_item.get('publication_date'):
             try:
