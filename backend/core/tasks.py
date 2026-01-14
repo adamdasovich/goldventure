@@ -354,7 +354,7 @@ def scrape_company_news_task(self, company_id):
 
             # Also create/update CompanyNews record (used by frontend API)
             from core.models import CompanyNews
-            CompanyNews.objects.update_or_create(
+            news_record, _ = CompanyNews.objects.update_or_create(
                 company=company,
                 source_url=url,
                 defaults={
@@ -363,6 +363,20 @@ def scrape_company_news_task(self, company_id):
                     "news_type": "corporate",
                 }
             )
+
+            # Create document processing job for PDF news releases (for vector DB)
+            if url and '.pdf' in url.lower():
+                from core.models import DocumentProcessingJob
+                existing_job = DocumentProcessingJob.objects.filter(url=url).exists()
+                if not existing_job:
+                    job = DocumentProcessingJob.objects.create(
+                        url=url,
+                        document_type='news_release',
+                        company_name=company.name,
+                        status='pending'
+                    )
+                    news_record.processing_job = job
+                    news_record.save(update_fields=['processing_job'])
 
             if created:
                 created_count += 1
