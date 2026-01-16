@@ -350,23 +350,24 @@ class DocumentProcessor:
     def extract_text(self, file_path: Path) -> Tuple[Optional[str], int, Optional[str]]:
         """Extract text from PDF using Docling (with OCR support for image-based PDFs)"""
         try:
-            from docling.document_converter import DocumentConverter
+            from docling.document_converter import DocumentConverter, PdfFormatOption
             from docling.datamodel.base_models import InputFormat
             from docling.datamodel.pipeline_options import PdfPipelineOptions
-            from docling.backend.pypdfium2_backend import PyPdfiumDocumentBackend
 
             logger.info(f"Extracting text from {file_path} using Docling")
             start_time = time.time()
 
             # Configure Docling with OCR enabled for image-based PDFs
-            pipeline_options = PdfPipelineOptions()
-            pipeline_options.do_ocr = True  # Enable OCR for scanned/image PDFs
-            pipeline_options.do_table_structure = True  # Extract table structure
+            pipeline_options = PdfPipelineOptions(
+                do_ocr=True,  # Enable OCR for scanned/image PDFs
+                do_table_structure=True  # Extract table structure
+            )
             
+            # Create converter with PDF format options
             converter = DocumentConverter(
-                allowed_formats=[InputFormat.PDF],
-                pdf_backend=PyPdfiumDocumentBackend,
-                pipeline_options={InputFormat.PDF: pipeline_options}
+                format_options={
+                    InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options)
+                }
             )
 
             # Convert the document
