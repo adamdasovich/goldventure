@@ -359,11 +359,11 @@ class GPUOrchestrator:
                 timeout=60
             )
 
-            # Start worker in background - use 'sh -c' with exit to ensure SSH returns
+            # Start worker in background - use 'bash -c' because 'source' is bash-only
             subprocess.run(
                 ['ssh', '-o', 'StrictHostKeyChecking=no', '-o', 'ConnectTimeout=10',
                  f'root@{self.gpu_droplet_ip}',
-                 'sh -c "cd /opt/goldventure && source venv/bin/activate && nohup python gpu_worker.py > /var/log/gpu_worker.log 2>&1 &" && exit 0'],
+                 'bash -c "cd /opt/goldventure && source venv/bin/activate && nohup python gpu_worker.py > /var/log/gpu_worker.log 2>&1 &"'],
                 timeout=60
             )
 
