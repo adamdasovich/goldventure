@@ -124,7 +124,7 @@ class GPUOrchestrator:
 
     def _load_state(self):
         """Load orchestrator state from file"""
-        state_file = Path('/var/run/gpu_orchestrator_state.json')
+        state_file = Path('/tmp/gpu_orchestrator_state.json')
         if state_file.exists():
             try:
                 with open(state_file) as f:
@@ -139,7 +139,7 @@ class GPUOrchestrator:
 
     def _save_state(self):
         """Save orchestrator state to file"""
-        state_file = Path('/var/run/gpu_orchestrator_state.json')
+        state_file = Path('/tmp/gpu_orchestrator_state.json')
         state = {
             'droplet_id': self.gpu_droplet_id,
             'droplet_ip': self.gpu_droplet_ip,
