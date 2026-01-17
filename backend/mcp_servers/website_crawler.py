@@ -1249,6 +1249,37 @@ def _extract_news_from_element(element, source_url: str, base_url: str) -> Optio
         return None
 
 
+def _add_news_item(news_by_url: Dict[str, Dict], news: Dict, cutoff_date: datetime, source: str) -> bool:
+    """
+    Add news item to collection, preferring items WITH dates over items WITHOUT dates.
+    Returns True if item was added/updated, False if skipped.
+    """
+    url_norm = news['url'].split('?')[0].rstrip('/')
+
+    # Check date range first
+    if news.get('date'):
+        try:
+            if datetime.strptime(news['date'], '%Y-%m-%d') < cutoff_date:
+                return False
+        except:
+            pass
+
+    # If URL not seen yet, add it
+    if url_norm not in news_by_url:
+        news_by_url[url_norm] = news
+        print(f"[{source}] {news['title'][:50]}... | {news.get('date', 'no date')}")
+        return True
+
+    # URL already exists - update if new item has date and existing doesn't
+    existing = news_by_url[url_norm]
+    if news.get('date') and not existing.get('date'):
+        news_by_url[url_norm] = news
+        print(f"[{source}] UPDATED with date: {news['title'][:50]}... | {news.get('date')}")
+        return True
+
+    return False
+
+
 async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
     """
     Crawl HTML news pages from a company website.
@@ -1261,8 +1292,7 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
     Returns:
         List of news release dictionaries with title, url, date
     """
-    news_releases = []
-    seen_urls = set()
+    news_by_url: Dict[str, Dict] = {}  # Map URL -> news item (prefer items with dates)
     cutoff_date = datetime.now() - timedelta(days=months * 30)
 
     browser_config = BrowserConfig(
@@ -1342,26 +1372,14 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
                     if len(title) < 15:
                         continue
 
-                    url_normalized = href.split('?')[0].rstrip('/')
-                    if url_normalized in seen_urls:
-                        continue
-
-                    # Check date range
-                    try:
-                        if datetime.strptime(date_str, '%Y-%m-%d') < cutoff_date:
-                            continue
-                    except:
-                        pass
-
-                    seen_urls.add(url_normalized)
-                    news_releases.append({
+                    news = {
                         'title': title,
                         'url': urljoin(news_url, href),
                         'date': date_str,
                         'document_type': 'news_release',
                         'year': date_str[:4] if date_str else None
-                    })
-                    print(f"[G2] {title[:50]}... | {date_str}")
+                    }
+                    _add_news_item(news_by_url, news, cutoff_date, "G2")
 
                 # ============================================================
                 # STRATEGY 2: WordPress/document card news (Canada Nickel)
@@ -1405,27 +1423,14 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
                         if href and not href.startswith('http'):
                             href = urljoin(url, href)
 
-                        url_normalized = href.split('?')[0].rstrip('/')
-                        if url_normalized in seen_urls:
-                            continue
-
-                        # Check date range
-                        if date_str:
-                            try:
-                                if datetime.strptime(date_str, '%Y-%m-%d') < cutoff_date:
-                                    continue
-                            except:
-                                pass
-
-                        seen_urls.add(url_normalized)
-                        news_releases.append({
+                        news = {
                             'title': clean_news_title(title, href),
                             'url': urljoin(news_url, href),
                             'date': date_str,
                             'document_type': 'news_release',
                             'year': date_str[:4] if date_str else None
-                        })
-                        print(f"[WP-BLOCK] {title[:50]}... | {date_str or 'no date'}")
+                        }
+                        _add_news_item(news_by_url, news, cutoff_date, "WP-BLOCK")
                     except Exception:
                         continue
 
@@ -1479,26 +1484,14 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
                         if href and not href.startswith('http'):
                             href = urljoin(url, href)
 
-                        url_normalized = href.split('?')[0].rstrip('/')
-                        if url_normalized in seen_urls:
-                            continue
-
-                        # Check date range
-                        try:
-                            if datetime.strptime(date_str, '%Y-%m-%d') < cutoff_date:
-                                continue
-                        except:
-                            pass
-
-                        seen_urls.add(url_normalized)
-                        news_releases.append({
+                        news = {
                             'title': clean_news_title(title, href),
                             'url': urljoin(news_url, href),
                             'date': date_str,
                             'document_type': 'news_release',
-                            'year': year_str
-                        })
-                        print(f"[ASTON] {title[:50]}... | {date_str}")
+                            'year': date_str[:4] if date_str else None
+                        }
+                        _add_news_item(news_by_url, news, cutoff_date, "ASTON")
                     except Exception:
                         continue
 
@@ -1544,26 +1537,14 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
                         if not href.startswith('http'):
                             href = urljoin(url, href)
 
-                        url_normalized = href.split('?')[0].rstrip('/')
-                        if url_normalized in seen_urls:
-                            continue
-
-                        # Check date range
-                        try:
-                            if datetime.strptime(date_str, '%Y-%m-%d') < cutoff_date:
-                                continue
-                        except:
-                            pass
-
-                        seen_urls.add(url_normalized)
-                        news_releases.append({
+                        news = {
                             'title': clean_news_title(title, href),
                             'url': urljoin(news_url, href),
                             'date': date_str,
                             'document_type': 'news_release',
                             'year': date_str[:4] if date_str else None
-                        })
-                        print(f"[UK-GRID] {title[:50]}... | {date_str}")
+                        }
+                        _add_news_item(news_by_url, news, cutoff_date, "UK-GRID")
                     except Exception:
                         continue
 
@@ -1608,26 +1589,14 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
                         if not title or len(title) < 15:
                             continue
 
-                        url_normalized = href.split('?')[0].rstrip('/')
-                        if url_normalized in seen_urls:
-                            continue
-
-                        if date_str:
-                            try:
-                                if datetime.strptime(date_str, '%Y-%m-%d') < cutoff_date:
-                                    continue
-                            except:
-                                pass
-
-                        seen_urls.add(url_normalized)
-                        news_releases.append({
+                        news = {
                             'title': clean_news_title(title, href),
                             'url': urljoin(news_url, href),
                             'date': date_str,
                             'document_type': 'news_release',
                             'year': date_str[:4] if date_str else None
-                        })
-                        print(f"[PDF-NEWS] {title[:50]}... | {date_str or 'no date'}")
+                        }
+                        _add_news_item(news_by_url, news, cutoff_date, "PDF-NEWS")
                     except Exception:
                         continue
 
@@ -1673,27 +1642,14 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
                         if not href.startswith('http'):
                             href = urljoin(news_url, href)
 
-                        url_normalized = href.split('?')[0].rstrip('/')
-                        if url_normalized in seen_urls:
-                            continue
-
-                        # Check date range
-                        if date_str:
-                            try:
-                                if datetime.strptime(date_str, '%Y-%m-%d') < cutoff_date:
-                                    continue
-                            except:
-                                pass
-
-                        seen_urls.add(url_normalized)
-                        news_releases.append({
+                        news = {
                             'title': clean_news_title(title, href),
                             'url': urljoin(news_url, href),
                             'date': date_str,
                             'document_type': 'news_release',
                             'year': date_str[:4] if date_str else None
-                        })
-                        print(f"[ARTICLE] {title[:50]}... | {date_str or 'no date'}")
+                        }
+                        _add_news_item(news_by_url, news, cutoff_date, "ARTICLE")
                     except Exception:
                         continue
 
@@ -1738,27 +1694,14 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
                         if not href.startswith('http'):
                             href = urljoin(news_url, href)
 
-                        url_normalized = href.split('?')[0].rstrip('/')
-                        if url_normalized in seen_urls:
-                            continue
-
-                        # Check date range
-                        if date_str:
-                            try:
-                                if datetime.strptime(date_str, '%Y-%m-%d') < cutoff_date:
-                                    continue
-                            except:
-                                pass
-
-                        seen_urls.add(url_normalized)
-                        news_releases.append({
+                        news = {
                             'title': clean_news_title(title, href),
                             'url': urljoin(news_url, href),
                             'date': date_str,
                             'document_type': 'news_release',
                             'year': date_str[:4] if date_str else None
-                        })
-                        print(f"[WP-ENTRY] {title[:50]}... | {date_str or 'no date'}")
+                        }
+                        _add_news_item(news_by_url, news, cutoff_date, "WP-ENTRY")
                     except Exception:
                         continue
 
@@ -1770,18 +1713,7 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
                     for item in soup.select(selector)[:50]:
                         news = _extract_news_from_element(item, news_url, url)
                         if news:
-                            url_normalized = news['url'].split('?')[0].rstrip('/')
-                            if url_normalized not in seen_urls:
-                                # Check date range
-                                if news.get('date'):
-                                    try:
-                                        if datetime.strptime(news['date'], '%Y-%m-%d') < cutoff_date:
-                                            continue
-                                    except:
-                                        pass
-                                seen_urls.add(url_normalized)
-                                news_releases.append(news)
-                                print(f"[ITEM] {news['title'][:50]}... | {news.get('date', 'no date')}")
+                            _add_news_item(news_by_url, news, cutoff_date, "ITEM")
 
                 # ============================================================
                 # STRATEGY 3: All links - catch external news services and internal
@@ -1798,10 +1730,6 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
                         full_url = href
                     else:
                         full_url = urljoin(url, href)
-
-                    url_normalized = full_url.split('?')[0].rstrip('/')
-                    if url_normalized in seen_urls:
-                        continue
 
                     # Check if it's a news article URL (internal or external)
                     if not is_news_article_url(full_url):
@@ -1829,23 +1757,14 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
                     if not is_valid_news_title(title):
                         continue
 
-                    # Check date range
-                    if date_str:
-                        try:
-                            if datetime.strptime(date_str, '%Y-%m-%d') < cutoff_date:
-                                continue
-                        except:
-                            pass
-
-                    seen_urls.add(url_normalized)
-                    news_releases.append({
+                    news = {
                         'title': title,
                         'url': full_url,
                         'date': date_str,
                         'document_type': 'news_release',
                         'year': date_str[:4] if date_str else None
-                    })
-                    print(f"[LINK] {title[:50]}... | {date_str or 'no date'}")
+                    }
+                    _add_news_item(news_by_url, news, cutoff_date, "LINK")
 
                 # ============================================================
                 # STRATEGY 4: Elementor-based news layouts
@@ -1866,10 +1785,6 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
                         continue
 
                     full_url = urljoin(url, href) if not href.startswith('http') else href
-                    url_normalized = full_url.split('?')[0].rstrip('/')
-
-                    if url_normalized in seen_urls:
-                        continue
 
                     # Extract date using comprehensive parser
                     date_str, cleaned_title = parse_date_comprehensive(title)
@@ -1890,31 +1805,23 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
                             if date_str:
                                 break
 
-                    # Check date range
-                    if date_str:
-                        try:
-                            if datetime.strptime(date_str, '%Y-%m-%d') < cutoff_date:
-                                continue
-                        except:
-                            pass
-
                     # Clean and validate
                     title = clean_news_title(cleaned_title if cleaned_title else title, full_url)
                     if not is_valid_news_title(title):
                         continue
 
-                    seen_urls.add(url_normalized)
-                    news_releases.append({
+                    news = {
                         'title': title,
                         'url': full_url,
                         'date': date_str,
                         'document_type': 'news_release',
                         'year': date_str[:4] if date_str else None
-                    })
-                    print(f"[ELEMENTOR] {title[:50]}... | {date_str or 'no date'}")
+                    }
+                    _add_news_item(news_by_url, news, cutoff_date, "ELEMENTOR")
 
             except Exception as e:
                 # Silently continue if this news URL doesn't exist
                 continue
 
-    return news_releases
+    # Return deduplicated news items as list
+    return list(news_by_url.values())
