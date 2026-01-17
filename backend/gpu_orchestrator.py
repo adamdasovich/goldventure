@@ -645,8 +645,10 @@ CHROMA_PORT=8002
                 if self.should_destroy_gpu():
                     self.destroy_gpu_droplet()
 
-                # SAFETY: Always check for old/orphaned droplets every loop iteration
-                self.cleanup_orphaned_droplets()
+                # Note: cleanup_orphaned_droplets() is only called at startup now,
+                # not in the main loop. This prevents race conditions where multiple
+                # orchestrator instances could destroy each other's droplets.
+                # The MAX_GPU_RUNTIME safety is still enforced via should_destroy_gpu().
 
                 # Check GPU worker health if active and there's work to do
                 pending = self.get_pending_heavy_jobs()
