@@ -97,6 +97,7 @@ class GPUOrchestrator:
     GPU_STARTUP_TIMEOUT = 300  # 5 minutes to boot
     GPU_IDLE_TIMEOUT = 300  # Destroy after 5 minutes idle
     MAX_GPU_RUNTIME = 7200  # Force destroy after 2 hours (safety)
+    JOB_STUCK_TIMEOUT = 900  # Mark job as failed after 15 minutes processing
 
     # Job types that require GPU processing
     # NOTE: company_scrape removed - it's just HTTP/BeautifulSoup, no GPU needed
@@ -184,6 +185,38 @@ class GPUOrchestrator:
             document_type__in=self.HEAVY_JOB_TYPES
         ).count()
         return count
+
+    def check_and_handle_stuck_jobs(self) -> int:
+        """Check for jobs stuck in 'processing' state and mark them as failed.
+
+        Returns the number of stuck jobs that were marked as failed.
+        """
+        from django.utils import timezone
+        stuck_threshold = timezone.now() - timedelta(seconds=self.JOB_STUCK_TIMEOUT)
+
+        # Find jobs that started processing more than JOB_STUCK_TIMEOUT ago
+        stuck_jobs = DocumentProcessingJob.objects.filter(
+            status='processing',
+            document_type__in=self.HEAVY_JOB_TYPES,
+            started_at__lt=stuck_threshold
+        )
+
+        stuck_count = 0
+        for job in stuck_jobs:
+            job_runtime = (timezone.now() - job.started_at).total_seconds() / 60
+            logger.warning(
+                f"Job {job.id} ({job.document_type}) stuck for {job_runtime:.1f} minutes, marking as failed"
+            )
+            job.status = 'failed'
+            job.error_message = f"Job timed out after {job_runtime:.1f} minutes (stuck job detection)"
+            job.completed_at = timezone.now()
+            job.save()
+            stuck_count += 1
+
+        if stuck_count > 0:
+            logger.info(f"Marked {stuck_count} stuck job(s) as failed")
+
+        return stuck_count
 
     def create_gpu_droplet(self) -> bool:
         """Create a new GPU droplet"""
@@ -620,6 +653,14 @@ CHROMA_PORT=8002
 
                 # SAFETY: Always check for old/orphaned droplets every loop iteration
                 self.cleanup_orphaned_droplets()
+
+                # Check for stuck jobs and mark them as failed
+                stuck_count = self.check_and_handle_stuck_jobs()
+                if stuck_count > 0 and self.gpu_droplet_id:
+                    # If we found stuck jobs, the GPU worker is likely dead/frozen
+                    # Destroy the droplet to stop costs and let it recreate if needed
+                    logger.warning(f"Found {stuck_count} stuck jobs - destroying GPU droplet")
+                    self.destroy_gpu_droplet()
 
                 # Check GPU worker health if active and there's work to do
                 pending = self.get_pending_heavy_jobs()
