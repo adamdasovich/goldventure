@@ -621,16 +621,49 @@ def auto_discover_and_process_documents_task(self, company_ids=None, document_ty
                 
                 # Discover documents
                 documents = asyncio.run(crawl_company_website(company.website, max_depth=2))
-                
+
                 if not documents:
                     print(f"  No documents discovered for {company.name}")
                     continue
-                
+
                 # Filter by document type if specified
                 if document_types:
                     documents = [d for d in documents if d['document_type'] in document_types]
-                
-                print(f"  Discovered {len(documents)} documents")
+
+                # IMPORTANT: Filter to only important recent documents
+                # Keep: most recent NI 43-101, most recent PEA, recent presentations, recent financials
+                filtered_docs = []
+                seen_types = set()
+
+                # Important document types - keep only the most recent of each
+                priority_types = ['ni_43_101', 'pea', 'feasibility_study', 'resource_estimate']
+
+                # Sort by date (newest first) if dates available
+                documents.sort(key=lambda x: x.get('date') or '0000-00-00', reverse=True)
+
+                for doc in documents:
+                    doc_type = doc.get('document_type', 'other')
+
+                    # For priority types, only keep the most recent one
+                    if doc_type in priority_types:
+                        if doc_type not in seen_types:
+                            filtered_docs.append(doc)
+                            seen_types.add(doc_type)
+                            print(f"    [KEEP] {doc_type}: {doc.get('title', 'No title')[:50]}")
+
+                    # For presentations, keep most recent only
+                    elif doc_type == 'presentation':
+                        if 'presentation' not in seen_types:
+                            filtered_docs.append(doc)
+                            seen_types.add('presentation')
+                            print(f"    [KEEP] presentation: {doc.get('title', 'No title')[:50]}")
+
+                    # Skip old financial statements, news releases (handled separately), and 'other' types
+                    elif doc_type in ['financial_statement', 'news_release', 'other']:
+                        continue
+
+                documents = filtered_docs
+                print(f"  Filtered to {len(documents)} important documents (from {len(documents)} discovered)")
                 total_discovered += len(documents)
                 
                 # Create processing jobs (skip existing)
