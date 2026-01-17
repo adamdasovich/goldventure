@@ -580,13 +580,9 @@ CHROMA_PORT=8002
         """Destroy any GPU droplets that are orphaned OR older than MAX_GPU_RUNTIME.
         This is a hard safety limit that works even if the orchestrator restarts."""
         try:
-            # GPU droplets require type=gpus parameter to be listed
-            # Note: Can't combine type and tag_name, so we filter by name prefix in code
-            response = self._api_request('GET', 'droplets?type=gpus&per_page=100')
-            all_droplets = response.get('droplets', [])
-
-            # Filter to only our GPU worker droplets by name prefix
-            droplets = [d for d in all_droplets if d.get('name', '').startswith('goldventure-gpu-worker')]
+            # List droplets by tag - GPU droplets show up in regular droplet API when tagged
+            response = self._api_request('GET', 'droplets?tag_name=gpu-worker&per_page=100')
+            droplets = response.get('droplets', [])
 
             for droplet in droplets:
                 droplet_id = str(droplet.get('id'))
