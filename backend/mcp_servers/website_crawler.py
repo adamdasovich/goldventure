@@ -979,17 +979,151 @@ class MiningDocumentCrawler:
         return score
 
 
+async def crawl_technical_documents(url: str) -> List[Dict]:
+    """
+    Crawl common technical document page patterns to find NI 43-101 reports, PEAs, etc.
+    This handles deeply nested technical document pages that recursive crawling might miss.
+    """
+    from urllib.parse import urljoin
+
+    browser_config = BrowserConfig(headless=True, verbose=False)
+    crawler_config = CrawlerRunConfig(cache_mode="bypass")
+
+    technical_docs = []
+    seen_urls = set()
+
+    # Common technical document URL patterns
+    tech_doc_patterns = [
+        '/technical-documents/',
+        '/technical-reports/',
+        '/technical/',
+        '/reports/',
+        '/ni-43-101/',
+        '/43-101/',
+        '/investors/reports/',
+        '/investors/technical-reports/',
+        '/investor-relations/reports/',
+        '/investor-relations/technical-reports/',
+    ]
+
+    async with AsyncWebCrawler(config=browser_config) as crawler:
+        # First, try to find project pages that might have technical documents
+        try:
+            result = await crawler.arun(url=url, config=crawler_config)
+            if result.success:
+                soup = BeautifulSoup(result.html, 'html.parser')
+
+                # Find project links that might lead to technical documents
+                for link in soup.find_all('a', href=True):
+                    href = link.get('href', '')
+                    text = link.get_text(strip=True).lower()
+
+                    # Check if this is a project page or technical page
+                    if any(kw in href.lower() or kw in text for kw in ['project', 'technical', 'reports', '43-101']):
+                        full_url = urljoin(url, href)
+                        if full_url not in seen_urls and url.split('/')[2] in full_url:
+                            tech_doc_patterns.append(href if href.startswith('/') else '/' + href.split('/', 3)[-1] if '/' in href else '')
+        except:
+            pass
+
+        # Now check each technical document pattern
+        for pattern in tech_doc_patterns:
+            if not pattern:
+                continue
+            tech_url = urljoin(url.rstrip('/'), pattern)
+
+            if tech_url in seen_urls:
+                continue
+            seen_urls.add(tech_url)
+
+            try:
+                result = await crawler.arun(url=tech_url, config=crawler_config)
+                if not result.success:
+                    continue
+
+                print(f"[TECH-DOCS] Scanning: {tech_url}")
+                soup = BeautifulSoup(result.html, 'html.parser')
+
+                # Find all PDF links
+                for link in soup.find_all('a', href=True):
+                    href = link.get('href', '')
+                    if '.pdf' not in href.lower():
+                        continue
+
+                    pdf_url = urljoin(tech_url, href)
+                    if pdf_url in seen_urls:
+                        continue
+                    seen_urls.add(pdf_url)
+
+                    # Get title from link text or nearby elements
+                    title = link.get_text(strip=True)
+                    if not title or len(title) < 10:
+                        # Try parent element
+                        parent = link.parent
+                        if parent:
+                            title = parent.get_text(strip=True)
+
+                    # Clean up title
+                    title = re.sub(r'\s+', ' ', title).strip()
+                    if len(title) > 200:
+                        title = title[:200] + '...'
+
+                    # Determine document type
+                    combined_lower = (title + ' ' + pdf_url).lower()
+                    doc_type = 'technical_report'
+
+                    if any(kw in combined_lower for kw in ['ni 43-101', 'ni43-101', '43-101']):
+                        doc_type = 'ni_43_101'
+                    elif any(kw in combined_lower for kw in ['pea', 'preliminary economic']):
+                        doc_type = 'pea'
+                    elif any(kw in combined_lower for kw in ['feasibility', 'prefeasibility', 'pre-feasibility']):
+                        doc_type = 'feasibility_study'
+                    elif any(kw in combined_lower for kw in ['resource estimate', 'mineral resource']):
+                        doc_type = 'resource_estimate'
+
+                    technical_docs.append({
+                        'url': pdf_url,
+                        'title': title if title else 'Technical Document',
+                        'document_type': doc_type,
+                        'source': 'technical_documents_page'
+                    })
+                    print(f"[TECH-DOCS] Found: {title[:60]}... ({doc_type})")
+
+            except Exception as e:
+                continue
+
+    return technical_docs
+
+
 async def crawl_company_website(url: str, max_depth: int = 2) -> List[Dict]:
     """
     Convenience function to crawl a company website
-    Returns list of discovered documents
+    Returns list of discovered documents including technical reports from deep pages
     """
     crawler = MiningDocumentCrawler()
+
+    # Standard recursive document discovery
     documents = await crawler.discover_documents(
         start_url=url,
         max_depth=max_depth,
         max_pages=50
     )
+
+    # Also crawl technical document pages (catches deeply nested NI 43-101 reports)
+    try:
+        tech_docs = await crawl_technical_documents(url)
+        if tech_docs:
+            print(f"[CRAWL] Found {len(tech_docs)} additional technical documents")
+            # Merge and deduplicate by URL
+            seen_urls = {d['url'].split('?')[0].rstrip('/') for d in documents}
+            for doc in tech_docs:
+                url_norm = doc['url'].split('?')[0].rstrip('/')
+                if url_norm not in seen_urls:
+                    documents.append(doc)
+                    seen_urls.add(url_norm)
+    except Exception as e:
+        print(f"[CRAWL] Technical documents crawl error: {e}")
+
     return documents
 
 
