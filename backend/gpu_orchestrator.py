@@ -257,7 +257,8 @@ class GPUOrchestrator:
         start_time = time.time()
         while time.time() - start_time < self.GPU_STARTUP_TIMEOUT:
             try:
-                response = self._api_request('GET', f'droplets/{self.gpu_droplet_id}')
+                # GPU droplets need type=gpus to be found via API
+                response = self._api_request('GET', f'droplets/{self.gpu_droplet_id}?type=gpus')
                 droplet = response.get('droplet', {})
                 status = droplet.get('status')
 
@@ -579,7 +580,8 @@ CHROMA_PORT=8002
         """Destroy any GPU droplets that are orphaned OR older than MAX_GPU_RUNTIME.
         This is a hard safety limit that works even if the orchestrator restarts."""
         try:
-            response = self._api_request('GET', 'droplets?tag_name=gpu-worker&per_page=100')
+            # GPU droplets require type=gpus parameter to be listed
+            response = self._api_request('GET', 'droplets?type=gpus&tag_name=gpu-worker&per_page=100')
             droplets = response.get('droplets', [])
 
             for droplet in droplets:
