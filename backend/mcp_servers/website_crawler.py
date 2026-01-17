@@ -1323,6 +1323,8 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
             f'{url}/press-releases/',
             f'{url}/investors/news/',
             f'{url}/investors/news-releases/',  # Canada Nickel
+            f'{url}/investor-relations/news-releases/',  # NEO Battery Materials
+            f'{url}/investor-relations/press-releases/',  # IR press releases pattern
             f'{url}/news/press-releases/',
             f'{url}/news/{current_year}/',  # Garibaldi (year-based)
             f'{url}/news-{current_year}/',  # ATEX Resources (year-suffix pattern)
