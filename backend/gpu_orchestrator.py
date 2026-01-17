@@ -257,8 +257,8 @@ class GPUOrchestrator:
         start_time = time.time()
         while time.time() - start_time < self.GPU_STARTUP_TIMEOUT:
             try:
-                # GPU droplets need type=gpus to be found via API
-                response = self._api_request('GET', f'droplets/{self.gpu_droplet_id}?type=gpus')
+                # Individual droplet lookup doesn't need type parameter
+                response = self._api_request('GET', f'droplets/{self.gpu_droplet_id}')
                 droplet = response.get('droplet', {})
                 status = droplet.get('status')
 
@@ -581,8 +581,12 @@ CHROMA_PORT=8002
         This is a hard safety limit that works even if the orchestrator restarts."""
         try:
             # GPU droplets require type=gpus parameter to be listed
-            response = self._api_request('GET', 'droplets?type=gpus&tag_name=gpu-worker&per_page=100')
-            droplets = response.get('droplets', [])
+            # Note: Can't combine type and tag_name, so we filter by name prefix in code
+            response = self._api_request('GET', 'droplets?type=gpus&per_page=100')
+            all_droplets = response.get('droplets', [])
+
+            # Filter to only our GPU worker droplets by name prefix
+            droplets = [d for d in all_droplets if d.get('name', '').startswith('goldventure-gpu-worker')]
 
             for droplet in droplets:
                 droplet_id = str(droplet.get('id'))
