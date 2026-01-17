@@ -39,12 +39,11 @@ from django.conf import settings
 from django.db import connection
 from core.models import DocumentProcessingJob
 
-# Configure logging
+# Configure logging - only use FileHandler since systemd captures stdout anyway
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s [%(levelname)s] %(message)s',
     handlers=[
-        logging.StreamHandler(),
         logging.FileHandler('/var/log/gpu_orchestrator.log')
     ]
 )
@@ -56,8 +55,36 @@ _lock_fd = None
 
 
 def acquire_lock():
-    """Acquire exclusive lock to prevent multiple orchestrator instances"""
+    """Acquire exclusive lock to prevent multiple orchestrator instances.
+
+    Uses flock for advisory locking AND checks if existing PID is still running.
+    This handles the case where a previous process died without releasing the lock.
+    """
     global _lock_fd
+
+    # First, check if lock file exists with a valid PID
+    if os.path.exists(LOCK_FILE):
+        try:
+            with open(LOCK_FILE, 'r') as f:
+                existing_pid = int(f.read().strip())
+            # Check if that PID is still running
+            try:
+                os.kill(existing_pid, 0)  # Signal 0 just checks if process exists
+                # Process exists - check if it's actually our orchestrator
+                with open(f'/proc/{existing_pid}/cmdline', 'r') as f:
+                    cmdline = f.read()
+                if 'gpu_orchestrator' in cmdline:
+                    logger.error(f"Orchestrator already running (PID {existing_pid})")
+                    return False
+            except (OSError, ProcessLookupError, FileNotFoundError):
+                # Process doesn't exist or we can't check - stale lock, remove it
+                logger.warning(f"Removing stale lock file (PID {existing_pid} not running)")
+                os.unlink(LOCK_FILE)
+        except (ValueError, IOError):
+            # Can't read PID, remove stale lock
+            logger.warning("Removing corrupted lock file")
+            os.unlink(LOCK_FILE)
+
     try:
         _lock_fd = open(LOCK_FILE, 'w')
         fcntl.flock(_lock_fd.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
