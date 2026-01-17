@@ -482,7 +482,7 @@ source venv/bin/activate
 
 # Install dependencies
 pip install --upgrade pip
-pip install psycopg2-binary requests tiktoken sentence-transformers pypdfium2 docling
+pip install psycopg2-binary requests tiktoken sentence-transformers pypdfium2 docling chromadb
 
 # Install scraping dependencies
 pip install crawl4ai beautifulsoup4 playwright
