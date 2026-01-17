@@ -50,8 +50,8 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Lock file for single instance enforcement
-LOCK_FILE = '/var/run/gpu_orchestrator.lock'
+# Lock file for single instance enforcement (use /tmp for www-data access)
+LOCK_FILE = '/tmp/gpu_orchestrator.lock'
 _lock_fd = None
 
 
