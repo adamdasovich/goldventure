@@ -1006,8 +1006,12 @@ async def crawl_technical_documents(url: str) -> List[Dict]:
         '/investor-relations/technical-reports/',
     ]
 
+    # Sub-paths to check under discovered project pages
+    tech_subpaths = ['/technical-documents/', '/technical-reports/', '/reports/', '/documents/']
+
     async with AsyncWebCrawler(config=browser_config) as crawler:
         # First, try to find project pages that might have technical documents
+        project_pages = []
         try:
             result = await crawler.arun(url=url, config=crawler_config)
             if result.success:
@@ -1022,9 +1026,19 @@ async def crawl_technical_documents(url: str) -> List[Dict]:
                     if any(kw in href.lower() or kw in text for kw in ['project', 'technical', 'reports', '43-101']):
                         full_url = urljoin(url, href)
                         if full_url not in seen_urls and url.split('/')[2] in full_url:
-                            tech_doc_patterns.append(href if href.startswith('/') else '/' + href.split('/', 3)[-1] if '/' in href else '')
+                            path = href if href.startswith('/') else '/' + href.split('/', 3)[-1] if '/' in href else ''
+                            if path:
+                                tech_doc_patterns.append(path)
+                                # If it's a project page, also add sub-paths for technical documents
+                                if '/project' in path.lower():
+                                    project_pages.append(path.rstrip('/'))
         except:
             pass
+
+        # Add technical document sub-paths under each discovered project page
+        for project_path in project_pages:
+            for subpath in tech_subpaths:
+                tech_doc_patterns.append(project_path + subpath)
 
         # Now check each technical document pattern
         for pattern in tech_doc_patterns:
