@@ -38,6 +38,7 @@ export default function Home() {
               <Button variant="ghost" size="sm" onClick={() => window.location.href = '/glossary'}>Glossary</Button>
               <Button variant="ghost" size="sm" onClick={() => window.location.href = '/metals'}>Metals</Button>
               <Button variant="ghost" size="sm" onClick={() => window.location.href = '/financial-hub'}>Financial Hub</Button>
+              <Button variant="ghost" size="sm" onClick={() => window.location.href = '/closed-financings'}>Closed Financings</Button>
               <Button variant="ghost" size="sm" onClick={() => window.location.href = '/store'}>Store</Button>
               <CartButton />
 

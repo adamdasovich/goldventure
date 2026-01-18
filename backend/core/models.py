@@ -426,12 +426,42 @@ class Financing(models.Model):
     press_release_url = models.URLField(blank=True)
     notes = models.TextField(blank=True)
 
+    # Closed financing tracking (for /closed-financings page)
+    is_closed = models.BooleanField(default=False, help_text="Whether this financing has been marked as closed for display")
+    closed_at = models.DateTimeField(null=True, blank=True, help_text="When the financing was marked as closed")
+    closed_by = models.ForeignKey(
+        'User',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='closed_financings',
+        help_text="User who marked this financing as closed"
+    )
+    source_news_flag = models.ForeignKey(
+        'NewsReleaseFlag',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='closed_financings',
+        help_text="The news flag that originated this financing"
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         db_table = 'financings'
         ordering = ['-announced_date']
+
+    def mark_as_closed(self, user=None):
+        """Mark this financing as closed for display on the closed financings page."""
+        from django.utils import timezone
+        self.is_closed = True
+        self.closed_at = timezone.now()
+        self.closed_by = user
+        if self.status != 'closed':
+            self.status = 'closed'
+        self.save()
 
 
 class Investor(models.Model):

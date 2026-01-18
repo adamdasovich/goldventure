@@ -134,6 +134,9 @@ urlpatterns = [
     # Document Processing Summary (Superuser Dashboard)
     path('admin/document-summary/', views.document_processing_summary, name='document_processing_summary'),
 
+    # Closed Financings (public page for displaying recently closed financings)
+    path('closed-financings/', views.closed_financings_list, name='closed_financings_list'),
+
     # ViewSet routes
     path('', include(router.urls)),
 ]

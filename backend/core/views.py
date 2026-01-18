@@ -7382,6 +7382,199 @@ class NewsReleaseFlagViewSet(viewsets.ReadOnlyModelViewSet):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
+    @action(detail=True, methods=['post'], url_path='close-financing')
+    def close_financing(self, request, pk=None):
+        """
+        Mark an existing financing as closed and remove from the news-flags queue.
+        Used when a financing announcement has been confirmed closed.
+
+        The financing record is NOT deleted - it's marked as closed with is_closed=True
+        and will appear on the /closed-financings page.
+        """
+        from core.models import NewsReleaseFlag, Financing
+
+        flag = self.get_object()
+
+        # Check if flag has a linked financing
+        if not flag.created_financing:
+            return Response(
+                {'error': 'This flag does not have an associated financing record. Create a financing first.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            financing = flag.created_financing
+
+            # Update closing_date if provided
+            closing_date = request.data.get('closing_date')
+            if closing_date:
+                from datetime import datetime
+                if isinstance(closing_date, str):
+                    closing_date = datetime.strptime(closing_date, '%Y-%m-%d').date()
+                financing.closing_date = closing_date
+
+            # Mark financing as closed
+            financing.mark_as_closed(user=request.user)
+
+            # Link the source news flag
+            financing.source_news_flag = flag
+            financing.save()
+
+            # Update flag notes if provided
+            notes = request.data.get('notes', '')
+            if notes:
+                flag.review_notes = (flag.review_notes or '') + f'\n[Closed] {notes}'
+                flag.save()
+
+            return Response({
+                'message': 'Financing marked as closed successfully',
+                'financing_id': financing.id,
+                'flag_id': flag.id,
+                'closed_at': financing.closed_at.isoformat() if financing.closed_at else None
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response(
+                {'error': f'Error closing financing: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+# ============================================================================
+# CLOSED FINANCINGS API (For /closed-financings page)
+# ============================================================================
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def closed_financings_list(request):
+    """
+    List all closed financings for display on the /closed-financings page.
+
+    GET /api/closed-financings/
+
+    Query Parameters:
+    - company: Filter by company name (partial match)
+    - financing_type: Filter by financing type
+    - date_from: Filter by closing date (YYYY-MM-DD)
+    - date_to: Filter by closing date (YYYY-MM-DD)
+    - sort_by: Sort field (closed_at, company, amount, closing_date)
+    - sort_order: asc or desc (default: desc)
+
+    Access Control:
+    - Currently: All authenticated users can access
+    - Future: Set CLOSED_FINANCINGS_REQUIRES_SUBSCRIPTION = True to restrict to paying users
+    """
+    from core.models import Financing
+    from django.db.models import Q
+
+    # ========== ACCESS CONTROL ==========
+    # Set this to True to restrict access to paying users only
+    CLOSED_FINANCINGS_REQUIRES_SUBSCRIPTION = False
+
+    if CLOSED_FINANCINGS_REQUIRES_SUBSCRIPTION:
+        # Check if user has an active subscription
+        # TODO: Implement subscription check when payment system is ready
+        # Example: if not request.user.has_active_subscription:
+        #     return Response({'error': 'Subscription required'}, status=403)
+        pass
+    # ====================================
+
+    # Base queryset - only closed financings
+    queryset = Financing.objects.filter(is_closed=True).select_related(
+        'company',
+        'closed_by',
+        'source_news_flag__news_release'
+    )
+
+    # Apply filters
+    company_filter = request.query_params.get('company')
+    if company_filter:
+        queryset = queryset.filter(company__name__icontains=company_filter)
+
+    financing_type_filter = request.query_params.get('financing_type')
+    if financing_type_filter:
+        queryset = queryset.filter(financing_type=financing_type_filter)
+
+    date_from = request.query_params.get('date_from')
+    if date_from:
+        queryset = queryset.filter(closing_date__gte=date_from)
+
+    date_to = request.query_params.get('date_to')
+    if date_to:
+        queryset = queryset.filter(closing_date__lte=date_to)
+
+    # Sorting
+    sort_by = request.query_params.get('sort_by', 'closed_at')
+    sort_order = request.query_params.get('sort_order', 'desc')
+
+    sort_mapping = {
+        'closed_at': 'closed_at',
+        'company': 'company__name',
+        'amount': 'amount_raised_usd',
+        'closing_date': 'closing_date',
+        'announced_date': 'announced_date',
+    }
+
+    sort_field = sort_mapping.get(sort_by, 'closed_at')
+    if sort_order == 'desc':
+        sort_field = f'-{sort_field}'
+
+    queryset = queryset.order_by(sort_field)
+
+    # Build response
+    data = []
+    for financing in queryset:
+        # Get source news release URL if available
+        source_news_url = None
+        source_news_title = None
+        source_news_date = None
+
+        if financing.source_news_flag and financing.source_news_flag.news_release:
+            source_news_url = financing.source_news_flag.news_release.url
+            source_news_title = financing.source_news_flag.news_release.title
+            source_news_date = financing.source_news_flag.news_release.release_date
+        elif financing.press_release_url:
+            source_news_url = financing.press_release_url
+
+        data.append({
+            'id': financing.id,
+            'company_id': financing.company.id,
+            'company_name': financing.company.name,
+            'company_ticker': financing.company.ticker_symbol,
+            'company_exchange': financing.company.exchange,
+            'financing_type': financing.financing_type,
+            'financing_type_display': dict(Financing.FINANCING_TYPES).get(financing.financing_type, financing.financing_type),
+            'status': financing.status,
+            'amount_raised_usd': str(financing.amount_raised_usd) if financing.amount_raised_usd else None,
+            'price_per_share': str(financing.price_per_share) if financing.price_per_share else None,
+            'shares_issued': financing.shares_issued,
+            'has_warrants': financing.has_warrants,
+            'warrant_strike_price': str(financing.warrant_strike_price) if financing.warrant_strike_price else None,
+            'warrant_expiry_date': financing.warrant_expiry_date.isoformat() if financing.warrant_expiry_date else None,
+            'announced_date': financing.announced_date.isoformat() if financing.announced_date else None,
+            'closing_date': financing.closing_date.isoformat() if financing.closing_date else None,
+            'closed_at': financing.closed_at.isoformat() if financing.closed_at else None,
+            'closed_by': financing.closed_by.username if financing.closed_by else None,
+            'lead_agent': financing.lead_agent,
+            'use_of_proceeds': financing.use_of_proceeds,
+            'source_news_url': source_news_url,
+            'source_news_title': source_news_title,
+            'source_news_date': source_news_date.isoformat() if source_news_date else None,
+            'notes': financing.notes,
+        })
+
+    # Get available financing types for filter dropdown
+    financing_types = [
+        {'value': ft[0], 'label': ft[1]}
+        for ft in Financing.FINANCING_TYPES
+    ]
+
+    return Response({
+        'count': len(data),
+        'results': data,
+        'financing_types': financing_types,
+    })
+
 
 # ============================================================================
 # DOCUMENT PROCESSING SUMMARY DASHBOARD (Superuser Only)

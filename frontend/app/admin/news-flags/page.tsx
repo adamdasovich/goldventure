@@ -33,6 +33,8 @@ export default function NewsFlagsPage() {
   const [showDismissModal, setShowDismissModal] = useState(false);
   const [dismissNotes, setDismissNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [showCloseFinancingModal, setShowCloseFinancingModal] = useState(false);
+  const [closingDate, setClosingDate] = useState('');
 
   const accessToken = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null;
 
@@ -125,6 +127,43 @@ export default function NewsFlagsPage() {
       setShowDismissModal(false);
       setSelectedFlag(null);
       setDismissNotes('');
+      fetchFlags();
+    } catch (err: any) {
+      alert(`Error: ${err.message}`);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleCloseFinancing = async () => {
+    if (!selectedFlag) return;
+
+    try {
+      setSubmitting(true);
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/news-flags/${selectedFlag.id}/close-financing/`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
+          },
+          body: JSON.stringify({
+            closing_date: closingDate || undefined
+          })
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to close financing');
+      }
+
+      const data = await response.json();
+      alert(`Financing closed successfully! ${data.financing?.company_name || ''}`);
+      setShowCloseFinancingModal(false);
+      setSelectedFlag(null);
+      setClosingDate('');
       fetchFlags();
     } catch (err: any) {
       alert(`Error: ${err.message}`);
@@ -229,6 +268,20 @@ export default function NewsFlagsPage() {
                     </Button>
                   </div>
                 )}
+                {flag.status === 'reviewed_financing' && flag.created_financing_id && (
+                  <div className="flex gap-2">
+                    <Button
+                      variant="primary"
+                      onClick={() => {
+                        setSelectedFlag(flag);
+                        setShowCloseFinancingModal(true);
+                      }}
+                      size="sm"
+                    >
+                      Close Financing
+                    </Button>
+                  </div>
+                )}
               </div>
 
               {/* Detected Keywords */}
@@ -321,6 +374,66 @@ export default function NewsFlagsPage() {
                   setShowDismissModal(false);
                   setSelectedFlag(null);
                   setDismissNotes('');
+                }}
+                disabled={submitting}
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Close Financing Modal */}
+      {showCloseFinancingModal && selectedFlag && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <div className="bg-slate-800 rounded-lg p-6 max-w-md w-full">
+            <h2 className="text-xl font-bold text-slate-100 mb-4">
+              Close Financing
+            </h2>
+            <p className="text-slate-400 mb-4">
+              Mark this financing as closed. This will add it to the Closed Financings page
+              and remove it from the news-flags queue.
+            </p>
+            <div className="mb-4 p-3 bg-slate-900 rounded-lg">
+              <p className="text-sm text-slate-300">
+                <span className="text-slate-500">Company:</span> {selectedFlag.company_name}
+              </p>
+              <p className="text-sm text-slate-300 mt-1">
+                <span className="text-slate-500">News:</span> {selectedFlag.news_title}
+              </p>
+            </div>
+            <div className="mb-4">
+              <label htmlFor="closing-date" className="block text-sm font-medium text-slate-300 mb-1">
+                Closing Date (optional)
+              </label>
+              <input
+                type="date"
+                id="closing-date"
+                value={closingDate}
+                onChange={(e) => setClosingDate(e.target.value)}
+                className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-slate-100"
+                title="Closing date for the financing"
+              />
+              <p className="text-xs text-slate-500 mt-1">
+                Leave blank to use the news release date
+              </p>
+            </div>
+            <div className="flex gap-3">
+              <Button
+                variant="primary"
+                onClick={handleCloseFinancing}
+                disabled={submitting}
+                className="flex-1"
+              >
+                {submitting ? 'Closing...' : 'Close Financing'}
+              </Button>
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  setShowCloseFinancingModal(false);
+                  setSelectedFlag(null);
+                  setClosingDate('');
                 }}
                 disabled={submitting}
               >
