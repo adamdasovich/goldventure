@@ -942,7 +942,7 @@ def scrape_mining_news_task(self):
             }
 
 
-@shared_task(bind=True, max_retries=2, default_retry_delay=60)
+@shared_task(bind=True, max_retries=2, default_retry_delay=60, time_limit=600, soft_time_limit=580, acks_late=True)
 def scrape_company_website_task(self, job_id: int, sections: list = None):
     """
     Background task to scrape a company website using Crawl4AI.
@@ -955,15 +955,32 @@ def scrape_company_website_task(self, job_id: int, sections: list = None):
 
     Returns:
         dict: Status information about the scraping operation
+
+    Notes:
+        - time_limit=600: Hard limit of 10 minutes per task
+        - soft_time_limit=580: Soft limit to allow graceful shutdown
+        - acks_late=True: Task is only acknowledged after completion, so if worker
+          crashes the task will be redelivered to another worker
     """
     from mcp_servers.company_scraper import scrape_company_website
     from .models import ScrapingJob
+    from celery.exceptions import SoftTimeLimitExceeded
 
     print(f"[ASYNC SCRAPE] Starting company scrape task for job {job_id}...")
 
     try:
         # Get the scraping job
         job = ScrapingJob.objects.get(id=job_id)
+
+        # Check if job is already completed or failed (idempotency for acks_late redelivery)
+        if job.status in ['success', 'partial', 'failed', 'cancelled']:
+            print(f"[ASYNC SCRAPE] Job {job_id} already has status '{job.status}', skipping")
+            return {
+                'status': 'skipped',
+                'job_id': job_id,
+                'message': f'Job already completed with status: {job.status}'
+            }
+
         job.status = 'running'
         job.started_at = timezone.now()
         job.save()
@@ -1010,6 +1027,25 @@ def scrape_company_website_task(self, job_id: int, sections: list = None):
             'error': f'ScrapingJob with ID {job_id} not found'
         }
 
+    except SoftTimeLimitExceeded:
+        # Task timed out - mark as failed with timeout message
+        print(f"[ASYNC SCRAPE] Job {job_id} timed out (exceeded 10 minute limit)")
+        try:
+            job = ScrapingJob.objects.get(id=job_id)
+            job.status = 'failed'
+            job.completed_at = timezone.now()
+            job.error_messages = ['Task timed out - exceeded 10 minute limit. The website may be too slow or complex.']
+            job.save()
+        except:
+            pass
+
+        return {
+            'status': 'error',
+            'job_id': job_id,
+            'error': 'Task timed out',
+            'message': 'Company scrape timed out after 10 minutes'
+        }
+
     except Exception as e:
         print(f"[ASYNC SCRAPE] Job {job_id} failed: {str(e)}")
         import traceback
@@ -1026,7 +1062,7 @@ def scrape_company_website_task(self, job_id: int, sections: list = None):
         except:
             pass
 
-        # Retry on failure
+        # Retry on failure (but not for timeouts)
         try:
             self.retry(exc=e)
         except self.MaxRetriesExceededError:
@@ -1036,3 +1072,79 @@ def scrape_company_website_task(self, job_id: int, sections: list = None):
                 'error': str(e),
                 'message': f'Company scrape failed after retries: {str(e)}'
             }
+
+
+@shared_task(bind=True)
+def cleanup_stuck_jobs_task(self):
+    """
+    Periodic task to clean up stuck jobs.
+    Runs every 15 minutes to detect and mark as failed any jobs that have been
+    stuck in 'running' or 'pending' status for too long.
+
+    A job is considered stuck if:
+    - Status is 'running' and started_at is more than 15 minutes ago
+    - Status is 'pending' and created_at is more than 30 minutes ago
+
+    This handles cases where:
+    - Celery worker crashed during task execution
+    - Task was lost due to broker issues
+    - Worker was restarted before task completed
+    """
+    from .models import ScrapingJob, DocumentProcessingJob
+    from datetime import timedelta
+
+    print("[CLEANUP] Running stuck jobs cleanup task...")
+
+    now = timezone.now()
+    stuck_running_threshold = now - timedelta(minutes=15)
+    stuck_pending_threshold = now - timedelta(minutes=30)
+
+    # Cleanup stuck ScrapingJobs
+    stuck_scraping_running = ScrapingJob.objects.filter(
+        status='running',
+        started_at__lt=stuck_running_threshold
+    )
+
+    stuck_scraping_pending = ScrapingJob.objects.filter(
+        status='pending',
+        started_at__isnull=True
+    ).filter(
+        # Filter by created_at being older than threshold
+        # Note: Django auto-adds created_at if the model has it
+    )
+
+    scraping_fixed = 0
+    for job in stuck_scraping_running:
+        duration = (now - job.started_at).total_seconds() / 60
+        print(f"[CLEANUP] Marking stuck ScrapingJob {job.id} as failed (running for {duration:.1f} minutes)")
+        job.status = 'failed'
+        job.completed_at = now
+        job.error_messages = [f'Job stuck in running state for {duration:.1f} minutes. Likely worker crash or restart.']
+        job.save()
+        scraping_fixed += 1
+
+    # Cleanup stuck DocumentProcessingJobs
+    stuck_processing = DocumentProcessingJob.objects.filter(
+        status='processing',
+        started_at__lt=stuck_running_threshold
+    )
+
+    processing_fixed = 0
+    for job in stuck_processing:
+        duration = (now - job.started_at).total_seconds() / 60
+        print(f"[CLEANUP] Marking stuck DocumentProcessingJob {job.id} as failed (processing for {duration:.1f} minutes)")
+        job.status = 'failed'
+        job.completed_at = now
+        job.error_message = f'Job stuck in processing state for {duration:.1f} minutes. Likely worker crash or restart.'
+        job.save()
+        processing_fixed += 1
+
+    total_fixed = scraping_fixed + processing_fixed
+    print(f"[CLEANUP] Fixed {total_fixed} stuck jobs (ScrapingJobs: {scraping_fixed}, DocumentProcessingJobs: {processing_fixed})")
+
+    return {
+        'status': 'success',
+        'scraping_jobs_fixed': scraping_fixed,
+        'processing_jobs_fixed': processing_fixed,
+        'total_fixed': total_fixed
+    }

@@ -328,5 +328,12 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'core.tasks.scrape_all_companies_news_task',
         'schedule': crontab(hour=12, minute=0),  # 7 AM ET
     },
+
+    # Cleanup stuck jobs every 15 minutes
+    # Detects and marks as failed any jobs stuck in 'running' or 'processing' state
+    'cleanup-stuck-jobs': {
+        'task': 'core.tasks.cleanup_stuck_jobs_task',
+        'schedule': crontab(minute='*/15'),  # Every 15 minutes
+    },
 }
 
