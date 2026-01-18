@@ -1148,3 +1148,198 @@ def cleanup_stuck_jobs_task(self):
         'processing_jobs_fixed': processing_fixed,
         'total_fixed': total_fixed
     }
+
+
+@shared_task(bind=True, max_retries=2, default_retry_delay=60, time_limit=300, soft_time_limit=280)
+def process_company_news_for_rag_task(self, company_id: int, limit: int = 20):
+    """
+    Background Celery task to process a company's news into the RAG knowledge base.
+
+    This task:
+    1. Fetches full content from news URLs
+    2. Chunks the text into manageable pieces
+    3. Generates embeddings using Voyage AI
+    4. Stores chunks in PostgreSQL (NewsChunk) and ChromaDB
+
+    Args:
+        company_id: ID of the Company to process news for
+        limit: Maximum number of news items to process (default 20)
+
+    Returns:
+        dict: Processing result with counts
+    """
+    from .models import Company, NewsChunk
+    from mcp_servers.news_content_processor import NewsContentProcessor
+
+    print(f"[RAG TASK] Starting news processing for company {company_id}...")
+
+    try:
+        company = Company.objects.get(id=company_id)
+
+        # Check if already has chunks (avoid reprocessing)
+        existing_chunks = NewsChunk.objects.filter(company=company).count()
+        if existing_chunks > 0:
+            print(f"[RAG TASK] Company {company.name} already has {existing_chunks} chunks, skipping")
+            return {
+                'status': 'skipped',
+                'company': company.name,
+                'existing_chunks': existing_chunks,
+                'message': 'Company already has news chunks processed'
+            }
+
+        # Process news
+        processor = NewsContentProcessor()
+        result = processor._process_company_news(company.name, limit=limit)
+
+        if result.get('success'):
+            print(f"[RAG TASK] Processed {result.get('news_items_processed', 0)} news items, "
+                  f"created {result.get('chunks_created', 0)} chunks for {company.name}")
+            return {
+                'status': 'success',
+                'company': company.name,
+                'news_items_processed': result.get('news_items_processed', 0),
+                'chunks_created': result.get('chunks_created', 0),
+                'errors': result.get('errors')
+            }
+        else:
+            error_msg = result.get('error', 'Unknown error')
+            print(f"[RAG TASK] Processing failed for {company.name}: {error_msg}")
+            return {
+                'status': 'error',
+                'company': company.name,
+                'error': error_msg
+            }
+
+    except Company.DoesNotExist:
+        print(f"[RAG TASK] Company {company_id} not found")
+        return {
+            'status': 'error',
+            'company_id': company_id,
+            'error': f'Company with ID {company_id} not found'
+        }
+
+    except Exception as e:
+        print(f"[RAG TASK] Error processing company {company_id}: {str(e)}")
+        import traceback
+        traceback.print_exc()
+
+        # Retry on failure
+        try:
+            self.retry(exc=e)
+        except self.MaxRetriesExceededError:
+            return {
+                'status': 'error',
+                'company_id': company_id,
+                'error': str(e),
+                'message': 'RAG processing failed after retries'
+            }
+
+
+@shared_task(bind=True, time_limit=600, soft_time_limit=580)
+def store_company_profile_in_rag_task(self, company_id: int):
+    """
+    Background task to store a company's profile in the RAG knowledge base.
+
+    Stores company overview, description, tagline, stock info, and project summaries
+    in ChromaDB for semantic search.
+
+    Args:
+        company_id: ID of the Company to store profile for
+
+    Returns:
+        dict: Storage result
+    """
+    from .models import Company
+    import chromadb
+    from chromadb.config import Settings as ChromaSettings
+    from pathlib import Path
+    from django.conf import settings
+    from mcp_servers.embeddings import get_embedding_function
+
+    print(f"[RAG TASK] Storing profile for company {company_id}...")
+
+    try:
+        company = Company.objects.get(id=company_id)
+
+        # Build company profile text
+        profile_parts = []
+
+        if company.description:
+            profile_parts.append(f"Company Overview: {company.name}\n{company.description}")
+
+        if company.tagline:
+            profile_parts.append(f"Tagline: {company.tagline}")
+
+        if company.ticker_symbol and company.exchange:
+            profile_parts.append(f"Stock: {company.ticker_symbol} on {company.exchange.upper()}")
+
+        # Projects summary
+        projects = company.projects.all()
+        if projects:
+            project_texts = []
+            for project in projects:
+                project_text = f"Project: {project.name}"
+                if project.description:
+                    project_text += f"\n{project.description}"
+                if project.country:
+                    project_text += f"\nLocation: {project.country}"
+                if project.primary_commodity:
+                    project_text += f"\nCommodity: {project.primary_commodity}"
+                project_texts.append(project_text)
+            profile_parts.append("Projects:\n" + "\n\n".join(project_texts))
+
+        if not profile_parts:
+            return {'status': 'skipped', 'message': 'No profile data to store'}
+
+        full_profile = "\n\n".join(profile_parts)
+
+        # Store in ChromaDB
+        chroma_path = Path(settings.BASE_DIR) / "chroma_db"
+        chroma_path.mkdir(exist_ok=True)
+
+        chroma_client = chromadb.PersistentClient(
+            path=str(chroma_path),
+            settings=ChromaSettings(anonymized_telemetry=False)
+        )
+
+        # Get embedding function
+        embedding_function = get_embedding_function()
+
+        collection = chroma_client.get_or_create_collection(
+            name="company_profiles",
+            metadata={"hnsw:space": "cosine"},
+            embedding_function=embedding_function
+        )
+
+        # Delete existing profile
+        try:
+            collection.delete(ids=[f"company_{company.id}_profile"])
+        except:
+            pass
+
+        # Add profile
+        collection.add(
+            ids=[f"company_{company.id}_profile"],
+            documents=[full_profile],
+            metadatas=[{
+                "company_id": company.id,
+                "company_name": company.name,
+                "ticker": company.ticker_symbol or "",
+                "exchange": company.exchange or "",
+                "type": "company_profile"
+            }]
+        )
+
+        print(f"[RAG TASK] Stored {len(full_profile)} chars of profile for {company.name}")
+        return {
+            'status': 'success',
+            'company': company.name,
+            'chars_stored': len(full_profile)
+        }
+
+    except Company.DoesNotExist:
+        return {'status': 'error', 'error': f'Company {company_id} not found'}
+
+    except Exception as e:
+        print(f"[RAG TASK] Error storing profile for {company_id}: {str(e)}")
+        return {'status': 'error', 'error': str(e)}
