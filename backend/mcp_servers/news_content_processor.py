@@ -2,6 +2,8 @@
 News Content Processor
 Fetches full content from news releases and articles, processes them for RAG/semantic search.
 Stores chunks in both PostgreSQL (NewsChunk) and ChromaDB for embedding-based retrieval.
+
+Uses Voyage AI for fast embeddings when available, falls back to local model.
 """
 
 import asyncio
@@ -20,6 +22,7 @@ from core.models import (
     Company, NewsRelease, NewsArticle, CompanyNews, NewsChunk
 )
 from .base import BaseMCPServer
+from .embeddings import get_embedding_function
 
 
 class NewsContentProcessor(BaseMCPServer):
@@ -49,10 +52,14 @@ class NewsContentProcessor(BaseMCPServer):
             settings=Settings(anonymized_telemetry=False)
         )
 
+        # Get embedding function (Voyage AI if available, else ChromaDB default)
+        self.embedding_function = get_embedding_function()
+
         # Get or create collection for news chunks
         self.collection = self.chroma_client.get_or_create_collection(
             name="news_chunks",
-            metadata={"hnsw:space": "cosine"}
+            metadata={"hnsw:space": "cosine"},
+            embedding_function=self.embedding_function
         )
 
     def _register_tools(self):

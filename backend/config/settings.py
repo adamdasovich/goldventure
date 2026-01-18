@@ -155,6 +155,9 @@ CORS_ALLOW_HEADERS = list(default_headers) + [
 # Anthropic API Key
 ANTHROPIC_API_KEY = os.getenv('ANTHROPIC_API_KEY', '')
 
+# Voyage AI API Key (for fast embeddings)
+VOYAGE_API_KEY = os.getenv('VOYAGE_API_KEY', '')
+
 # Alpha Vantage API Key
 ALPHA_VANTAGE_API_KEY = os.getenv('ALPHA_VANTAGE_API_KEY', '')
 

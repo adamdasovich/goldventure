@@ -2,6 +2,8 @@
 RAG (Retrieval-Augmented Generation) Utilities
 Handles document chunking, embedding, and semantic search using ChromaDB.
 Supports both technical documents (NI 43-101) and news content.
+
+Uses Voyage AI for fast embeddings when available, falls back to local model.
 """
 
 import chromadb
@@ -12,6 +14,7 @@ from pathlib import Path
 import anthropic
 from django.conf import settings
 from core.models import Document, DocumentChunk
+from .embeddings import get_embedding_function
 
 
 class RAGManager:
@@ -28,22 +31,27 @@ class RAGManager:
             settings=Settings(anonymized_telemetry=False)
         )
 
+        # Get embedding function (Voyage AI if available, else ChromaDB default)
+        self.embedding_function = get_embedding_function()
+
         # Get or create collection for document chunks (technical reports)
         self.collection = self.chroma_client.get_or_create_collection(
             name="document_chunks",
-            metadata={"hnsw:space": "cosine"}  # Cosine similarity for semantic search
+            metadata={"hnsw:space": "cosine"},  # Cosine similarity for semantic search
+            embedding_function=self.embedding_function
         )
 
         # Get or create collection for news chunks
         self.news_collection = self.chroma_client.get_or_create_collection(
             name="news_chunks",
-            metadata={"hnsw:space": "cosine"}
+            metadata={"hnsw:space": "cosine"},
+            embedding_function=self.embedding_function
         )
 
         # Initialize tokenizer for Claude's model
         self.tokenizer = tiktoken.get_encoding("cl100k_base")
 
-        # Initialize Anthropic client for embeddings (will use Claude's embeddings)
+        # Initialize Anthropic client for LLM calls
         self.claude_client = anthropic.Anthropic(api_key=settings.ANTHROPIC_API_KEY)
 
     def chunk_text(self, text: str, max_tokens: int = 512, overlap_tokens: int = 50) -> List[Dict]:
