@@ -417,6 +417,14 @@ class GPUOrchestrator:
 
         except Exception as e:
             logger.error(f"Failed to destroy GPU droplet: {e}")
+            # If droplet not found (404), clear state anyway - it's already gone
+            if '404' in str(e) or 'not_found' in str(e).lower():
+                logger.warning("Droplet not found - clearing state (droplet was likely already destroyed)")
+                self.gpu_droplet_id = None
+                self.gpu_droplet_ip = None
+                self.gpu_created_at = None
+                self._save_state()
+                return True
             return False
 
     def should_create_gpu(self) -> bool:
