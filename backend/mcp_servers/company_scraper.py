@@ -105,8 +105,13 @@ class CompanyDataScraper:
 
             # 4. Find and scrape Investors section
             if 'investors' in sections:
-                investor_urls = self._find_section_urls(['investor', 'shareholders', 'financial', 'reports', 'presentations'])
-                for url in investor_urls[:3]:
+                # Include singular forms and variations to catch URLs like /corporate-presentation/ and /factsheet/
+                investor_urls = self._find_section_urls([
+                    'investor', 'shareholders', 'financial', 'reports',
+                    'presentations', 'presentation',  # Both plural and singular
+                    'factsheet', 'fact-sheet', 'fact_sheet',  # Factsheet variations
+                ])
+                for url in investor_urls[:5]:  # Increased limit to handle more document types
                     print(f"[SCRAPE] Scraping investor page: {url}")
                     await self._scrape_investor_page(crawler, crawler_config, url)
 
@@ -116,6 +121,15 @@ class CompanyDataScraper:
                 for url in project_urls[:3]:
                     print(f"[SCRAPE] Scraping projects page: {url}")
                     await self._scrape_projects_page(crawler, crawler_config, url)
+
+                # ENHANCED: Also look for potential project pages in nav_links
+                # Many mining sites use direct URLs like /laird-lake/ instead of /projects/laird-lake/
+                # These are often geographic names (lakes, mountains, rivers, claims)
+                potential_project_urls = self._find_potential_project_urls()
+                for url in potential_project_urls[:5]:
+                    if url not in self.visited_urls:
+                        print(f"[SCRAPE] Scraping potential project page: {url}")
+                        await self._scrape_projects_page(crawler, crawler_config, url)
 
                 # After scraping listing pages, visit individual project detail pages
                 # that were discovered (they will have source_url set)
@@ -228,6 +242,77 @@ class CompanyDataScraper:
                     matching_urls.append(pattern)
 
         return matching_urls
+
+    def _find_potential_project_urls(self) -> List[str]:
+        """
+        Find nav links that look like project pages even if they don't contain 'project' keyword.
+        Many mining company sites use direct URLs like /laird-lake/ or /golden-summit/
+        instead of /projects/laird-lake/.
+
+        Uses patterns to identify likely project names:
+        - Geographic names (lakes, mountains, rivers, creeks, springs)
+        - Mining-related terms in link text
+        - Short, clean URL slugs at root level
+        """
+        potential_urls = []
+        nav_links = self.extracted_data.get('_nav_links', [])
+
+        # Skip these common non-project pages
+        skip_keywords = {
+            'about', 'contact', 'news', 'media', 'investor', 'team', 'leadership',
+            'board', 'management', 'corporate', 'governance', 'esg', 'sustainability',
+            'careers', 'home', 'privacy', 'terms', 'legal', 'disclaimer',
+            'presentation', 'factsheet', 'report', 'financial', 'sedar',
+            'subscribe', 'login', 'sign', 'register'
+        }
+
+        # Geographic suffixes that often indicate project names
+        project_indicators = [
+            'lake', 'river', 'creek', 'mountain', 'hill', 'valley', 'springs',
+            'ridge', 'peak', 'basin', 'gulch', 'canyon', 'flat', 'mine',
+            'deposit', 'project', 'property', 'claim', 'belt', 'district'
+        ]
+
+        for link in nav_links:
+            url = link.get('url', '')
+            text = link.get('text', '').lower().strip()
+
+            # Skip external links
+            if not self._is_internal_link(url):
+                continue
+
+            # Parse URL path
+            path = urlparse(url).path.rstrip('/').lower()
+            parts = [p for p in path.split('/') if p]
+
+            # Skip if path has more than 2 levels (likely not a top-level project page)
+            if len(parts) > 2:
+                continue
+
+            # Skip if any skip keywords in URL or text
+            url_lower = url.lower()
+            if any(kw in url_lower or kw in text for kw in skip_keywords):
+                continue
+
+            # Check if link text or URL contains project indicators
+            combined = url_lower + ' ' + text
+            has_project_indicator = any(ind in combined for ind in project_indicators)
+
+            # Also check for 2-3 word geographic-sounding names
+            # (e.g., "Laird Lake", "Excelsior Springs", "Golden Summit")
+            words = text.split()
+            is_short_name = 1 <= len(words) <= 4
+
+            # Simple URL slug at root level (e.g., /laird-lake/)
+            is_simple_slug = len(parts) == 1 and '-' in parts[0]
+
+            if has_project_indicator or (is_short_name and is_simple_slug):
+                full_url = urljoin(self.base_url, url)
+                if full_url not in potential_urls:
+                    potential_urls.append(full_url)
+                    print(f"[DISCOVER] Potential project page: {text} -> {full_url}")
+
+        return potential_urls
 
     async def _scrape_homepage(self, crawler, config):
         """Scrape homepage for basic company info and navigation."""
@@ -343,30 +428,63 @@ class CompanyDataScraper:
                 '.intro', '[class*="intro"]', 'main section'
             ]
             homepage_desc = None
-            for selector in about_selectors:
-                section = soup.select_one(selector)
-                if section:
-                    paragraphs = section.find_all('p')
-                    for p in paragraphs[:5]:
-                        p_text = p.get_text(strip=True)
-                        # Look for company-related text (not bios)
-                        p_lower = p_text.lower()
-                        if len(p_text) > 80:
-                            # Check if it talks about the company (not a person)
-                            company_indicators = ['company', 'corporation', 'advancing', 'developing',
-                                                 'exploring', 'project', 'mine', 'mineral', 'resource',
-                                                 'property', 'hectare', 'land package', 'producer',
-                                                 'exploration', 'production', 'asset', 'operations']
-                            bio_indicators = ['cpa', 'cfo', 'ceo', 'years of experience',
-                                             'previously served', 'his career', 'her career',
-                                             'results oriented', 'accomplished', 'executive']
-                            has_company = any(ind in p_lower for ind in company_indicators)
-                            has_bio = any(ind in p_lower for ind in bio_indicators)
-                            if has_company and not has_bio:
-                                homepage_desc = p_text
-                                break
-                    if homepage_desc:
-                        break
+
+            # First, try to find "About [Company]" h2 headers and extract following paragraphs
+            # This handles sites like Athena Gold where About section is marked by h2 header
+            for header in soup.find_all(['h2', 'h3']):
+                header_text = header.get_text(strip=True).lower()
+                if 'about' in header_text:
+                    # Found About header, get next sibling paragraphs
+                    parent = header.find_parent(['div', 'section'])
+                    if parent:
+                        paragraphs = parent.find_all('p')
+                        for p in paragraphs[:5]:
+                            p_text = p.get_text(strip=True)
+                            p_lower = p_text.lower()
+                            if len(p_text) > 80:
+                                company_indicators = ['company', 'corporation', 'advancing', 'developing',
+                                                     'exploring', 'project', 'mine', 'mineral', 'resource',
+                                                     'property', 'hectare', 'land package', 'producer',
+                                                     'exploration', 'production', 'asset', 'operations',
+                                                     'junior', 'hunting', 'gold', 'silver', 'copper']
+                                bio_indicators = ['cpa', 'cfo', 'ceo', 'years of experience',
+                                                 'previously served', 'his career', 'her career',
+                                                 'results oriented', 'accomplished', 'executive']
+                                has_company = any(ind in p_lower for ind in company_indicators)
+                                has_bio = any(ind in p_lower for ind in bio_indicators)
+                                if has_company and not has_bio:
+                                    homepage_desc = p_text
+                                    break
+                        if homepage_desc:
+                            break
+
+            # Fallback: try CSS selectors if h2 method didn't work
+            if not homepage_desc:
+                for selector in about_selectors:
+                    section = soup.select_one(selector)
+                    if section:
+                        paragraphs = section.find_all('p')
+                        for p in paragraphs[:5]:
+                            p_text = p.get_text(strip=True)
+                            # Look for company-related text (not bios)
+                            p_lower = p_text.lower()
+                            if len(p_text) > 80:
+                                # Check if it talks about the company (not a person)
+                                company_indicators = ['company', 'corporation', 'advancing', 'developing',
+                                                     'exploring', 'project', 'mine', 'mineral', 'resource',
+                                                     'property', 'hectare', 'land package', 'producer',
+                                                     'exploration', 'production', 'asset', 'operations',
+                                                     'junior', 'hunting', 'gold', 'silver', 'copper']
+                                bio_indicators = ['cpa', 'cfo', 'ceo', 'years of experience',
+                                                 'previously served', 'his career', 'her career',
+                                                 'results oriented', 'accomplished', 'executive']
+                                has_company = any(ind in p_lower for ind in company_indicators)
+                                has_bio = any(ind in p_lower for ind in bio_indicators)
+                                if has_company and not has_bio:
+                                    homepage_desc = p_text
+                                    break
+                        if homepage_desc:
+                            break
 
             # Use homepage description if it's better than meta description
             current_desc = self.extracted_data['company'].get('description', '')
