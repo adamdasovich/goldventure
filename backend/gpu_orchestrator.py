@@ -510,6 +510,51 @@ touch /opt/goldventure/.ready
     # Main server's external IP for GPU workers to connect back
     MAIN_SERVER_IP = "137.184.168.166"
 
+    def _wait_for_cloud_init(self, timeout: int = 600) -> bool:
+        """Wait for cloud-init to complete by checking for .ready file.
+
+        Args:
+            timeout: Maximum seconds to wait (default 10 minutes)
+
+        Returns:
+            True if cloud-init completed, False if timed out
+        """
+        if not self.gpu_droplet_ip:
+            return False
+
+        start_time = time.time()
+        check_interval = 15  # Check every 15 seconds
+
+        while time.time() - start_time < timeout:
+            try:
+                result = subprocess.run(
+                    ['ssh', '-o', 'StrictHostKeyChecking=no', '-o', 'ConnectTimeout=10',
+                     f'root@{self.gpu_droplet_ip}',
+                     'test -f /opt/goldventure/.ready && echo READY || echo WAITING'],
+                    capture_output=True,
+                    text=True,
+                    timeout=30
+                )
+
+                if 'READY' in result.stdout:
+                    elapsed = int(time.time() - start_time)
+                    logger.info(f"Cloud-init completed in {elapsed}s")
+                    return True
+
+                elapsed = int(time.time() - start_time)
+                logger.info(f"Cloud-init still running... ({elapsed}s elapsed)")
+                time.sleep(check_interval)
+
+            except subprocess.TimeoutExpired:
+                logger.warning("SSH timeout while checking cloud-init status")
+                time.sleep(check_interval)
+            except Exception as e:
+                logger.warning(f"Error checking cloud-init status: {e}")
+                time.sleep(check_interval)
+
+        logger.error(f"Cloud-init timed out after {timeout}s")
+        return False
+
     def _transfer_credentials(self) -> bool:
         """Securely transfer credentials to GPU droplet via SCP.
 
@@ -639,14 +684,17 @@ CHROMA_PORT=8002
                 if self.should_create_gpu():
                     if self.create_gpu_droplet():
                         if self.wait_for_droplet_ready():
-                            # Give it time to run cloud-init
-                            logger.info("Waiting for GPU droplet initialization...")
-                            time.sleep(120)
-                            # Transfer credentials securely (not via cloud-init)
-                            if self._transfer_credentials():
-                                self.start_gpu_worker()
+                            # Wait for cloud-init to complete (checks for .ready file)
+                            logger.info("Waiting for GPU droplet initialization (cloud-init)...")
+                            if self._wait_for_cloud_init():
+                                # Transfer credentials securely (not via cloud-init)
+                                if self._transfer_credentials():
+                                    self.start_gpu_worker()
+                                else:
+                                    logger.error("Failed to transfer credentials, destroying droplet")
+                                    self.destroy_gpu_droplet()
                             else:
-                                logger.error("Failed to transfer credentials, destroying droplet")
+                                logger.error("Cloud-init timed out, destroying droplet")
                                 self.destroy_gpu_droplet()
 
                 # Check if we should destroy GPU droplet
