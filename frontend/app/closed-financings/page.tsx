@@ -10,6 +10,13 @@ import LogoMono from '@/components/LogoMono';
 import { LoginModal, RegisterModal } from '@/components/auth';
 import { useAuth } from '@/contexts/AuthContext';
 
+interface Company {
+  id: number;
+  name: string;
+  ticker_symbol: string;
+  exchange: string;
+}
+
 interface ClosedFinancing {
   id: number;
   company_id: number;
@@ -50,6 +57,28 @@ export default function ClosedFinancingsPage() {
   const [sortOrder, setSortOrder] = useState<string>('desc');
   const [financingType, setFinancingType] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState<string>('');
+
+  // Add Financing Modal (superuser only)
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [companies, setCompanies] = useState<Company[]>([]);
+  const [companiesLoading, setCompaniesLoading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [formData, setFormData] = useState({
+    company_id: '',
+    financing_type: 'private_placement',
+    amount_raised_usd: '',
+    price_per_share: '',
+    shares_issued: '',
+    has_warrants: false,
+    warrant_strike_price: '',
+    warrant_expiry_date: '',
+    announced_date: '',
+    closing_date: '',
+    lead_agent: '',
+    use_of_proceeds: '',
+    press_release_url: '',
+    notes: '',
+  });
 
   const accessToken = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null;
 
@@ -92,6 +121,97 @@ export default function ClosedFinancingsPage() {
       setError(err instanceof Error ? err.message : 'Failed to load closed financings');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchCompanies = async () => {
+    try {
+      setCompaniesLoading(true);
+      const response = await fetch(`${API_URL}/companies/`);
+      if (response.ok) {
+        const data = await response.json();
+        setCompanies(data.results || data);
+      }
+    } catch (err) {
+      console.error('Failed to fetch companies:', err);
+    } finally {
+      setCompaniesLoading(false);
+    }
+  };
+
+  const handleOpenAddModal = () => {
+    if (companies.length === 0) {
+      fetchCompanies();
+    }
+    setShowAddModal(true);
+  };
+
+  const handleCloseAddModal = () => {
+    setShowAddModal(false);
+    setFormData({
+      company_id: '',
+      financing_type: 'private_placement',
+      amount_raised_usd: '',
+      price_per_share: '',
+      shares_issued: '',
+      has_warrants: false,
+      warrant_strike_price: '',
+      warrant_expiry_date: '',
+      announced_date: '',
+      closing_date: '',
+      lead_agent: '',
+      use_of_proceeds: '',
+      press_release_url: '',
+      notes: '',
+    });
+  };
+
+  const handleSubmitFinancing = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!formData.company_id || !formData.amount_raised_usd || !formData.closing_date) {
+      alert('Please fill in required fields: Company, Amount Raised, and Closing Date');
+      return;
+    }
+
+    try {
+      setSubmitting(true);
+      const response = await fetch(`${API_URL}/closed-financings/create/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({
+          company_id: parseInt(formData.company_id),
+          financing_type: formData.financing_type,
+          amount_raised_usd: parseFloat(formData.amount_raised_usd),
+          price_per_share: formData.price_per_share ? parseFloat(formData.price_per_share) : null,
+          shares_issued: formData.shares_issued ? parseInt(formData.shares_issued) : null,
+          has_warrants: formData.has_warrants,
+          warrant_strike_price: formData.warrant_strike_price ? parseFloat(formData.warrant_strike_price) : null,
+          warrant_expiry_date: formData.warrant_expiry_date || null,
+          announced_date: formData.announced_date || null,
+          closing_date: formData.closing_date,
+          lead_agent: formData.lead_agent,
+          use_of_proceeds: formData.use_of_proceeds,
+          press_release_url: formData.press_release_url,
+          notes: formData.notes,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to create financing');
+      }
+
+      const data = await response.json();
+      alert(`Financing created successfully for ${data.financing?.company_name || 'company'}`);
+      handleCloseAddModal();
+      fetchClosedFinancings();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to create financing');
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -210,9 +330,14 @@ export default function ClosedFinancingsPage() {
           <h1 className="text-4xl md:text-5xl font-bold mb-4 text-gradient-gold leading-tight pb-2">
             Closed Financings
           </h1>
-          <p className="text-lg text-slate-300 max-w-2xl mx-auto">
+          <p className="text-lg text-slate-300 max-w-2xl mx-auto mb-6">
             Browse recently closed financing rounds from junior mining companies
           </p>
+          {user?.is_superuser && (
+            <Button variant="primary" size="lg" onClick={handleOpenAddModal}>
+              + Add Past Financing
+            </Button>
+          )}
         </div>
       </section>
 
@@ -437,6 +562,267 @@ export default function ClosedFinancingsPage() {
           )}
         </div>
       </section>
+
+      {/* Add Financing Modal */}
+      {showAddModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 overflow-y-auto">
+          <div className="bg-slate-800 rounded-lg p-6 max-w-2xl w-full my-8 max-h-[90vh] overflow-y-auto">
+            <h2 className="text-xl font-bold text-slate-100 mb-4">
+              Add Past Financing
+            </h2>
+            <p className="text-slate-400 mb-6">
+              Manually add a historical financing that has already closed.
+            </p>
+
+            <form onSubmit={handleSubmitFinancing} className="space-y-4">
+              {/* Company Selection */}
+              <div>
+                <label htmlFor="company_id" className="block text-sm font-medium text-slate-300 mb-1">
+                  Company <span className="text-red-400">*</span>
+                </label>
+                <select
+                  id="company_id"
+                  value={formData.company_id}
+                  onChange={(e) => setFormData({ ...formData, company_id: e.target.value })}
+                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-slate-100 focus:outline-none focus:border-gold-400"
+                  required
+                >
+                  <option value="">Select a company...</option>
+                  {companiesLoading ? (
+                    <option disabled>Loading companies...</option>
+                  ) : (
+                    companies.map((company) => (
+                      <option key={company.id} value={company.id}>
+                        {company.name} ({company.exchange}:{company.ticker_symbol})
+                      </option>
+                    ))
+                  )}
+                </select>
+              </div>
+
+              {/* Financing Type */}
+              <div>
+                <label htmlFor="financing_type" className="block text-sm font-medium text-slate-300 mb-1">
+                  Financing Type <span className="text-red-400">*</span>
+                </label>
+                <select
+                  id="financing_type"
+                  value={formData.financing_type}
+                  onChange={(e) => setFormData({ ...formData, financing_type: e.target.value })}
+                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-slate-100 focus:outline-none focus:border-gold-400"
+                  required
+                >
+                  {financingTypes.filter(t => t.value).map((type) => (
+                    <option key={type.value} value={type.value}>{type.label}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Amount and Price Row */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label htmlFor="amount_raised_usd" className="block text-sm font-medium text-slate-300 mb-1">
+                    Amount Raised (CAD) <span className="text-red-400">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    id="amount_raised_usd"
+                    value={formData.amount_raised_usd}
+                    onChange={(e) => setFormData({ ...formData, amount_raised_usd: e.target.value })}
+                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-slate-100 focus:outline-none focus:border-gold-400"
+                    placeholder="5000000"
+                    required
+                  />
+                </div>
+                <div>
+                  <label htmlFor="price_per_share" className="block text-sm font-medium text-slate-300 mb-1">
+                    Price Per Share
+                  </label>
+                  <input
+                    type="number"
+                    id="price_per_share"
+                    step="0.001"
+                    value={formData.price_per_share}
+                    onChange={(e) => setFormData({ ...formData, price_per_share: e.target.value })}
+                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-slate-100 focus:outline-none focus:border-gold-400"
+                    placeholder="0.15"
+                  />
+                </div>
+              </div>
+
+              {/* Shares Issued */}
+              <div>
+                <label htmlFor="shares_issued" className="block text-sm font-medium text-slate-300 mb-1">
+                  Shares Issued
+                </label>
+                <input
+                  type="number"
+                  id="shares_issued"
+                  value={formData.shares_issued}
+                  onChange={(e) => setFormData({ ...formData, shares_issued: e.target.value })}
+                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-slate-100 focus:outline-none focus:border-gold-400"
+                  placeholder="33333333"
+                />
+              </div>
+
+              {/* Warrant Checkbox */}
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="has_warrants"
+                  checked={formData.has_warrants}
+                  onChange={(e) => setFormData({ ...formData, has_warrants: e.target.checked })}
+                  className="w-4 h-4 rounded border-slate-700 bg-slate-900 text-gold-500 focus:ring-gold-500"
+                />
+                <label htmlFor="has_warrants" className="text-sm font-medium text-slate-300">
+                  Includes Warrants
+                </label>
+              </div>
+
+              {/* Warrant Details (conditional) */}
+              {formData.has_warrants && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pl-6 border-l-2 border-gold-500/30">
+                  <div>
+                    <label htmlFor="warrant_strike_price" className="block text-sm font-medium text-slate-300 mb-1">
+                      Warrant Strike Price
+                    </label>
+                    <input
+                      type="number"
+                      id="warrant_strike_price"
+                      step="0.001"
+                      value={formData.warrant_strike_price}
+                      onChange={(e) => setFormData({ ...formData, warrant_strike_price: e.target.value })}
+                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-slate-100 focus:outline-none focus:border-gold-400"
+                      placeholder="0.20"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="warrant_expiry_date" className="block text-sm font-medium text-slate-300 mb-1">
+                      Warrant Expiry Date
+                    </label>
+                    <input
+                      type="date"
+                      id="warrant_expiry_date"
+                      value={formData.warrant_expiry_date}
+                      onChange={(e) => setFormData({ ...formData, warrant_expiry_date: e.target.value })}
+                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-slate-100 focus:outline-none focus:border-gold-400"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Dates Row */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label htmlFor="announced_date" className="block text-sm font-medium text-slate-300 mb-1">
+                    Announced Date
+                  </label>
+                  <input
+                    type="date"
+                    id="announced_date"
+                    value={formData.announced_date}
+                    onChange={(e) => setFormData({ ...formData, announced_date: e.target.value })}
+                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-slate-100 focus:outline-none focus:border-gold-400"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="closing_date" className="block text-sm font-medium text-slate-300 mb-1">
+                    Closing Date <span className="text-red-400">*</span>
+                  </label>
+                  <input
+                    type="date"
+                    id="closing_date"
+                    value={formData.closing_date}
+                    onChange={(e) => setFormData({ ...formData, closing_date: e.target.value })}
+                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-slate-100 focus:outline-none focus:border-gold-400"
+                    required
+                  />
+                </div>
+              </div>
+
+              {/* Lead Agent */}
+              <div>
+                <label htmlFor="lead_agent" className="block text-sm font-medium text-slate-300 mb-1">
+                  Lead Agent
+                </label>
+                <input
+                  type="text"
+                  id="lead_agent"
+                  value={formData.lead_agent}
+                  onChange={(e) => setFormData({ ...formData, lead_agent: e.target.value })}
+                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-slate-100 focus:outline-none focus:border-gold-400"
+                  placeholder="e.g., Canaccord Genuity"
+                />
+              </div>
+
+              {/* Use of Proceeds */}
+              <div>
+                <label htmlFor="use_of_proceeds" className="block text-sm font-medium text-slate-300 mb-1">
+                  Use of Proceeds
+                </label>
+                <textarea
+                  id="use_of_proceeds"
+                  value={formData.use_of_proceeds}
+                  onChange={(e) => setFormData({ ...formData, use_of_proceeds: e.target.value })}
+                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-slate-100 focus:outline-none focus:border-gold-400"
+                  rows={2}
+                  placeholder="Exploration activities, working capital..."
+                />
+              </div>
+
+              {/* Press Release URL */}
+              <div>
+                <label htmlFor="press_release_url" className="block text-sm font-medium text-slate-300 mb-1">
+                  Press Release URL
+                </label>
+                <input
+                  type="url"
+                  id="press_release_url"
+                  value={formData.press_release_url}
+                  onChange={(e) => setFormData({ ...formData, press_release_url: e.target.value })}
+                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-slate-100 focus:outline-none focus:border-gold-400"
+                  placeholder="https://..."
+                />
+              </div>
+
+              {/* Notes */}
+              <div>
+                <label htmlFor="notes" className="block text-sm font-medium text-slate-300 mb-1">
+                  Notes
+                </label>
+                <textarea
+                  id="notes"
+                  value={formData.notes}
+                  onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-slate-100 focus:outline-none focus:border-gold-400"
+                  rows={2}
+                  placeholder="Optional notes..."
+                />
+              </div>
+
+              {/* Buttons */}
+              <div className="flex gap-3 pt-4">
+                <Button
+                  type="submit"
+                  variant="primary"
+                  disabled={submitting}
+                  className="flex-1"
+                >
+                  {submitting ? 'Creating...' : 'Create Financing'}
+                </Button>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={handleCloseAddModal}
+                  disabled={submitting}
+                >
+                  Cancel
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Footer */}
       <footer className="py-8 px-4 border-t border-slate-800 mt-12">

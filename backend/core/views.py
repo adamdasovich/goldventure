@@ -7576,6 +7576,123 @@ def closed_financings_list(request):
     })
 
 
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def create_closed_financing(request):
+    """
+    Create a new closed financing directly (for adding historical/past financings).
+
+    POST /api/closed-financings/create/
+
+    Request Body:
+    {
+        "company_id": 123,
+        "financing_type": "private_placement",
+        "amount_raised_usd": 5000000,
+        "price_per_share": 0.15,
+        "shares_issued": 33333333,
+        "has_warrants": true,
+        "warrant_strike_price": 0.20,
+        "warrant_expiry_date": "2026-01-15",
+        "announced_date": "2024-12-01",
+        "closing_date": "2024-12-15",
+        "lead_agent": "Agent Name",
+        "use_of_proceeds": "Exploration activities",
+        "press_release_url": "https://...",
+        "notes": "Optional notes"
+    }
+
+    Superuser access required.
+    """
+    from core.models import Financing, Company
+    from django.utils import timezone
+    from decimal import Decimal
+
+    # Superuser check
+    if not request.user.is_superuser:
+        return Response(
+            {'error': 'Only superusers can add closed financings'},
+            status=status.HTTP_403_FORBIDDEN
+        )
+
+    # Validate required fields
+    company_id = request.data.get('company_id')
+    if not company_id:
+        return Response({'error': 'company_id is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+    financing_type = request.data.get('financing_type')
+    if not financing_type:
+        return Response({'error': 'financing_type is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+    amount_raised = request.data.get('amount_raised_usd')
+    if not amount_raised:
+        return Response({'error': 'amount_raised_usd is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+    closing_date = request.data.get('closing_date')
+    if not closing_date:
+        return Response({'error': 'closing_date is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+    # Get company
+    try:
+        company = Company.objects.get(id=company_id)
+    except Company.DoesNotExist:
+        return Response({'error': 'Company not found'}, status=status.HTTP_404_NOT_FOUND)
+
+    try:
+        # Parse dates
+        from datetime import datetime
+        if isinstance(closing_date, str):
+            closing_date = datetime.strptime(closing_date, '%Y-%m-%d').date()
+
+        announced_date = request.data.get('announced_date')
+        if announced_date and isinstance(announced_date, str):
+            announced_date = datetime.strptime(announced_date, '%Y-%m-%d').date()
+        else:
+            announced_date = closing_date  # Default to closing date
+
+        warrant_expiry_date = request.data.get('warrant_expiry_date')
+        if warrant_expiry_date and isinstance(warrant_expiry_date, str):
+            warrant_expiry_date = datetime.strptime(warrant_expiry_date, '%Y-%m-%d').date()
+
+        # Create the financing
+        financing = Financing.objects.create(
+            company=company,
+            financing_type=financing_type,
+            status='closed',
+            amount_raised_usd=Decimal(str(amount_raised)),
+            price_per_share=Decimal(str(request.data.get('price_per_share', 0))) if request.data.get('price_per_share') else None,
+            shares_issued=request.data.get('shares_issued'),
+            has_warrants=request.data.get('has_warrants', False),
+            warrant_strike_price=Decimal(str(request.data.get('warrant_strike_price', 0))) if request.data.get('warrant_strike_price') else None,
+            warrant_expiry_date=warrant_expiry_date,
+            announced_date=announced_date,
+            closing_date=closing_date,
+            lead_agent=request.data.get('lead_agent', ''),
+            use_of_proceeds=request.data.get('use_of_proceeds', ''),
+            press_release_url=request.data.get('press_release_url', ''),
+            notes=request.data.get('notes', ''),
+            # Mark as closed
+            is_closed=True,
+            closed_at=timezone.now(),
+            closed_by=request.user,
+        )
+
+        return Response({
+            'message': 'Closed financing created successfully',
+            'financing': {
+                'id': financing.id,
+                'company_name': company.name,
+                'company_ticker': company.ticker_symbol,
+                'financing_type': financing.financing_type,
+                'amount_raised_usd': str(financing.amount_raised_usd),
+                'closing_date': financing.closing_date.isoformat() if financing.closing_date else None,
+            }
+        }, status=status.HTTP_201_CREATED)
+
+    except Exception as e:
+        return Response({'error': f'Error creating financing: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
 # ============================================================================
 # DOCUMENT PROCESSING SUMMARY DASHBOARD (Superuser Only)
 # ============================================================================
