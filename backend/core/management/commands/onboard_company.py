@@ -734,12 +734,18 @@ class Command(BaseCommand):
         # Save documents
         documents_data = data.get('documents', [])
         for doc_data in documents_data:
+            doc_source_url = doc_data.get('source_url', '')
+            # Skip documents with URLs that are too long (max 200 chars)
+            if len(doc_source_url) > 200:
+                self.stdout.write(self.style.WARNING(f"  Skipping document with URL too long: {doc_source_url[:60]}..."))
+                continue
+
             CompanyDocument.objects.update_or_create(
                 company=company,
-                source_url=doc_data.get('source_url'),
+                source_url=doc_source_url,
                 defaults={
                     'document_type': doc_data.get('document_type', 'other'),
-                    'title': doc_data.get('title', 'Untitled'),
+                    'title': (doc_data.get('title', 'Untitled') or 'Untitled')[:500],  # Truncate title
                     'year': doc_data.get('year'),
                     'extracted_at': timezone.now(),
                 }
