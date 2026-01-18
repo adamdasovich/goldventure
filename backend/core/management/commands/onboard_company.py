@@ -543,6 +543,126 @@ class Command(BaseCommand):
                     f"\nCompany created/updated: {company.name} (ID: {company.id})"
                 ))
                 self.stdout.write(f"Completeness score: {company.data_completeness_score}%")
+
+                # Process news content for RAG/semantic search
+                # This makes all scraped news available to Claude's knowledge base
+                news_count = len(data.get('news', []))
+                if news_count > 0:
+                    @sync_to_async
+                    def process_news_for_rag():
+                        try:
+                            from mcp_servers.news_content_processor import NewsContentProcessor
+                            processor = NewsContentProcessor()
+                            result = processor._process_company_news(company.name, limit=50)
+                            return result
+                        except Exception as e:
+                            return {"error": str(e)}
+
+                    self.stdout.write(f"Processing {news_count} news items for RAG knowledge base...")
+                    news_result = await process_news_for_rag()
+                    if news_result.get('success'):
+                        self.stdout.write(self.style.SUCCESS(
+                            f"  Processed {news_result.get('news_items_processed', 0)} news items, "
+                            f"created {news_result.get('chunks_created', 0)} searchable chunks"
+                        ))
+                    elif news_result.get('error'):
+                        self.stdout.write(self.style.WARNING(
+                            f"  Warning: News processing failed: {news_result.get('error')}"
+                        ))
+
+                # Store company profile data in knowledge base
+                # This includes description, tagline, and project summaries
+                @sync_to_async
+                def store_company_profile_in_rag():
+                    try:
+                        from mcp_servers.rag_utils import RAGManager
+                        import chromadb
+                        from pathlib import Path
+                        from django.conf import settings
+
+                        # Build company profile text for RAG
+                        profile_parts = []
+
+                        # Company overview
+                        if company.description:
+                            profile_parts.append(f"Company Overview: {company.name}\n{company.description}")
+
+                        if company.tagline:
+                            profile_parts.append(f"Tagline: {company.tagline}")
+
+                        # Stock info
+                        if company.ticker_symbol and company.exchange:
+                            profile_parts.append(f"Stock: {company.ticker_symbol} on {company.exchange.upper()}")
+
+                        # Projects summary
+                        projects = company.projects.all()
+                        if projects:
+                            project_texts = []
+                            for project in projects:
+                                project_text = f"Project: {project.name}"
+                                if project.description:
+                                    project_text += f"\n{project.description}"
+                                if project.country:
+                                    project_text += f"\nLocation: {project.country}"
+                                if project.primary_commodity:
+                                    project_text += f"\nCommodity: {project.primary_commodity}"
+                                project_texts.append(project_text)
+                            profile_parts.append("Projects:\n" + "\n\n".join(project_texts))
+
+                        if not profile_parts:
+                            return {"success": False, "message": "No profile data to store"}
+
+                        full_profile = "\n\n".join(profile_parts)
+
+                        # Store in ChromaDB company_profiles collection
+                        chroma_path = Path(settings.BASE_DIR) / "chroma_db"
+                        chroma_path.mkdir(exist_ok=True)
+
+                        from chromadb.config import Settings as ChromaSettings
+                        chroma_client = chromadb.PersistentClient(
+                            path=str(chroma_path),
+                            settings=ChromaSettings(anonymized_telemetry=False)
+                        )
+
+                        collection = chroma_client.get_or_create_collection(
+                            name="company_profiles",
+                            metadata={"hnsw:space": "cosine"}
+                        )
+
+                        # Delete existing profile for this company
+                        try:
+                            collection.delete(ids=[f"company_{company.id}_profile"])
+                        except:
+                            pass
+
+                        # Add the profile
+                        collection.add(
+                            ids=[f"company_{company.id}_profile"],
+                            documents=[full_profile],
+                            metadatas=[{
+                                "company_id": company.id,
+                                "company_name": company.name,
+                                "ticker": company.ticker_symbol or "",
+                                "exchange": company.exchange or "",
+                                "type": "company_profile"
+                            }]
+                        )
+
+                        return {"success": True, "chars_stored": len(full_profile)}
+
+                    except Exception as e:
+                        return {"error": str(e)}
+
+                self.stdout.write("Storing company profile in knowledge base...")
+                profile_result = await store_company_profile_in_rag()
+                if profile_result.get('success'):
+                    self.stdout.write(self.style.SUCCESS(
+                        f"  Stored {profile_result.get('chars_stored', 0)} chars of company profile data"
+                    ))
+                elif profile_result.get('error'):
+                    self.stdout.write(self.style.WARNING(
+                        f"  Warning: Profile storage failed: {profile_result.get('error')}"
+                    ))
             else:
                 raise Exception("Failed to create company record")
 
