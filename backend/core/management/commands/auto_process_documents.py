@@ -27,6 +27,7 @@ from core.models import Company, DocumentProcessingJob, Document
 from mcp_servers.website_crawler import crawl_company_website
 from datetime import datetime
 import asyncio
+import requests
 
 
 class Command(BaseCommand):
@@ -225,6 +226,16 @@ class Command(BaseCommand):
 
                 if existing_job:
                     continue
+
+            # Validate URL is accessible before creating job
+            try:
+                response = requests.head(doc['url'], timeout=10, allow_redirects=True)
+                if response.status_code >= 400:
+                    self.stdout.write(self.style.WARNING(f"    Skipping broken link ({response.status_code}): {doc['url'][:60]}..."))
+                    continue
+            except requests.RequestException as e:
+                self.stdout.write(self.style.WARNING(f"    Skipping unreachable URL: {doc['url'][:60]}..."))
+                continue
 
             # Create processing job
             DocumentProcessingJob.objects.create(
