@@ -731,10 +731,15 @@ class Command(BaseCommand):
                 }
             )
 
-        # Save documents
+        # Save documents and create processing jobs for key document types
         documents_data = data.get('documents', [])
+        processing_job_types = ['ni43101', 'pea', 'presentation', 'fact_sheet']
+        doc_jobs_created = 0
+
         for doc_data in documents_data:
             doc_source_url = doc_data.get('source_url', '')
+            doc_type = doc_data.get('document_type', 'other')
+
             # Skip documents with URLs that are too long (max 200 chars)
             if len(doc_source_url) > 200:
                 self.stdout.write(self.style.WARNING(f"  Skipping document with URL too long: {doc_source_url[:60]}..."))
@@ -744,12 +749,27 @@ class Command(BaseCommand):
                 company=company,
                 source_url=doc_source_url,
                 defaults={
-                    'document_type': doc_data.get('document_type', 'other'),
+                    'document_type': doc_type,
                     'title': (doc_data.get('title', 'Untitled') or 'Untitled')[:500],  # Truncate title
                     'year': doc_data.get('year'),
                     'extracted_at': timezone.now(),
                 }
             )
+
+            # Create document processing job for key document types (if PDF)
+            if doc_type in processing_job_types and doc_source_url and '.pdf' in doc_source_url.lower():
+                existing_job = DocumentProcessingJob.objects.filter(url=doc_source_url).first()
+                if not existing_job:
+                    DocumentProcessingJob.objects.create(
+                        url=doc_source_url,
+                        document_type=doc_type,
+                        company_name=company.name,
+                        status='pending',
+                    )
+                    doc_jobs_created += 1
+
+        if doc_jobs_created > 0:
+            self.stdout.write(self.style.SUCCESS(f"  Created {doc_jobs_created} document processing jobs"))
 
         # Save news with classification and document processing
         news_data = data.get('news', [])
