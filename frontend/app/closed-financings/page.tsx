@@ -86,7 +86,7 @@ export default function ClosedFinancingsPage() {
       }
 
       const data = await response.json();
-      setFinancings(data);
+      setFinancings(data.results || []);
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load closed financings');
