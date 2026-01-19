@@ -304,6 +304,7 @@ export default function NewsFlagsPage() {
       setSubmitting(true);
 
       // Prepare the data for submission
+      // Use empty strings instead of null for text fields to avoid NOT NULL constraint violations
       const submitData = {
         company_id: closedFinancingForm.company_id,
         financing_type: closedFinancingForm.financing_type,
@@ -315,10 +316,10 @@ export default function NewsFlagsPage() {
         warrant_expiry_date: closedFinancingForm.warrant_expiry_date || null,
         announced_date: closedFinancingForm.announced_date || null,
         closing_date: closedFinancingForm.closing_date,
-        lead_agent: closedFinancingForm.lead_agent || null,
-        use_of_proceeds: closedFinancingForm.use_of_proceeds || null,
-        press_release_url: closedFinancingForm.press_release_url || null,
-        notes: closedFinancingForm.notes || null,
+        lead_agent: closedFinancingForm.lead_agent || '',
+        use_of_proceeds: closedFinancingForm.use_of_proceeds || '',
+        press_release_url: closedFinancingForm.press_release_url || '',
+        notes: closedFinancingForm.notes || '',
         source_news_flag_id: selectedFlag.id,  // Link to the news flag for duplicate detection
       };
 
