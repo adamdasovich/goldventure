@@ -94,11 +94,14 @@ export function CreateFinancingModal({ companyId, companyName, accessToken, onCl
         notes: notes || '',
       };
 
+      // Get fresh token from localStorage in case the prop is stale
+      const token = accessToken || localStorage.getItem('accessToken');
+
       const response = await fetch(`${API_URL}/financings/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${accessToken}`,
+          'Authorization': `Bearer ${token}`,
         },
         body: JSON.stringify(payload),
       });

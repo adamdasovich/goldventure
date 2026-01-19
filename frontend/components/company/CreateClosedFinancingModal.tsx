@@ -138,11 +138,14 @@ export function CreateClosedFinancingModal({ flag, accessToken, onClose, onCreat
         source_news_flag_id: flag.id,
       };
 
+      // Get fresh token from localStorage in case the prop is stale
+      const token = accessToken || localStorage.getItem('accessToken');
+
       const response = await fetch(`${API_URL}/closed-financings/create/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${accessToken}`,
+          'Authorization': `Bearer ${token}`,
         },
         body: JSON.stringify(payload),
       });
