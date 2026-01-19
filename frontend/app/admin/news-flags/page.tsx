@@ -5,6 +5,70 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/Button';
 import { CreateFinancingModal } from '@/components/company/CreateFinancingModal';
 
+// Financing types for the dropdown
+const financingTypes = [
+  { value: 'private_placement', label: 'Private Placement' },
+  { value: 'bought_deal', label: 'Bought Deal' },
+  { value: 'flow_through', label: 'Flow-Through Shares' },
+  { value: 'warrant_exercise', label: 'Warrant Exercise' },
+  { value: 'rights_offering', label: 'Rights Offering' },
+  { value: 'public_offering', label: 'Public Offering' },
+  { value: 'debt', label: 'Debt Financing' },
+  { value: 'convertible', label: 'Convertible Debenture' },
+  { value: 'other', label: 'Other' },
+];
+
+// Helper to infer financing type from detected keywords
+const inferFinancingType = (keywords: string[]): string => {
+  const keywordsLower = keywords.map(k => k.toLowerCase());
+
+  if (keywordsLower.some(k => k.includes('flow-through') || k.includes('flow through'))) {
+    return 'flow_through';
+  }
+  if (keywordsLower.some(k => k.includes('bought deal'))) {
+    return 'bought_deal';
+  }
+  if (keywordsLower.some(k => k.includes('warrant') && k.includes('exercise'))) {
+    return 'warrant_exercise';
+  }
+  if (keywordsLower.some(k => k.includes('rights offering'))) {
+    return 'rights_offering';
+  }
+  if (keywordsLower.some(k => k.includes('convertible') || k.includes('debenture'))) {
+    return 'convertible';
+  }
+  if (keywordsLower.some(k => k.includes('debt') || k.includes('loan'))) {
+    return 'debt';
+  }
+  if (keywordsLower.some(k => k.includes('public offering') || k.includes('prospectus'))) {
+    return 'public_offering';
+  }
+  if (keywordsLower.some(k => k.includes('private placement') || k.includes('non-brokered'))) {
+    return 'private_placement';
+  }
+
+  // Default to private placement as it's most common for junior miners
+  return 'private_placement';
+};
+
+// Interface for the closed financing form data
+interface ClosedFinancingFormData {
+  company_id: number;
+  financing_type: string;
+  amount_raised_usd: string;
+  price_per_share: string;
+  shares_issued: string;
+  has_warrants: boolean;
+  warrant_strike_price: string;
+  warrant_expiry_date: string;
+  announced_date: string;
+  closing_date: string;
+  lead_agent: string;
+  use_of_proceeds: string;
+  press_release_url: string;
+  notes: string;
+}
+
 interface NewsReleaseFlag {
   id: number;
   company_name: string;
@@ -35,6 +99,25 @@ export default function NewsFlagsPage() {
   const [submitting, setSubmitting] = useState(false);
   const [showCloseFinancingModal, setShowCloseFinancingModal] = useState(false);
   const [closingDate, setClosingDate] = useState('');
+
+  // State for the new "Add Closed Financing from Flag" modal
+  const [showAddClosedFinancingModal, setShowAddClosedFinancingModal] = useState(false);
+  const [closedFinancingForm, setClosedFinancingForm] = useState<ClosedFinancingFormData>({
+    company_id: 0,
+    financing_type: 'private_placement',
+    amount_raised_usd: '',
+    price_per_share: '',
+    shares_issued: '',
+    has_warrants: false,
+    warrant_strike_price: '',
+    warrant_expiry_date: '',
+    announced_date: '',
+    closing_date: '',
+    lead_agent: '',
+    use_of_proceeds: '',
+    press_release_url: '',
+    notes: '',
+  });
 
   const accessToken = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null;
 
@@ -172,6 +255,128 @@ export default function NewsFlagsPage() {
     }
   };
 
+  // Handler to open the Add Closed Financing modal with pre-filled data from the flag
+  const handleOpenAddClosedFinancing = (flag: NewsReleaseFlag) => {
+    setSelectedFlag(flag);
+
+    // Pre-fill form with data from the news flag
+    const inferredType = inferFinancingType(flag.detected_keywords);
+
+    setClosedFinancingForm({
+      company_id: flag.company_id,
+      financing_type: inferredType,
+      amount_raised_usd: '',
+      price_per_share: '',
+      shares_issued: '',
+      has_warrants: false,
+      warrant_strike_price: '',
+      warrant_expiry_date: '',
+      announced_date: flag.news_date ? flag.news_date.split('T')[0] : '',
+      closing_date: flag.news_date ? flag.news_date.split('T')[0] : '',
+      lead_agent: '',
+      use_of_proceeds: '',
+      press_release_url: flag.news_url || '',
+      notes: `Created from news flag: "${flag.news_title}"`,
+    });
+
+    setShowAddClosedFinancingModal(true);
+  };
+
+  // Handler to submit the closed financing form
+  const handleSubmitClosedFinancing = async () => {
+    if (!selectedFlag) return;
+
+    // Validation
+    if (!closedFinancingForm.financing_type) {
+      alert('Please select a financing type');
+      return;
+    }
+    if (!closedFinancingForm.amount_raised_usd || parseFloat(closedFinancingForm.amount_raised_usd) <= 0) {
+      alert('Please enter a valid amount raised');
+      return;
+    }
+    if (!closedFinancingForm.closing_date) {
+      alert('Please enter a closing date');
+      return;
+    }
+
+    try {
+      setSubmitting(true);
+
+      // Prepare the data for submission
+      const submitData = {
+        company_id: closedFinancingForm.company_id,
+        financing_type: closedFinancingForm.financing_type,
+        amount_raised_usd: parseFloat(closedFinancingForm.amount_raised_usd),
+        price_per_share: closedFinancingForm.price_per_share ? parseFloat(closedFinancingForm.price_per_share) : null,
+        shares_issued: closedFinancingForm.shares_issued ? parseInt(closedFinancingForm.shares_issued) : null,
+        has_warrants: closedFinancingForm.has_warrants,
+        warrant_strike_price: closedFinancingForm.warrant_strike_price ? parseFloat(closedFinancingForm.warrant_strike_price) : null,
+        warrant_expiry_date: closedFinancingForm.warrant_expiry_date || null,
+        announced_date: closedFinancingForm.announced_date || null,
+        closing_date: closedFinancingForm.closing_date,
+        lead_agent: closedFinancingForm.lead_agent || null,
+        use_of_proceeds: closedFinancingForm.use_of_proceeds || null,
+        press_release_url: closedFinancingForm.press_release_url || null,
+        notes: closedFinancingForm.notes || null,
+        source_news_flag_id: selectedFlag.id,  // Link to the news flag for duplicate detection
+      };
+
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/closed-financings/create/`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
+          },
+          body: JSON.stringify(submitData)
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to create closed financing');
+      }
+
+      const data = await response.json();
+
+      // Show success message including info about duplicate removal if applicable
+      let successMessage = `Closed financing created successfully for ${selectedFlag.company_name}!`;
+      if (data.duplicates_removed && data.duplicates_removed > 0) {
+        successMessage += ` (${data.duplicates_removed} duplicate financing round(s) removed)`;
+      }
+      alert(successMessage);
+
+      // Reset form and close modal
+      setShowAddClosedFinancingModal(false);
+      setSelectedFlag(null);
+      setClosedFinancingForm({
+        company_id: 0,
+        financing_type: 'private_placement',
+        amount_raised_usd: '',
+        price_per_share: '',
+        shares_issued: '',
+        has_warrants: false,
+        warrant_strike_price: '',
+        warrant_expiry_date: '',
+        announced_date: '',
+        closing_date: '',
+        lead_agent: '',
+        use_of_proceeds: '',
+        press_release_url: '',
+        notes: '',
+      });
+
+      // Refresh the flags list
+      fetchFlags();
+    } catch (err: any) {
+      alert(`Error: ${err.message}`);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   if (!user?.is_superuser) {
     return (
       <div className="text-center py-12">
@@ -248,13 +453,21 @@ export default function NewsFlagsPage() {
                   </div>
                 </div>
                 {flag.status === 'pending' && (
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 flex-wrap">
                     <Button
                       variant="primary"
                       onClick={() => handleOpenFinancingModal(flag)}
                       size="sm"
                     >
                       Create Financing
+                    </Button>
+                    <Button
+                      variant="primary"
+                      onClick={() => handleOpenAddClosedFinancing(flag)}
+                      size="sm"
+                      className="bg-emerald-600 hover:bg-emerald-700"
+                    >
+                      + Add Closed Financing
                     </Button>
                     <Button
                       variant="secondary"
@@ -434,6 +647,258 @@ export default function NewsFlagsPage() {
                   setShowCloseFinancingModal(false);
                   setSelectedFlag(null);
                   setClosingDate('');
+                }}
+                disabled={submitting}
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add Closed Financing from Flag Modal - Comprehensive Form */}
+      {showAddClosedFinancingModal && selectedFlag && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 overflow-y-auto">
+          <div className="bg-slate-800 rounded-lg p-6 max-w-2xl w-full my-8">
+            <h2 className="text-xl font-bold text-slate-100 mb-2">
+              Add Closed Financing from Flag
+            </h2>
+            <p className="text-slate-400 mb-4 text-sm">
+              Create a closed financing record pre-filled with data from the news flag.
+              Any duplicate financing rounds for this company will be automatically removed.
+            </p>
+
+            {/* Pre-filled Info Banner */}
+            <div className="mb-4 p-3 bg-emerald-900/30 border border-emerald-700/50 rounded-lg">
+              <p className="text-sm text-emerald-300 font-medium mb-1">Pre-filled from News Flag:</p>
+              <p className="text-sm text-slate-300">
+                <span className="text-slate-500">Company:</span> {selectedFlag.company_name}
+              </p>
+              <p className="text-sm text-slate-300">
+                <span className="text-slate-500">News:</span> {selectedFlag.news_title}
+              </p>
+              <p className="text-sm text-slate-300">
+                <span className="text-slate-500">Keywords:</span> {selectedFlag.detected_keywords.join(', ')}
+              </p>
+            </div>
+
+            {/* Form Fields */}
+            <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-2">
+              {/* Financing Type */}
+              <div>
+                <label htmlFor="cf-financing-type" className="block text-sm font-medium text-slate-300 mb-1">
+                  Financing Type <span className="text-red-400">*</span>
+                </label>
+                <select
+                  id="cf-financing-type"
+                  title="Financing Type"
+                  value={closedFinancingForm.financing_type}
+                  onChange={(e) => setClosedFinancingForm({ ...closedFinancingForm, financing_type: e.target.value })}
+                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-slate-100"
+                >
+                  {financingTypes.map((type) => (
+                    <option key={type.value} value={type.value}>
+                      {type.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Amount Raised */}
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-1">
+                  Amount Raised (CAD) <span className="text-red-400">*</span>
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={closedFinancingForm.amount_raised_usd}
+                  onChange={(e) => setClosedFinancingForm({ ...closedFinancingForm, amount_raised_usd: e.target.value })}
+                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-slate-100"
+                  placeholder="e.g., 5000000"
+                />
+              </div>
+
+              {/* Price Per Share */}
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-1">
+                  Price Per Share (CAD)
+                </label>
+                <input
+                  type="number"
+                  step="0.001"
+                  value={closedFinancingForm.price_per_share}
+                  onChange={(e) => setClosedFinancingForm({ ...closedFinancingForm, price_per_share: e.target.value })}
+                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-slate-100"
+                  placeholder="e.g., 0.15"
+                />
+              </div>
+
+              {/* Shares Issued */}
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-1">
+                  Shares Issued
+                </label>
+                <input
+                  type="number"
+                  value={closedFinancingForm.shares_issued}
+                  onChange={(e) => setClosedFinancingForm({ ...closedFinancingForm, shares_issued: e.target.value })}
+                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-slate-100"
+                  placeholder="e.g., 33333333"
+                />
+              </div>
+
+              {/* Has Warrants */}
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="has-warrants"
+                  checked={closedFinancingForm.has_warrants}
+                  onChange={(e) => setClosedFinancingForm({ ...closedFinancingForm, has_warrants: e.target.checked })}
+                  className="w-4 h-4 rounded border-slate-700 bg-slate-900"
+                />
+                <label htmlFor="has-warrants" className="text-sm font-medium text-slate-300">
+                  Includes Warrants
+                </label>
+              </div>
+
+              {/* Warrant Details (shown only if has_warrants) */}
+              {closedFinancingForm.has_warrants && (
+                <div className="grid grid-cols-2 gap-4 pl-6 border-l-2 border-slate-700">
+                  <div>
+                    <label htmlFor="cf-warrant-strike" className="block text-sm font-medium text-slate-300 mb-1">
+                      Warrant Strike Price (CAD)
+                    </label>
+                    <input
+                      type="number"
+                      id="cf-warrant-strike"
+                      title="Warrant Strike Price"
+                      step="0.001"
+                      value={closedFinancingForm.warrant_strike_price}
+                      onChange={(e) => setClosedFinancingForm({ ...closedFinancingForm, warrant_strike_price: e.target.value })}
+                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-slate-100"
+                      placeholder="e.g., 0.25"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="cf-warrant-expiry" className="block text-sm font-medium text-slate-300 mb-1">
+                      Warrant Expiry Date
+                    </label>
+                    <input
+                      type="date"
+                      id="cf-warrant-expiry"
+                      title="Warrant Expiry Date"
+                      value={closedFinancingForm.warrant_expiry_date}
+                      onChange={(e) => setClosedFinancingForm({ ...closedFinancingForm, warrant_expiry_date: e.target.value })}
+                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-slate-100"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Dates */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label htmlFor="cf-announced-date" className="block text-sm font-medium text-slate-300 mb-1">
+                    Announced Date
+                  </label>
+                  <input
+                    type="date"
+                    id="cf-announced-date"
+                    title="Announced Date"
+                    value={closedFinancingForm.announced_date}
+                    onChange={(e) => setClosedFinancingForm({ ...closedFinancingForm, announced_date: e.target.value })}
+                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-slate-100"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="cf-closing-date" className="block text-sm font-medium text-slate-300 mb-1">
+                    Closing Date <span className="text-red-400">*</span>
+                  </label>
+                  <input
+                    type="date"
+                    id="cf-closing-date"
+                    title="Closing Date"
+                    value={closedFinancingForm.closing_date}
+                    onChange={(e) => setClosedFinancingForm({ ...closedFinancingForm, closing_date: e.target.value })}
+                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-slate-100"
+                  />
+                </div>
+              </div>
+
+              {/* Lead Agent */}
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-1">
+                  Lead Agent / Underwriter
+                </label>
+                <input
+                  type="text"
+                  value={closedFinancingForm.lead_agent}
+                  onChange={(e) => setClosedFinancingForm({ ...closedFinancingForm, lead_agent: e.target.value })}
+                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-slate-100"
+                  placeholder="e.g., Canaccord Genuity"
+                />
+              </div>
+
+              {/* Use of Proceeds */}
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-1">
+                  Use of Proceeds
+                </label>
+                <textarea
+                  value={closedFinancingForm.use_of_proceeds}
+                  onChange={(e) => setClosedFinancingForm({ ...closedFinancingForm, use_of_proceeds: e.target.value })}
+                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-slate-100"
+                  rows={2}
+                  placeholder="e.g., Exploration drilling, working capital"
+                />
+              </div>
+
+              {/* Press Release URL */}
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-1">
+                  Press Release URL
+                </label>
+                <input
+                  type="url"
+                  value={closedFinancingForm.press_release_url}
+                  onChange={(e) => setClosedFinancingForm({ ...closedFinancingForm, press_release_url: e.target.value })}
+                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-slate-100"
+                  placeholder="https://..."
+                />
+              </div>
+
+              {/* Notes */}
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-1">
+                  Notes
+                </label>
+                <textarea
+                  value={closedFinancingForm.notes}
+                  onChange={(e) => setClosedFinancingForm({ ...closedFinancingForm, notes: e.target.value })}
+                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-slate-100"
+                  rows={2}
+                  placeholder="Additional notes..."
+                />
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex gap-3 mt-6 pt-4 border-t border-slate-700">
+              <Button
+                variant="primary"
+                onClick={handleSubmitClosedFinancing}
+                disabled={submitting}
+                className="flex-1 bg-emerald-600 hover:bg-emerald-700"
+              >
+                {submitting ? 'Creating...' : 'Create Closed Financing'}
+              </Button>
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  setShowAddClosedFinancingModal(false);
+                  setSelectedFlag(null);
                 }}
                 disabled={submitting}
               >

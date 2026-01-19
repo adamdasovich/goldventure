@@ -7599,14 +7599,21 @@ def create_closed_financing(request):
         "lead_agent": "Agent Name",
         "use_of_proceeds": "Exploration activities",
         "press_release_url": "https://...",
-        "notes": "Optional notes"
+        "notes": "Optional notes",
+        "source_news_flag_id": 456  // Optional - links to news flag and triggers duplicate detection
     }
+
+    When source_news_flag_id is provided:
+    - Links the new financing to the news flag
+    - Detects and removes duplicate 'announced' financing rounds for the same company
+    - Updates the news flag status to 'reviewed_financing'
 
     Superuser access required.
     """
-    from core.models import Financing, Company
+    from core.models import Financing, Company, NewsReleaseFlag
     from django.utils import timezone
     from decimal import Decimal
+    from datetime import timedelta
 
     # Superuser check
     if not request.user.is_superuser:
@@ -7654,6 +7661,42 @@ def create_closed_financing(request):
         if warrant_expiry_date and isinstance(warrant_expiry_date, str):
             warrant_expiry_date = datetime.strptime(warrant_expiry_date, '%Y-%m-%d').date()
 
+        # Check for source_news_flag_id to link and handle duplicates
+        source_news_flag_id = request.data.get('source_news_flag_id')
+        source_news_flag = None
+        duplicates_removed = 0
+
+        if source_news_flag_id:
+            try:
+                source_news_flag = NewsReleaseFlag.objects.get(id=source_news_flag_id)
+            except NewsReleaseFlag.DoesNotExist:
+                # Log warning but don't fail - the flag might have been deleted
+                print(f"Warning: NewsReleaseFlag {source_news_flag_id} not found")
+
+        # Detect and remove duplicate financing rounds if this came from a news flag
+        # Look for 'announced' status financings for the same company within a date range
+        if source_news_flag:
+            # Define date range for duplicate detection (±30 days from closing date)
+            date_range_start = closing_date - timedelta(days=30)
+            date_range_end = closing_date + timedelta(days=30)
+
+            # Find potential duplicate financings (announced but not closed, same company, similar timeframe)
+            duplicate_financings = Financing.objects.filter(
+                company=company,
+                status='announced',  # Only look at announced (not yet closed) financings
+                is_closed=False,
+            ).filter(
+                # Match by announced_date OR closing_date within range
+                announced_date__gte=date_range_start,
+                announced_date__lte=date_range_end,
+            )
+
+            # Delete duplicates
+            duplicates_removed = duplicate_financings.count()
+            if duplicates_removed > 0:
+                print(f"Removing {duplicates_removed} duplicate announced financing(s) for {company.name}")
+                duplicate_financings.delete()
+
         # Create the financing
         financing = Financing.objects.create(
             company=company,
@@ -7675,7 +7718,18 @@ def create_closed_financing(request):
             is_closed=True,
             closed_at=timezone.now(),
             closed_by=request.user,
+            # Link to source news flag if provided
+            source_news_flag=source_news_flag,
         )
+
+        # Update the news flag status if it was provided
+        if source_news_flag:
+            source_news_flag.status = 'reviewed_financing'
+            source_news_flag.reviewed_by = request.user
+            source_news_flag.reviewed_at = timezone.now()
+            source_news_flag.created_financing = financing
+            source_news_flag.review_notes = f'Closed financing created directly from flag (Amount: ${amount_raised:,.2f})'
+            source_news_flag.save()
 
         return Response({
             'message': 'Closed financing created successfully',
@@ -7686,7 +7740,9 @@ def create_closed_financing(request):
                 'financing_type': financing.financing_type,
                 'amount_raised_usd': str(financing.amount_raised_usd),
                 'closing_date': financing.closing_date.isoformat() if financing.closing_date else None,
-            }
+            },
+            'duplicates_removed': duplicates_removed,
+            'news_flag_updated': source_news_flag is not None,
         }, status=status.HTTP_201_CREATED)
 
     except Exception as e:
