@@ -58,8 +58,9 @@ export default function ClosedFinancingsPage() {
   const [financingType, setFinancingType] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState<string>('');
 
-  // Add Financing Modal (superuser only)
+  // Add/Edit Financing Modal (superuser only)
   const [showAddModal, setShowAddModal] = useState(false);
+  const [editingFinancing, setEditingFinancing] = useState<ClosedFinancing | null>(null);
   const [companies, setCompanies] = useState<Company[]>([]);
   const [companiesLoading, setCompaniesLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -148,6 +149,7 @@ export default function ClosedFinancingsPage() {
 
   const handleCloseAddModal = () => {
     setShowAddModal(false);
+    setEditingFinancing(null);
     setFormData({
       company_id: '',
       financing_type: 'private_placement',
@@ -166,50 +168,95 @@ export default function ClosedFinancingsPage() {
     });
   };
 
+  const handleOpenEditModal = (financing: ClosedFinancing) => {
+    setEditingFinancing(financing);
+    setFormData({
+      company_id: String(financing.company_id),
+      financing_type: financing.financing_type,
+      amount_raised_usd: String(financing.amount_raised_usd),
+      price_per_share: financing.price_per_share ? String(financing.price_per_share) : '',
+      shares_issued: financing.shares_issued ? String(financing.shares_issued) : '',
+      has_warrants: financing.has_warrants,
+      warrant_strike_price: financing.warrant_strike_price ? String(financing.warrant_strike_price) : '',
+      warrant_expiry_date: financing.warrant_expiry_date || '',
+      announced_date: financing.announced_date || '',
+      closing_date: financing.closing_date || '',
+      lead_agent: financing.lead_agent || '',
+      use_of_proceeds: financing.use_of_proceeds || '',
+      press_release_url: financing.press_release_url || '',
+      notes: '',
+    });
+    setShowAddModal(true);
+  };
+
   const handleSubmitFinancing = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.company_id || !formData.amount_raised_usd || !formData.closing_date) {
-      alert('Please fill in required fields: Company, Amount Raised, and Closing Date');
+
+    // For create mode, company is required; for edit mode, it's already set
+    if (!editingFinancing && !formData.company_id) {
+      alert('Please select a company');
+      return;
+    }
+    if (!formData.amount_raised_usd || !formData.closing_date) {
+      alert('Please fill in required fields: Amount Raised and Closing Date');
       return;
     }
 
     try {
       setSubmitting(true);
-      const response = await fetch(`${API_URL}/closed-financings/create/`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${accessToken}`,
-        },
-        body: JSON.stringify({
-          company_id: parseInt(formData.company_id),
-          financing_type: formData.financing_type,
-          amount_raised_usd: parseFloat(formData.amount_raised_usd),
-          price_per_share: formData.price_per_share ? parseFloat(formData.price_per_share) : null,
-          shares_issued: formData.shares_issued ? parseInt(formData.shares_issued) : null,
-          has_warrants: formData.has_warrants,
-          warrant_strike_price: formData.warrant_strike_price ? parseFloat(formData.warrant_strike_price) : null,
-          warrant_expiry_date: formData.warrant_expiry_date || null,
-          announced_date: formData.announced_date || null,
-          closing_date: formData.closing_date,
-          lead_agent: formData.lead_agent,
-          use_of_proceeds: formData.use_of_proceeds,
-          press_release_url: formData.press_release_url,
-          notes: formData.notes,
-        }),
-      });
+      const token = accessToken || localStorage.getItem('accessToken');
+
+      const payload = {
+        company_id: parseInt(formData.company_id),
+        financing_type: formData.financing_type,
+        amount_raised_usd: parseFloat(formData.amount_raised_usd),
+        price_per_share: formData.price_per_share ? parseFloat(formData.price_per_share) : null,
+        shares_issued: formData.shares_issued ? parseInt(formData.shares_issued) : null,
+        has_warrants: formData.has_warrants,
+        warrant_strike_price: formData.warrant_strike_price ? parseFloat(formData.warrant_strike_price) : null,
+        warrant_expiry_date: formData.warrant_expiry_date || null,
+        announced_date: formData.announced_date || null,
+        closing_date: formData.closing_date,
+        lead_agent: formData.lead_agent,
+        use_of_proceeds: formData.use_of_proceeds,
+        press_release_url: formData.press_release_url,
+        notes: formData.notes,
+      };
+
+      let response;
+      if (editingFinancing) {
+        // Update existing financing
+        response = await fetch(`${API_URL}/closed-financings/${editingFinancing.id}/update/`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+          body: JSON.stringify(payload),
+        });
+      } else {
+        // Create new financing
+        response = await fetch(`${API_URL}/closed-financings/create/`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+          body: JSON.stringify(payload),
+        });
+      }
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to create financing');
+        throw new Error(errorData.error || `Failed to ${editingFinancing ? 'update' : 'create'} financing`);
       }
 
       const data = await response.json();
-      alert(`Financing created successfully for ${data.financing?.company_name || 'company'}`);
+      alert(`Financing ${editingFinancing ? 'updated' : 'created'} successfully for ${data.financing?.company_name || 'company'}`);
       handleCloseAddModal();
       fetchClosedFinancings();
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to create financing');
+      alert(err instanceof Error ? err.message : `Failed to ${editingFinancing ? 'update' : 'create'} financing`);
     } finally {
       setSubmitting(false);
     }
@@ -534,6 +581,16 @@ export default function ClosedFinancingsPage() {
                             </Button>
                           </a>
                         )}
+                        {user?.is_superuser && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="w-full text-slate-400 hover:text-gold-400"
+                            onClick={() => handleOpenEditModal(financing)}
+                          >
+                            Edit
+                          </Button>
+                        )}
                       </div>
                     </div>
 
@@ -563,15 +620,17 @@ export default function ClosedFinancingsPage() {
         </div>
       </section>
 
-      {/* Add Financing Modal */}
+      {/* Add/Edit Financing Modal */}
       {showAddModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 overflow-y-auto">
           <div className="bg-slate-800 rounded-lg p-6 max-w-2xl w-full my-8 max-h-[90vh] overflow-y-auto">
             <h2 className="text-xl font-bold text-slate-100 mb-4">
-              Add Past Financing
+              {editingFinancing ? 'Edit Financing' : 'Add Past Financing'}
             </h2>
             <p className="text-slate-400 mb-6">
-              Manually add a historical financing that has already closed.
+              {editingFinancing
+                ? `Editing financing for ${editingFinancing.company_name}`
+                : 'Manually add a historical financing that has already closed.'}
             </p>
 
             <form onSubmit={handleSubmitFinancing} className="space-y-4">
@@ -580,24 +639,30 @@ export default function ClosedFinancingsPage() {
                 <label htmlFor="company_id" className="block text-sm font-medium text-slate-300 mb-1">
                   Company <span className="text-red-400">*</span>
                 </label>
-                <select
-                  id="company_id"
-                  value={formData.company_id}
-                  onChange={(e) => setFormData({ ...formData, company_id: e.target.value })}
-                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-slate-100 focus:outline-none focus:border-gold-400"
-                  required
-                >
-                  <option value="">Select a company...</option>
-                  {companiesLoading ? (
-                    <option disabled>Loading companies...</option>
-                  ) : (
-                    companies.map((company) => (
-                      <option key={company.id} value={company.id}>
-                        {company.name} ({company.exchange}:{company.ticker_symbol})
-                      </option>
-                    ))
-                  )}
-                </select>
+                {editingFinancing ? (
+                  <div className="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-3 py-2 text-slate-300">
+                    {editingFinancing.company_name} ({editingFinancing.company_exchange}:{editingFinancing.company_ticker})
+                  </div>
+                ) : (
+                  <select
+                    id="company_id"
+                    value={formData.company_id}
+                    onChange={(e) => setFormData({ ...formData, company_id: e.target.value })}
+                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-slate-100 focus:outline-none focus:border-gold-400"
+                    required
+                  >
+                    <option value="">Select a company...</option>
+                    {companiesLoading ? (
+                      <option disabled>Loading companies...</option>
+                    ) : (
+                      companies.map((company) => (
+                        <option key={company.id} value={company.id}>
+                          {company.name} ({company.exchange}:{company.ticker_symbol})
+                        </option>
+                      ))
+                    )}
+                  </select>
+                )}
               </div>
 
               {/* Financing Type */}
@@ -808,7 +873,9 @@ export default function ClosedFinancingsPage() {
                   disabled={submitting}
                   className="flex-1"
                 >
-                  {submitting ? 'Creating...' : 'Create Financing'}
+                  {submitting
+                    ? (editingFinancing ? 'Updating...' : 'Creating...')
+                    : (editingFinancing ? 'Update Financing' : 'Create Financing')}
                 </Button>
                 <Button
                   type="button"

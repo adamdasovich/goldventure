@@ -7749,6 +7749,121 @@ def create_closed_financing(request):
         return Response({'error': f'Error creating financing: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+@api_view(['PUT', 'PATCH'])
+@permission_classes([IsAuthenticated])
+def update_closed_financing(request, financing_id):
+    """
+    Update an existing closed financing.
+
+    PUT/PATCH /api/closed-financings/<id>/update/
+
+    Request Body (all fields optional for PATCH):
+    {
+        "financing_type": "private_placement",
+        "amount_raised_usd": 5000000,
+        "price_per_share": 0.15,
+        "shares_issued": 33333333,
+        "has_warrants": true,
+        "warrant_strike_price": 0.20,
+        "warrant_expiry_date": "2026-01-15",
+        "announced_date": "2024-12-01",
+        "closing_date": "2024-12-15",
+        "lead_agent": "Agent Name",
+        "use_of_proceeds": "Exploration activities",
+        "press_release_url": "https://...",
+        "notes": "Optional notes"
+    }
+
+    Superuser access required.
+    """
+    from core.models import Financing
+    from decimal import Decimal
+
+    # Superuser check
+    if not request.user.is_superuser:
+        return Response(
+            {'error': 'Only superusers can update closed financings'},
+            status=status.HTTP_403_FORBIDDEN
+        )
+
+    # Get the financing
+    try:
+        financing = Financing.objects.get(id=financing_id)
+    except Financing.DoesNotExist:
+        return Response({'error': 'Financing not found'}, status=status.HTTP_404_NOT_FOUND)
+
+    try:
+        # Parse dates if provided
+        from datetime import datetime
+
+        # Update fields if provided
+        if 'financing_type' in request.data:
+            financing.financing_type = request.data['financing_type']
+
+        if 'amount_raised_usd' in request.data:
+            financing.amount_raised_usd = Decimal(str(request.data['amount_raised_usd']))
+
+        if 'price_per_share' in request.data:
+            price = request.data['price_per_share']
+            financing.price_per_share = Decimal(str(price)) if price else None
+
+        if 'shares_issued' in request.data:
+            financing.shares_issued = request.data['shares_issued'] or None
+
+        if 'has_warrants' in request.data:
+            financing.has_warrants = request.data['has_warrants']
+
+        if 'warrant_strike_price' in request.data:
+            price = request.data['warrant_strike_price']
+            financing.warrant_strike_price = Decimal(str(price)) if price else None
+
+        if 'warrant_expiry_date' in request.data:
+            date_str = request.data['warrant_expiry_date']
+            if date_str and isinstance(date_str, str):
+                financing.warrant_expiry_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+            else:
+                financing.warrant_expiry_date = None
+
+        if 'announced_date' in request.data:
+            date_str = request.data['announced_date']
+            if date_str and isinstance(date_str, str):
+                financing.announced_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+
+        if 'closing_date' in request.data:
+            date_str = request.data['closing_date']
+            if date_str and isinstance(date_str, str):
+                financing.closing_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+
+        if 'lead_agent' in request.data:
+            financing.lead_agent = request.data['lead_agent'] or ''
+
+        if 'use_of_proceeds' in request.data:
+            financing.use_of_proceeds = request.data['use_of_proceeds'] or ''
+
+        if 'press_release_url' in request.data:
+            financing.press_release_url = request.data['press_release_url'] or ''
+
+        if 'notes' in request.data:
+            financing.notes = request.data['notes'] or ''
+
+        financing.save()
+
+        return Response({
+            'message': 'Financing updated successfully',
+            'financing': {
+                'id': financing.id,
+                'company_name': financing.company.name,
+                'company_ticker': financing.company.ticker_symbol,
+                'financing_type': financing.financing_type,
+                'amount_raised_usd': str(financing.amount_raised_usd),
+                'closing_date': financing.closing_date.isoformat() if financing.closing_date else None,
+            }
+        }, status=status.HTTP_200_OK)
+
+    except Exception as e:
+        return Response({'error': f'Error updating financing: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
 # ============================================================================
 # DOCUMENT PROCESSING SUMMARY DASHBOARD (Superuser Only)
 # ============================================================================

@@ -137,6 +137,7 @@ urlpatterns = [
     # Closed Financings (public page for displaying recently closed financings)
     path('closed-financings/', views.closed_financings_list, name='closed_financings_list'),
     path('closed-financings/create/', views.create_closed_financing, name='create_closed_financing'),
+    path('closed-financings/<int:financing_id>/update/', views.update_closed_financing, name='update_closed_financing'),
 
     # ViewSet routes
     path('', include(router.urls)),
