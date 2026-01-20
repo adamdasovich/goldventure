@@ -1010,12 +1010,12 @@ def company_news_releases(request, company_id):
     Returns:
         {
             "financial": [...5 most recent financing news from NewsRelease...],
-            "non_financial": [...10 most recent news from CompanyNews...],
+            "non_financial": [...10 most recent news...],
             "last_updated": "2025-01-15T10:30:00Z"
         }
 
-    Financial news comes from NewsRelease (flagged financing items).
-    Company updates always come from CompanyNews (scraped news).
+    Financial news comes from NewsRelease (flagged financing items with is_material=True).
+    Company updates come from NewsRelease (all news), with fallback to CompanyNews if empty.
     """
     from core.models import CompanyNews
 
@@ -1034,27 +1034,43 @@ def company_news_releases(request, company_id):
     ).order_by('-release_date')[:5]
     financial_data = NewsReleaseSerializer(financial_releases, many=True).data
 
-    # Always get company updates from CompanyNews (scraped news)
-    scraped_news = CompanyNews.objects.filter(company=company).order_by('-publication_date')[:10]
+    # Get company updates - prefer NewsRelease, fallback to CompanyNews
+    news_releases = NewsRelease.objects.filter(company=company).order_by('-release_date')[:10]
     non_financial_data = []
     last_updated = None
 
-    for news in scraped_news:
-        news_item = {
-            'id': news.id,
-            'title': news.title,
-            'release_date': str(news.publication_date) if news.publication_date else None,
-            'release_type': news.news_type or 'corporate',
-            'summary': news.summary or '',
-            'url': news.source_url,
-            'is_material': news.is_material or False,
-        }
-        non_financial_data.append(news_item)
-
-    # Get last_updated from scraped news
-    if scraped_news.exists():
-        latest_scraped = scraped_news.first()
-        last_updated = str(latest_scraped.extracted_at) if latest_scraped else None
+    if news_releases.exists():
+        # Use NewsRelease data (from staggered scraping)
+        for news in news_releases:
+            news_item = {
+                'id': news.id,
+                'title': news.title,
+                'release_date': str(news.release_date) if news.release_date else None,
+                'release_type': news.release_type or 'general',
+                'summary': news.summary or '',
+                'url': news.url,
+                'is_material': news.is_material or False,
+            }
+            non_financial_data.append(news_item)
+        latest = news_releases.first()
+        last_updated = str(latest.updated_at) if latest and latest.updated_at else None
+    else:
+        # Fallback to CompanyNews (legacy scraped news)
+        scraped_news = CompanyNews.objects.filter(company=company).order_by('-publication_date')[:10]
+        for news in scraped_news:
+            news_item = {
+                'id': news.id,
+                'title': news.title,
+                'release_date': str(news.publication_date) if news.publication_date else None,
+                'release_type': news.news_type or 'corporate',
+                'summary': news.summary or '',
+                'url': news.source_url,
+                'is_material': news.is_material or False,
+            }
+            non_financial_data.append(news_item)
+        if scraped_news.exists():
+            latest_scraped = scraped_news.first()
+            last_updated = str(latest_scraped.extracted_at) if latest_scraped else None
 
     return Response({
         'financial': financial_data,
