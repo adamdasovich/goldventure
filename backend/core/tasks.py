@@ -433,10 +433,17 @@ def scrape_company_news_task(self, company_id):
                 if detected_keywords:
                     from core.models import NewsReleaseFlag, DismissedNewsURL
 
-                    # Check if URL was dismissed
-                    if DismissedNewsURL.objects.filter(url=url).exists():
-                        print(f"  [SKIP] Previously dismissed URL")
+                    # Check if URL or title is similar to a previously dismissed news
+                    is_similar, matched_dismissed = DismissedNewsURL.is_similar_to_dismissed(
+                        company=company,
+                        url=url,
+                        title=title,
+                        similarity_threshold=0.85
+                    )
+                    if is_similar:
+                        print(f"  [SKIP] Similar to previously dismissed: {title[:50]}...")
                         continue
+
                     # Only create flag if one doesn't already exist
                     flag, flag_created = NewsReleaseFlag.objects.get_or_create(
                         news_release=obj,
@@ -813,9 +820,15 @@ def scrape_single_company_news_task(self, company_id: int):
 
                 if detected_keywords:
                     from core.models import NewsReleaseFlag, DismissedNewsURL
-                    # Check if this URL was previously dismissed - never re-flag dismissed news
-                    if DismissedNewsURL.objects.filter(url=url).exists():
-                        print(f"  [SKIP] Previously dismissed: {title[:50]}...")
+                    # Check if URL or title is similar to previously dismissed - never re-flag
+                    is_similar, matched_dismissed = DismissedNewsURL.is_similar_to_dismissed(
+                        company=company,
+                        url=url,
+                        title=title,
+                        similarity_threshold=0.85
+                    )
+                    if is_similar:
+                        print(f"  [SKIP] Similar to dismissed: {title[:50]}...")
                     else:
                         flag, flag_created = NewsReleaseFlag.objects.get_or_create(
                             news_release=obj,

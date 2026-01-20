@@ -4626,35 +4626,144 @@ class NewsReleaseFlag(models.Model):
     def dismiss_as_false_positive(self, reviewer, notes=''):
         """Dismiss as false positive"""
         from django.utils import timezone
-        
+
         self.status = 'reviewed_false_positive'
         self.reviewed_by = reviewer
         self.reviewed_at = timezone.now()
         self.review_notes = notes
         self.save()
-        
-        # Record URL as permanently dismissed to prevent re-flagging
+
+        # Record URL and title as permanently dismissed to prevent re-flagging
         if self.news_release and self.news_release.url:
-            DismissedNewsURL.objects.get_or_create(
-                url=self.news_release.url,
+            url = self.news_release.url
+            title = self.news_release.title or ''
+
+            dismissed, created = DismissedNewsURL.objects.get_or_create(
+                url=url,
                 defaults={
                     'company': self.news_release.company,
                     'dismissed_by': reviewer,
-                    'reason': 'false_positive'
+                    'reason': 'false_positive',
+                    'title': title,
+                    'normalized_url': DismissedNewsURL.normalize_url(url),
+                    'normalized_title': DismissedNewsURL.normalize_title(title),
                 }
             )
+            # Update title if record already existed but didn't have title
+            if not created and not dismissed.title and title:
+                dismissed.title = title
+                dismissed.normalized_title = DismissedNewsURL.normalize_title(title)
+                dismissed.save()
 
 
 class DismissedNewsURL(models.Model):
     url = models.URLField(unique=True)
+    normalized_url = models.CharField(max_length=500, blank=True, db_index=True)
+    title = models.CharField(max_length=500, blank=True)
+    normalized_title = models.CharField(max_length=500, blank=True, db_index=True)
     company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name="dismissed_news_urls")
     dismissed_at = models.DateTimeField(auto_now_add=True)
     dismissed_by = models.ForeignKey("User", on_delete=models.SET_NULL, null=True, blank=True)
     reason = models.CharField(max_length=100, default="false_positive")
-    
+
     class Meta:
         db_table = "dismissed_news_urls"
-    
+
     def __str__(self):
         return self.url
+
+    def save(self, *args, **kwargs):
+        # Auto-generate normalized fields on save
+        if self.url and not self.normalized_url:
+            self.normalized_url = self.normalize_url(self.url)
+        if self.title and not self.normalized_title:
+            self.normalized_title = self.normalize_title(self.title)
+        super().save(*args, **kwargs)
+
+    @staticmethod
+    def normalize_url(url):
+        """Normalize URL for comparison - remove trailing slashes, query params, and common suffixes"""
+        import re
+        from urllib.parse import urlparse, urlunparse
+
+        if not url:
+            return ''
+
+        # Parse URL
+        parsed = urlparse(url)
+
+        # Remove query string and fragment
+        normalized = urlunparse((parsed.scheme, parsed.netloc, parsed.path, '', '', ''))
+
+        # Remove trailing slashes
+        normalized = normalized.rstrip('/')
+
+        # Remove common WordPress duplicate suffixes like -2, -3, -2-2, etc.
+        normalized = re.sub(r'-\d+(-\d+)*$', '', normalized)
+
+        return normalized.lower()
+
+    @staticmethod
+    def normalize_title(title):
+        """Normalize title for comparison - lowercase, remove punctuation, extra spaces"""
+        import re
+
+        if not title:
+            return ''
+
+        # Lowercase
+        normalized = title.lower()
+
+        # Remove common prefixes that vary
+        normalized = re.sub(r'^(press release[:\s]*|news[:\s]*)', '', normalized)
+
+        # Remove punctuation except spaces
+        normalized = re.sub(r'[^\w\s]', '', normalized)
+
+        # Collapse multiple spaces
+        normalized = re.sub(r'\s+', ' ', normalized).strip()
+
+        return normalized
+
+    @classmethod
+    def is_similar_to_dismissed(cls, company, url=None, title=None, similarity_threshold=0.85):
+        """
+        Check if a URL or title is similar to any dismissed news for this company.
+        Returns (is_similar, matched_dismissed_record) tuple.
+        """
+        from difflib import SequenceMatcher
+
+        # Check exact URL match first
+        if url:
+            if cls.objects.filter(url=url).exists():
+                return True, cls.objects.filter(url=url).first()
+
+            # Check normalized URL match
+            normalized_url = cls.normalize_url(url)
+            if normalized_url:
+                match = cls.objects.filter(
+                    company=company,
+                    normalized_url=normalized_url
+                ).first()
+                if match:
+                    return True, match
+
+        # Check title similarity
+        if title:
+            normalized_title = cls.normalize_title(title)
+            if normalized_title:
+                # Get all dismissed titles for this company
+                dismissed_titles = cls.objects.filter(
+                    company=company,
+                    normalized_title__isnull=False
+                ).exclude(normalized_title='').values_list('normalized_title', 'id')
+
+                for dismissed_norm_title, dismissed_id in dismissed_titles:
+                    if dismissed_norm_title:
+                        # Calculate similarity ratio
+                        similarity = SequenceMatcher(None, normalized_title, dismissed_norm_title).ratio()
+                        if similarity >= similarity_threshold:
+                            return True, cls.objects.get(id=dismissed_id)
+
+        return False, None
 
