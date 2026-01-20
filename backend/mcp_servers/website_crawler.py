@@ -1776,6 +1776,47 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
                         continue
 
                 # ============================================================
+                # STRATEGY 5b-NEW: WP Posts Pro plugin (Centurion Minerals pattern)
+                # Uses: div.wpp_section with span[itemprop="datePublished"] and b[itemprop="name"] a
+                # ============================================================
+                for wpp_section in soup.select('div.wpp_section, .wpp_group'):
+                    try:
+                        # Get date from span with itemprop="datePublished"
+                        date_elem = wpp_section.select_one('span[itemprop="datePublished"]')
+                        if not date_elem:
+                            continue
+
+                        date_str = parse_date_standalone(date_elem.get_text(strip=True))
+                        if not date_str:
+                            continue
+
+                        # Get title from b[itemprop="name"] a or just find the link
+                        title_link = wpp_section.select_one('b[itemprop="name"] a, b a, a[href]')
+                        if not title_link:
+                            continue
+
+                        title = title_link.get_text(strip=True)
+                        href = title_link.get('href', '')
+
+                        if not title or len(title) < 15:
+                            continue
+
+                        # Build full URL
+                        if href and not href.startswith('http'):
+                            href = urljoin(news_url, href)
+
+                        news = {
+                            'title': clean_news_title(title, href),
+                            'url': href,
+                            'date': date_str,
+                            'document_type': 'news_release',
+                            'year': date_str[:4] if date_str else None
+                        }
+                        _add_news_item(news_by_url, news, cutoff_date, "WPP")
+                    except Exception:
+                        continue
+
+                # ============================================================
                 # STRATEGY 5b: ATEX Resources - Article with time element
                 # Uses <article> tags with <time datetime="..."> elements
                 # ============================================================
@@ -1917,10 +1958,15 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
                     if not date_str:
                         parent = link.find_parent(['div', 'li', 'article', 'tr', 'td', 'p'])
                         if parent:
-                            # Look for dedicated date element first
-                            date_elem = parent.find(['div', 'span', 'time'], class_=lambda c: c and 'date' in str(c).lower())
+                            # Look for itemprop="datePublished" (WP Posts Pro pattern)
+                            date_elem = parent.find(['span', 'time'], attrs={'itemprop': 'datePublished'})
                             if date_elem:
                                 date_str = parse_date_standalone(date_elem.get_text(strip=True))
+                            # Look for dedicated date element by class
+                            if not date_str:
+                                date_elem = parent.find(['div', 'span', 'time'], class_=lambda c: c and 'date' in str(c).lower())
+                                if date_elem:
+                                    date_str = parse_date_standalone(date_elem.get_text(strip=True))
                             # Fallback to parsing parent text
                             if not date_str:
                                 date_str, _ = parse_date_comprehensive(parent.get_text(strip=True))
