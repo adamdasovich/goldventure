@@ -1943,6 +1943,69 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
                         continue
 
                 # ============================================================
+                # STRATEGY 5b-ELEMENTOR: LaFleur Minerals Elementor Loop pattern
+                # Uses e-loop-item containers with:
+                # - h1.elementor-heading-title for titles (not linked directly)
+                # - time element inside li[itemprop="datePublished"] for dates
+                # - a.elementor-button with full URL to the news article
+                # ============================================================
+                for loop_item in soup.select('.e-loop-item, [data-elementor-type="loop-item"]'):
+                    try:
+                        # Get title from h1 heading
+                        title_elem = loop_item.select_one('h1.elementor-heading-title, .elementor-heading-title')
+                        if not title_elem:
+                            continue
+
+                        title = title_elem.get_text(strip=True)
+                        if not title or len(title) < 15:
+                            continue
+
+                        # Extract date from time element
+                        date_str = None
+                        time_elem = loop_item.select_one('li[itemprop="datePublished"] time, time')
+                        if time_elem:
+                            # Try datetime attribute first
+                            datetime_attr = time_elem.get('datetime', '')
+                            if datetime_attr:
+                                date_match = re.search(r'(\d{4})-(\d{2})-(\d{2})', datetime_attr)
+                                if date_match:
+                                    date_str = f"{date_match.group(1)}-{date_match.group(2)}-{date_match.group(3)}"
+                            # Fallback to text content
+                            if not date_str:
+                                date_str = parse_date_standalone(time_elem.get_text(strip=True))
+
+                        # Extract URL - prefer the "Read More" style button with full URL
+                        href = None
+                        # First try the elementor button link (contains full article URL)
+                        button_link = loop_item.select_one('a.elementor-button[href]')
+                        if button_link:
+                            href = button_link.get('href', '')
+
+                        # Fallback to date link (short URL like /2026/01/05/)
+                        if not href:
+                            date_link = loop_item.select_one('li[itemprop="datePublished"] a[href]')
+                            if date_link:
+                                href = date_link.get('href', '')
+
+                        if not href:
+                            continue
+
+                        # Build full URL
+                        if href and not href.startswith('http'):
+                            href = urljoin(news_url, href)
+
+                        news = {
+                            'title': clean_news_title(title, href),
+                            'url': href,
+                            'date': date_str,
+                            'document_type': 'news_release',
+                            'year': date_str[:4] if date_str else None
+                        }
+                        _add_news_item(news_by_url, news, cutoff_date, "ELEMENTOR")
+                    except Exception:
+                        continue
+
+                # ============================================================
                 # STRATEGY 5b: ATEX Resources - Article with time element
                 # Uses <article> tags with <time datetime="..."> elements
                 # ============================================================
