@@ -201,10 +201,12 @@ def parse_date_standalone(text: str) -> Optional[str]:
         year = match.group(3)
         return f"{year}-{month}-{day}"
 
-    # MM/DD/YYYY
-    match = re.match(r'^(\d{1,2})/(\d{1,2})/(20\d{2})$', text)
+    # MM/DD/YYYY or MM/DD/YY (Silverco: 01/20/26)
+    match = re.match(r'^(\d{1,2})/(\d{1,2})/(20\d{2}|\d{2})$', text)
     if match:
         month, day, year = match.groups()
+        if len(year) == 2:
+            year = f"20{year}"
         return f"{year}-{month.zfill(2)}-{day.zfill(2)}"
 
     # Mon DD - NO YEAR (Freegold Ventures: "Jan 15", "Dec 19")
@@ -1377,9 +1379,11 @@ def _extract_news_from_element(element, source_url: str, base_url: str) -> Optio
                 title = title_link.get_text(strip=True)
                 link_url = title_link.get('href', '')
 
-        # Try a.title directly
+        # Try a.title or a with class containing 'title' (e.g., news-item__title)
         if not title:
             title_link = element.find('a', class_='title')
+            if not title_link:
+                title_link = element.find('a', class_=lambda c: c and 'title' in str(c).lower())
             if title_link:
                 title = title_link.get_text(strip=True)
                 link_url = title_link.get('href', '')
