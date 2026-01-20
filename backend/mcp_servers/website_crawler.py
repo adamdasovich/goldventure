@@ -1188,16 +1188,19 @@ async def crawl_news_releases(url: str, months: int = 6, max_depth: int = 2) -> 
         url_normalized = news['url'].split('?')[0].rstrip('/')
         # Normalize title for comparison (lowercase, remove extra spaces)
         title_normalized = re.sub(r'\s+', ' ', news.get('title', '').lower().strip())
+        # Create title+date key to allow same title with different dates (recurring reports)
+        title_date_key = f"{title_normalized}|{news.get('date', '')}"
 
-        # Skip if we've seen this URL or a very similar title
+        # Skip if we've seen this URL
         if url_normalized in seen_urls:
             continue
-        if title_normalized and title_normalized in seen_titles:
+        # Skip if we've seen this exact title+date combo (but allow same title with different dates)
+        if title_normalized and title_date_key in seen_titles:
             continue
 
         seen_urls.add(url_normalized)
         if title_normalized:
-            seen_titles.add(title_normalized)
+            seen_titles.add(title_date_key)
         unique_news.append(news)
 
     # Sort final result: items with dates first (newest first), then items without dates
