@@ -2011,6 +2011,71 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
                         continue
 
                 # ============================================================
+                # STRATEGY 5b-UIKIT: Scottie Resources UIKit Grid pattern
+                # Uses uk-grid with date in first column, title in second, links in third
+                # Structure: div[uk-grid] > div.uk-width-1-4@s (date) + div.uk-width-expand@s (title) + div (VIEW/PDF links)
+                # ============================================================
+                for grid in soup.select('[uk-grid], .uk-grid'):
+                    try:
+                        # Look for the three-column structure
+                        columns = grid.find_all('div', recursive=False)
+                        if len(columns) < 2:
+                            continue
+
+                        # First column should contain a date
+                        date_col = columns[0]
+                        date_text = date_col.get_text(strip=True)
+                        date_str = parse_date_standalone(date_text)
+                        if not date_str:
+                            continue
+
+                        # Second column should contain the title
+                        title_col = columns[1] if len(columns) > 1 else None
+                        if not title_col:
+                            continue
+                        title = title_col.get_text(strip=True)
+                        if not title or len(title) < 15:
+                            continue
+
+                        # Skip non-news items
+                        if any(skip in title.lower() for skip in ['subscribe', 'contact', 'menu', 'home']):
+                            continue
+
+                        # Find VIEW link in any column (usually the third)
+                        href = None
+                        for col in columns:
+                            view_link = col.find('a', href=True, string=re.compile(r'view', re.I))
+                            if view_link:
+                                href = view_link.get('href', '')
+                                break
+                            # Also try any link that's not PDF
+                            for link in col.find_all('a', href=True):
+                                link_href = link.get('href', '')
+                                link_text = link.get_text(strip=True).lower()
+                                if link_text != 'pdf' and '.pdf' not in link_href.lower():
+                                    if '/news/' in link_href or '/press' in link_href:
+                                        href = link_href
+                                        break
+
+                        if not href:
+                            continue
+
+                        # Build full URL
+                        if not href.startswith('http'):
+                            href = urljoin(news_url, href)
+
+                        news = {
+                            'title': clean_news_title(title, href),
+                            'url': href,
+                            'date': date_str,
+                            'document_type': 'news_release',
+                            'year': date_str[:4] if date_str else None
+                        }
+                        _add_news_item(news_by_url, news, cutoff_date, "UIKIT")
+                    except Exception:
+                        continue
+
+                # ============================================================
                 # STRATEGY 5b: ATEX Resources - Article with time element
                 # Uses <article> tags with <time datetime="..."> elements
                 # ============================================================
