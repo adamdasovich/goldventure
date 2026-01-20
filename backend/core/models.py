@@ -640,7 +640,7 @@ class NewsRelease(models.Model):
 
     summary = models.TextField(blank=True)
     full_text = models.TextField(blank=True)
-    url = models.URLField(blank=True)
+    url = models.URLField(max_length=500, blank=True)
 
     # Impact tracking
     is_material = models.BooleanField(default=False, help_text="Material news event")
@@ -4077,7 +4077,7 @@ class CompanyNews(models.Model):
     summary = models.TextField(blank=True, help_text="AI-generated summary")
 
     # Source
-    source_url = models.URLField(help_text="URL of the news release")
+    source_url = models.URLField(max_length=500, help_text="URL of the news release")
     is_pdf = models.BooleanField(default=False, help_text="Is the source a PDF file?")
 
     # Dates
