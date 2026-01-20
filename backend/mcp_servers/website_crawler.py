@@ -1158,27 +1158,49 @@ async def crawl_news_releases(url: str, months: int = 6, max_depth: int = 2) -> 
     # Use optimized HTML-only extraction (much faster than recursive PDF crawl)
     html_news = await crawl_html_news_pages(url, months=months)
 
+    # IMPORTANT: Sort by date FIRST (items with dates come before items without)
+    # This ensures that when we deduplicate by title, we keep the version WITH the date
+    html_news_sorted = sorted(
+        html_news,
+        key=lambda x: (0 if x.get('date') else 1, x.get('date') or '0000-00-00'),
+        reverse=False  # Items with dates first, then sorted by date ascending
+    )
+    # Re-sort so newest dates come first among dated items
+    html_news_sorted = sorted(
+        html_news_sorted,
+        key=lambda x: (0 if x.get('date') else 1, x.get('date') or ''),
+        reverse=False  # 0 (has date) before 1 (no date), then by date descending
+    )
+    # Actually let's just separate and process
+    with_dates_raw = [n for n in html_news if n.get('date')]
+    without_dates_raw = [n for n in html_news if not n.get('date')]
+    # Sort dated items newest first
+    with_dates_raw.sort(key=lambda x: x['date'], reverse=True)
+    # Combine: dated items first (so they're kept during dedup), then undated
+    html_news_sorted = with_dates_raw + without_dates_raw
+
     # Deduplicate by URL AND title (same news can have multiple URLs)
+    # Process dated items first so they're kept over undated duplicates
     seen_urls = set()
     seen_titles = set()
     unique_news = []
-    for news in html_news:
+    for news in html_news_sorted:
         url_normalized = news['url'].split('?')[0].rstrip('/')
         # Normalize title for comparison (lowercase, remove extra spaces)
         title_normalized = re.sub(r'\s+', ' ', news.get('title', '').lower().strip())
-        
+
         # Skip if we've seen this URL or a very similar title
         if url_normalized in seen_urls:
             continue
         if title_normalized and title_normalized in seen_titles:
             continue
-            
+
         seen_urls.add(url_normalized)
         if title_normalized:
             seen_titles.add(title_normalized)
         unique_news.append(news)
 
-    # Sort: items with dates first (newest first), then items without dates
+    # Sort final result: items with dates first (newest first), then items without dates
     with_dates = sorted([n for n in unique_news if n.get('date')], key=lambda x: x['date'], reverse=True)
     without_dates = [n for n in unique_news if not n.get('date')]
 
