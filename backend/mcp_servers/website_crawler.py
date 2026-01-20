@@ -1510,6 +1510,105 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
         parsed_url = urlparse(url)
         domain = parsed_url.netloc.replace('www.', '')
 
+        # ============================================================
+        # SPECIAL CASE: ASP.NET Evergreen CMS (Harvest Gold pattern)
+        # These sites use JavaScript year selectors that require interaction
+        # Check for /news/default.aspx pattern
+        # ============================================================
+        aspx_news_urls = [
+            f'{url}/news/default.aspx',
+            f'{url}/news/news.aspx',
+            f'{url}/news-releases/default.aspx',
+        ]
+
+        for aspx_url in aspx_news_urls:
+            try:
+                # First check if the page exists and has Evergreen structure
+                result = await crawler.arun(url=aspx_url, config=crawler_config)
+                if not result.success:
+                    continue
+
+                soup = BeautifulSoup(result.html, 'html.parser')
+
+                # Check for Evergreen year selector
+                year_select = soup.select_one('select.evergreen-dropdown')
+                if not year_select:
+                    continue
+
+                print(f"[ASPX] Found Evergreen CMS page: {aspx_url}")
+
+                # Get available years from the dropdown
+                years = [opt.get('value') for opt in year_select.select('option') if opt.get('value')]
+                # Only process recent years (within the cutoff window)
+                cutoff_year = (datetime.now() - timedelta(days=months * 30)).year
+                years_to_check = [y for y in years if y and int(y) >= cutoff_year][:3]  # Max 3 years
+
+                for year in years_to_check:
+                    try:
+                        # Use JavaScript to select the year and get the content
+                        js_code = f'''
+                        const select = document.querySelector("select.evergreen-dropdown");
+                        if (select) {{
+                            select.value = "{year}";
+                            select.dispatchEvent(new Event("change", {{ bubbles: true }}));
+                        }}
+                        await new Promise(r => setTimeout(r, 2000));
+                        '''
+
+                        year_config = CrawlerRunConfig(
+                            cache_mode="bypass",
+                            js_code=js_code,
+                            wait_until="networkidle",
+                            page_timeout=30000
+                        )
+
+                        year_result = await crawler.arun(url=aspx_url, config=year_config)
+                        if not year_result.success:
+                            continue
+
+                        year_soup = BeautifulSoup(year_result.html, 'html.parser')
+
+                        # Extract news items from Evergreen structure
+                        for item in year_soup.select('.evergreen-news-item, .evergreen-item'):
+                            try:
+                                # Get date
+                                date_elem = item.select_one('.evergreen-news-date, .evergreen-item-date-time')
+                                date_str = None
+                                if date_elem:
+                                    date_str = parse_date_standalone(date_elem.get_text(strip=True))
+
+                                # Get title and link
+                                link = item.select_one('.evergreen-news-headline-link, .evergreen-item-title, a[href*="/news/"]')
+                                if not link:
+                                    continue
+
+                                title = link.get_text(strip=True)
+                                href = link.get('href', '')
+
+                                if not title or len(title) < 15:
+                                    continue
+
+                                # Build full URL
+                                if href and not href.startswith('http'):
+                                    href = urljoin(aspx_url, href)
+
+                                news = {
+                                    'title': clean_news_title(title, href),
+                                    'url': href,
+                                    'date': date_str,
+                                    'document_type': 'news_release',
+                                    'year': date_str[:4] if date_str else year
+                                }
+                                _add_news_item(news_by_url, news, cutoff_date, f"ASPX-{year}")
+                            except Exception:
+                                continue
+
+                        print(f"[ASPX] Processed year {year}")
+                    except Exception:
+                        continue
+            except Exception:
+                continue
+
         # Streamlined news page patterns
         news_page_patterns = [
             f'{url}/news/',
