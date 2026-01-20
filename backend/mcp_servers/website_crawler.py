@@ -1514,11 +1514,13 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
         # SPECIAL CASE: ASP.NET Evergreen CMS (Harvest Gold pattern)
         # These sites use JavaScript year selectors that require interaction
         # Check for /news/default.aspx pattern
+        # Use the base domain (scheme + netloc) not the full URL which might include paths
         # ============================================================
+        base_url = f"{parsed_url.scheme}://{parsed_url.netloc}"
         aspx_news_urls = [
-            f'{url}/news/default.aspx',
-            f'{url}/news/news.aspx',
-            f'{url}/news-releases/default.aspx',
+            f'{base_url}/news/default.aspx',
+            f'{base_url}/news/news.aspx',
+            f'{base_url}/news-releases/default.aspx',
         ]
 
         for aspx_url in aspx_news_urls:
