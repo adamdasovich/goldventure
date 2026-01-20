@@ -1499,6 +1499,9 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
             f'{url}/news/{current_year}/',  # Garibaldi (year-based)
             f'{url}/news-{current_year}/',  # ATEX Resources (year-suffix pattern)
             f'{url}/news-{current_year - 1}/',  # ATEX Resources (previous year)
+            # Year-based archive pages under news-releases (Aftermath Silver pattern)
+            f'{url}/news-releases/{current_year}/',
+            f'{url}/news-releases/{current_year - 1}/',
             f'https://wp.{domain}/news-releases/',  # Angkor Resources (WP subdomain)
             f'https://wp.{domain}/press-releases/',  # Angkor Resources (WP subdomain)
             url,  # Homepage fallback for 55 North Mining style sites
