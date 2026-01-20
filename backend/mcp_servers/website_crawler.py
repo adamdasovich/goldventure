@@ -1974,12 +1974,17 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
                             if not date_str:
                                 date_str = parse_date_standalone(time_elem.get_text(strip=True))
 
-                        # Extract URL - prefer the "Read More" style button with full URL
+                        # Extract URL - prefer the "Read More" style button with full article URL
+                        # Skip popup/action links (href starts with # or contains 'action')
                         href = None
-                        # First try the elementor button link (contains full article URL)
-                        button_link = loop_item.select_one('a.elementor-button[href]')
-                        if button_link:
-                            href = button_link.get('href', '')
+                        for button in loop_item.select('a.elementor-button[href]'):
+                            btn_href = button.get('href', '')
+                            # Skip popup action links
+                            if btn_href.startswith('#') or 'action' in btn_href.lower():
+                                continue
+                            if btn_href.startswith('http') or btn_href.startswith('/'):
+                                href = btn_href
+                                break
 
                         # Fallback to date link (short URL like /2026/01/05/)
                         if not href:
