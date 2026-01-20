@@ -2041,8 +2041,13 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
                         if not title or len(title) < 15:
                             continue
 
-                        # Skip non-news items
-                        if any(skip in title.lower() for skip in ['subscribe', 'contact', 'menu', 'home']):
+                        # Skip non-news items (navigation elements, not geological terms)
+                        title_lower = title.lower()
+                        if any(skip == title_lower or title_lower.startswith(skip + ' ') or ' ' + skip + ' ' not in title_lower and title_lower.endswith(' ' + skip)
+                               for skip in ['subscribe', 'menu', 'home']):
+                            continue
+                        # "contact" as standalone nav item but not geological "contact zone"
+                        if title_lower in ['contact', 'contact us'] or title_lower.startswith('contact us'):
                             continue
 
                         # Find VIEW link in any column (usually the third)
