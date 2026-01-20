@@ -207,6 +207,28 @@ def parse_date_standalone(text: str) -> Optional[str]:
         month, day, year = match.groups()
         return f"{year}-{month.zfill(2)}-{day.zfill(2)}"
 
+    # Mon DD - NO YEAR (Freegold Ventures: "Jan 15", "Dec 19")
+    # Infer year based on whether the date is in the future
+    match = re.match(
+        r'^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{1,2})$',
+        text, re.IGNORECASE
+    )
+    if match:
+        month = MONTH_MAP.get(match.group(1).lower(), '01')
+        day = match.group(2).zfill(2)
+        # Determine year - if month/day is in the future, use last year
+        current_year = datetime.now().year
+        current_month = datetime.now().month
+        current_day = datetime.now().day
+        month_int = int(month)
+        day_int = int(day)
+        # If the date appears to be in the future, assume it's from last year
+        if month_int > current_month or (month_int == current_month and day_int > current_day):
+            year = current_year - 1
+        else:
+            year = current_year
+        return f"{year}-{month}-{day}"
+
     return None
 
 
@@ -1921,6 +1943,52 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
                             'year': date_str[:4] if date_str else None
                         }
                         _add_news_item(news_by_url, news, cutoff_date, "WP-ENTRY")
+                    except Exception:
+                        continue
+
+                # ============================================================
+                # STRATEGY 5d: Freegold Ventures - a.latest with h3 date
+                # Links with "latest" class containing h3 date (Mon DD format)
+                # <a class="latest" href="..."><h3>Jan 15</h3>Title</a>
+                # ============================================================
+                for latest_link in soup.select('a.latest[href]'):
+                    try:
+                        href = latest_link.get('href', '')
+                        if not href:
+                            continue
+
+                        # Get date from h3 element inside
+                        date_str = None
+                        h3_elem = latest_link.select_one('h3')
+                        if h3_elem:
+                            date_str = parse_date_standalone(h3_elem.get_text(strip=True))
+
+                        # Get title - text content excluding the h3
+                        # Clone the element and remove h3 to get remaining text
+                        title_parts = []
+                        for child in latest_link.children:
+                            if hasattr(child, 'name') and child.name == 'h3':
+                                continue
+                            text = child.get_text(strip=True) if hasattr(child, 'get_text') else str(child).strip()
+                            if text:
+                                title_parts.append(text)
+                        title = ' '.join(title_parts)
+
+                        if not title or len(title) < 15:
+                            continue
+
+                        # Build full URL
+                        if not href.startswith('http'):
+                            href = urljoin(news_url, href)
+
+                        news = {
+                            'title': clean_news_title(title, href),
+                            'url': href,
+                            'date': date_str,
+                            'document_type': 'news_release',
+                            'year': date_str[:4] if date_str else None
+                        }
+                        _add_news_item(news_by_url, news, cutoff_date, "LATEST")
                     except Exception:
                         continue
 
