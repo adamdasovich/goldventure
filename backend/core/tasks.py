@@ -430,8 +430,16 @@ def scrape_company_news_task(self, company_id):
                 detected_keywords = [kw for kw in all_keywords if kw in title_lower]
 
                 # If financing keywords detected, create flag for superuser review
-                if detected_keywords:
+                # But ONLY for recent news (within 7 days) - older news is not actionable
+                if detected_keywords and release_date:
                     from core.models import NewsReleaseFlag, DismissedNewsURL
+                    from datetime import timedelta
+
+                    # Only flag news releases within the last 7 days
+                    cutoff_date = datetime.now().date() - timedelta(days=7)
+                    if release_date < cutoff_date:
+                        print(f"  [SKIP] Old news (not flagging): {title[:50]}... (date: {release_date})")
+                        continue
 
                     # Check if URL or title is similar to a previously dismissed news
                     is_similar, matched_dismissed = DismissedNewsURL.is_similar_to_dismissed(
@@ -818,32 +826,40 @@ def scrape_single_company_news_task(self, company_id: int):
                 title_lower = title.lower()
                 detected_keywords = [kw for kw in financing_keywords if kw in title_lower]
 
-                if detected_keywords:
+                # Only flag recent news (within 7 days) - older news is not actionable
+                if detected_keywords and release_date:
                     from core.models import NewsReleaseFlag, DismissedNewsURL
-                    # Check if URL or title is similar to previously dismissed - never re-flag
-                    is_similar, matched_dismissed = DismissedNewsURL.is_similar_to_dismissed(
-                        company=company,
-                        url=url,
-                        title=title,
-                        similarity_threshold=0.85
-                    )
-                    if is_similar:
-                        print(f"  [SKIP] Similar to dismissed: {title[:50]}...")
+                    from datetime import timedelta
+
+                    # Only flag news releases within the last 7 days
+                    cutoff_date = datetime.now().date() - timedelta(days=7)
+                    if release_date < cutoff_date:
+                        print(f"  [SKIP] Old news (not flagging): {title[:50]}...")
                     else:
-                        flag, flag_created = NewsReleaseFlag.objects.get_or_create(
-                            news_release=obj,
-                            defaults={
-                                'detected_keywords': detected_keywords,
-                                'status': 'pending'
-                            }
+                        # Check if URL or title is similar to previously dismissed - never re-flag
+                        is_similar, matched_dismissed = DismissedNewsURL.is_similar_to_dismissed(
+                            company=company,
+                            url=url,
+                            title=title,
+                            similarity_threshold=0.85
                         )
-                        if flag_created:
-                            print(f"  [FLAG] Flagged: {title[:50]}...")
-                            try:
-                                from core.notifications import send_financing_flag_notification
-                                send_financing_flag_notification(flag, company, obj)
-                            except Exception as e:
-                                print(f"  [WARN] Notification error: {str(e)}")
+                        if is_similar:
+                            print(f"  [SKIP] Similar to dismissed: {title[:50]}...")
+                        else:
+                            flag, flag_created = NewsReleaseFlag.objects.get_or_create(
+                                news_release=obj,
+                                defaults={
+                                    'detected_keywords': detected_keywords,
+                                    'status': 'pending'
+                                }
+                            )
+                            if flag_created:
+                                print(f"  [FLAG] Flagged: {title[:50]}...")
+                                try:
+                                    from core.notifications import send_financing_flag_notification
+                                    send_financing_flag_notification(flag, company, obj)
+                                except Exception as e:
+                                    print(f"  [WARN] Notification error: {str(e)}")
             else:
                 updated_count += 1
 
