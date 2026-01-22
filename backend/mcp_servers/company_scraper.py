@@ -1634,16 +1634,26 @@ class CompanyDataScraper:
                     'inthemedia', 'faq', 'privacy', 'terms', 'legal', 'disclaimer'
                 }
                 if slug not in non_project_slugs:
-                    # Check if page has a header (h1 or h2) with "property", "project", "mine", "deposit" or similar
+                    # Check if page has project indicators in title, h1, or h2
                     # Some sites use h2 for main title instead of h1
                     project_indicators = ['property', 'project', 'mine', 'deposit', 'claim',
                                         'exploration', 'mineral', 'prospect', 'gold', 'silver',
                                         'copper', 'zinc', 'nickel', 'lithium']
-                    for header in soup.find_all(['h1', 'h2'])[:3]:  # Check first few headers
-                        header_text = header.get_text(strip=True).lower()
-                        if any(ind in header_text for ind in project_indicators):
+
+                    # Check page title first (most reliable indicator)
+                    title = soup.find('title')
+                    if title:
+                        title_text = title.get_text(strip=True).lower()
+                        if any(ind in title_text for ind in project_indicators):
                             is_project_detail_page = True
-                            break
+
+                    # Also check h1/h2 headers
+                    if not is_project_detail_page:
+                        for header in soup.find_all(['h1', 'h2'])[:3]:
+                            header_text = header.get_text(strip=True).lower()
+                            if any(ind in header_text for ind in project_indicators):
+                                is_project_detail_page = True
+                                break
 
             if is_project_detail_page:
                 # This is a specific project page - extract project name from header or URL
@@ -1672,7 +1682,24 @@ class CompanyDataScraper:
                         project_name = header_text
                         break
 
-                # Strategy 2: If no header found, derive name from URL slug
+                # Strategy 2: Try to extract project name from page title
+                # e.g., "Sycamore Canyon Property – Arizona Gold & Silver" -> "Sycamore Canyon Property"
+                if not project_name:
+                    title = soup.find('title')
+                    if title:
+                        title_text = title.get_text(strip=True)
+                        # Split on common separators: |, –, -, :, —
+                        separators = ['|', ' – ', ' - ', ' — ', ': ']
+                        for sep in separators:
+                            if sep in title_text:
+                                parts = title_text.split(sep)
+                                # First part is usually the project name
+                                candidate = parts[0].strip()
+                                if self._is_valid_project_name(candidate) and len(candidate) < 60:
+                                    project_name = candidate
+                                break
+
+                # Strategy 3: If still no name, derive from URL slug
                 if not project_name:
                     slug_name = path_parts[-1].replace('-', ' ').replace('_', ' ').title()
                     # Validate the slug-derived name too
