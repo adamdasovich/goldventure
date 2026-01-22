@@ -1684,20 +1684,35 @@ class CompanyDataScraper:
 
                 # Strategy 2: Try to extract project name from page title
                 # e.g., "Sycamore Canyon Property – Arizona Gold & Silver" -> "Sycamore Canyon Property"
-                if not project_name:
-                    title = soup.find('title')
-                    if title:
-                        title_text = title.get_text(strip=True)
-                        # Split on common separators: |, –, -, :, —
-                        separators = ['|', ' – ', ' - ', ' — ', ': ']
-                        for sep in separators:
-                            if sep in title_text:
-                                parts = title_text.split(sep)
-                                # First part is usually the project name
-                                candidate = parts[0].strip()
-                                if self._is_valid_project_name(candidate) and len(candidate) < 60:
-                                    project_name = candidate
-                                break
+                # Prefer title if it has a more specific project indicator (Property, Project, Mine)
+                title = soup.find('title')
+                title_candidate = None
+                if title:
+                    title_text = title.get_text(strip=True)
+                    # Split on common separators: |, –, -, :, —
+                    separators = ['|', ' – ', ' - ', ' — ', ': ']
+                    for sep in separators:
+                        if sep in title_text:
+                            parts = title_text.split(sep)
+                            # First part is usually the project name
+                            candidate = parts[0].strip()
+                            if self._is_valid_project_name(candidate) and len(candidate) < 60:
+                                title_candidate = candidate
+                            break
+
+                # Use title candidate if we don't have a name yet
+                if not project_name and title_candidate:
+                    project_name = title_candidate
+                # Also prefer title candidate if it has more specific project indicators
+                elif project_name and title_candidate:
+                    title_lower = title_candidate.lower()
+                    name_lower = project_name.lower()
+                    project_terms = ['property', 'project', 'mine', 'deposit']
+                    title_has_term = any(term in title_lower for term in project_terms)
+                    name_has_term = any(term in name_lower for term in project_terms)
+                    # If title has project term but current name doesn't, prefer title
+                    if title_has_term and not name_has_term:
+                        project_name = title_candidate
 
                 # Strategy 3: If still no name, derive from URL slug
                 if not project_name:
