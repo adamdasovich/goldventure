@@ -82,9 +82,9 @@ class CompanyDataScraper:
         crawler_config = CrawlerRunConfig(
             cache_mode="bypass",
             # Wait longer for Cloudflare challenge pages to complete
-            delay_before_return_html=2.0,  # Wait 2 seconds after page loads
+            delay_before_return_html=3.0,  # Wait 3 seconds after page loads
             page_timeout=90000,  # 90 second timeout for slow pages
-            wait_until="networkidle",  # Wait for network to be idle (Cloudflare redirects)
+            wait_until="load",  # Wait for load event
         )
 
         async with AsyncWebCrawler(config=browser_config) as crawler:
@@ -341,9 +341,9 @@ class CompanyDataScraper:
                 from crawl4ai import CrawlerRunConfig
                 retry_config = CrawlerRunConfig(
                     cache_mode="bypass",
-                    delay_before_return_html=5.0,  # 5 second delay
+                    delay_before_return_html=8.0,  # 8 second delay for Cloudflare
                     page_timeout=120000,  # 2 minute timeout
-                    wait_until="networkidle",
+                    wait_until="load",
                 )
                 result = await crawler.arun(url=self.base_url, config=retry_config)
                 if not result.success:
