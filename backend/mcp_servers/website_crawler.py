@@ -1978,7 +1978,14 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
                         href = None
 
                         # Check if the whole item is wrapped in an <a> tag (Argenta pattern)
-                        wrapper_link = loop_item.select_one('a.e-con[href], > a[href]')
+                        # Look for a.e-con link or direct child <a> tag
+                        wrapper_link = loop_item.select_one('a.e-con[href]')
+                        if not wrapper_link:
+                            # Check for direct child <a> that wraps content
+                            for child in loop_item.children:
+                                if hasattr(child, 'name') and child.name == 'a' and child.get('href'):
+                                    wrapper_link = child
+                                    break
                         if wrapper_link:
                             href = wrapper_link.get('href', '')
 
