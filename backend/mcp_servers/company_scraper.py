@@ -1610,11 +1610,40 @@ class CompanyDataScraper:
             url_path = urlparse(url).path.rstrip('/')
             path_parts = [p for p in url_path.split('/') if p]
 
+            # Classic structure: /projects/golden-summit/ (depth 2+, starts with projects)
             is_project_detail_page = (
                 len(path_parts) >= 2 and
                 path_parts[0] in ['projects', 'project', 'properties', 'property'] and
                 path_parts[-1] not in ['projects', 'project', 'properties', 'property']
             )
+
+            # Also detect root-level project pages (e.g., /philadelphia/, /silverton/)
+            # These are common when navigation links directly to project pages
+            # Check by looking for project-related content in h1/h2 headers
+            if not is_project_detail_page and len(path_parts) == 1:
+                # Single-segment URL - check if it looks like a project page
+                slug = path_parts[0].lower()
+                # Skip common non-project pages
+                non_project_slugs = {
+                    'home', 'about', 'about-us', 'contact', 'contact-us', 'news', 'press',
+                    'investor', 'investors', 'team', 'management', 'leadership', 'board',
+                    'governance', 'esg', 'sustainability', 'careers', 'subscribe', 'login',
+                    'gallery', 'media', 'documents', 'reports', 'corporate', 'highlights',
+                    'overview', 'history', 'events', 'calendar', 'mandates', 'shareholder',
+                    'shareholders', 'presentations', 'factsheet', 'stock', 'stockinformation',
+                    'inthemedia', 'faq', 'privacy', 'terms', 'legal', 'disclaimer'
+                }
+                if slug not in non_project_slugs:
+                    # Check if page has a header (h1 or h2) with "property", "project", "mine", "deposit" or similar
+                    # Some sites use h2 for main title instead of h1
+                    project_indicators = ['property', 'project', 'mine', 'deposit', 'claim',
+                                        'exploration', 'mineral', 'prospect', 'gold', 'silver',
+                                        'copper', 'zinc', 'nickel', 'lithium']
+                    for header in soup.find_all(['h1', 'h2'])[:3]:  # Check first few headers
+                        header_text = header.get_text(strip=True).lower()
+                        if any(ind in header_text for ind in project_indicators):
+                            is_project_detail_page = True
+                            break
 
             if is_project_detail_page:
                 # This is a specific project page - extract project name from header or URL
@@ -1637,8 +1666,9 @@ class CompanyDataScraper:
                     if url_slug in header_normalized or header_normalized in url_slug:
                         project_name = header_text
                         break
-                    # Also accept if it's the first valid h1 on a project detail page
-                    if not project_name and header.name == 'h1':
+                    # Also accept if it's the first valid h1 or h2 on a project detail page
+                    # (some sites use h2 for main content title)
+                    if not project_name and header.name in ['h1', 'h2']:
                         project_name = header_text
                         break
 
