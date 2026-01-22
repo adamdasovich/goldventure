@@ -1873,6 +1873,52 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
                         continue
 
                 # ============================================================
+                # STRATEGY 4b: Avino news-entry pattern
+                # Structure: <div class="news-entry" uk-grid><div class="date">DATE</div><div class="title"><a>TITLE</a></div></div>
+                # ============================================================
+                for entry in soup.select('.news-entry'):
+                    try:
+                        # Look for date column
+                        date_col = entry.select_one('.date, [class*="uk-width-1-5"]')
+                        if not date_col:
+                            continue
+
+                        date_text = date_col.get_text(strip=True)
+                        date_str = parse_date_standalone(date_text)
+                        if not date_str:
+                            continue
+
+                        # Look for title column with link
+                        title_col = entry.select_one('.title, [class*="uk-width-4-5"]')
+                        if not title_col:
+                            continue
+
+                        link = title_col.select_one('a')
+                        if not link:
+                            continue
+
+                        title = link.get_text(strip=True)
+                        href = link.get('href', '')
+
+                        if not title or not href:
+                            continue
+
+                        # Build full URL
+                        if not href.startswith('http'):
+                            href = urljoin(url, href)
+
+                        news = {
+                            'title': clean_news_title(title, href),
+                            'url': urljoin(news_url, href),
+                            'date': date_str,
+                            'document_type': 'news_release',
+                            'year': date_str[:4] if date_str else None
+                        }
+                        _add_news_item(news_by_url, news, cutoff_date, "NEWS-ENTRY")
+                    except Exception:
+                        continue
+
+                # ============================================================
                 # STRATEGY 5a: 55 North Mining - Homepage PDF news pattern
                 # News links to PDFs with date in span, title as text
                 # ============================================================
