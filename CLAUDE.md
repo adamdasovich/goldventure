@@ -16,8 +16,10 @@
 ### Servers (DigitalOcean)
 | Server | IP | Specs | Purpose |
 |--------|-----|-------|---------|
-| **Main (CPU)** | 137.184.168.166 | 8 GB RAM / 80 GB Disk | Django, Celery, PostgreSQL, ChromaDB |
-| **GPU Worker** | 134.122.36.137 | 66 GB RAM / 500 GB Disk | Docling PDF processing (GPU-accelerated) |
+| **Main (CPU)** | 137.184.168.166 | 8 GB RAM / 80 GB Disk | Django, Celery, PostgreSQL, ChromaDB, GPU Orchestrator |
+| **GPU Worker** | Dynamic (on-demand) | 48 GB VRAM / RTX 6000 Ada | Docling PDF processing (GPU-accelerated) |
+
+> **Note:** GPU worker droplets are created dynamically by the GPU Orchestrator when document processing jobs are pending. They are auto-destroyed after 5 minutes idle to minimize costs (~$1.57/hr).
 
 ---
 
@@ -71,8 +73,60 @@ goldventure-platform/
 │   │   ├── company_scraper.py # Company profile scraping (140KB)
 │   │   ├── news_scraper.py    # Industry news (Mining.com, Northern Miner)
 │   │   └── rag_utils.py       # ChromaDB vector search
+│   ├── gpu_orchestrator.py    # On-demand GPU droplet management
+│   ├── gpu_worker.py          # GPU-accelerated document processing
 │   └── templates/             # Email templates
 └── frontend/                   # Next.js React application
+```
+
+---
+
+## GPU Document Processing Architecture
+
+### How It Works
+1. **GPU Orchestrator** (`gpu_orchestrator.py`) runs on main server, polls every 60 seconds
+2. When `DocumentProcessingJob` records with status='pending' exist, it creates a GPU droplet
+3. **GPU Worker** (`gpu_worker.py`) runs on the GPU droplet, processes documents with Docling + GPU
+4. Worker stores chunks in PostgreSQL and embeddings in ChromaDB
+5. When queue is empty for 5 minutes, orchestrator destroys the GPU droplet
+
+### Key Files
+| File | Location | Purpose |
+|------|----------|---------|
+| `gpu_orchestrator.py` | `/var/www/goldventure/backend/` | Manages GPU droplet lifecycle |
+| `gpu_worker.py` | `/var/www/goldventure/backend/` | Processes documents on GPU |
+| Orchestrator log | `/var/log/gpu_orchestrator.log` | GPU creation/destruction events |
+| State file | `/var/run/gpu_orchestrator_state.json` | Current GPU droplet tracking |
+
+### Environment Variables (Main Server)
+- `DO_API_TOKEN` - DigitalOcean API token for droplet management
+- `DO_SSH_KEY_ID` - SSH key ID for GPU droplet access
+- `DB_PASSWORD` - Transferred securely to GPU worker via SCP
+
+### CRITICAL: CPU vs GPU Processing
+> **IMPORTANT:** Document processing should ONLY happen on the GPU worker!
+
+The CPU cannot handle Docling processing efficiently (causes 100% CPU, very slow).
+
+- ❌ **DO NOT** call `process_document_queue()` from views or admin
+- ❌ **DO NOT** use threading to process documents on CPU
+- ✅ **DO** let the GPU orchestrator handle all `DocumentProcessingJob` records
+- ✅ Jobs stay in 'pending' status until GPU worker picks them up
+
+### Checking GPU Status
+```bash
+# Is orchestrator running?
+ps aux | grep gpu_orchestrator | grep -v grep
+
+# Check orchestrator logs
+tail -100 /var/log/gpu_orchestrator.log
+
+# Check current state
+cat /var/run/gpu_orchestrator_state.json
+
+# List active GPU droplets
+curl -s -H "Authorization: Bearer $DO_API_TOKEN" \
+  "https://api.digitalocean.com/v2/droplets?tag_name=gpu-worker"
 ```
 
 ---
@@ -281,3 +335,4 @@ When Claude makes a mistake and gets corrected, add it here:
 | 2026-01-22 | Confused homepage news scraper with company news scraper | They are separate tasks with different sources |
 | 2026-01-22 | Forgot server path repeatedly | Path is `/var/www/goldventure` (not goldventure-platform) |
 | 2026-01-22 | Created code locally but didn't deploy to server | Always push to GitHub and pull on DO server after changes |
+| 2026-01-22 | Documents processing on CPU instead of GPU | Found race condition - views.py was starting CPU processing immediately; GPU orchestrator needs time to spin up. Fixed by removing CPU processing calls. |

@@ -1455,12 +1455,13 @@ class CompanyViewSet(viewsets.ModelViewSet):
                 job.error_messages = errors
                 job.save()
 
-                # Start document processing in background if documents were found
+                # Document processing jobs are created by the scraper
+                # The GPU Orchestrator will automatically pick them up and process on GPU
+                # DO NOT process on CPU - it causes 100% CPU and is very slow
                 processing_jobs = data.get('_processing_jobs_created', [])
                 if processing_jobs:
-                    import threading
-                    from core.tasks import process_document_queue
-                    threading.Thread(target=process_document_queue, daemon=True).start()
+                    # Jobs will be processed by GPU worker automatically
+                    pass
 
                 return Response({
                     'success': True,
@@ -6113,13 +6114,10 @@ def scrape_company_save(request):
             # Get processing jobs that were created
             processing_jobs = data.get('_processing_jobs_created', [])
 
-            # Optionally trigger document processing in background
+            # Document processing is handled by GPU Orchestrator
+            # DO NOT process on CPU - it causes 100% CPU and is very slow
+            # Jobs will be picked up by GPU worker automatically
             process_documents = request.data.get('process_documents', True)
-            if process_documents and processing_jobs:
-                # Start document processing in background thread
-                import threading
-                from core.tasks import process_document_queue
-                threading.Thread(target=process_document_queue, daemon=True).start()
 
             return Response({
                 'success': True,
