@@ -12,7 +12,45 @@
 - Offers educational content and a property exchange marketplace
 
 **Live URL:** https://juniorminingintelligence.com
-**Server:** DigitalOcean droplet at 137.184.168.166
+
+### Servers (DigitalOcean)
+| Server | IP | Specs | Purpose |
+|--------|-----|-------|---------|
+| **Main (CPU)** | 137.184.168.166 | 8 GB RAM / 80 GB Disk | Django, Celery, PostgreSQL, ChromaDB |
+| **GPU Worker** | 134.122.36.137 | 66 GB RAM / 500 GB Disk | Docling PDF processing (GPU-accelerated) |
+
+---
+
+## Deployment Workflow
+
+> **CRITICAL:** After making code changes locally, you MUST deploy to the server!
+
+### Standard Deployment
+```bash
+# 1. Commit and push locally
+git add -A && git commit -m "Description" && git push
+
+# 2. SSH to main server and pull
+ssh root@137.184.168.166
+cd /var/www/goldventure && git pull
+
+# 3. Restart Celery (if backend changes)
+pkill -f 'celery -A config'
+cd /var/www/goldventure/backend && source venv/bin/activate
+celery -A config beat --detach --logfile=/var/log/celery-beat.log --pidfile=/var/run/celery-beat.pid
+celery -A config worker --detach --concurrency=2 --logfile=/var/log/celery-worker.log --pidfile=/var/run/celery-worker.pid
+
+# 4. Restart Gunicorn (if needed)
+pkill -f gunicorn
+gunicorn config.wsgi:application --bind 127.0.0.1:8000 --workers 3 --timeout 300 --daemon
+```
+
+### GPU Worker Deployment
+```bash
+ssh root@134.122.36.137
+cd /var/www/goldventure && git pull
+# Restart GPU worker service as needed
+```
 
 ---
 
@@ -140,6 +178,10 @@ python -c "from core.tasks import scrape_all_companies_news_task; scrape_all_com
 ## Recent Changes (Keep Updated)
 
 ### 2026-01-22
+- Added RLM (Recursive Language Model) processor for long NI 43-101 documents
+  - New file: `backend/mcp_servers/rlm_processor.py`
+  - New command: `python manage.py process_document_rlm`
+  - Auto-switches to RLM for documents >50 pages
 - Fixed financing flags to only flag news within 7 days
 - Added UIKit grid strategy for Scottie Resources
 - Fixed MM/DD/YY date parsing for Silverco Mining
@@ -238,3 +280,4 @@ When Claude makes a mistake and gets corrected, add it here:
 | 2026-01-22 | Claimed Pacifica flag was legitimate without checking dismissed news | Always check `DismissedNewsURL` table and similarity matching |
 | 2026-01-22 | Confused homepage news scraper with company news scraper | They are separate tasks with different sources |
 | 2026-01-22 | Forgot server path repeatedly | Path is `/var/www/goldventure` (not goldventure-platform) |
+| 2026-01-22 | Created code locally but didn't deploy to server | Always push to GitHub and pull on DO server after changes |
