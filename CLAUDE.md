@@ -196,3 +196,45 @@ curl -H "Authorization: Token REDACTED_TOKEN" \
 | Add database model | `backend/core/models.py` |
 | Modify background task | `backend/core/tasks.py` |
 | Fix financing detection | `backend/core/tasks.py` lines ~384 and ~810 |
+
+---
+
+## Common Mistakes (Do NOT)
+
+> **IMPORTANT:** When the user corrects a mistake, UPDATE THIS SECTION immediately.
+
+### Server & Paths
+- ❌ Server path is NOT `/var/www/goldventure-platform`
+- ✅ Server path IS `/var/www/goldventure`
+
+### Scraping Functions
+- ❌ Do NOT use `crawl_company_website()` for news
+- ✅ Use `crawl_news_releases()` for company news
+
+### Scrapers Confusion
+- ❌ Do NOT confuse homepage "Latest Mining News" with company news
+- ✅ Homepage news = `scrape_mining_news_task` (Mining.com, Northern Miner)
+- ✅ Company news = `scrape_all_companies_news_task` (individual company websites)
+
+### Investigation Before Action
+- ❌ Do NOT assume something is working without checking
+- ❌ Do NOT claim a bug is "legitimate behavior" without thorough investigation
+- ✅ Always investigate thoroughly before drawing conclusions
+- ✅ Read the actual code, check the database, verify assumptions
+
+### Code Quality
+- ❌ Do NOT be sloppy or rush through fixes
+- ✅ Take time to understand the problem before writing code
+- ✅ Test changes properly before claiming they work
+
+---
+
+## Lessons Learned (Add mistakes here)
+
+When Claude makes a mistake and gets corrected, add it here:
+
+| Date | Mistake | Correction |
+|------|---------|------------|
+| 2026-01-22 | Claimed Pacifica flag was legitimate without checking dismissed news | Always check `DismissedNewsURL` table and similarity matching |
+| 2026-01-22 | Confused homepage news scraper with company news scraper | They are separate tasks with different sources |
+| 2026-01-22 | Forgot server path repeatedly | Path is `/var/www/goldventure` (not goldventure-platform) |
