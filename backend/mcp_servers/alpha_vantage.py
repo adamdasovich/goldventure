@@ -160,7 +160,10 @@ class AlphaVantageServer(BaseMCPServer):
                 try:
                     trade_date = datetime.strptime(latest_day, "%Y-%m-%d").date()
 
-                    # Create or update market data
+                    # Parse change_percent to decimal (remove % sign)
+                    change_pct_decimal = Decimal(str(change_percent).rstrip('%')) if change_percent else Decimal('0')
+
+                    # Create or update market data - save ALL extracted data
                     market_data, created = MarketData.objects.update_or_create(
                         company=company,
                         date=trade_date,
@@ -169,7 +172,10 @@ class AlphaVantageServer(BaseMCPServer):
                             'high_price': high_price,
                             'low_price': low_price,
                             'close_price': close_price,
-                            'volume': volume
+                            'volume': volume,
+                            'change_amount': change,
+                            'change_percent': change_pct_decimal,
+                            'source': 'Alpha Vantage'
                         }
                     )
                     cached = True
@@ -308,7 +314,7 @@ class AlphaVantageServer(BaseMCPServer):
                         close_price = Decimal(values.get("4. close", 0))
                         volume = int(values.get("5. volume", 0))
 
-                        # Create or update market data
+                        # Create or update market data - save ALL extracted data
                         market_data, created = MarketData.objects.update_or_create(
                             company=company,
                             date=trade_date,
@@ -317,7 +323,8 @@ class AlphaVantageServer(BaseMCPServer):
                                 'high_price': high_price,
                                 'low_price': low_price,
                                 'close_price': close_price,
-                                'volume': volume
+                                'volume': volume,
+                                'source': 'Alpha Vantage (daily)'
                             }
                         )
                         if created:

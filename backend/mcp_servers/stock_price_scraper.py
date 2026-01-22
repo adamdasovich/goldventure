@@ -292,9 +292,11 @@ class StockPriceScraper:
 
     def save_price(self, company, quote: Dict) -> bool:
         """
-        Save price data to StockPrice model.
+        Save price data to both StockPrice and MarketData models.
+        This ensures data is accessible via both the scheduled task results
+        and the AI assistant's financial tools.
         """
-        from core.models import StockPrice
+        from core.models import StockPrice, MarketData
 
         try:
             trade_date = datetime.strptime(quote['date'], '%Y-%m-%d').date() if quote.get('date') else date.today()
@@ -302,7 +304,7 @@ class StockPriceScraper:
             # Determine currency based on exchange
             currency = 'CAD' if company.exchange in ['tsx', 'tsxv', 'cse'] else 'USD'
 
-            # Create or update the price record
+            # Create or update the StockPrice record
             price_obj, created = StockPrice.objects.update_or_create(
                 company=company,
                 date=trade_date,
@@ -312,6 +314,24 @@ class StockPriceScraper:
                     'open_price': quote.get('open'),
                     'high_price': quote.get('high'),
                     'low_price': quote.get('low'),
+                    'change_amount': quote.get('change', Decimal('0')),
+                    'change_percent': quote.get('change_percent', Decimal('0')),
+                    'currency': currency,
+                    'source': quote.get('source', 'Unknown')
+                }
+            )
+
+            # Also save to MarketData for AI assistant access
+            # MarketData requires non-null OHLC values, so provide defaults
+            MarketData.objects.update_or_create(
+                company=company,
+                date=trade_date,
+                defaults={
+                    'open_price': quote.get('open') or quote['close'],
+                    'high_price': quote.get('high') or quote['close'],
+                    'low_price': quote.get('low') or quote['close'],
+                    'close_price': quote['close'],
+                    'volume': quote.get('volume', 0),
                     'change_amount': quote.get('change', Decimal('0')),
                     'change_percent': quote.get('change_percent', Decimal('0')),
                     'currency': currency,
