@@ -1503,42 +1503,51 @@ class CompanyDataScraper:
             return
 
         try:
-            # First, do a HEAD request to check if this URL serves a PDF directly
+            # First, check if this URL serves a PDF directly using requests
             # Some sites serve PDFs from URLs like /1pager/ or /corp-presentation/
-            import aiohttp
+            import requests as sync_requests
             try:
-                async with aiohttp.ClientSession() as session:
-                    async with session.head(url, allow_redirects=True, timeout=aiohttp.ClientTimeout(total=10)) as resp:
-                        content_type = resp.headers.get('Content-Type', '').lower()
-                        if 'application/pdf' in content_type or resp.url.path.endswith('.pdf'):
-                            # This URL serves a PDF directly - add it as a document
-                            self.visited_urls.add(url)
-                            url_lower = url.lower()
+                # Use stream=True to avoid downloading the whole file
+                resp = sync_requests.get(url, headers={'User-Agent': 'Mozilla/5.0'}, stream=True, timeout=10)
+                content_type = resp.headers.get('Content-Type', '').lower()
 
-                            # Determine document type from URL
-                            doc_type = 'other'
-                            if any(kw in url_lower for kw in ['presentation', 'corp-presentation', 'corporate-presentation']):
-                                doc_type = 'presentation'
-                            elif any(kw in url_lower for kw in ['fact', '1pager', 'one-pager']):
-                                doc_type = 'fact_sheet'
+                # Check if it's a PDF by content-type or by reading first bytes
+                is_pdf = 'application/pdf' in content_type
+                if not is_pdf and resp.status_code == 200:
+                    # Read first few bytes to check for PDF signature
+                    first_bytes = resp.raw.read(10)
+                    is_pdf = first_bytes.startswith(b'%PDF')
+                resp.close()
 
-                            # Extract title from URL slug
-                            path = urlparse(url).path.rstrip('/')
-                            slug = path.split('/')[-1] if path else 'document'
-                            title = slug.replace('-', ' ').replace('_', ' ').title()
+                if is_pdf:
+                    # This URL serves a PDF directly - add it as a document
+                    self.visited_urls.add(url)
+                    url_lower = url.lower()
 
-                            doc = {
-                                'source_url': str(resp.url),  # Use final URL after redirects
-                                'title': title,
-                                'document_type': doc_type,
-                                'extracted_at': datetime.utcnow().isoformat(),
-                            }
-                            self.extracted_data['documents'].append(doc)
-                            print(f"[OK] Direct PDF detected at {url}: {title} ({doc_type})")
-                            return
-            except Exception as head_error:
-                # HEAD request failed, continue with regular scraping
-                pass
+                    # Determine document type from URL
+                    doc_type = 'other'
+                    if any(kw in url_lower for kw in ['presentation', 'corp-presentation', 'corporate-presentation']):
+                        doc_type = 'presentation'
+                    elif any(kw in url_lower for kw in ['fact', '1pager', 'one-pager']):
+                        doc_type = 'fact_sheet'
+
+                    # Extract title from URL slug
+                    path = urlparse(url).path.rstrip('/')
+                    slug = path.split('/')[-1] if path else 'document'
+                    title = slug.replace('-', ' ').replace('_', ' ').title()
+
+                    doc = {
+                        'source_url': url,
+                        'title': title,
+                        'document_type': doc_type,
+                        'extracted_at': datetime.utcnow().isoformat(),
+                    }
+                    self.extracted_data['documents'].append(doc)
+                    print(f"[OK] Direct PDF detected at {url}: {title} ({doc_type})")
+                    return
+            except Exception as pdf_check_error:
+                # PDF check failed, continue with regular scraping
+                print(f"[DEBUG] PDF check failed for {url}: {pdf_check_error}")
 
             result = await crawler.arun(url=url, config=config)
             if not result.success:
