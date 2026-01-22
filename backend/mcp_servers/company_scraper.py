@@ -1453,7 +1453,8 @@ class CompanyDataScraper:
 
             # Find and follow sub-pages for presentations, fact sheets, and reports
             sub_page_keywords = [
-                'presentation', 'fact-sheet', 'factsheet', 'fact_sheet',
+                'presentation', 'corp-presentation', 'corporate-presentation',
+                'fact-sheet', 'factsheet', 'fact_sheet', '1pager', 'one-pager',
                 'reports', 'documents', 'filings', 'annual-report'
             ]
             for link in soup.find_all('a', href=True):
@@ -1502,6 +1503,43 @@ class CompanyDataScraper:
             return
 
         try:
+            # First, do a HEAD request to check if this URL serves a PDF directly
+            # Some sites serve PDFs from URLs like /1pager/ or /corp-presentation/
+            import aiohttp
+            try:
+                async with aiohttp.ClientSession() as session:
+                    async with session.head(url, allow_redirects=True, timeout=aiohttp.ClientTimeout(total=10)) as resp:
+                        content_type = resp.headers.get('Content-Type', '').lower()
+                        if 'application/pdf' in content_type or resp.url.path.endswith('.pdf'):
+                            # This URL serves a PDF directly - add it as a document
+                            self.visited_urls.add(url)
+                            url_lower = url.lower()
+
+                            # Determine document type from URL
+                            doc_type = 'other'
+                            if any(kw in url_lower for kw in ['presentation', 'corp-presentation', 'corporate-presentation']):
+                                doc_type = 'presentation'
+                            elif any(kw in url_lower for kw in ['fact', '1pager', 'one-pager']):
+                                doc_type = 'fact_sheet'
+
+                            # Extract title from URL slug
+                            path = urlparse(url).path.rstrip('/')
+                            slug = path.split('/')[-1] if path else 'document'
+                            title = slug.replace('-', ' ').replace('_', ' ').title()
+
+                            doc = {
+                                'source_url': str(resp.url),  # Use final URL after redirects
+                                'title': title,
+                                'document_type': doc_type,
+                                'extracted_at': datetime.utcnow().isoformat(),
+                            }
+                            self.extracted_data['documents'].append(doc)
+                            print(f"[OK] Direct PDF detected at {url}: {title} ({doc_type})")
+                            return
+            except Exception as head_error:
+                # HEAD request failed, continue with regular scraping
+                pass
+
             result = await crawler.arun(url=url, config=config)
             if not result.success:
                 return
@@ -1515,6 +1553,8 @@ class CompanyDataScraper:
             if 'presentation' in url_lower:
                 page_hint = 'presentation'
             elif 'fact' in url_lower and 'sheet' in url_lower:
+                page_hint = 'fact_sheet'
+            elif '1pager' in url_lower or 'one-pager' in url_lower:
                 page_hint = 'fact_sheet'
 
             # Find all PDF links
