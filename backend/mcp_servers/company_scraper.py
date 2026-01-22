@@ -81,6 +81,10 @@ class CompanyDataScraper:
 
         crawler_config = CrawlerRunConfig(
             cache_mode="bypass",
+            # Wait longer for Cloudflare challenge pages to complete
+            delay_before_return_html=2.0,  # Wait 2 seconds after page loads
+            page_timeout=90000,  # 90 second timeout for slow pages
+            wait_until="networkidle",  # Wait for network to be idle (Cloudflare redirects)
         )
 
         async with AsyncWebCrawler(config=browser_config) as crawler:
@@ -324,6 +328,34 @@ class CompanyDataScraper:
 
             self.visited_urls.add(self.base_url)
             soup = BeautifulSoup(result.html, 'html.parser')
+
+            # Detect Cloudflare challenge pages and retry with longer wait
+            title = soup.find('title')
+            title_text = title.get_text(strip=True) if title else ""
+            cloudflare_indicators = ['one moment', 'just a moment', 'please wait', 'checking your browser',
+                                    'cloudflare', 'ddos protection', 'attention required']
+            if any(indicator in title_text.lower() for indicator in cloudflare_indicators):
+                print(f"[CLOUDFLARE] Detected challenge page, retrying with longer wait...")
+                # Wait and retry with longer delay
+                await asyncio.sleep(5)  # Wait 5 seconds for Cloudflare to complete
+                from crawl4ai import CrawlerRunConfig
+                retry_config = CrawlerRunConfig(
+                    cache_mode="bypass",
+                    delay_before_return_html=5.0,  # 5 second delay
+                    page_timeout=120000,  # 2 minute timeout
+                    wait_until="networkidle",
+                )
+                result = await crawler.arun(url=self.base_url, config=retry_config)
+                if not result.success:
+                    self.errors.append(f"Failed to bypass Cloudflare for: {self.base_url}")
+                    return
+                soup = BeautifulSoup(result.html, 'html.parser')
+                title = soup.find('title')
+                title_text = title.get_text(strip=True) if title else ""
+                # If still showing Cloudflare, give up
+                if any(indicator in title_text.lower() for indicator in cloudflare_indicators):
+                    self.errors.append(f"Could not bypass Cloudflare protection for: {self.base_url}")
+                    return
 
             # Extract company name from title or header
             title = soup.find('title')
