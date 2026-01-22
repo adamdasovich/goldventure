@@ -46,16 +46,25 @@ def parse_date_comprehensive(text: str) -> Tuple[Optional[str], str]:
     original_text = text
     date_str = None
 
-    # Pattern 1: MM.DD.YYYY or MM.DD.YY (Laurion style: 01.07.2026 or 12.22.25)
+    # Pattern 1: XX.XX.YYYY or XX.XX.YY - Could be MM.DD or DD.MM format
+    # Determine format by checking which interpretation is valid
     match = re.match(r'^(\d{1,2})\.(\d{1,2})\.(20\d{2}|\d{2})\s*[-–]?\s*(.*)$', text)
     if match:
-        month = match.group(1).zfill(2)
-        day = match.group(2).zfill(2)
+        first = match.group(1).zfill(2)
+        second = match.group(2).zfill(2)
         year = match.group(3)
         if len(year) == 2:
             year = f"20{year}" if int(year) <= 50 else f"19{year}"
-        if 1 <= int(month) <= 12 and 1 <= int(day) <= 31:
-            date_str = f"{year}-{month}-{day}"
+        first_int, second_int = int(first), int(second)
+
+        # Try MM.DD.YYYY first (US format)
+        if 1 <= first_int <= 12 and 1 <= second_int <= 31:
+            date_str = f"{year}-{first}-{second}"
+            text = match.group(4).strip() if match.group(4) else ''
+            return date_str, text
+        # If first > 12, it must be DD.MM.YYYY (European format)
+        elif 1 <= second_int <= 12 and 1 <= first_int <= 31:
+            date_str = f"{year}-{second}-{first}"
             text = match.group(4).strip() if match.group(4) else ''
             return date_str, text
 
@@ -160,13 +169,23 @@ def parse_date_standalone(text: str) -> Optional[str]:
         return None
     text = text.strip()
 
-    # MM.DD.YYYY (Laurion: 01.07.2026)
+    # XX.XX.YYYY - Could be MM.DD.YYYY or DD.MM.YYYY depending on the site
+    # Try to determine format by checking which interpretation is valid
     match = re.match(r'^(\d{1,2})\.(\d{1,2})\.(20\d{2}|\d{2})$', text)
     if match:
-        month, day, year = match.groups()
+        first, second, year = match.groups()
         if len(year) == 2:
             year = f"20{year}"
-        return f"{year}-{month.zfill(2)}-{day.zfill(2)}"
+        first_int, second_int = int(first), int(second)
+
+        # Try MM.DD.YYYY first (US format)
+        if 1 <= first_int <= 12 and 1 <= second_int <= 31:
+            return f"{year}-{first.zfill(2)}-{second.zfill(2)}"
+        # If first > 12, it must be DD.MM.YYYY (European format)
+        elif 1 <= second_int <= 12 and 1 <= first_int <= 31:
+            return f"{year}-{second.zfill(2)}-{first.zfill(2)}"
+        # Fallback to MM.DD.YYYY even if potentially invalid
+        return f"{year}-{first.zfill(2)}-{second.zfill(2)}"
 
     # Month DD, YYYY (1911 Gold: December 17, 2025)
     match = re.match(
