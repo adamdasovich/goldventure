@@ -212,15 +212,17 @@ class DocumentProcessingJobAdmin(admin.ModelAdmin):
         return render(request, 'admin/core/documentprocessingjob/batch_add.html', context)
 
     def process_queue_view(self, request):
-        """Process all pending jobs"""
-        from .tasks import process_document_queue
-
+        """Show GPU processing status - manual CPU processing disabled"""
         pending_jobs = DocumentProcessingJob.objects.filter(status='pending').count()
 
         if request.method == 'POST':
-            # Start processing in background
-            process_document_queue()
-            messages.success(request, f'Started processing {pending_jobs} pending jobs.')
+            # CPU processing disabled - GPU Orchestrator handles all document processing
+            # This prevents 100% CPU usage and ensures efficient GPU processing
+            messages.warning(
+                request,
+                f'{pending_jobs} pending jobs will be processed automatically by the GPU Orchestrator. '
+                'Manual CPU processing is disabled to prevent system overload.'
+            )
             return redirect('..')
 
         context = {
