@@ -573,6 +573,16 @@ class MarketData(models.Model):
     close_price = models.DecimalField(max_digits=10, decimal_places=4)
     volume = models.BigIntegerField()
 
+    # Change data (added 2026-01-22 to sync with StockPrice model)
+    change_amount = models.DecimalField(max_digits=10, decimal_places=4, default=0)
+    change_percent = models.DecimalField(max_digits=8, decimal_places=4, default=0)
+
+    # Currency (added 2026-01-22)
+    currency = models.CharField(max_length=3, default='CAD')
+
+    # Source tracking (added 2026-01-22)
+    source = models.CharField(max_length=50, default='Unknown')
+
     # Calculated
     market_cap_usd = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True)
 
@@ -4271,6 +4281,10 @@ class MetalPrice(models.Model):
     ask_price = models.DecimalField(max_digits=12, decimal_places=2)
     change_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     change_percent = models.DecimalField(max_digits=6, decimal_places=2, default=0)
+
+    # Daily high/low prices (added 2026-01-22)
+    high_price = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    low_price = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
 
     # Source tracking
     source = models.CharField(max_length=50, default='Kitco')

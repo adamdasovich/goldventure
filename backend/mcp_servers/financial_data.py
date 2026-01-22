@@ -7,7 +7,7 @@ from typing import Dict, List, Any
 from .base import BaseMCPServer
 from django.db.models import Sum, Avg, Max, Min, Q, F, Count
 from django.db.models.functions import TruncDate
-from core.models import Company, Financing, Investor, MarketData
+from core.models import Company, Financing, Investor, MarketData, StockPrice
 from datetime import datetime, timedelta
 from decimal import Decimal
 
@@ -170,7 +170,7 @@ class FinancialDataServer(BaseMCPServer):
     # =============================================================================
 
     def _get_market_data(self, company_name: str, days: int = 1) -> Dict:
-        """Get market data for a company"""
+        """Get market data for a company from MarketData or StockPrice tables"""
         try:
             # Find company
             company = Company.objects.filter(
@@ -180,10 +180,19 @@ class FinancialDataServer(BaseMCPServer):
             if not company:
                 return {"error": f"Company '{company_name}' not found"}
 
-            # Get market data
+            # Try MarketData first, then fall back to StockPrice
             market_data = MarketData.objects.filter(
                 company=company
             ).order_by('-date')[:days]
+
+            source_table = "MarketData"
+
+            # If no MarketData, try StockPrice table
+            if not market_data.exists():
+                market_data = StockPrice.objects.filter(
+                    company=company
+                ).order_by('-date')[:days]
+                source_table = "StockPrice"
 
             if not market_data.exists():
                 return {
@@ -194,31 +203,50 @@ class FinancialDataServer(BaseMCPServer):
 
             data_list = []
             for md in market_data:
-                data_list.append({
+                entry = {
                     "date": md.date.isoformat(),
-                    "open": float(md.open_price),
-                    "high": float(md.high_price),
-                    "low": float(md.low_price),
+                    "open": float(md.open_price) if md.open_price else None,
+                    "high": float(md.high_price) if md.high_price else None,
+                    "low": float(md.low_price) if md.low_price else None,
                     "close": float(md.close_price),
                     "volume": md.volume
-                })
+                }
+                # Include change data if available
+                if hasattr(md, 'change_amount') and md.change_amount:
+                    entry["change"] = float(md.change_amount)
+                if hasattr(md, 'change_percent') and md.change_percent:
+                    entry["change_percent"] = float(md.change_percent)
+                if hasattr(md, 'currency'):
+                    entry["currency"] = md.currency
+                data_list.append(entry)
 
             latest = market_data.first()
 
-            return {
+            result = {
                 "company": company.name,
                 "ticker": company.ticker_symbol,
                 "exchange": company.exchange,
+                "source": source_table,
                 "latest": {
                     "date": latest.date.isoformat(),
-                    "open": float(latest.open_price),
-                    "high": float(latest.high_price),
-                    "low": float(latest.low_price),
+                    "open": float(latest.open_price) if latest.open_price else None,
+                    "high": float(latest.high_price) if latest.high_price else None,
+                    "low": float(latest.low_price) if latest.low_price else None,
                     "close": float(latest.close_price),
                     "volume": latest.volume
                 },
                 "historical": data_list if days > 1 else None
             }
+
+            # Add change data to latest if available
+            if hasattr(latest, 'change_amount') and latest.change_amount:
+                result["latest"]["change"] = float(latest.change_amount)
+            if hasattr(latest, 'change_percent') and latest.change_percent:
+                result["latest"]["change_percent"] = float(latest.change_percent)
+            if hasattr(latest, 'currency'):
+                result["latest"]["currency"] = latest.currency
+
+            return result
 
         except Exception as e:
             return {"error": str(e)}

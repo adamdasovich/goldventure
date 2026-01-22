@@ -121,6 +121,8 @@ class KitcoScraper:
             'ask_price': None,
             'change_amount': Decimal('0'),
             'change_percent': Decimal('0'),
+            'high_price': None,
+            'low_price': None,
         }
 
         # Method 1: Look for BidAskGrid_gridifier divs (current Kitco structure as of 2025)
@@ -178,6 +180,12 @@ class KitcoScraper:
                 if len(all_prices) >= 2:
                     price_data['bid_price'] = all_prices[0]
                     price_data['ask_price'] = all_prices[1]
+
+                    # Extract low and high prices if available (last 2 prices in the list)
+                    # Format: Bid | Ask | ... | Low | High
+                    if len(all_prices) >= 4:
+                        price_data['low_price'] = all_prices[-2]
+                        price_data['high_price'] = all_prices[-1]
 
                 # Extract change amount and percent
                 # Look for pattern like "32.6000.75%" (change followed by percent)
@@ -293,16 +301,19 @@ class KitcoScraper:
         saved_count = 0
         for price_data in prices:
             try:
+                # Save ALL extracted data including high/low prices
                 MetalPrice.objects.create(
                     metal=price_data['metal'],
                     bid_price=price_data['bid_price'],
                     ask_price=price_data['ask_price'],
                     change_amount=price_data.get('change_amount', Decimal('0')),
                     change_percent=price_data.get('change_percent', Decimal('0')),
+                    high_price=price_data.get('high_price'),
+                    low_price=price_data.get('low_price'),
                     source='Kitco'
                 )
                 saved_count += 1
-                logger.info(f"Saved {price_data['metal_name']} price: ${price_data['bid_price']}")
+                logger.info(f"Saved {price_data['metal_name']} price: ${price_data['bid_price']} (Low: {price_data.get('low_price')}, High: {price_data.get('high_price')})")
             except Exception as e:
                 logger.error(f"Failed to save {price_data.get('metal', 'unknown')} price: {e}")
 
