@@ -82,9 +82,9 @@ class CompanyDataScraper:
         crawler_config = CrawlerRunConfig(
             cache_mode="bypass",
             # Wait longer for Cloudflare challenge pages to complete
-            delay_before_return_html=3.0,  # Wait 3 seconds after page loads
+            delay_before_return_html=5.0,  # Wait 5 seconds after page loads
             page_timeout=90000,  # 90 second timeout for slow pages
-            wait_until="load",  # Wait for load event
+            wait_until="domcontentloaded",  # Use domcontentloaded to avoid navigation issues
         )
 
         async with AsyncWebCrawler(config=browser_config) as crawler:
@@ -321,8 +321,31 @@ class CompanyDataScraper:
     async def _scrape_homepage(self, crawler, config):
         """Scrape homepage for basic company info and navigation."""
         try:
-            result = await crawler.arun(url=self.base_url, config=config)
-            if not result.success:
+            # Try initial crawl - may fail on Cloudflare-protected sites
+            result = None
+            cloudflare_indicators = ['one moment', 'just a moment', 'please wait', 'checking your browser',
+                                    'cloudflare', 'ddos protection', 'attention required']
+
+            try:
+                result = await crawler.arun(url=self.base_url, config=config)
+            except Exception as crawl_error:
+                error_msg = str(crawl_error).lower()
+                # If navigation error, wait and retry with longer delay
+                if 'navigating' in error_msg or 'content' in error_msg:
+                    print(f"[CLOUDFLARE] Page navigation detected, waiting and retrying...")
+                    await asyncio.sleep(8)  # Wait 8 seconds for Cloudflare to complete
+                    from crawl4ai import CrawlerRunConfig
+                    retry_config = CrawlerRunConfig(
+                        cache_mode="bypass",
+                        delay_before_return_html=10.0,  # 10 second delay
+                        page_timeout=120000,  # 2 minute timeout
+                        wait_until="domcontentloaded",
+                    )
+                    result = await crawler.arun(url=self.base_url, config=retry_config)
+                else:
+                    raise crawl_error
+
+            if not result or not result.success:
                 self.errors.append(f"Failed to load homepage: {self.base_url}")
                 return
 
@@ -332,18 +355,16 @@ class CompanyDataScraper:
             # Detect Cloudflare challenge pages and retry with longer wait
             title = soup.find('title')
             title_text = title.get_text(strip=True) if title else ""
-            cloudflare_indicators = ['one moment', 'just a moment', 'please wait', 'checking your browser',
-                                    'cloudflare', 'ddos protection', 'attention required']
             if any(indicator in title_text.lower() for indicator in cloudflare_indicators):
-                print(f"[CLOUDFLARE] Detected challenge page, retrying with longer wait...")
+                print(f"[CLOUDFLARE] Detected challenge page in title, retrying with longer wait...")
                 # Wait and retry with longer delay
-                await asyncio.sleep(5)  # Wait 5 seconds for Cloudflare to complete
+                await asyncio.sleep(8)  # Wait 8 seconds for Cloudflare to complete
                 from crawl4ai import CrawlerRunConfig
                 retry_config = CrawlerRunConfig(
                     cache_mode="bypass",
-                    delay_before_return_html=8.0,  # 8 second delay for Cloudflare
+                    delay_before_return_html=10.0,  # 10 second delay for Cloudflare
                     page_timeout=120000,  # 2 minute timeout
-                    wait_until="load",
+                    wait_until="domcontentloaded",
                 )
                 result = await crawler.arun(url=self.base_url, config=retry_config)
                 if not result.success:
