@@ -1919,6 +1919,54 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
                         continue
 
                 # ============================================================
+                # STRATEGY 4c: Blue Lagoon news-archive-list pattern
+                # Structure: <ul class="news-archive-list"><li><p class="date">DATE</p><p class="title">TITLE</p><p class="file"><a href="PDF">PDF</a></p></li></ul>
+                # ============================================================
+                for li in soup.select('ul.news-archive-list li'):
+                    try:
+                        # Get date from p.date
+                        date_el = li.select_one('p.date')
+                        if not date_el:
+                            continue
+
+                        date_text = date_el.get_text(strip=True)
+                        date_str = parse_date_standalone(date_text)
+                        if not date_str:
+                            continue
+
+                        # Get title from p.title
+                        title_el = li.select_one('p.title')
+                        if not title_el:
+                            continue
+
+                        title = title_el.get_text(strip=True)
+                        if not title:
+                            continue
+
+                        # Get PDF link from p.file a
+                        file_el = li.select_one('p.file a')
+                        if not file_el:
+                            continue
+
+                        href = file_el.get('href', '')
+                        if not href:
+                            continue
+
+                        if not href.startswith('http'):
+                            href = urljoin(url, href)
+
+                        news = {
+                            'title': clean_news_title(title, href),
+                            'url': href,
+                            'date': date_str,
+                            'document_type': 'news_release',
+                            'year': date_str[:4] if date_str else None
+                        }
+                        _add_news_item(news_by_url, news, cutoff_date, "NEWS-ARCHIVE-LIST")
+                    except Exception:
+                        continue
+
+                # ============================================================
                 # STRATEGY 5a: 55 North Mining - Homepage PDF news pattern
                 # News links to PDFs with date in span, title as text
                 # ============================================================
