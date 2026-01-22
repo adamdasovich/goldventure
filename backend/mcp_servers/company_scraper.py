@@ -121,7 +121,7 @@ class CompanyDataScraper:
 
             # 5. Find and scrape Projects section
             if 'projects' in sections:
-                project_urls = self._find_section_urls(['project', 'properties', 'assets', 'operations', 'exploration'])
+                project_urls = self._find_section_urls(['project', 'property', 'properties', 'assets', 'operations', 'exploration'])
                 for url in project_urls[:3]:
                     print(f"[SCRAPE] Scraping projects page: {url}")
                     await self._scrape_projects_page(crawler, crawler_config, url)
