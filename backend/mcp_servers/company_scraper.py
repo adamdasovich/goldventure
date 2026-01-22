@@ -822,6 +822,44 @@ class CompanyDataScraper:
             return
 
         try:
+            # First, check if this URL serves a PDF directly (like /corp-presentation/)
+            # Some sites serve PDFs from URLs without .pdf extension
+            import requests as sync_requests
+            try:
+                resp = sync_requests.get(url, headers={'User-Agent': 'Mozilla/5.0'}, stream=True, timeout=10)
+                content_type = resp.headers.get('Content-Type', '').lower()
+                is_pdf = 'application/pdf' in content_type
+                if not is_pdf and resp.status_code == 200:
+                    first_bytes = resp.raw.read(10)
+                    is_pdf = first_bytes.startswith(b'%PDF')
+                resp.close()
+
+                if is_pdf:
+                    # This URL serves a PDF directly - add it as a document
+                    self.visited_urls.add(url)
+                    url_lower = url.lower()
+                    doc_type = 'other'
+                    if any(kw in url_lower for kw in ['presentation', 'corp-presentation', 'corporate-presentation']):
+                        doc_type = 'presentation'
+                    elif any(kw in url_lower for kw in ['fact', '1pager', 'one-pager']):
+                        doc_type = 'fact_sheet'
+
+                    path = urlparse(url).path.rstrip('/')
+                    slug = path.split('/')[-1] if path else 'document'
+                    title = slug.replace('-', ' ').replace('_', ' ').title()
+
+                    doc = {
+                        'source_url': url,
+                        'title': title,
+                        'document_type': doc_type,
+                        'extracted_at': datetime.utcnow().isoformat(),
+                    }
+                    self.extracted_data['documents'].append(doc)
+                    print(f"[OK] Direct PDF detected at {url}: {title} ({doc_type})")
+                    return
+            except Exception as pdf_check_error:
+                print(f"[DEBUG] PDF check failed for {url}: {pdf_check_error}")
+
             result = await crawler.arun(url=url, config=config)
             if not result.success:
                 return
