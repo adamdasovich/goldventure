@@ -1,7 +1,12 @@
 """
 Hybrid Document Processor MCP Server (Docling + Claude)
 Combines Docling's structure extraction with Claude's intelligent interpretation
-for maximum accuracy in NI 43-101 report processing
+for maximum accuracy in NI 43-101 report processing.
+
+Now enhanced with Recursive Language Model (RLM) support for processing
+documents that exceed context windows (100+ pages).
+
+Based on: "Recursive Language Models" (Zhang, Kraska, Khattab - arXiv:2512.24601)
 """
 
 import requests
@@ -17,6 +22,7 @@ from docling.document_converter import DocumentConverter
 from docling_core.types.doc import ImageRefMode, PictureItem, TableItem
 
 from .base import BaseMCPServer
+from .rlm_processor import RLMProcessor, DecompositionStrategy
 from django.conf import settings
 from core.models import Company, Project, Document, ResourceEstimate, EconomicStudy
 from django.db.models import Q
@@ -30,7 +36,14 @@ class HybridDocumentProcessor(BaseMCPServer):
     1. Docling extracts tables, text, and structure from PDF
     2. Claude interprets the extracted data with context
     3. Results stored in database with full traceability
+
+    Enhanced with RLM (Recursive Language Model) support for long documents:
+    - Documents under 50 pages: Standard single-pass processing
+    - Documents over 50 pages: RLM recursive decomposition and aggregation
     """
+
+    # Page threshold for using RLM processing
+    RLM_PAGE_THRESHOLD = 50
 
     def __init__(self, company_id: int = None, user=None):
         super().__init__(company_id, user)
@@ -38,6 +51,7 @@ class HybridDocumentProcessor(BaseMCPServer):
             api_key=settings.ANTHROPIC_API_KEY
         )
         self.doc_converter = DocumentConverter()
+        self.rlm_processor = RLMProcessor()
 
     def _register_tools(self):
         """Register all document processing tools"""
@@ -162,6 +176,46 @@ class HybridDocumentProcessor(BaseMCPServer):
                 "required": []
             },
             handler=self._list_documents
+        )
+
+        # Tool 6: Process with RLM (Recursive Language Model)
+        self.register_tool(
+            name="document_process_ni43101_rlm",
+            description=(
+                "Process NI 43-101 using Recursive Language Model (RLM) approach. "
+                "Best for documents over 50 pages. Decomposes document into sections, "
+                "processes each recursively, then aggregates with validation. "
+                "Based on arXiv:2512.24601 research paper."
+            ),
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "document_url": {
+                        "type": "string",
+                        "description": "URL to the PDF document"
+                    },
+                    "company_name": {
+                        "type": "string",
+                        "description": "Company name or ticker symbol"
+                    },
+                    "project_name": {
+                        "type": "string",
+                        "description": "Project name (optional)"
+                    },
+                    "decomposition_strategy": {
+                        "type": "string",
+                        "description": "Strategy: hybrid (default), section, page, semantic",
+                        "default": "hybrid"
+                    },
+                    "validate": {
+                        "type": "boolean",
+                        "description": "Run validation pass (default: true)",
+                        "default": True
+                    }
+                },
+                "required": ["document_url", "company_name"]
+            },
+            handler=self._process_ni43101_rlm
         )
 
     # =============================================================================
@@ -323,7 +377,11 @@ class HybridDocumentProcessor(BaseMCPServer):
 
     def _process_ni43101_hybrid(self, document_url: str, company_name: str,
                                 project_name: str = None) -> Dict:
-        """Process NI 43-101 using Docling + Claude hybrid approach"""
+        """Process NI 43-101 using Docling + Claude hybrid approach.
+
+        Automatically uses RLM (Recursive Language Model) processing for
+        documents over 50 pages to ensure comprehensive extraction.
+        """
         try:
             # Find company
             company = Company.objects.filter(
@@ -338,6 +396,19 @@ class HybridDocumentProcessor(BaseMCPServer):
 
             # Step 2: Extract with Docling
             docling_data = self._process_with_docling(pdf_path)
+
+            # Check page count - use RLM for long documents
+            page_count = docling_data.get('page_count', 0)
+            if page_count > self.RLM_PAGE_THRESHOLD:
+                print(f"[HYBRID] Document has {page_count} pages (>{self.RLM_PAGE_THRESHOLD}), switching to RLM processing")
+                pdf_path.unlink()
+                return self._process_ni43101_rlm(
+                    document_url=document_url,
+                    company_name=company_name,
+                    project_name=project_name,
+                    decomposition_strategy="hybrid",
+                    validate=True
+                )
 
             # Clean up temp file
             pdf_path.unlink()
@@ -748,3 +819,210 @@ Structure:
 
         except Exception as e:
             return {"error": str(e)}
+
+    def _process_ni43101_rlm(
+        self,
+        document_url: str,
+        company_name: str,
+        project_name: str = None,
+        decomposition_strategy: str = "hybrid",
+        validate: bool = True
+    ) -> Dict:
+        """
+        Process NI 43-101 using Recursive Language Model (RLM) approach.
+
+        This method implements the RLM framework from arXiv:2512.24601:
+        1. Decompose document into logical chunks
+        2. Recursively process each chunk
+        3. Aggregate results with conflict resolution
+        4. Validate extracted data
+
+        Best for documents over 50 pages where standard processing may miss information.
+        """
+        try:
+            # Find company
+            company = Company.objects.filter(
+                Q(name__icontains=company_name) | Q(ticker_symbol__iexact=company_name)
+            ).first()
+
+            if not company:
+                return {"error": f"Company '{company_name}' not found"}
+
+            # Step 1: Download PDF
+            pdf_path = self._download_pdf(document_url)
+
+            # Step 2: Extract with Docling
+            docling_data = self._process_with_docling(pdf_path)
+
+            # Clean up temp file
+            pdf_path.unlink()
+
+            page_count = docling_data.get('page_count', 0)
+            print(f"[RLM] Document has {page_count} pages, {len(docling_data['tables'])} tables")
+
+            # Step 3: Process with RLM
+            strategy_map = {
+                "hybrid": DecompositionStrategy.HYBRID,
+                "section": DecompositionStrategy.SECTION_BASED,
+                "page": DecompositionStrategy.PAGE_BASED,
+                "semantic": DecompositionStrategy.SEMANTIC
+            }
+            strategy = strategy_map.get(decomposition_strategy, DecompositionStrategy.HYBRID)
+
+            rlm_result = self.rlm_processor.process_document(
+                document_text=docling_data['text'],
+                tables=docling_data['tables'],
+                strategy=strategy,
+                validate=validate
+            )
+
+            # Convert to dictionary
+            extracted_data = self.rlm_processor.to_dict(rlm_result)
+
+            # Step 4: Store in database
+            doc_info = extracted_data.get('document_info', {})
+            doc_date = datetime.now().date()
+            if doc_info.get('report_date'):
+                try:
+                    doc_date = datetime.strptime(doc_info['report_date'], "%Y-%m-%d").date()
+                except:
+                    pass
+
+            document = Document.objects.create(
+                company=company,
+                title=doc_info.get('title', 'NI 43-101 Technical Report'),
+                document_type='ni43101',
+                document_date=doc_date,
+                file_url=document_url,
+                description=f"Processed with RLM ({strategy.value}) on {datetime.now().strftime('%Y-%m-%d')}"
+            )
+
+            # Store project
+            project = None
+            project_info = extracted_data.get('project_info', {})
+            if project_info.get('project_name') or project_name:
+                proj_name = project_info.get('project_name') or project_name
+                project, created = Project.objects.get_or_create(
+                    company=company,
+                    name=proj_name,
+                    defaults={
+                        'country': project_info.get('country', 'Unknown'),
+                        'project_stage': project_info.get('stage', 'exploration'),
+                        'primary_commodity': 'gold'
+                    }
+                )
+                document.project = project
+                document.save()
+
+            # Store resources
+            resources_added = 0
+            for res in extracted_data.get('mineral_resources', []):
+                if res.get('tonnage_mt') and res.get('grade'):
+                    try:
+                        mineral_type = res.get('mineral_type', 'gold').lower()
+                        grade_value = Decimal(str(res['grade']))
+
+                        grade_fields = {}
+                        if mineral_type in ['gold', 'au']:
+                            if res.get('grade_unit') == 'g/t':
+                                grade_fields['gold_grade_gpt'] = grade_value
+                            if res.get('contained_metal'):
+                                grade_fields['gold_ounces'] = Decimal(str(res['contained_metal']))
+                        elif mineral_type in ['silver', 'ag']:
+                            if res.get('grade_unit') == 'g/t':
+                                grade_fields['silver_grade_gpt'] = grade_value
+                            if res.get('contained_metal'):
+                                grade_fields['silver_ounces'] = Decimal(str(res['contained_metal']))
+                        elif mineral_type in ['copper', 'cu']:
+                            if res.get('grade_unit') == '%':
+                                grade_fields['copper_grade_pct'] = grade_value
+
+                        # Determine category
+                        category = res.get('category', 'inferred').lower()
+                        if res.get('is_reserve'):
+                            category = 'proven' if 'proven' in category else 'probable'
+
+                        ResourceEstimate.objects.create(
+                            project=project or Project.objects.filter(company=company).first(),
+                            category=category,
+                            standard='ni43101',
+                            tonnes=Decimal(str(res['tonnage_mt'])) * Decimal('1000000'),
+                            report_date=doc_date,
+                            effective_date=doc_date,
+                            **grade_fields
+                        )
+                        resources_added += 1
+                    except Exception as e:
+                        print(f"[RLM] Error storing resource: {str(e)}")
+
+            # Store economic study
+            econ_data = extracted_data.get('economic_study', {})
+            econ_stored = False
+            npv_value = econ_data.get('npv_usd_millions') or econ_data.get('npv_millions')
+            if npv_value:
+                try:
+                    EconomicStudy.objects.create(
+                        project=project or Project.objects.filter(company=company).first(),
+                        study_type=econ_data.get('study_type', 'pea').lower(),
+                        study_date=doc_date,
+                        npv_usd=Decimal(str(npv_value)) * Decimal('1000000'),
+                        discount_rate=Decimal(str(econ_data.get('discount_rate_percent') or econ_data.get('discount_rate', 5))),
+                        irr=Decimal(str(econ_data.get('irr_percent', 0))) if econ_data.get('irr_percent') else None,
+                        capex_initial=Decimal(str(econ_data.get('capex_initial_usd_millions', 0))) * Decimal('1000000') if econ_data.get('capex_initial_usd_millions') else None,
+                        payback_period_years=Decimal(str(econ_data.get('payback_period_years', 0))) if econ_data.get('payback_period_years') else None,
+                        mine_life_years=int(econ_data.get('mine_life_years', 0)) if econ_data.get('mine_life_years') else None
+                    )
+                    econ_stored = True
+                except Exception as e:
+                    print(f"[RLM] Error storing economics: {str(e)}")
+
+            # Store document chunks for RAG
+            chunks_stored = 0
+            try:
+                from .rag_utils import RAGManager
+                rag_manager = RAGManager()
+                full_text = docling_data['text']
+                chunks_stored = rag_manager.store_document_chunks(document, full_text)
+                print(f"[RLM] Stored {chunks_stored} chunks for semantic search")
+            except Exception as e:
+                print(f"[RLM] Error storing document chunks for RAG: {str(e)}")
+
+            # Get processing metadata
+            proc_meta = extracted_data.get('processing_metadata', {})
+
+            return {
+                "success": True,
+                "method": f"RLM ({strategy.value} decomposition)",
+                "document_id": document.id,
+                "company": company.name,
+                "project": project.name if project else None,
+                "rlm_stats": {
+                    "chunks_processed": proc_meta.get('chunks_processed', 0),
+                    "successful_extractions": proc_meta.get('successful_extractions', 0),
+                    "processing_time_seconds": proc_meta.get('processing_time_seconds', 0),
+                    "validation_passed": proc_meta.get('validation_passed'),
+                    "decomposition_strategy": strategy.value
+                },
+                "processing_stats": {
+                    "pages_processed": page_count,
+                    "tables_extracted": len(docling_data['tables']),
+                    "resources_stored": resources_added,
+                    "economic_study_stored": econ_stored,
+                    "document_chunks_stored": chunks_stored
+                },
+                "extracted_data": {
+                    "document_info": doc_info,
+                    "project_info": project_info,
+                    "key_findings": extracted_data.get('key_findings', {}),
+                    "resources_summary": f"{len(extracted_data.get('mineral_resources', []))} resource categories found"
+                },
+                "message": f"NI 43-101 processed successfully with RLM ({strategy.value})"
+            }
+
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            return {"error": f"RLM processing failed: {str(e)}"}
+        finally:
+            if 'pdf_path' in locals() and pdf_path.exists():
+                pdf_path.unlink()
