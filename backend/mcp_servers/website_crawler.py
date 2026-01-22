@@ -1966,54 +1966,86 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
                         continue
 
                 # ============================================================
-                # STRATEGY 5b-ELEMENTOR: LaFleur Minerals Elementor Loop pattern
-                # Uses e-loop-item containers with:
-                # - h1.elementor-heading-title for titles (not linked directly)
-                # - time element inside li[itemprop="datePublished"] for dates
-                # - a.elementor-button with full URL to the news article
+                # STRATEGY 5b-ELEMENTOR: Elementor Loop pattern
+                # Handles multiple layouts:
+                # - LaFleur: h1.elementor-heading-title + time element + a.elementor-button
+                # - Argenta Silver: Wrapped <a> with h2 for date + h2 for title
                 # ============================================================
                 for loop_item in soup.select('.e-loop-item, [data-elementor-type="loop-item"]'):
                     try:
-                        # Get title from h1 heading
-                        title_elem = loop_item.select_one('h1.elementor-heading-title, .elementor-heading-title')
-                        if not title_elem:
-                            continue
-
-                        title = title_elem.get_text(strip=True)
-                        if not title or len(title) < 15:
-                            continue
-
-                        # Extract date from time element
+                        title = None
                         date_str = None
-                        time_elem = loop_item.select_one('li[itemprop="datePublished"] time, time')
-                        if time_elem:
-                            # Try datetime attribute first
-                            datetime_attr = time_elem.get('datetime', '')
-                            if datetime_attr:
-                                date_match = re.search(r'(\d{4})-(\d{2})-(\d{2})', datetime_attr)
-                                if date_match:
-                                    date_str = f"{date_match.group(1)}-{date_match.group(2)}-{date_match.group(3)}"
-                            # Fallback to text content
-                            if not date_str:
-                                date_str = parse_date_standalone(time_elem.get_text(strip=True))
-
-                        # Extract URL - prefer the "Read More" style button with full article URL
-                        # Skip popup/action links (href starts with # or contains 'action')
                         href = None
-                        for button in loop_item.select('a.elementor-button[href]'):
-                            btn_href = button.get('href', '')
-                            # Skip popup action links
-                            if btn_href.startswith('#') or 'action' in btn_href.lower():
-                                continue
-                            if btn_href.startswith('http') or btn_href.startswith('/'):
-                                href = btn_href
-                                break
 
-                        # Fallback to date link (short URL like /2026/01/05/)
+                        # Check if the whole item is wrapped in an <a> tag (Argenta pattern)
+                        wrapper_link = loop_item.select_one('a.e-con[href], > a[href]')
+                        if wrapper_link:
+                            href = wrapper_link.get('href', '')
+
+                        # Get all headings - some sites use h1, some use h2
+                        headings = loop_item.select('h1.elementor-heading-title, h2.elementor-heading-title, .elementor-heading-title')
+
+                        if len(headings) >= 2:
+                            # Multiple headings: first is usually date, second is title (Argenta pattern)
+                            first_text = headings[0].get_text(strip=True)
+                            second_text = headings[1].get_text(strip=True)
+
+                            # Try to parse date from first heading
+                            parsed_date = parse_date_standalone(first_text)
+                            if parsed_date:
+                                date_str = parsed_date
+                                title = second_text
+                            else:
+                                # First heading is title, try date from second
+                                parsed_date = parse_date_standalone(second_text)
+                                if parsed_date:
+                                    date_str = parsed_date
+                                    title = first_text
+                                else:
+                                    # Neither is a pure date, use first as title
+                                    title = first_text
+                        elif len(headings) == 1:
+                            # Single heading - title might have embedded date
+                            title = headings[0].get_text(strip=True)
+
+                        if not title or len(title) < 10:
+                            continue
+
+                        # Extract date from time element if not found in headings
+                        if not date_str:
+                            time_elem = loop_item.select_one('li[itemprop="datePublished"] time, time')
+                            if time_elem:
+                                datetime_attr = time_elem.get('datetime', '')
+                                if datetime_attr:
+                                    date_match = re.search(r'(\d{4})-(\d{2})-(\d{2})', datetime_attr)
+                                    if date_match:
+                                        date_str = f"{date_match.group(1)}-{date_match.group(2)}-{date_match.group(3)}"
+                                if not date_str:
+                                    date_str = parse_date_standalone(time_elem.get_text(strip=True))
+
+                        # Extract URL if not from wrapper link
+                        if not href:
+                            for button in loop_item.select('a.elementor-button[href]'):
+                                btn_href = button.get('href', '')
+                                if btn_href.startswith('#') or 'action' in btn_href.lower():
+                                    continue
+                                if btn_href.startswith('http') or btn_href.startswith('/'):
+                                    href = btn_href
+                                    break
+
+                        # Fallback to date link
                         if not href:
                             date_link = loop_item.select_one('li[itemprop="datePublished"] a[href]')
                             if date_link:
                                 href = date_link.get('href', '')
+
+                        # Last resort - any link in the item
+                        if not href:
+                            any_link = loop_item.select_one('a[href]')
+                            if any_link:
+                                link_href = any_link.get('href', '')
+                                if not link_href.startswith('#'):
+                                    href = link_href
 
                         if not href:
                             continue
