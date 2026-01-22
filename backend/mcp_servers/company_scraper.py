@@ -2717,9 +2717,14 @@ class CompanyDataScraper:
         invalid_patterns = [
             'what makes', 'why', 'how', 'learn more', 'read more', 'click here',
             'view', 'explore', 'discover', 'see our', 'about the',
-            # News/update patterns
+            # News/update patterns (these indicate news headlines, not project names)
             'update', 'q1 ', 'q2 ', 'q3 ', 'q4 ', 'quarter', 'results',
-            'announces', 'reports', 'closes', 'completes',
+            'announces', 'reports', 'reported', 'closes', 'completes',
+            'intersects', 'intercepts', 'drills', 'returns', 'confirms',
+            'discovers', 'identifies', 'receives', 'commences', 'begins',
+            'expands', 'extends', 'increases', 'produces', 'achieves',
+            # Assay result patterns (e.g., "72.5 gpt Gold")
+            ' gpt ', ' g/t ', ' oz/t ', ' ppm ', ' ppb ',
             # Tagline patterns
             'developing', 'advancing', 'building', 'creating', 'delivering',
             'two high-grade', 'district scale', 'historic mining',
@@ -2843,17 +2848,25 @@ class CompanyDataScraper:
                 continue
 
             # Check if any existing project has a similar base name (fuzzy matching)
+            # Be careful: only match if the base names are very similar in length
+            # to avoid "philadelphia" matching "72.5 gpt gold reported on the philadelphia"
             is_duplicate = False
             for existing_base in seen_project_names:
-                # If one base name contains the other, they're likely duplicates
+                # If one base name contains the other, they might be duplicates
                 # e.g., "ixtaca" matches "ixtaca gold silver"
                 if base_name and len(base_name) > 4:
-                    # Check if base names match or one contains the other
-                    if (base_name == existing_base or
-                        (len(existing_base) > 4 and base_name in existing_base) or
-                        (len(existing_base) > 4 and existing_base in base_name)):
+                    # Exact match is always a duplicate
+                    if base_name == existing_base:
                         is_duplicate = True
                         break
+                    # Containment check - but only if lengths are similar (within 2x)
+                    # This prevents "philadelphia" matching "72.5 gpt ... philadelphia"
+                    if len(existing_base) > 4:
+                        len_ratio = max(len(base_name), len(existing_base)) / min(len(base_name), len(existing_base))
+                        if len_ratio < 2.5:  # Only check containment if lengths are similar
+                            if base_name in existing_base or existing_base in base_name:
+                                is_duplicate = True
+                                break
 
             if is_duplicate:
                 continue
