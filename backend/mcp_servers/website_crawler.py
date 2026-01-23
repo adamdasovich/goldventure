@@ -1967,6 +1967,71 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
                         continue
 
                 # ============================================================
+                # STRATEGY 4d: Ultimate Elements Grid pattern (CanAlaska)
+                # Structure: <div class="uc_post_title"><a><div class="ue_p_title">TITLE</div></a></div>
+                #            <div class="ue-meta-data"><div class="ue-grid-item-meta-data">DATE</div></div>
+                # ============================================================
+                # Find all title elements
+                for title_div in soup.select('.uc_post_title'):
+                    try:
+                        # Get the link
+                        link = title_div.select_one('a')
+                        if not link:
+                            continue
+
+                        href = link.get('href', '')
+                        if not href:
+                            continue
+
+                        # Get title from ue_p_title inside link
+                        title_el = link.select_one('.ue_p_title') or link
+                        title = title_el.get_text(strip=True)
+                        if not title or len(title) < 10:
+                            continue
+
+                        # Find date - look in next siblings for ue-meta-data or ue-grid-item-meta-data
+                        date_str = None
+                        # Check siblings after title_div
+                        for sibling in title_div.find_next_siblings():
+                            date_el = sibling.select_one('.ue-grid-item-meta-data') if sibling.name else None
+                            if not date_el and hasattr(sibling, 'get') and 'ue-grid-item-meta-data' in sibling.get('class', []):
+                                date_el = sibling
+                            if date_el:
+                                date_text = date_el.get_text(strip=True)
+                                date_str = parse_date_standalone(date_text)
+                                break
+                            # Stop if we hit another title
+                            if sibling.select_one('.uc_post_title'):
+                                break
+
+                        # Also try parent container
+                        if not date_str:
+                            parent = title_div.find_parent(['div', 'article', 'li'])
+                            for _ in range(5):
+                                if parent is None:
+                                    break
+                                date_el = parent.select_one('.ue-grid-item-meta-data')
+                                if date_el:
+                                    date_text = date_el.get_text(strip=True)
+                                    date_str = parse_date_standalone(date_text)
+                                    break
+                                parent = parent.find_parent(['div', 'article', 'li'])
+
+                        if not href.startswith('http'):
+                            href = urljoin(url, href)
+
+                        news = {
+                            'title': clean_news_title(title, href),
+                            'url': href,
+                            'date': date_str,
+                            'document_type': 'news_release',
+                            'year': date_str[:4] if date_str else None
+                        }
+                        _add_news_item(news_by_url, news, cutoff_date, "UE-GRID")
+                    except Exception:
+                        continue
+
+                # ============================================================
                 # STRATEGY 5a: 55 North Mining - Homepage PDF news pattern
                 # News links to PDFs with date in span, title as text
                 # ============================================================
