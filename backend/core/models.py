@@ -228,21 +228,33 @@ class Project(models.Model):
     ]
 
     COMMODITY_TYPES = [
+        # Precious Metals
         ('gold', 'Gold'),
         ('silver', 'Silver'),
-        ('copper', 'Copper'),
+        ('platinum', 'Platinum Group Metals'),
+        ('palladium', 'Palladium'),
+        # Critical/Battery Minerals
         ('lithium', 'Lithium'),
-        ('nickel', 'Nickel'),
         ('cobalt', 'Cobalt'),
+        ('nickel', 'Nickel'),
+        ('graphite', 'Graphite'),
+        ('manganese', 'Manganese'),
         ('rare_earths', 'Rare Earth Elements'),
+        # Base Metals
+        ('copper', 'Copper'),
         ('zinc', 'Zinc'),
         ('lead', 'Lead'),
-        ('platinum', 'Platinum Group Metals'),
+        ('iron_ore', 'Iron Ore'),
+        ('tin', 'Tin'),
+        # Energy/Specialty Minerals
         ('uranium', 'Uranium'),
-        ('graphite', 'Graphite'),
         ('vanadium', 'Vanadium'),
         ('tungsten', 'Tungsten'),
         ('molybdenum', 'Molybdenum'),
+        ('antimony', 'Antimony'),
+        ('niobium', 'Niobium'),
+        ('tantalum', 'Tantalum'),
+        # Other
         ('multi_metal', 'Multi-Metal'),
         ('other', 'Other'),
     ]
