@@ -1482,14 +1482,23 @@ class CompanyViewSet(viewsets.ModelViewSet):
                     # Jobs will be processed by GPU worker automatically
                     pass
 
+                # CRITICAL: Trigger comprehensive news scraping via Celery task
+                # scrape_company_website() has LIMITED news strategies
+                # scrape_company_news_task uses crawl_news_releases() with ALL strategies
+                # (NEWS-ENTRY, G2, WP-BLOCK, ELEMENTOR, UIKIT, ITEM, LINK, ASPX)
+                from .tasks import scrape_company_news_task
+                final_company = updated_company or company
+                news_task = scrape_company_news_task.delay(final_company.id)
+
                 return Response({
                     'success': True,
-                    'message': f'{company.name} has been approved and onboarded successfully.',
+                    'message': f'{company.name} has been approved and onboarded successfully. Comprehensive news scraping triggered.',
                     'company_id': company.id,
                     'onboarding_completed': True,
                     'documents_found': len(data.get('documents', [])),
                     'people_found': len(data.get('people', [])),
                     'news_found': len(data.get('news', [])),
+                    'news_scrape_task_id': news_task.id,
                 })
 
             except Exception as e:
