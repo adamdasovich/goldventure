@@ -133,11 +133,26 @@ curl -s -H "Authorization: Bearer $DO_API_TOKEN" \
 
 ## Critical Patterns & Gotchas
 
-### News Scraping
-- **Company news:** Use `crawl_news_releases()` NOT `crawl_company_website()`
-- `crawl_company_website()` is for PDFs/documents, not news
-- News strategies are in `website_crawler.py` starting around line 1640
-- Strategies: G2, WP-BLOCK, ELEMENTOR, UIKIT, ITEM, LINK, ASPX
+### News Scraping - TWO DIFFERENT FUNCTIONS (CRITICAL)
+
+> **STOP AND READ THIS:** There are TWO completely different news scraping systems. Using the wrong one will result in missing news!
+
+| Function | File | Purpose | Strategies |
+|----------|------|---------|------------|
+| `crawl_news_releases()` | `website_crawler.py` | **Company news releases** | NEWS-ENTRY, G2, WP-BLOCK, ELEMENTOR, UIKIT, ITEM, LINK, ASPX (comprehensive) |
+| `scrape_company_website()` | `company_scraper.py` | **General website scraping** (documents, people, basic news) | Basic article selectors only (limited) |
+
+**Rules:**
+- ✅ For company news: Use `crawl_news_releases()` via `scrape_company_news_task`
+- ✅ For general onboarding: Use `scrape_company_website()` via `scrape_company_website_task`
+- ❌ NEVER rely on `scrape_company_website()` for comprehensive news - it has limited strategies
+- ❌ The onboarding process (`approve_company`) uses `scrape_company_website()` which may NOT capture all news
+
+**Why onboarding may miss news:**
+The `approve_company` endpoint in `views.py` calls `scrape_company_website()` which has basic news extraction. It does NOT call `scrape_company_news_task` which uses the comprehensive `crawl_news_releases()` function with all the specialized strategies (NEWS-ENTRY, G2, etc.).
+
+**Fix for missing news after onboarding:**
+Manually trigger news scrape: `POST /api/companies/{id}/scrape-news/`
 
 ### Financing Flags
 - Only flag news within **7 days** of current date
@@ -303,9 +318,12 @@ curl -H "Authorization: Token REDACTED_TOKEN" \
 - ❌ Server path is NOT `/var/www/goldventure-platform`
 - ✅ Server path IS `/var/www/goldventure`
 
-### Scraping Functions
-- ❌ Do NOT use `crawl_company_website()` for news
-- ✅ Use `crawl_news_releases()` for company news
+### Scraping Functions (TWO DIFFERENT SYSTEMS - MEMORIZE THIS)
+- ❌ Do NOT use `scrape_company_website()` (company_scraper.py) for comprehensive news - it has LIMITED strategies
+- ❌ Do NOT assume onboarding captures all news - it uses the LIMITED scraper
+- ✅ Use `crawl_news_releases()` (website_crawler.py) for company news - it has ALL strategies (NEWS-ENTRY, G2, WP-BLOCK, ELEMENTOR, UIKIT, ITEM, LINK, ASPX)
+- ✅ Use `scrape_company_news_task` which calls `crawl_news_releases()` for proper news scraping
+- ✅ After onboarding, manually trigger `/api/companies/{id}/scrape-news/` if news is missing
 
 ### Scrapers Confusion
 - ❌ Do NOT confuse homepage "Latest Mining News" with company news
@@ -342,3 +360,4 @@ When Claude makes a mistake and gets corrected, add it here:
 | 2026-01-22 | Created code locally but didn't deploy to server | Always push to GitHub and pull on DO server after changes |
 | 2026-01-22 | Documents processing on CPU instead of GPU | Found race condition - views.py was starting CPU processing immediately; GPU orchestrator needs time to spin up. Fixed by removing CPU processing calls. |
 | 2026-01-24 | Pushed changes but didn't deploy to server | After git push, ALWAYS deploy immediately: SSH, git pull, restart services. Don't wait for user to report "changes not appearing" |
+| 2026-01-24 | Confused `scrape_company_website()` with `crawl_news_releases()` - AGAIN | These are TWO DIFFERENT FUNCTIONS. `crawl_news_releases()` (website_crawler.py) has comprehensive news strategies. `scrape_company_website()` (company_scraper.py) has limited news extraction. Onboarding uses the limited one - news may be missing! |
