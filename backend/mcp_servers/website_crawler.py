@@ -1894,7 +1894,7 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
                             continue
 
                         # Look for title column with link
-                        title_col = entry.select_one('.title, [class*="uk-width-4-5"]')
+                        title_col = entry.select_one('.title, [class*="uk-width-4-5"], [class*="uk-width-expand"]')
                         if not title_col:
                             continue
 
@@ -2070,6 +2070,50 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
                             'year': date_str[:4] if date_str else None
                         }
                         _add_news_item(news_by_url, news, cutoff_date, "NEWS-ITEM-H3")
+                    except Exception:
+                        continue
+
+                # ============================================================
+                # STRATEGY 4f: Cosa Resources pattern - div.news-link with date in parent
+                # Structure: <div class="flex...">Jan 21, 2026<div class="news-link"><a href="...">Title</a></div></div>
+                # ============================================================
+                for news_link in soup.select('div.news-link, .news-link'):
+                    try:
+                        link = news_link.select_one('a')
+                        if not link:
+                            continue
+
+                        href = link.get('href', '')
+                        title = link.get_text(strip=True)
+
+                        if not href or not title or len(title) < 10:
+                            continue
+
+                        # Skip if not a news release URL
+                        if '/news' not in href.lower():
+                            continue
+
+                        # Get date from parent element's text
+                        date_str = None
+                        parent = news_link.parent
+                        if parent:
+                            parent_text = parent.get_text()
+                            # Look for date pattern in parent text
+                            date_match = re.search(r'(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2},\s+\d{4}', parent_text)
+                            if date_match:
+                                date_str = parse_date_standalone(date_match.group(0))
+
+                        if not href.startswith('http'):
+                            href = urljoin(url, href)
+
+                        news = {
+                            'title': clean_news_title(title, href),
+                            'url': href,
+                            'date': date_str,
+                            'document_type': 'news_release',
+                            'year': date_str[:4] if date_str else None
+                        }
+                        _add_news_item(news_by_url, news, cutoff_date, "NEWS-LINK")
                     except Exception:
                         continue
 
@@ -2617,5 +2661,39 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
                 # Silently continue if this news URL doesn't exist
                 continue
 
-    # Return deduplicated news items as list
-    return list(news_by_url.values())
+    # Secondary deduplication by title+date (same news can appear on multiple pages with different URLs)
+    # Prefer items with article-like URLs over archive/listing page URLs
+    seen_titles = {}  # Map "title|date" -> news item
+    for news in news_by_url.values():
+        title_key = f"{news['title'].lower().strip()}|{news.get('date', '')}"
+
+        if title_key not in seen_titles:
+            seen_titles[title_key] = news
+        else:
+            # If we already have this title+date, keep the one with a more specific URL
+            # (longer URL path usually means it's the actual article, not an archive page)
+            existing_url = seen_titles[title_key]['url']
+            new_url = news['url']
+
+            # Prefer URLs that look like article pages (longer, more specific paths)
+            # Avoid archive pages like /news/, /news/2026/, etc.
+            existing_is_archive = existing_url.rstrip('/').endswith(('/news', '/press', '/media')) or \
+                                  re.search(r'/news/\d{4}/?$', existing_url) or \
+                                  re.search(r'/\d{4}/?$', existing_url)
+            new_is_archive = new_url.rstrip('/').endswith(('/news', '/press', '/media')) or \
+                             re.search(r'/news/\d{4}/?$', new_url) or \
+                             re.search(r'/\d{4}/?$', new_url)
+
+            # Prefer non-archive URL over archive URL
+            if existing_is_archive and not new_is_archive:
+                seen_titles[title_key] = news
+            elif not existing_is_archive and not new_is_archive:
+                # Both are article URLs - keep the longer one (more specific)
+                if len(new_url) > len(existing_url):
+                    seen_titles[title_key] = news
+
+    deduped_news = list(seen_titles.values())
+    if len(deduped_news) < len(news_by_url):
+        print(f"[DEDUP] Removed {len(news_by_url) - len(deduped_news)} duplicate news items by title+date")
+
+    return deduped_news

@@ -680,6 +680,10 @@ CHROMA_PORT=8002
 
         while True:
             try:
+                # Close stale database connections to prevent "connection already closed" errors
+                # This is necessary for long-running processes that may outlive DB connection timeouts
+                connection.close_if_unusable_or_obsolete()
+
                 # Check if we need to create GPU droplet
                 if self.should_create_gpu():
                     if self.create_gpu_droplet():
