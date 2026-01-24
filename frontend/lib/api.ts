@@ -79,9 +79,26 @@ async function apiFetch<T>(endpoint: string, options?: RequestInit): Promise<T> 
 
 // Company API
 export const companyAPI = {
-  getAll: (params?: { search?: string; ticker?: string }) => {
-    const query = new URLSearchParams(params as Record<string, string>).toString();
-    return apiFetch<{ results: Company[] }>(`/companies/${query ? `?${query}` : ''}`);
+  getAll: (params?: {
+    search?: string;
+    ticker?: string;
+    commodity?: string;
+    page?: number;
+    page_size?: number;
+  }) => {
+    const cleanParams: Record<string, string> = {};
+    if (params?.search) cleanParams.search = params.search;
+    if (params?.ticker) cleanParams.ticker = params.ticker;
+    if (params?.commodity) cleanParams.commodity = params.commodity;
+    if (params?.page) cleanParams.page = String(params.page);
+    if (params?.page_size) cleanParams.page_size = String(params.page_size);
+    const query = new URLSearchParams(cleanParams).toString();
+    return apiFetch<{
+      results: Company[];
+      count: number;
+      next: string | null;
+      previous: string | null;
+    }>(`/companies/${query ? `?${query}` : ''}`);
   },
 
   getById: (id: number) =>

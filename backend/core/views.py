@@ -6,7 +6,15 @@ from rest_framework import viewsets, status, permissions
 from rest_framework.decorators import api_view, permission_classes, action
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
+from rest_framework.pagination import PageNumberPagination
 from django.db.models import Q
+
+
+class FlexiblePagePagination(PageNumberPagination):
+    """Custom pagination that allows page_size query parameter"""
+    page_size = 50
+    page_size_query_param = 'page_size'
+    max_page_size = 100
 
 from .models import (
     Company, Project, ResourceEstimate, EconomicStudy,
@@ -1089,6 +1097,7 @@ class CompanyViewSet(viewsets.ModelViewSet):
     """API endpoint for companies"""
     queryset = Company.objects.all()
     permission_classes = [AllowAny]
+    pagination_class = FlexiblePagePagination
 
     def get_serializer_class(self):
         if self.action == 'retrieve':
@@ -1114,6 +1123,16 @@ class CompanyViewSet(viewsets.ModelViewSet):
                 Q(name__icontains=search) |
                 Q(ticker_symbol__icontains=search)
             )
+
+        # Filter by commodity - find companies with projects in specified commodity
+        commodity = self.request.query_params.get('commodity')
+        if commodity:
+            # Support comma-separated commodities for multi-select
+            commodities = [c.strip() for c in commodity.split(',') if c.strip()]
+            if commodities:
+                queryset = queryset.filter(
+                    projects__primary_commodity__in=commodities
+                ).distinct()
 
         return queryset.order_by('name')
 
