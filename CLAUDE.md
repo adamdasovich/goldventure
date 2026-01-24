@@ -323,6 +323,11 @@ curl -H "Authorization: Token 3b1db5a11c5f9a8cd1dd968efac680891d24ab3f" \
 - ✅ Take time to understand the problem before writing code
 - ✅ Test changes properly before claiming they work
 
+### Git Workflow
+- ❌ Do NOT commit without pushing - local and remote must stay in sync
+- ✅ Always push to origin immediately after committing
+- ✅ After pushing, deploy to server if changes affect production
+
 ---
 
 ## Lessons Learned (Add mistakes here)
