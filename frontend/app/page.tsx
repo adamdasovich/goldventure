@@ -131,6 +131,9 @@ export default function Home() {
             <Button variant="primary" size="lg" onClick={() => window.location.href = '/closed-financings'}>
               Closed Financings
             </Button>
+            <Button variant="primary" size="lg" onClick={() => window.location.href = '/guides'}>
+              Investment Guides
+            </Button>
             <Button variant="secondary" size="lg" onClick={scrollToNews}>
               Latest News Articles
             </Button>
