@@ -1651,6 +1651,11 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
             # Year-based archive pages under news-releases (Aftermath Silver pattern)
             f'{url}/news-releases/{current_year}/',
             f'{url}/news-releases/{current_year - 1}/',
+            # Query parameter year filtering (Cassiar Gold pattern)
+            f'{url}/news/?current_year={current_year}',
+            f'{url}/news/?current_year={current_year - 1}',
+            f'{url}/news?current_year={current_year}',
+            f'{url}/news?current_year={current_year - 1}',
             f'https://wp.{domain}/news-releases/',  # Angkor Resources (WP subdomain)
             f'https://wp.{domain}/press-releases/',  # Angkor Resources (WP subdomain)
             url,  # Homepage fallback for 55 North Mining style sites
@@ -2028,6 +2033,43 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
                             'year': date_str[:4] if date_str else None
                         }
                         _add_news_item(news_by_url, news, cutoff_date, "UE-GRID")
+                    except Exception:
+                        continue
+
+                # ============================================================
+                # STRATEGY 4e: Cassiar Gold pattern - news_item with h3 date
+                # Structure: <div class="news_item"><h3>23 January 2026</h3><p><a href="...">Title</a></p></div>
+                # ============================================================
+                for news_item in soup.select('.news_item, .newsItem'):
+                    try:
+                        # Get date from h3
+                        date_el = news_item.select_one('h3')
+                        date_str = None
+                        if date_el:
+                            date_str = parse_date_standalone(date_el.get_text(strip=True))
+
+                        # Get link and title from p > a
+                        link = news_item.select_one('p a, a')
+                        if not link:
+                            continue
+
+                        href = link.get('href', '')
+                        title = link.get_text(strip=True)
+
+                        if not href or not title or len(title) < 10:
+                            continue
+
+                        if not href.startswith('http'):
+                            href = urljoin(url, href)
+
+                        news = {
+                            'title': clean_news_title(title, href),
+                            'url': href,
+                            'date': date_str,
+                            'document_type': 'news_release',
+                            'year': date_str[:4] if date_str else None
+                        }
+                        _add_news_item(news_by_url, news, cutoff_date, "NEWS-ITEM-H3")
                     except Exception:
                         continue
 
@@ -2456,7 +2498,7 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
                 # STRATEGY 5: Structured news-item elements with date/title divs
                 # Handles: Laurion (.news-item .date), 1911 Gold, etc.
                 # ============================================================
-                for selector in ['.news-item', '.press-release', '.news-release', 'article.post', 'article']:
+                for selector in ['.news-item', '.news_item', '.press-release', '.news-release', 'article.post', 'article']:
                     for item in soup.select(selector)[:50]:
                         news = _extract_news_from_element(item, news_url, url)
                         if news:

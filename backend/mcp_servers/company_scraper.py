@@ -463,10 +463,18 @@ class CompanyDataScraper:
                     self.extracted_data['company']['logo_url'] = logo_url
                     break
 
-            # Extract description from meta tags
+            # Extract description from meta tags - prefer og:description over name="description"
+            # og:description often has more detailed content
+            og_desc = soup.find('meta', attrs={'property': 'og:description'})
             meta_desc = soup.find('meta', attrs={'name': 'description'})
-            if meta_desc and meta_desc.get('content'):
+
+            desc_content = None
+            if og_desc and og_desc.get('content'):
+                desc_content = og_desc['content']
+            elif meta_desc and meta_desc.get('content'):
                 desc_content = meta_desc['content']
+
+            if desc_content:
                 # Basic validation - skip if it looks like error page or garbage
                 desc_lower = desc_content.lower()
                 garbage_keywords = ['page not found', '404', 'apologies', "can't find", 'click here']
@@ -1063,6 +1071,19 @@ class CompanyDataScraper:
                 if not desc or len(desc) < 50:
                     return False
                 desc_lower = desc.lower()
+
+                # Check if it looks like a person bio (starts with a name)
+                # Pattern: "FirstName LastName continues/brings/has/is/serves..."
+                import re
+                bio_start_patterns = [
+                    r'^[A-Z][a-z]+\s+[A-Z][a-z]+\s+(continues|brings|has|is|was|serves|served|joined|leads|led|holds|held|spent|worked|oversaw|managed|built|established|founded|pioneered)\b',
+                    r'^(mr\.|mrs\.|ms\.|dr\.)\s+[A-Z][a-z]+\s+(continues|brings|has|is|was|serves)\b',
+                    r'^[A-Z][a-z]+\s+[A-Z]\.\s+[A-Z][a-z]+\s+(continues|brings|has|is|was|serves)\b',  # "John A. Smith brings..."
+                ]
+                for pattern in bio_start_patterns:
+                    if re.search(pattern, desc, re.IGNORECASE):
+                        return False
+
                 # Garbage indicators (error pages, role lists, etc.)
                 garbage_indicators = [
                     'page not found', '404', 'sorry', 'apologies',
@@ -1074,6 +1095,9 @@ class CompanyDataScraper:
                     'president vice president', 'corporate secretary',
                     'click here to', 'go back to', 'return to homepage',
                     'sign-up to follow', 'subscribe to', 'newsletter sign up',
+                    # Bio indicators
+                    'years of experience', 'his career', 'her career', 'his expertise', 'her expertise',
+                    'previously served as', 'before joining', 'prior to joining', 'background includes',
                     # Technical/geological content (drill results, resource estimates)
                     'block model', 'exploration target', 'drill program', 'drill hole',
                     'g/t ag', 'g/t au', 'g/t zn', 'g/t cu', 'g/t pb',  # grades
