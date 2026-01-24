@@ -323,6 +323,11 @@ curl -H "Authorization: Token REDACTED_TOKEN" \
 - ✅ Take time to understand the problem before writing code
 - ✅ Test changes properly before claiming they work
 
+### Git Workflow
+- ❌ Do NOT commit without pushing - local and remote must stay in sync
+- ✅ Always push to origin immediately after committing
+- ✅ After pushing, deploy to server if changes affect production
+
 ---
 
 ## Lessons Learned (Add mistakes here)
