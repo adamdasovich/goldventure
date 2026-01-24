@@ -135,6 +135,14 @@ class CompanyDataScraper:
                         print(f"[SCRAPE] Scraping potential project page: {url}")
                         await self._scrape_projects_page(crawler, crawler_config, url)
 
+                # ENHANCED: Scrape project pages found in navigation dropdown menus
+                # These are direct links to project pages from dropdown menus (e.g., Cerrado Gold pattern)
+                nav_dropdown_projects = self.extracted_data.get('_nav_dropdown_projects', [])
+                for url in nav_dropdown_projects[:10]:
+                    if url not in self.visited_urls:
+                        print(f"[SCRAPE] Scraping nav dropdown project page: {url}")
+                        await self._scrape_projects_page(crawler, crawler_config, url)
+
                 # After scraping listing pages, visit individual project detail pages
                 # that were discovered (they will have source_url set)
                 detail_urls_to_visit = []
@@ -241,6 +249,17 @@ class CompanyDataScraper:
                     f"{self.base_url}/investors/press-releases/",
                 ])
 
+                # Year-based patterns for nested news structures (e.g., Clean Air Metals)
+                for year in years_to_try:
+                    common_patterns.extend([
+                        f"{self.base_url}/news-media/news-releases/{year}/",
+                        f"{self.base_url}/news-media/press-releases/{year}/",
+                        f"{self.base_url}/media/news-releases/{year}/",
+                        f"{self.base_url}/media/press-releases/{year}/",
+                        f"{self.base_url}/investors/news/{year}/",
+                        f"{self.base_url}/investors/press-releases/{year}/",
+                    ])
+
             for pattern in common_patterns:
                 if pattern not in matching_urls:
                     matching_urls.append(pattern)
@@ -317,6 +336,97 @@ class CompanyDataScraper:
                     print(f"[DISCOVER] Potential project page: {text} -> {full_url}")
 
         return potential_urls
+
+    def _extract_nav_dropdown_projects(self, soup) -> List[str]:
+        """
+        Extract project URLs from navigation dropdown menus.
+
+        Many mining company sites have a structure like:
+        <nav>
+          <li class="has-dropdown">
+            <a href="/projects">Projects</a>
+            <ul class="dropdown">
+              <li><a href="/projects/minera-don-nicolas">Minera Don Nicolas</a></li>
+              <li><a href="/projects/lagoa-salgada">Lagoa Salgada</a></li>
+            </ul>
+          </li>
+        </nav>
+
+        This method finds such structures and extracts the child project URLs.
+        """
+        project_urls = []
+        project_keywords = ['project', 'propert', 'asset', 'operation', 'portfolio', 'mine']
+
+        # Common dropdown indicators in class names
+        dropdown_parent_classes = ['has-dropdown', 'has-submenu', 'has-children', 'menu-item-has-children', 'dropdown']
+        dropdown_child_classes = ['dropdown', 'sub-menu', 'submenu', 'g-dropdown', 'children', 'dropdown-menu']
+
+        # Find all nav elements and menu containers
+        nav_containers = soup.find_all(['nav', 'header', 'div'], class_=lambda x: x and any(
+            c in str(x).lower() for c in ['nav', 'menu', 'header']
+        ))
+
+        # Also check direct nav tags
+        nav_containers.extend(soup.find_all('nav'))
+
+        for container in nav_containers:
+            # Find list items that might be dropdown parents
+            for li in container.find_all('li'):
+                li_classes = ' '.join(li.get('class', [])).lower()
+
+                # Check if this li has dropdown indicators
+                has_dropdown = any(cls in li_classes for cls in dropdown_parent_classes)
+
+                # Also check if it contains a nested ul
+                nested_ul = li.find('ul')
+                if not nested_ul and not has_dropdown:
+                    continue
+
+                # Get the parent link text
+                parent_link = li.find('a', recursive=False)
+                if not parent_link:
+                    # Try to find direct child anchor
+                    for child in li.children:
+                        if hasattr(child, 'name') and child.name == 'a':
+                            parent_link = child
+                            break
+
+                if not parent_link:
+                    continue
+
+                parent_text = parent_link.get_text(strip=True).lower()
+
+                # Check if this is a projects dropdown
+                is_project_parent = any(kw in parent_text for kw in project_keywords)
+
+                if not is_project_parent:
+                    continue
+
+                print(f"[NAV-DROPDOWN] Found projects dropdown menu: '{parent_link.get_text(strip=True)}'")
+
+                # Extract child links from the dropdown
+                if nested_ul:
+                    for child_li in nested_ul.find_all('li'):
+                        child_link = child_li.find('a', href=True)
+                        if child_link:
+                            href = child_link.get('href', '')
+                            text = child_link.get_text(strip=True)
+
+                            # Skip empty or anchor-only links
+                            if not href or href == '#' or href.startswith('javascript:'):
+                                continue
+
+                            # Skip if it looks like a section header
+                            if not text or len(text) > 100:
+                                continue
+
+                            full_url = urljoin(self.base_url, href)
+
+                            if full_url not in project_urls and self._is_internal_link(href):
+                                project_urls.append(full_url)
+                                print(f"[NAV-DROPDOWN] Found project: '{text}' -> {full_url}")
+
+        return project_urls
 
     async def _scrape_homepage(self, crawler, config):
         """Scrape homepage for basic company info and navigation."""
@@ -473,6 +583,34 @@ class CompanyDataScraper:
                 desc_content = og_desc['content']
             elif meta_desc and meta_desc.get('content'):
                 desc_content = meta_desc['content']
+
+            # Fallback: Try to extract description from JSON-LD schema (Yoast SEO, etc.)
+            # Some sites like Corcel Exploration only have description in JSON-LD
+            if not desc_content:
+                for script in soup.find_all('script', type='application/ld+json'):
+                    try:
+                        import json
+                        schema_data = json.loads(script.string)
+
+                        # Handle @graph structure (common in Yoast SEO)
+                        if isinstance(schema_data, dict) and '@graph' in schema_data:
+                            for item in schema_data['@graph']:
+                                if isinstance(item, dict):
+                                    # Look for WebSite or Organization description
+                                    if item.get('@type') in ['WebSite', 'Organization', 'Corporation']:
+                                        if item.get('description'):
+                                            desc_content = item['description']
+                                            print(f"[DESC] Found description in JSON-LD ({item.get('@type')})")
+                                            break
+                        # Direct schema object
+                        elif isinstance(schema_data, dict) and schema_data.get('description'):
+                            desc_content = schema_data['description']
+                            print(f"[DESC] Found description in JSON-LD")
+
+                        if desc_content:
+                            break
+                    except (json.JSONDecodeError, TypeError, AttributeError):
+                        continue
 
             if desc_content:
                 # Basic validation - skip if it looks like error page or garbage
@@ -765,6 +903,12 @@ class CompanyDataScraper:
                     if self._is_internal_link(href):
                         nav_links.append({'url': href, 'text': text})
             self.extracted_data['_nav_links'] = nav_links
+
+            # Extract project URLs from dropdown navigation menus
+            dropdown_project_urls = self._extract_nav_dropdown_projects(soup)
+            if dropdown_project_urls:
+                self.extracted_data['_nav_dropdown_projects'] = dropdown_project_urls
+                print(f"[NAV-DROPDOWN] Found {len(dropdown_project_urls)} project URLs from dropdown menus")
 
             # Extract social media links
             self._extract_social_media(soup)
@@ -2767,8 +2911,9 @@ class CompanyDataScraper:
 
     def _post_process_data(self):
         """Clean up and deduplicate extracted data."""
-        # Remove internal nav links
+        # Remove internal nav links and dropdown project URLs
         self.extracted_data.pop('_nav_links', None)
+        self.extracted_data.pop('_nav_dropdown_projects', None)
 
         # Deduplicate people by name
         seen_names = set()
