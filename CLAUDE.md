@@ -341,3 +341,4 @@ When Claude makes a mistake and gets corrected, add it here:
 | 2026-01-22 | Forgot server path repeatedly | Path is `/var/www/goldventure` (not goldventure-platform) |
 | 2026-01-22 | Created code locally but didn't deploy to server | Always push to GitHub and pull on DO server after changes |
 | 2026-01-22 | Documents processing on CPU instead of GPU | Found race condition - views.py was starting CPU processing immediately; GPU orchestrator needs time to spin up. Fixed by removing CPU processing calls. |
+| 2026-01-24 | Pushed changes but didn't deploy to server | After git push, ALWAYS deploy immediately: SSH, git pull, restart services. Don't wait for user to report "changes not appearing" |
