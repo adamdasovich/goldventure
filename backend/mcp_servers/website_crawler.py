@@ -198,6 +198,17 @@ def parse_date_standalone(text: str) -> Optional[str]:
         year = match.group(3)
         return f"{year}-{month}-{day}"
 
+    # Month DD / YYYY (GoldMining: January 22 / 2026)
+    match = re.match(
+        r'^(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{1,2})\s*/\s*(20\d{2})$',
+        text, re.IGNORECASE
+    )
+    if match:
+        month = MONTH_MAP.get(match.group(1).lower()[:3], '01')
+        day = match.group(2).zfill(2)
+        year = match.group(3)
+        return f"{year}-{month}-{day}"
+
     # Mon DD YYYY - no comma (Aston Bay: Nov 17 2025)
     match = re.match(
         r'^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{1,2})\s+(20\d{2})$',
@@ -1415,8 +1426,10 @@ def _extract_news_from_element(element, source_url: str, base_url: str) -> Optio
         if date_elem:
             date_str = parse_date_standalone(date_elem.get_text(strip=True))
 
-        # Strategy 2: Look for dedicated title element (div.title a, a.title, h2, h3)
+        # Strategy 2: Look for dedicated title element (div.title a, div.news-title a, a.title, h2, h3)
         title_elem = element.find('div', class_='title')
+        if not title_elem:
+            title_elem = element.find('div', class_='news-title')  # GoldMining pattern
         if title_elem:
             title_link = title_elem.find('a', href=True)
             if title_link:
