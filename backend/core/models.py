@@ -4266,6 +4266,44 @@ class FailedCompanyDiscovery(models.Model):
         return f"Failed: {self.company_name} ({self.attempts} attempts)"
 
 
+class CompanyVerificationLog(models.Model):
+    """
+    Tracks verification results for onboarded companies.
+    Used to identify companies that need manual review.
+    """
+    STATUS_CHOICES = [
+        ('complete', 'Complete'),
+        ('incomplete', 'Incomplete'),
+        ('needs_review', 'Needs Review'),
+        ('error', 'Error'),
+    ]
+
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.CASCADE,
+        related_name='verification_logs'
+    )
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='incomplete')
+    overall_score = models.IntegerField(default=0)  # 0-100 completeness score
+
+    # Detailed issues (JSON array)
+    issues = models.JSONField(default=list, blank=True)
+
+    # Auto-fixes applied (JSON array of strings)
+    fixes_applied = models.JSONField(default=list, blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'company_verification_logs'
+        ordering = ['-created_at']
+        verbose_name = 'Company Verification Log'
+        verbose_name_plural = 'Company Verification Logs'
+
+    def __str__(self):
+        return f"Verification: {self.company.name} ({self.status}, score: {self.overall_score})"
+
+
 # ============================================================================
 # METALS PRICING
 # ============================================================================
