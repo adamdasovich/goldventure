@@ -6074,7 +6074,7 @@ def scrape_company_preview(request):
 @permission_classes([IsAuthenticated])
 def scrape_company_save(request):
     """
-    Scrape and save company data from a website.
+    Scrape and save company data from a website (ASYNC via Celery).
 
     POST /api/admin/companies/scrape-save/
 
@@ -6082,6 +6082,9 @@ def scrape_company_save(request):
     - url: Company website URL
     - sections: Optional list of sections to scrape
     - update_existing: Boolean, whether to update if company exists
+
+    Returns immediately with job_id. Poll /api/admin/companies/scraping-jobs/{job_id}/
+    to check status.
     """
     if not (request.user.is_superuser or request.user.is_staff):
         return Response(
@@ -6099,89 +6102,33 @@ def scrape_company_save(request):
     sections = request.data.get('sections')
     update_existing = request.data.get('update_existing', False)
 
-    import asyncio
-    from mcp_servers.company_scraper import scrape_company_website
-    from core.models import (
-        Company, Project, CompanyPerson, CompanyDocument,
-        CompanyNews, ScrapingJob, FailedCompanyDiscovery
-    )
+    from core.models import ScrapingJob
+    from core.tasks import scrape_and_save_company_task
 
-    # Create scraping job
+    # Create scraping job with 'pending' status
     job = ScrapingJob.objects.create(
         company_name_input=url,
         website_url=url,
-        status='running',
-        started_at=timezone.now(),
+        status='pending',
         sections_to_process=sections or ['all'],
         initiated_by=request.user
     )
 
-    try:
-        # Run the scraper
-        result = asyncio.run(scrape_company_website(url, sections=sections))
+    # Trigger async Celery task
+    task = scrape_and_save_company_task.delay(
+        job_id=job.id,
+        update_existing=update_existing,
+        user_id=request.user.id
+    )
 
-        data = result['data']
-        errors = result['errors']
-
-        # Save to database
-        company = _save_scraped_company_data(data, url, update_existing, request.user)
-
-        if company:
-            # Update job with success
-            job.company = company
-            job.status = 'success'
-            job.completed_at = timezone.now()
-            job.data_extracted = data
-            job.documents_found = len(data.get('documents', []))
-            job.people_found = len(data.get('people', []))
-            job.news_found = len(data.get('news', []))
-            job.sections_completed = sections or ['all']
-            job.error_messages = errors
-            job.save()
-
-            # Get processing jobs that were created
-            processing_jobs = data.get('_processing_jobs_created', [])
-
-            # Document processing is handled by GPU Orchestrator
-            # DO NOT process on CPU - it causes 100% CPU and is very slow
-            # Jobs will be picked up by GPU worker automatically
-            process_documents = request.data.get('process_documents', True)
-
-            return Response({
-                'success': True,
-                'company_id': company.id,
-                'company_name': company.name,
-                'completeness_score': company.data_completeness_score,
-                'people_count': len(data.get('people', [])),
-                'documents_count': len(data.get('documents', [])),
-                'news_count': len(data.get('news', [])),
-                'errors': errors,
-                'processing_jobs': processing_jobs,
-                'processing_started': process_documents and len(processing_jobs) > 0,
-            })
-        else:
-            raise Exception("Failed to create company record")
-
-    except Exception as e:
-        job.status = 'failed'
-        job.completed_at = timezone.now()
-        job.error_messages = [str(e)]
-        job.error_traceback = str(e)
-        job.save()
-
-        # Record failed discovery
-        FailedCompanyDiscovery.objects.update_or_create(
-            website_url=url,
-            defaults={
-                'company_name': url,
-                'failure_reason': str(e),
-            }
-        )
-
-        return Response(
-            {'error': str(e)},
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
-        )
+    return Response({
+        'success': True,
+        'status': 'processing',
+        'message': 'Scraping started in background. Poll job status to check completion.',
+        'job_id': job.id,
+        'task_id': task.id,
+        'poll_url': f'/api/admin/companies/scraping-jobs/{job.id}/',
+    })
 
 
 def _infer_commodity_from_name(name: str) -> str:

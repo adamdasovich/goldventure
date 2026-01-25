@@ -1103,6 +1103,160 @@ def scrape_company_website_task(self, job_id: int, sections: list = None):
             }
 
 
+@shared_task(bind=True, max_retries=1, time_limit=600, soft_time_limit=580, acks_late=True)
+def scrape_and_save_company_task(self, job_id: int, update_existing: bool = False, user_id: int = None):
+    """
+    Background task to scrape a company website AND save to database.
+    This prevents timeout issues when onboarding companies with lots of content.
+
+    Args:
+        job_id (int): ID of the ScrapingJob record (already created by the view)
+        update_existing (bool): Whether to update existing company if found
+        user_id (int): ID of the user who initiated the request
+
+    Returns:
+        dict: Status information about the scraping operation
+    """
+    from mcp_servers.company_scraper import scrape_company_website
+    from .models import ScrapingJob, Company, FailedCompanyDiscovery
+    from django.contrib.auth import get_user_model
+    from celery.exceptions import SoftTimeLimitExceeded
+
+    # Import the save function from views
+    import sys
+    import importlib
+
+    print(f"[ASYNC SCRAPE+SAVE] Starting scrape and save task for job {job_id}...")
+
+    try:
+        # Get the scraping job
+        job = ScrapingJob.objects.get(id=job_id)
+
+        # Check if job is already completed (idempotency)
+        if job.status in ['success', 'partial', 'failed', 'cancelled']:
+            print(f"[ASYNC SCRAPE+SAVE] Job {job_id} already has status '{job.status}', skipping")
+            return {
+                'status': 'skipped',
+                'job_id': job_id,
+                'message': f'Job already completed with status: {job.status}'
+            }
+
+        job.status = 'running'
+        job.started_at = timezone.now()
+        job.save()
+
+        url = job.website_url
+        sections = job.sections_to_process
+        print(f"[ASYNC SCRAPE+SAVE] Scraping URL: {url}")
+
+        # Get user if provided
+        User = get_user_model()
+        user = User.objects.filter(id=user_id).first() if user_id else None
+
+        # Run the async scraper
+        result = asyncio.run(scrape_company_website(url, sections=sections if sections != ['all'] else None))
+        data = result['data']
+        errors = result['errors']
+
+        # Import and call the save function
+        from core.views import _save_scraped_company_data
+        company = _save_scraped_company_data(data, url, update_existing, user)
+
+        if company:
+            # Update job with success
+            job.company = company
+            job.status = 'success'
+            job.completed_at = timezone.now()
+            job.data_extracted = data
+            job.documents_found = len(data.get('documents', []))
+            job.people_found = len(data.get('people', []))
+            job.news_found = len(data.get('news', []))
+            job.sections_completed = sections or ['all']
+            job.error_messages = errors
+            job.save()
+
+            # Trigger comprehensive news scraping
+            # scrape_company_website() has LIMITED news strategies
+            # scrape_company_news_task uses crawl_news_releases() with ALL strategies
+            scrape_company_news_task.delay(company.id)
+
+            print(f"[ASYNC SCRAPE+SAVE] Job {job_id} completed successfully")
+            print(f"  - Company: {company.name} (ID: {company.id})")
+            print(f"  - Documents: {job.documents_found}")
+            print(f"  - People: {job.people_found}")
+            print(f"  - News scraping triggered")
+
+            return {
+                'status': 'success',
+                'job_id': job_id,
+                'company_id': company.id,
+                'company_name': company.name,
+                'documents_found': job.documents_found,
+                'people_found': job.people_found,
+                'news_found': job.news_found,
+                'message': f'Successfully scraped and saved {company.name}'
+            }
+        else:
+            raise Exception("Failed to create company record")
+
+    except ScrapingJob.DoesNotExist:
+        print(f"[ASYNC SCRAPE+SAVE] Job {job_id} not found")
+        return {
+            'status': 'error',
+            'job_id': job_id,
+            'error': f'ScrapingJob with ID {job_id} not found'
+        }
+
+    except SoftTimeLimitExceeded:
+        print(f"[ASYNC SCRAPE+SAVE] Job {job_id} timed out")
+        try:
+            job = ScrapingJob.objects.get(id=job_id)
+            job.status = 'failed'
+            job.completed_at = timezone.now()
+            job.error_messages = ['Task timed out - exceeded 10 minute limit']
+            job.save()
+        except:
+            pass
+        return {
+            'status': 'error',
+            'job_id': job_id,
+            'error': 'Task timed out',
+            'message': 'Scrape and save timed out after 10 minutes'
+        }
+
+    except Exception as e:
+        print(f"[ASYNC SCRAPE+SAVE] Job {job_id} failed: {str(e)}")
+        import traceback
+        traceback.print_exc()
+
+        # Update job with failure
+        try:
+            job = ScrapingJob.objects.get(id=job_id)
+            job.status = 'failed'
+            job.completed_at = timezone.now()
+            job.error_messages = [str(e)]
+            job.error_traceback = traceback.format_exc()
+            job.save()
+
+            # Record failed discovery
+            FailedCompanyDiscovery.objects.update_or_create(
+                website_url=job.website_url,
+                defaults={
+                    'company_name': job.website_url,
+                    'failure_reason': str(e),
+                }
+            )
+        except:
+            pass
+
+        return {
+            'status': 'error',
+            'job_id': job_id,
+            'error': str(e),
+            'message': f'Scrape and save failed: {str(e)}'
+        }
+
+
 @shared_task(bind=True)
 def cleanup_stuck_jobs_task(self):
     """
