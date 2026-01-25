@@ -628,11 +628,12 @@ class CompanyDataScraper:
             ]
             homepage_desc = None
 
-            # First, try to find "About [Company]" h2 headers and extract following paragraphs
+            # First, try to find "About [Company]" or "Welcome to [Company]" h2 headers and extract following paragraphs
             # This handles sites like Athena Gold where About section is marked by h2 header
+            # Also handles sites like Eastfield Resources where description is under "Welcome to" header
             for header in soup.find_all(['h2', 'h3']):
                 header_text = header.get_text(strip=True).lower()
-                if 'about' in header_text:
+                if 'about' in header_text or 'welcome to' in header_text:
                     # Found About header, get next sibling paragraphs
                     parent = header.find_parent(['div', 'section'])
                     if parent:
@@ -684,6 +685,35 @@ class CompanyDataScraper:
                                     break
                         if homepage_desc:
                             break
+
+            # Last resort: If still no description, scan main content area for company-related paragraphs
+            # This handles sites where description isn't in a labeled section
+            if not homepage_desc:
+                # Look in main, article, or the largest content div
+                main_content = soup.find('main') or soup.find('article') or soup.find('div', class_=lambda x: x and ('content' in str(x).lower() or 'main' in str(x).lower()))
+                if main_content:
+                    paragraphs = main_content.find_all('p')
+                    for p in paragraphs[:10]:  # Check first 10 paragraphs
+                        p_text = p.get_text(strip=True)
+                        p_lower = p_text.lower()
+                        if len(p_text) > 100:  # Need substantial text
+                            company_indicators = ['company', 'corporation', 'ltd', 'inc', 'advancing', 'developing',
+                                                 'exploring', 'project', 'mine', 'mineral', 'resource',
+                                                 'property', 'hectare', 'land package', 'producer',
+                                                 'exploration', 'production', 'asset', 'operations',
+                                                 'junior', 'gold', 'silver', 'copper', 'lithium',
+                                                 'partners', 'investors', 'venture']
+                            bio_indicators = ['cpa', 'cfo', 'ceo', 'president', 'years of experience',
+                                             'previously served', 'his career', 'her career',
+                                             'results oriented', 'accomplished', 'executive', 'mr.', 'ms.', 'dr.']
+                            # Count company indicators vs bio indicators
+                            company_count = sum(1 for ind in company_indicators if ind in p_lower)
+                            bio_count = sum(1 for ind in bio_indicators if ind in p_lower)
+                            # Accept if it has multiple company indicators and few bio indicators
+                            if company_count >= 2 and bio_count == 0:
+                                homepage_desc = p_text
+                                print(f"[DESC] Found description from main content scan")
+                                break
 
             # Use homepage description if it's better than meta description
             current_desc = self.extracted_data['company'].get('description', '')
