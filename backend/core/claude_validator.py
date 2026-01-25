@@ -569,16 +569,33 @@ Be thorough but only flag real issues."""
 
         result_text = response.content[0].text.strip()
 
-        # Parse JSON
+        # Parse JSON - extract the JSON object even if there's extra text
         import re
-        if result_text.startswith('{'):
-            verification = json.loads(result_text)
+
+        # Find the first complete JSON object (handles nested braces)
+        def extract_json(text):
+            start = text.find('{')
+            if start == -1:
+                return None
+            depth = 0
+            for i, char in enumerate(text[start:], start):
+                if char == '{':
+                    depth += 1
+                elif char == '}':
+                    depth -= 1
+                    if depth == 0:
+                        return text[start:i+1]
+            return None
+
+        json_str = extract_json(result_text)
+        if json_str:
+            try:
+                verification = json.loads(json_str)
+            except json.JSONDecodeError as e:
+                print(f"[VERIFICATION] JSON parse error: {e}")
+                verification = {'status': 'error', 'message': f'JSON parse error: {e}'}
         else:
-            match = re.search(r'\{.*\}', result_text, re.DOTALL)
-            if match:
-                verification = json.loads(match.group())
-            else:
-                verification = {'status': 'error', 'message': 'Could not parse Claude response'}
+            verification = {'status': 'error', 'message': 'Could not find JSON in Claude response'}
 
         # Auto-fix issues if possible
         fixes_applied = []
