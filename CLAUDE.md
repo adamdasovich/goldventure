@@ -208,6 +208,39 @@ The `approve_company` endpoint in `views.py` calls `scrape_company_website()` wh
 **Fix for missing news after onboarding:**
 Manually trigger news scrape: `POST /api/companies/{id}/scrape-news/`
 
+### Press Releases vs Media Coverage (CRITICAL)
+
+> **THIS IS ESSENTIAL:** Company news should ONLY be official press releases, NOT third-party media coverage!
+
+**Press Releases (✅ CORRECT for company news):**
+- Official company announcements from the company's own website
+- News distributed via wire services (GlobeNewswire, Newsfile, Business Wire, etc.)
+- These are what investors want to see on company profile pages
+
+**Media Coverage (❌ WRONG for company news):**
+- Third-party articles ABOUT the company (Mining.com, Northern Miner, Kitco, etc.)
+- These are written by journalists, not the company itself
+- These should ONLY appear on the homepage "Latest Mining News" section
+
+**Where each type belongs:**
+| Type | Source | Where it goes | Scraped by |
+|------|--------|---------------|------------|
+| Press Releases | Company website, News wires | CompanyNews table (company profiles) | `scrape_company_news_task` |
+| Media Coverage | Mining.com, Northern Miner, etc. | NewsArticle table (homepage) | `scrape_mining_news_task` |
+
+**Blocklist in `website_crawler.py` `is_news_article_url()`:**
+The function filters OUT these media coverage sites:
+- mining.com, northernminer.com, kitco.com, proactiveinvestors.com
+- smallcappower.com, resourceworld.com, miningweekly.com, stockwatch.com
+- seekingalpha.com, fool.com, investingnews.com, juniorminingnetwork.com, ceo.ca
+- Social media: youtube.com, twitter.com, linkedin.com, facebook.com, instagram.com
+
+**If media coverage appears in company news:**
+1. It means the company has an "In the News" section linking to media articles
+2. The `is_news_article_url()` blocklist should filter these out
+3. If a new media site appears, add it to the blocklist in `website_crawler.py`
+4. Clean up bad articles: `DELETE FROM core_companynews WHERE source_url LIKE '%mining.com%'`
+
 ### Financing Flags
 - Only flag news within **7 days** of current date
 - Check added 2026-01-22 in `tasks.py` lines ~432 and ~821
@@ -300,6 +333,14 @@ python -c "from core.tasks import scrape_all_companies_news_task; scrape_all_com
 
 ## Recent Changes (Keep Updated)
 
+### 2026-01-25
+- Added media coverage site blocklist to `website_crawler.py` `is_news_article_url()` function
+  - Blocks Mining.com, Northern Miner, Kitco, Proactive Investors, and 15+ other media sites
+  - Company news should ONLY be official press releases, not third-party media coverage
+- Cleaned up 28 bad articles from CompanyNews table (Mining.com and Northern Miner articles)
+- Updated CLAUDE.md with Press Releases vs Media Coverage distinction
+- Added automatic company verification system with Claude-powered auto-fixes
+
 ### 2026-01-22
 - Added RLM (Recursive Language Model) processor for long NI 43-101 documents
   - New file: `backend/mcp_servers/rlm_processor.py`
@@ -384,6 +425,13 @@ curl -H "Authorization: Token REDACTED_TOKEN" \
 - ✅ Homepage news = `scrape_mining_news_task` (Mining.com, Northern Miner)
 - ✅ Company news = `scrape_all_companies_news_task` (individual company websites)
 
+### Press Releases vs Media Coverage (NEW - CRITICAL)
+- ❌ Do NOT save media coverage (Mining.com, Northern Miner articles) in CompanyNews
+- ❌ Do NOT ignore "In the News" sections on company websites - they link to media coverage, not press releases
+- ✅ Company profiles should ONLY have official press releases (from the company or news wires)
+- ✅ Media coverage belongs ONLY on the homepage "Latest Mining News" section
+- ✅ If a new media site appears in company news, add it to the blocklist in `website_crawler.py` `is_news_article_url()`
+
 ### Investigation Before Action
 - ❌ Do NOT assume something is working without checking
 - ❌ Do NOT claim a bug is "legitimate behavior" without thorough investigation
@@ -415,3 +463,4 @@ When Claude makes a mistake and gets corrected, add it here:
 | 2026-01-22 | Documents processing on CPU instead of GPU | Found race condition - views.py was starting CPU processing immediately; GPU orchestrator needs time to spin up. Fixed by removing CPU processing calls. |
 | 2026-01-24 | Pushed changes but didn't deploy to server | After git push, ALWAYS deploy immediately: SSH, git pull, restart services. Don't wait for user to report "changes not appearing" |
 | 2026-01-24 | Confused `scrape_company_website()` with `crawl_news_releases()` - AGAIN | These are TWO DIFFERENT FUNCTIONS. `crawl_news_releases()` (website_crawler.py) has comprehensive news strategies. `scrape_company_website()` (company_scraper.py) has limited news extraction. Onboarding uses the limited one - news may be missing! |
+| 2026-01-25 | Media coverage from Mining.com/Northern Miner appeared in company news | Company profiles should ONLY have press releases. Some companies have "In the News" sections linking to media articles - these must be filtered. Added blocklist in `is_news_article_url()`. |

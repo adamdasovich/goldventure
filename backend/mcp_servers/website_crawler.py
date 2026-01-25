@@ -362,10 +362,28 @@ def is_valid_news_url(url):
 
 
 def is_news_article_url(url: str) -> bool:
-    """Check if a URL looks like a news article (internal or external)."""
+    """Check if a URL looks like a news article (internal or external).
+
+    IMPORTANT: This function filters for COMPANY PRESS RELEASES only.
+    It EXCLUDES third-party media coverage sites (Mining.com, Northern Miner, etc.)
+    which write ABOUT companies but are NOT official press releases.
+    """
     if not url:
         return False
     url_lower = url.lower()
+
+    # BLOCKLIST: Third-party media/news sites that write ABOUT companies
+    # These are NOT official press releases - they're media coverage
+    # Companies sometimes link to these in "In the News" sections, but we don't want them
+    media_coverage_sites = [
+        'mining.com', 'northernminer.com', 'kitco.com', 'proactiveinvestors.com',
+        'smallcappower.com', 'resourceworld.com', 'miningweekly.com',
+        'stockwatch.com', 'youtube.com', 'twitter.com', 'linkedin.com',
+        'facebook.com', 'instagram.com', 'seekingalpha.com', 'fool.com',
+        'investingnews.com', 'juniorminingnetwork.com', 'ceo.ca',
+    ]
+    if any(site in url_lower for site in media_coverage_sites):
+        return False
 
     # Skip base news listing pages
     if url_lower.rstrip('/').endswith(('/news', '/press-releases', '/news-releases', '/media')):
@@ -373,18 +391,19 @@ def is_news_article_url(url: str) -> bool:
     if re.search(r'/news/\d{4}$', url_lower):
         return False
 
-    # Internal news patterns
+    # Internal news patterns (company's own news page)
     internal = ['/news/', '/press-release', '/news-release', '/nr-', '/nr_', '/announcement']
     if any(p in url_lower for p in internal):
         return True
 
-    # External news wire services
-    external = [
+    # External news wire services (these distribute OFFICIAL company press releases)
+    # These are legitimate because companies use them to distribute their own news
+    news_wires = [
         'globenewswire.com', 'newswire.ca', 'prnewswire.com',
         'businesswire.com', 'accesswire.com', 'newsfilecorp.com',
         'cision.com', 'marketwatch.com/press-release'
     ]
-    if any(p in url_lower for p in external):
+    if any(p in url_lower for p in news_wires):
         return True
 
     # PDF news releases
