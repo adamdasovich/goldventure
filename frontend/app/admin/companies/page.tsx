@@ -205,11 +205,64 @@ export default function CompanyOnboardingPage() {
     }
   };
 
+  // Poll for save job completion
+  const pollSaveJobStatus = useCallback(async (jobId: number) => {
+    try {
+      const response = await fetch(`/api/admin/companies/scraping-jobs/${jobId}/`, {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to check save status');
+      }
+
+      const jobData: ScrapingJobStatus = await response.json();
+
+      if (jobData.status === 'running' || jobData.status === 'pending') {
+        setScrapeStatus(jobData.status === 'running' ? 'Saving company data...' : 'Waiting in queue...');
+        return; // Keep polling
+      }
+
+      // Job completed - stop polling
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+        pollIntervalRef.current = null;
+      }
+
+      setIsSaving(false);
+
+      if (jobData.status === 'success') {
+        // Extract company info from job data
+        const companyData = jobData.data_extracted?.company;
+        setSaveResult({
+          success: true,
+          company_id: (jobData as any).company_id || undefined,
+          company_name: companyData?.name || 'Company',
+        });
+        setScrapeStatus('');
+      } else if (jobData.status === 'failed') {
+        setError(jobData.error_messages?.[0] || 'Failed to save company');
+        setScrapeStatus('');
+      }
+    } catch (err) {
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+        pollIntervalRef.current = null;
+      }
+      setIsSaving(false);
+      setError(err instanceof Error ? err.message : 'An error occurred while checking status');
+      setScrapeStatus('');
+    }
+  }, [accessToken]);
+
   const handleSave = async () => {
     if (!previewData) return;
 
     setIsSaving(true);
     setError(null);
+    setScrapeStatus('Starting save...');
 
     try {
       const response = await fetch('/api/admin/companies/scrape-save/', {
@@ -223,15 +276,34 @@ export default function CompanyOnboardingPage() {
 
       if (!response.ok) {
         const errData = await response.json();
-        throw new Error(errData.error || 'Failed to save company');
+        throw new Error(errData.error || 'Failed to start save');
       }
 
       const data = await response.json();
-      setSaveResult(data);
+
+      if (data.status === 'processing' && data.job_id) {
+        // Async save - start polling for completion
+        setScrapeStatus('Saving company data (this may take a few minutes)...');
+
+        // Start polling every 3 seconds
+        pollIntervalRef.current = setInterval(() => {
+          pollSaveJobStatus(data.job_id);
+        }, 3000);
+
+        // Also poll immediately
+        pollSaveJobStatus(data.job_id);
+      } else if (data.success) {
+        // Synchronous save completed (legacy response)
+        setSaveResult(data);
+        setIsSaving(false);
+        setScrapeStatus('');
+      } else {
+        throw new Error('Unexpected response from server');
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
-    } finally {
       setIsSaving(false);
+      setScrapeStatus('');
     }
   };
 
