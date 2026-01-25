@@ -2143,6 +2143,70 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
                         continue
 
                 # ============================================================
+                # STRATEGY 4g: Globex Mining pattern - PDF press releases with embedded titles
+                # Structure: Text contains "Month DD, YYYY<Title>View English PDF" where link says "View PDF"
+                # The actual title is between the date and the generic PDF link text
+                # ============================================================
+                for pdf_link in soup.select('a[href*=".pdf"]'):
+                    try:
+                        href = pdf_link.get('href', '')
+                        link_text = pdf_link.get_text(strip=True).lower()
+
+                        # Only process generic PDF link text (not actual titles)
+                        if not any(x in link_text for x in ['view', 'pdf', 'download', 'english', 'french']):
+                            continue
+
+                        # Skip if already found this URL
+                        if href in news_by_url:
+                            continue
+
+                        # Get parent element that contains both date and title
+                        parent = pdf_link.find_parent()
+                        while parent and parent.name not in ['tr', 'div', 'li', 'article', 'p', 'td']:
+                            parent = parent.find_parent()
+
+                        if not parent:
+                            continue
+
+                        parent_text = parent.get_text(strip=True)
+
+                        # Extract date and title using regex
+                        # Pattern: MonthName DD, YYYY followed by title text followed by View/Share
+                        match = re.match(
+                            r'(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{1,2}),?\s+(20\d{2})\s*(.+?)(?:View|Share|Download|PDF|English|French)',
+                            parent_text, re.IGNORECASE
+                        )
+
+                        if not match:
+                            continue
+
+                        month_name, day, year, title = match.groups()
+                        title = title.strip()
+
+                        # Skip if title is too short or looks like a generic label
+                        if len(title) < 15:
+                            continue
+
+                        # Build date string
+                        month = MONTH_MAP.get(month_name.lower(), '01')
+                        date_str = f"{year}-{month}-{day.zfill(2)}"
+
+                        # Build full URL
+                        if not href.startswith('http'):
+                            href = urljoin(url, href)
+
+                        news = {
+                            'title': clean_news_title(title, href),
+                            'url': href,
+                            'date': date_str,
+                            'document_type': 'news_release',
+                            'year': year
+                        }
+                        _add_news_item(news_by_url, news, cutoff_date, "PDF-EMBEDDED-TITLE")
+                    except Exception:
+                        continue
+
+                # ============================================================
                 # STRATEGY 5a: 55 North Mining - Homepage PDF news pattern
                 # News links to PDFs with date in span, title as text
                 # ============================================================

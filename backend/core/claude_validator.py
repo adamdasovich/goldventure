@@ -139,6 +139,7 @@ KNOWN INVALID TITLE PATTERNS (from 45+ companies):
 - Generic: "News", "Press Release", "Read More", "Continue Reading", "View", "PDF", "Download"
 - Navigation: "News Releases", "Press Releases", "Media", "Recent News"
 - Dates with month/day only: "January 5", "Dec 31"
+- PDF link text: "View English PDF", "View French PDF", "View PDF", "Download PDF", "Share English PDF by Email"
 
 VALID NEWS HEADLINE CHARACTERISTICS:
 - Describes a company announcement, event, or development
@@ -383,8 +384,18 @@ def _basic_news_filter(news_items: List[Dict]) -> List[Dict]:
     invalid_exact = {
         'news', 'press release', 'press releases', 'news release', 'news releases',
         'read more', 'continue reading', 'view', 'pdf', 'download',
-        'recent news', 'latest news', 'media', 'announcement', 'announcements'
+        'recent news', 'latest news', 'media', 'announcement', 'announcements',
+        # PDF link text patterns (Globex Mining style)
+        'view english pdf', 'view french pdf', 'view pdf', 'download pdf',
+        'english pdf', 'french pdf', 'share english pdf', 'share french pdf',
+        'share pdf', 'share english pdf by email', 'share french pdf by email',
     }
+
+    # Invalid partial matches - titles containing these are likely garbage
+    invalid_partial = [
+        'view english', 'view french', 'view pdf', 'share pdf',
+        'download pdf', 'click here', 'learn more', 'read full',
+    ]
 
     valid_news = []
     for item in news_items:
@@ -398,6 +409,10 @@ def _basic_news_filter(news_items: List[Dict]) -> List[Dict]:
 
         # Check exact matches
         if title_lower in invalid_exact:
+            continue
+
+        # Check partial matches
+        if any(partial in title_lower for partial in invalid_partial):
             continue
 
         # Check date patterns
