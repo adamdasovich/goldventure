@@ -1676,6 +1676,12 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
             # Year-based archive pages under news-releases (Aftermath Silver pattern)
             f'{url}/news-releases/{current_year}/',
             f'{url}/news-releases/{current_year - 1}/',
+            # GoGold Resources pattern: /investors/press-releases/YYYY/
+            f'{url}/investors/press-releases/{current_year}/',
+            f'{url}/investors/press-releases/{current_year - 1}/',
+            # Also check year-based under press-releases
+            f'{url}/press-releases/{current_year}/',
+            f'{url}/press-releases/{current_year - 1}/',
             # Query parameter year filtering (Cassiar Gold pattern)
             f'{url}/news/?current_year={current_year}',
             f'{url}/news/?current_year={current_year - 1}',
@@ -2203,6 +2209,57 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
                             'year': year
                         }
                         _add_news_item(news_by_url, news, cutoff_date, "PDF-EMBEDDED-TITLE")
+                    except Exception:
+                        continue
+
+                # ============================================================
+                # STRATEGY 4h: GoGold Resources pattern - div.file with p and span
+                # Structure: <div class="file"><p>Title<br/><span>Date</span></p><a href="PDF">Download</a></div>
+                # ============================================================
+                for file_div in soup.select('div.file'):
+                    try:
+                        # Find the paragraph with title and date
+                        p_elem = file_div.select_one('p')
+                        if not p_elem:
+                            continue
+
+                        # Extract date from span inside p
+                        date_span = p_elem.select_one('span')
+                        date_str = None
+                        if date_span:
+                            date_str = parse_date_standalone(date_span.get_text(strip=True))
+
+                        # Extract title - it's the text before the span/br
+                        # Get all text and remove the date part
+                        full_text = p_elem.get_text(separator=' ', strip=True)
+                        title = full_text
+                        if date_span:
+                            date_text = date_span.get_text(strip=True)
+                            title = full_text.replace(date_text, '').strip()
+
+                        if not title or len(title) < 15:
+                            continue
+
+                        # Find PDF link
+                        link = file_div.select_one('a[href*=".pdf"], a.btn')
+                        if not link:
+                            continue
+
+                        href = link.get('href', '')
+                        if not href:
+                            continue
+
+                        if not href.startswith('http'):
+                            href = urljoin(url, href)
+
+                        news = {
+                            'title': clean_news_title(title, href),
+                            'url': href,
+                            'date': date_str,
+                            'document_type': 'news_release',
+                            'year': date_str[:4] if date_str else None
+                        }
+                        _add_news_item(news_by_url, news, cutoff_date, "FILE-DIV")
                     except Exception:
                         continue
 
