@@ -548,7 +548,7 @@ COMPANY DATA SAVED:
 - Exchange: {current_data['exchange'] or 'NOT CAPTURED'}
 - Description: {current_data['description'] or 'NOT CAPTURED'}
 - Projects: {current_data['projects_count']} projects: {', '.join(current_data['projects']) if current_data['projects'] else 'NONE'}
-- News Items: {current_data['news_count']}
+- News Items: {current_data['news_count']} {'(CRITICAL: NO NEWS CAPTURED!)' if current_data['news_count'] == 0 else ''}
 - Has Logo: {current_data['has_logo']}
 
 WEBSITE URL: {company.website}
@@ -559,8 +559,11 @@ WEBSITE CONTENT (first 5000 chars):
 VERIFICATION TASK:
 1. Check if the DESCRIPTION is present and meaningful. If missing or empty, extract what should be the description from the website content.
 2. Check if PROJECTS are complete. Look for project names in the website content that weren't captured.
-3. Check if TICKER/EXCHANGE is correct by looking at the website header (often shows "TSX-V: XXX" or similar).
-4. Identify any other MISSING DATA that should have been captured.
+3. Check if TICKER/EXCHANGE is correct by looking at the website header (often shows "TSX-V: XXX" or "TSX: XXX").
+   IMPORTANT: Canadian companies often have BOTH TSX and NYSE/OTC tickers. Always use the PRIMARY TSX/TSX-V ticker, not the US secondary ticker.
+   Example: If website shows "GOLD: TSX, GLDG: NYSE" - the correct ticker is "GOLD" not "GLDG".
+4. **CRITICAL**: If News Items is 0, this is a MAJOR issue - flag it as critical severity with field "news".
+5. Identify any other MISSING DATA that should have been captured.
 
 Respond with JSON only:
 {{
@@ -570,6 +573,7 @@ Respond with JSON only:
   ],
   "missing_projects": ["Project Name 1", "Project Name 2"],
   "suggested_description": "..." (only if description is missing),
+  "suggested_ticker": "..." (only if ticker appears wrong or missing),
   "overall_score": 0-100 (completeness percentage)
 }}
 
@@ -635,6 +639,25 @@ Be thorough but only flag real issues."""
                     )
                     fixes_applied.append(f'Added project: {project_name}')
                     print(f"[VERIFICATION] Auto-fixed: Added project '{project_name}' for {company.name}")
+
+        # Fix ticker if suggested and different
+        suggested_ticker = verification.get('suggested_ticker')
+        if suggested_ticker and suggested_ticker != current_data['ticker']:
+            old_ticker = company.ticker_symbol
+            company.ticker_symbol = suggested_ticker
+            company.save(update_fields=['ticker_symbol'])
+            fixes_applied.append(f'Fixed ticker: {old_ticker} -> {suggested_ticker}')
+            print(f"[VERIFICATION] Auto-fixed: Ticker {old_ticker} -> {suggested_ticker} for {company.name}")
+
+        # Trigger news scrape if no news captured
+        if current_data['news_count'] == 0:
+            try:
+                from core.tasks import scrape_company_news_task
+                scrape_company_news_task.delay(company.id)
+                fixes_applied.append('Triggered news scrape (0 news items found)')
+                print(f"[VERIFICATION] Auto-triggered news scrape for {company.name} (0 news)")
+            except Exception as e:
+                print(f"[VERIFICATION] Could not trigger news scrape: {e}")
 
         verification['fixes_applied'] = fixes_applied
         verification['company_id'] = company_id
