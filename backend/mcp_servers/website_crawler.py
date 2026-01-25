@@ -385,10 +385,16 @@ def is_news_article_url(url: str) -> bool:
     if any(site in url_lower for site in media_coverage_sites):
         return False
 
-    # Skip base news listing pages
-    if url_lower.rstrip('/').endswith(('/news', '/press-releases', '/news-releases', '/media')):
+    # Skip base news listing pages (these are navigation pages, not articles)
+    # Strip trailing slash for consistent matching
+    url_stripped = url_lower.rstrip('/')
+    if url_stripped.endswith(('/news', '/press-releases', '/news-releases', '/media')):
         return False
-    if re.search(r'/news/\d{4}$', url_lower):
+    # Skip year-based news listing pages like /news/2026 or /news/2026/
+    if re.search(r'/news/\d{4}$', url_stripped):
+        return False
+    # Skip inverted year-news patterns like /2026/news or /2026/news/
+    if re.search(r'/\d{4}/news$', url_stripped):
         return False
 
     # Internal news patterns (company's own news page)
