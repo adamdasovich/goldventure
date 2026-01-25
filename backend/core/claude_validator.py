@@ -464,3 +464,231 @@ def _basic_description_filter(description: str) -> Optional[str]:
         return None
 
     return description
+
+
+def verify_onboarded_company(company_id: int) -> Dict:
+    """
+    Post-save verification of onboarded company data using Claude.
+
+    This function runs AFTER a company is saved to verify:
+    1. Description is present and meaningful
+    2. Projects were captured (if company has projects)
+    3. Key company info is complete (ticker, exchange, etc.)
+    4. News items were captured
+
+    Returns a verification report with issues and suggestions.
+    """
+    from core.models import Company, Project, CompanyNews
+    import httpx
+    from bs4 import BeautifulSoup
+
+    try:
+        company = Company.objects.get(id=company_id)
+    except Company.DoesNotExist:
+        return {'status': 'error', 'message': f'Company {company_id} not found'}
+
+    # Gather current data
+    projects = list(Project.objects.filter(company=company).values('name', 'country', 'primary_commodity'))
+    news_count = CompanyNews.objects.filter(company=company).count()
+
+    current_data = {
+        'name': company.name,
+        'ticker': company.ticker_symbol,
+        'exchange': company.exchange,
+        'description': company.description[:500] if company.description else None,
+        'website': company.website,
+        'projects_count': len(projects),
+        'projects': [p['name'] for p in projects],
+        'news_count': news_count,
+        'has_logo': bool(company.logo_url),
+    }
+
+    # Fetch the website to compare
+    website_content = None
+    if company.website:
+        try:
+            with httpx.Client(timeout=30, follow_redirects=True) as client:
+                headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+                response = client.get(company.website, headers=headers)
+                if response.status_code == 200:
+                    soup = BeautifulSoup(response.text, 'html.parser')
+                    # Extract text from main content
+                    for tag in soup(['script', 'style', 'nav', 'header', 'footer']):
+                        tag.decompose()
+                    website_content = soup.get_text(separator=' ', strip=True)[:5000]
+        except Exception as e:
+            print(f"[VERIFICATION] Could not fetch website: {e}")
+
+    # Use Claude to verify
+    client = get_claude_client()
+    if not client:
+        # Basic verification without Claude
+        return _basic_verification(current_data)
+
+    prompt = f"""You are verifying onboarded company data for a mining intelligence platform.
+
+COMPANY DATA SAVED:
+- Name: {current_data['name']}
+- Ticker: {current_data['ticker'] or 'NOT CAPTURED'}
+- Exchange: {current_data['exchange'] or 'NOT CAPTURED'}
+- Description: {current_data['description'] or 'NOT CAPTURED'}
+- Projects: {current_data['projects_count']} projects: {', '.join(current_data['projects']) if current_data['projects'] else 'NONE'}
+- News Items: {current_data['news_count']}
+- Has Logo: {current_data['has_logo']}
+
+WEBSITE URL: {company.website}
+
+WEBSITE CONTENT (first 5000 chars):
+{website_content[:5000] if website_content else 'COULD NOT FETCH'}
+
+VERIFICATION TASK:
+1. Check if the DESCRIPTION is present and meaningful. If missing or empty, extract what should be the description from the website content.
+2. Check if PROJECTS are complete. Look for project names in the website content that weren't captured.
+3. Check if TICKER/EXCHANGE is correct by looking at the website header (often shows "TSX-V: XXX" or similar).
+4. Identify any other MISSING DATA that should have been captured.
+
+Respond with JSON only:
+{{
+  "status": "complete" | "incomplete" | "needs_review",
+  "issues": [
+    {{"field": "description", "severity": "critical" | "warning", "message": "...", "suggested_value": "..."}}
+  ],
+  "missing_projects": ["Project Name 1", "Project Name 2"],
+  "suggested_description": "..." (only if description is missing),
+  "overall_score": 0-100 (completeness percentage)
+}}
+
+Be thorough but only flag real issues."""
+
+    try:
+        response = client.messages.create(
+            model="claude-3-5-haiku-20241022",
+            max_tokens=2048,
+            messages=[{"role": "user", "content": prompt}]
+        )
+
+        result_text = response.content[0].text.strip()
+
+        # Parse JSON
+        import re
+        if result_text.startswith('{'):
+            verification = json.loads(result_text)
+        else:
+            match = re.search(r'\{.*\}', result_text, re.DOTALL)
+            if match:
+                verification = json.loads(match.group())
+            else:
+                verification = {'status': 'error', 'message': 'Could not parse Claude response'}
+
+        # Auto-fix issues if possible
+        fixes_applied = []
+
+        # Fix missing description
+        if verification.get('suggested_description') and not current_data['description']:
+            company.description = verification['suggested_description'][:1000]
+            company.save(update_fields=['description'])
+            fixes_applied.append('Added missing description')
+            print(f"[VERIFICATION] Auto-fixed: Added description for {company.name}")
+
+        # Add missing projects
+        missing_projects = verification.get('missing_projects', [])
+        for project_name in missing_projects[:5]:  # Limit to 5 auto-adds
+            if project_name and len(project_name) > 2:
+                # Check if project already exists
+                if not Project.objects.filter(company=company, name__iexact=project_name).exists():
+                    Project.objects.create(
+                        company=company,
+                        name=project_name,
+                        project_stage='exploration',
+                    )
+                    fixes_applied.append(f'Added project: {project_name}')
+                    print(f"[VERIFICATION] Auto-fixed: Added project '{project_name}' for {company.name}")
+
+        verification['fixes_applied'] = fixes_applied
+        verification['company_id'] = company_id
+        verification['company_name'] = company.name
+
+        # Log the verification result
+        _log_verification_result(company, verification)
+
+        return verification
+
+    except Exception as e:
+        print(f"[VERIFICATION] Error: {e}")
+        import traceback
+        traceback.print_exc()
+        return {'status': 'error', 'message': str(e), 'company_id': company_id}
+
+
+def _basic_verification(current_data: Dict) -> Dict:
+    """Basic verification without Claude API."""
+    issues = []
+
+    if not current_data['description']:
+        issues.append({
+            'field': 'description',
+            'severity': 'critical',
+            'message': 'No company description captured'
+        })
+
+    if not current_data['ticker']:
+        issues.append({
+            'field': 'ticker',
+            'severity': 'warning',
+            'message': 'No ticker symbol captured'
+        })
+
+    if current_data['projects_count'] == 0:
+        issues.append({
+            'field': 'projects',
+            'severity': 'warning',
+            'message': 'No projects captured'
+        })
+
+    if current_data['news_count'] == 0:
+        issues.append({
+            'field': 'news',
+            'severity': 'warning',
+            'message': 'No news items captured'
+        })
+
+    # Calculate score
+    score = 100
+    for issue in issues:
+        if issue['severity'] == 'critical':
+            score -= 25
+        else:
+            score -= 10
+
+    status = 'complete' if not issues else ('needs_review' if any(i['severity'] == 'critical' for i in issues) else 'incomplete')
+
+    return {
+        'status': status,
+        'issues': issues,
+        'overall_score': max(0, score),
+        'missing_projects': [],
+        'fixes_applied': []
+    }
+
+
+def _log_verification_result(company, verification: Dict):
+    """Log verification results for review."""
+    from core.models import CompanyVerificationLog
+
+    try:
+        CompanyVerificationLog.objects.create(
+            company=company,
+            status=verification.get('status', 'unknown'),
+            overall_score=verification.get('overall_score', 0),
+            issues=verification.get('issues', []),
+            fixes_applied=verification.get('fixes_applied', []),
+        )
+    except Exception as e:
+        # Model might not exist yet, just log to console
+        print(f"[VERIFICATION] Result for {company.name}: {verification.get('status')} (score: {verification.get('overall_score', 0)})")
+        if verification.get('issues'):
+            for issue in verification['issues']:
+                print(f"  - [{issue.get('severity', 'info')}] {issue.get('field')}: {issue.get('message')}")
+        if verification.get('fixes_applied'):
+            for fix in verification['fixes_applied']:
+                print(f"  - [FIXED] {fix}")

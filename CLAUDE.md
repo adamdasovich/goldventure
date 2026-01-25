@@ -131,6 +131,60 @@ curl -s -H "Authorization: Bearer $DO_API_TOKEN" \
 
 ---
 
+## Company Onboarding & Verification
+
+### Single-Step Onboarding
+The onboarding process is a single button click that:
+1. Scrapes the company website (via `scrape_and_save_company_task`)
+2. Saves to database
+3. Triggers comprehensive news scraping (via `scrape_company_news_task`)
+4. **Runs Claude-powered verification** (automatic quality check)
+
+### Automatic Verification System (NEW)
+After every company is onboarded, a Claude-powered verification runs automatically:
+
+**Location:** `backend/core/claude_validator.py` - `verify_onboarded_company()`
+
+**What it checks:**
+- Description is present and meaningful
+- Projects were captured (if the company has projects)
+- Ticker/exchange information is complete
+- News items were captured
+
+**Auto-fixes:**
+- If description is missing, Claude extracts it from the website and adds it
+- If projects are mentioned on website but not captured, they're auto-added
+- All fixes are logged in `CompanyVerificationLog` table
+
+**Verification scores:**
+- `complete` (90-100): All data captured correctly
+- `incomplete` (50-89): Some data missing but functional
+- `needs_review` (<50): Critical issues, needs manual review
+
+### Checking Verification Results
+```bash
+# View recent verification logs
+ssh root@137.184.168.166
+cd /var/www/goldventure/backend && source venv/bin/activate
+DJANGO_SETTINGS_MODULE=config.settings python -c "
+import django
+django.setup()
+from core.models import CompanyVerificationLog
+for log in CompanyVerificationLog.objects.order_by('-created_at')[:10]:
+    print(f'{log.company.name}: {log.status} (score: {log.overall_score})')
+    if log.fixes_applied:
+        print(f'  Fixes: {log.fixes_applied}')
+"
+```
+
+### Manual Verification/Fix
+If auto-verification misses something:
+1. Check the company page: `https://juniorminingintelligence.com/companies/{id}`
+2. Compare against the source website
+3. Manually update via Django admin or database query
+
+---
+
 ## Critical Patterns & Gotchas
 
 ### News Scraping - TWO DIFFERENT FUNCTIONS (CRITICAL)

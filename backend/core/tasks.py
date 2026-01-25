@@ -1180,11 +1180,19 @@ def scrape_and_save_company_task(self, job_id: int, update_existing: bool = Fals
             # scrape_company_news_task uses crawl_news_releases() with ALL strategies
             scrape_company_news_task.delay(company.id)
 
+            # Run Claude-powered verification to check data completeness
+            # This will auto-fix missing descriptions and projects when possible
+            from core.claude_validator import verify_onboarded_company
+            verification = verify_onboarded_company(company.id)
+
             print(f"[ASYNC SCRAPE+SAVE] Job {job_id} completed successfully")
             print(f"  - Company: {company.name} (ID: {company.id})")
             print(f"  - Documents: {job.documents_found}")
             print(f"  - People: {job.people_found}")
             print(f"  - News scraping triggered")
+            print(f"  - Verification: {verification.get('status', 'unknown')} (score: {verification.get('overall_score', 0)})")
+            if verification.get('fixes_applied'):
+                print(f"  - Auto-fixes applied: {verification['fixes_applied']}")
 
             return {
                 'status': 'success',
@@ -1194,6 +1202,7 @@ def scrape_and_save_company_task(self, job_id: int, update_existing: bool = Fals
                 'documents_found': job.documents_found,
                 'people_found': job.people_found,
                 'news_found': job.news_found,
+                'verification': verification,
                 'message': f'Successfully scraped and saved {company.name}'
             }
         else:
