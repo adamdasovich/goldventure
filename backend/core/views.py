@@ -6584,7 +6584,48 @@ def _save_scraped_company_data(data: dict, source_url: str, update_existing: boo
     processing_job_types = ['ni43101', 'pea', 'presentation', 'fact_sheet']
     processing_jobs_created = []
 
-    for doc_data in data.get('documents', []):
+    # IMPORTANT: Filter documents to only keep the most recent of each type
+    # Old presentations and reports are not useful - investors want current info
+    documents = data.get('documents', [])
+
+    # Sort by year (newest first) if available, then by title containing year
+    def get_doc_year(doc):
+        # Try explicit year field
+        if doc.get('year'):
+            return int(doc['year'])
+        # Try to extract year from title or URL
+        import re
+        text = f"{doc.get('title', '')} {doc.get('source_url', '')}"
+        years = re.findall(r'20[12]\d', text)
+        if years:
+            return max(int(y) for y in years)
+        return 0
+
+    documents.sort(key=get_doc_year, reverse=True)
+
+    # Filter to keep only most recent documents by type
+    filtered_docs = []
+    seen_types = {'presentation': 0, 'fact_sheet': 0, 'ni43101': 0, 'pea': 0}
+    type_limits = {'presentation': 1, 'fact_sheet': 1, 'ni43101': 2, 'pea': 1}  # How many to keep per type
+
+    for doc in documents:
+        doc_type = doc.get('document_type', 'other')
+
+        if doc_type in seen_types:
+            # Check if we've reached the limit for this type
+            if seen_types[doc_type] < type_limits.get(doc_type, 1):
+                filtered_docs.append(doc)
+                seen_types[doc_type] += 1
+        else:
+            # Keep other document types (news_release, financial_statement, etc.)
+            filtered_docs.append(doc)
+
+    print(f"[SAVE COMPANY] Filtered documents: {len(filtered_docs)} from {len(documents)} total")
+    for doc_type, count in seen_types.items():
+        if count > 0:
+            print(f"  - {doc_type}: {count} (limit: {type_limits.get(doc_type, 1)})")
+
+    for doc_data in filtered_docs:
         doc_type = doc_data.get('document_type', 'other')
         source_url = doc_data.get('source_url', '')
 
