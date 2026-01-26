@@ -94,15 +94,29 @@ def parse_date_comprehensive(text: str) -> Tuple[Optional[str], str]:
         date_str = f"{year}-{month}-{day}"
         return date_str, remaining_title
 
-    # Pattern 4: MM/DD/YY at start (01/06/26)
+    # Pattern 4: XX/XX/YY at start - could be MM/DD/YY or DD/MM/YY
+    # Detect format by checking if first or second number > 12
     match = re.match(r'^(\d{1,2})/(\d{1,2})/(\d{2})\s+(.*)$', text)
     if match:
-        month = match.group(1).zfill(2)
-        day = match.group(2).zfill(2)
+        first = match.group(1).zfill(2)
+        second = match.group(2).zfill(2)
         year_short = match.group(3)
         year = f"20{year_short}" if int(year_short) <= 50 else f"19{year_short}"
-        if 1 <= int(month) <= 12 and 1 <= int(day) <= 31:
-            date_str = f"{year}-{month}-{day}"
+        first_int, second_int = int(first), int(second)
+
+        # If first > 12, it MUST be DD/MM/YY (e.g., 13/11/25 = Nov 13)
+        if first_int > 12 and 1 <= second_int <= 12:
+            date_str = f"{year}-{second}-{first}"  # DD/MM -> YYYY-MM-DD
+            text = match.group(4).strip()
+            return date_str, text
+        # If second > 12, it MUST be MM/DD/YY (e.g., 01/25/26 = Jan 25)
+        elif second_int > 12 and 1 <= first_int <= 12:
+            date_str = f"{year}-{first}-{second}"  # MM/DD -> YYYY-MM-DD
+            text = match.group(4).strip()
+            return date_str, text
+        # Both <= 12: ambiguous, default to MM/DD/YY (US format)
+        elif 1 <= first_int <= 12 and 1 <= second_int <= 31:
+            date_str = f"{year}-{first}-{second}"
             text = match.group(4).strip()
             return date_str, text
 
@@ -150,14 +164,25 @@ def parse_date_comprehensive(text: str) -> Tuple[Optional[str], str]:
         date_str = f"{year}-{month}-{day}"
         return date_str, original_text
 
-    # Pattern 9: MM/DD/YYYY anywhere
+    # Pattern 9: XX/XX/YYYY anywhere - could be MM/DD or DD/MM format
     match = re.search(r'(\d{1,2})/(\d{1,2})/(20\d{2})', text)
     if match:
-        month = match.group(1).zfill(2)
-        day = match.group(2).zfill(2)
+        first = match.group(1).zfill(2)
+        second = match.group(2).zfill(2)
         year = match.group(3)
-        if 1 <= int(month) <= 12 and 1 <= int(day) <= 31:
-            date_str = f"{year}-{month}-{day}"
+        first_int, second_int = int(first), int(second)
+
+        # If first > 12, it MUST be DD/MM format
+        if first_int > 12 and 1 <= second_int <= 12:
+            date_str = f"{year}-{second}-{first}"  # DD/MM -> YYYY-MM-DD
+            return date_str, original_text
+        # If second > 12, it MUST be MM/DD format
+        elif second_int > 12 and 1 <= first_int <= 12:
+            date_str = f"{year}-{first}-{second}"  # MM/DD -> YYYY-MM-DD
+            return date_str, original_text
+        # Both <= 12: ambiguous, default to MM/DD
+        elif 1 <= first_int <= 12 and 1 <= second_int <= 31:
+            date_str = f"{year}-{first}-{second}"
             return date_str, original_text
 
     return None, original_text
@@ -231,13 +256,24 @@ def parse_date_standalone(text: str) -> Optional[str]:
         year = match.group(3)
         return f"{year}-{month}-{day}"
 
-    # MM/DD/YYYY or MM/DD/YY (Silverco: 01/20/26)
+    # XX/XX/YYYY or XX/XX/YY - could be MM/DD or DD/MM format
+    # Detect format by checking if first or second number > 12
     match = re.match(r'^(\d{1,2})/(\d{1,2})/(20\d{2}|\d{2})$', text)
     if match:
-        month, day, year = match.groups()
+        first, second, year = match.groups()
         if len(year) == 2:
             year = f"20{year}"
-        return f"{year}-{month.zfill(2)}-{day.zfill(2)}"
+        first_int, second_int = int(first), int(second)
+
+        # If first > 12, it MUST be DD/MM format (e.g., 13/11/25 = Nov 13)
+        if first_int > 12 and 1 <= second_int <= 12:
+            return f"{year}-{second.zfill(2)}-{first.zfill(2)}"  # DD/MM -> YYYY-MM-DD
+        # If second > 12, it MUST be MM/DD format (e.g., 01/25/26 = Jan 25)
+        elif second_int > 12 and 1 <= first_int <= 12:
+            return f"{year}-{first.zfill(2)}-{second.zfill(2)}"  # MM/DD -> YYYY-MM-DD
+        # Both <= 12: ambiguous, default to MM/DD (US format)
+        else:
+            return f"{year}-{first.zfill(2)}-{second.zfill(2)}"
 
     # Mon DD - NO YEAR (Freegold Ventures: "Jan 15", "Dec 19")
     # Infer year based on whether the date is in the future
