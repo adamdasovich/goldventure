@@ -1192,8 +1192,13 @@ def scrape_and_save_company_task(self, job_id: int, update_existing: bool = Fals
 
             # Run Claude-powered verification to check data completeness
             # This will auto-fix missing descriptions and projects when possible
-            from core.claude_validator import verify_onboarded_company
-            verification = verify_onboarded_company(company.id)
+            verification = {'status': 'skipped', 'message': 'Verification not run'}
+            try:
+                from core.claude_validator import verify_onboarded_company
+                verification = verify_onboarded_company(company.id)
+            except Exception as e:
+                print(f"[ASYNC SCRAPE+SAVE] Verification failed for company {company.id}: {e}")
+                verification = {'status': 'error', 'message': str(e)}
 
             print(f"[ASYNC SCRAPE+SAVE] Job {job_id} completed successfully")
             print(f"  - Company: {company.name} (ID: {company.id})")
