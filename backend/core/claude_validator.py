@@ -518,19 +518,48 @@ def verify_onboarded_company(company_id: int) -> Dict:
         'has_logo': bool(company.logo_url),
     }
 
-    # Fetch the website to compare
+    # Fetch the website to compare - fetch MULTIPLE pages for complete data
+    # Mining companies typically have projects on /projects/, /properties/, or /assets/
     website_content = None
+    projects_content = None
     if company.website:
         try:
+            from urllib.parse import urljoin
             with httpx.Client(timeout=30, follow_redirects=True) as client:
                 headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+
+                # Fetch homepage
                 response = client.get(company.website, headers=headers)
                 if response.status_code == 200:
                     soup = BeautifulSoup(response.text, 'html.parser')
-                    # Extract text from main content
                     for tag in soup(['script', 'style', 'nav', 'header', 'footer']):
                         tag.decompose()
-                    website_content = soup.get_text(separator=' ', strip=True)[:5000]
+                    website_content = soup.get_text(separator=' ', strip=True)[:3000]
+
+                # Fetch projects page - try common URL patterns
+                # This is CRITICAL because projects are often NOT listed on the homepage
+                projects_urls = [
+                    urljoin(company.website, '/projects/'),
+                    urljoin(company.website, '/projects'),
+                    urljoin(company.website, '/properties/'),
+                    urljoin(company.website, '/properties'),
+                    urljoin(company.website, '/assets/'),
+                    urljoin(company.website, '/our-projects/'),
+                ]
+
+                for projects_url in projects_urls:
+                    try:
+                        proj_response = client.get(projects_url, headers=headers)
+                        if proj_response.status_code == 200:
+                            proj_soup = BeautifulSoup(proj_response.text, 'html.parser')
+                            for tag in proj_soup(['script', 'style', 'nav', 'header', 'footer']):
+                                tag.decompose()
+                            projects_content = proj_soup.get_text(separator=' ', strip=True)[:3000]
+                            print(f"[VERIFICATION] Found projects page at: {projects_url}")
+                            break
+                    except:
+                        continue
+
         except Exception as e:
             print(f"[VERIFICATION] Could not fetch website: {e}")
 
@@ -553,12 +582,18 @@ COMPANY DATA SAVED:
 
 WEBSITE URL: {company.website}
 
-WEBSITE CONTENT (first 5000 chars):
-{website_content[:5000] if website_content else 'COULD NOT FETCH'}
+HOMEPAGE CONTENT:
+{website_content[:3000] if website_content else 'COULD NOT FETCH'}
+
+PROJECTS PAGE CONTENT (from /projects/ or similar):
+{projects_content[:3000] if projects_content else 'NO PROJECTS PAGE FOUND - check homepage for project mentions'}
 
 VERIFICATION TASK:
 1. Check if the DESCRIPTION is present and meaningful. If missing or empty, extract what should be the description from the website content.
-2. Check if PROJECTS are complete. Look for project names in the website content that weren't captured.
+2. **CRITICAL FOR PROJECTS**: Check if ALL projects are captured. Mining companies often have multiple projects listed on their /projects/ page.
+   - Look in BOTH the homepage AND the projects page content
+   - Extract ALL project names you can find (e.g., "Black Pine", "Goldstrike", etc.)
+   - If projects page content is available, that is your PRIMARY source for project names
 3. Check if TICKER/EXCHANGE is correct by looking at the website header (often shows "TSX-V: XXX" or "TSX: XXX").
    IMPORTANT: Canadian companies often have BOTH TSX and NYSE/OTC tickers. Always use the PRIMARY TSX/TSX-V ticker, not the US secondary ticker.
    Example: If website shows "GOLD: TSX, GLDG: NYSE" - the correct ticker is "GOLD" not "GLDG".
@@ -577,7 +612,7 @@ Respond with JSON only:
   "overall_score": 0-100 (completeness percentage)
 }}
 
-Be thorough but only flag real issues."""
+Be thorough - extract ALL project names from the content. Mining companies often have 2-5 projects."""
 
     try:
         response = client.messages.create(
