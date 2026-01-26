@@ -2928,7 +2928,10 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
                 #   <div class="col-lg-7"><a href="...">Title</a></div>
                 # </div>
                 # ============================================================
-                for news_row in soup.select('.news-section, .news-row, div.row:has(a[href*="/news"]):has(div[class*="col"])'):
+                news_grid_rows = soup.select('.news-section, .news-row')
+                if '/news' in news_url and news_grid_rows:
+                    print(f"[NEWS-GRID-DEBUG] Found {len(news_grid_rows)} news-section rows on {news_url}")
+                for news_row in news_grid_rows:
                     try:
                         # Find all column divs
                         cols = news_row.select('div[class*="col-"]')
