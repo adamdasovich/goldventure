@@ -7,6 +7,7 @@ handling edge cases that rule-based systems miss.
 
 import os
 import json
+import asyncio
 import anthropic
 from typing import Dict, List, Optional
 
@@ -481,6 +482,93 @@ def _basic_description_filter(description: str) -> Optional[str]:
     return description
 
 
+async def _fetch_page_with_playwright(url: str) -> Optional[str]:
+    """
+    Fetch a page using Playwright via crawl4ai.
+    This handles Cloudflare protection and JavaScript-rendered content.
+    """
+    try:
+        from crawl4ai import AsyncWebCrawler, BrowserConfig, CrawlerRunConfig
+        from bs4 import BeautifulSoup
+
+        browser_config = BrowserConfig(
+            headless=True,
+            verbose=False,
+        )
+
+        async with AsyncWebCrawler(config=browser_config) as crawler:
+            config = CrawlerRunConfig(
+                delay_before_return_html=3.0,  # Wait for JS to render
+                wait_until='domcontentloaded',
+            )
+
+            result = await crawler.arun(url=url, config=config)
+
+            if result and result.html:
+                soup = BeautifulSoup(result.html, 'html.parser')
+                for tag in soup(['script', 'style', 'nav', 'header', 'footer']):
+                    tag.decompose()
+                return soup.get_text(separator=' ', strip=True)[:3000]
+
+    except Exception as e:
+        print(f"[VERIFICATION] Playwright fetch failed for {url}: {e}")
+
+    return None
+
+
+def _fetch_pages_with_playwright(base_url: str) -> tuple:
+    """
+    Synchronous wrapper to fetch homepage and projects page using Playwright.
+    Returns (homepage_content, projects_content).
+    """
+    from urllib.parse import urljoin
+
+    async def _fetch_all():
+        homepage_content = None
+        projects_content = None
+
+        # Fetch homepage
+        homepage_content = await _fetch_page_with_playwright(base_url)
+
+        # Try projects page URLs
+        projects_urls = [
+            urljoin(base_url, '/projects/'),
+            urljoin(base_url, '/projects'),
+            urljoin(base_url, '/properties/'),
+            urljoin(base_url, '/properties'),
+            urljoin(base_url, '/assets/'),
+            urljoin(base_url, '/our-projects/'),
+        ]
+
+        for projects_url in projects_urls:
+            content = await _fetch_page_with_playwright(projects_url)
+            if content and len(content) > 100:
+                projects_content = content
+                print(f"[VERIFICATION] Found projects page at: {projects_url}")
+                break
+
+        return homepage_content, projects_content
+
+    # Run async code in sync context
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            # If there's already an event loop running (e.g., in Celery),
+            # create a new one in a thread
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor() as executor:
+                future = executor.submit(asyncio.run, _fetch_all())
+                return future.result(timeout=60)
+        else:
+            return loop.run_until_complete(_fetch_all())
+    except RuntimeError:
+        # No event loop exists, create one
+        return asyncio.run(_fetch_all())
+    except Exception as e:
+        print(f"[VERIFICATION] Playwright wrapper failed: {e}")
+        return None, None
+
+
 def verify_onboarded_company(company_id: int) -> Dict:
     """
     Post-save verification of onboarded company data using Claude.
@@ -494,8 +582,6 @@ def verify_onboarded_company(company_id: int) -> Dict:
     Returns a verification report with issues and suggestions.
     """
     from core.models import Company, Project, CompanyNews
-    import httpx
-    from bs4 import BeautifulSoup
 
     try:
         company = Company.objects.get(id=company_id)
@@ -520,48 +606,22 @@ def verify_onboarded_company(company_id: int) -> Dict:
 
     # Fetch the website to compare - fetch MULTIPLE pages for complete data
     # Mining companies typically have projects on /projects/, /properties/, or /assets/
+    # Use Playwright to handle Cloudflare-protected sites (httpx fails on these)
     website_content = None
     projects_content = None
     if company.website:
-        try:
-            from urllib.parse import urljoin
-            with httpx.Client(timeout=30, follow_redirects=True) as client:
-                headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+        print(f"[VERIFICATION] Fetching pages with Playwright for {company.website}...")
+        website_content, projects_content = _fetch_pages_with_playwright(company.website)
 
-                # Fetch homepage
-                response = client.get(company.website, headers=headers)
-                if response.status_code == 200:
-                    soup = BeautifulSoup(response.text, 'html.parser')
-                    for tag in soup(['script', 'style', 'nav', 'header', 'footer']):
-                        tag.decompose()
-                    website_content = soup.get_text(separator=' ', strip=True)[:3000]
+        if website_content:
+            print(f"[VERIFICATION] Homepage content fetched: {len(website_content)} chars")
+        else:
+            print(f"[VERIFICATION] Warning: Could not fetch homepage")
 
-                # Fetch projects page - try common URL patterns
-                # This is CRITICAL because projects are often NOT listed on the homepage
-                projects_urls = [
-                    urljoin(company.website, '/projects/'),
-                    urljoin(company.website, '/projects'),
-                    urljoin(company.website, '/properties/'),
-                    urljoin(company.website, '/properties'),
-                    urljoin(company.website, '/assets/'),
-                    urljoin(company.website, '/our-projects/'),
-                ]
-
-                for projects_url in projects_urls:
-                    try:
-                        proj_response = client.get(projects_url, headers=headers)
-                        if proj_response.status_code == 200:
-                            proj_soup = BeautifulSoup(proj_response.text, 'html.parser')
-                            for tag in proj_soup(['script', 'style', 'nav', 'header', 'footer']):
-                                tag.decompose()
-                            projects_content = proj_soup.get_text(separator=' ', strip=True)[:3000]
-                            print(f"[VERIFICATION] Found projects page at: {projects_url}")
-                            break
-                    except:
-                        continue
-
-        except Exception as e:
-            print(f"[VERIFICATION] Could not fetch website: {e}")
+        if projects_content:
+            print(f"[VERIFICATION] Projects page content fetched: {len(projects_content)} chars")
+        else:
+            print(f"[VERIFICATION] Warning: No projects page found")
 
     # Use Claude to verify
     client = get_claude_client()
