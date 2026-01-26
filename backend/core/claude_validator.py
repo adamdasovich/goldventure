@@ -486,10 +486,18 @@ async def _fetch_page_with_playwright(url: str) -> Optional[str]:
     """
     Fetch a page using Playwright via crawl4ai.
     This handles Cloudflare protection and JavaScript-rendered content.
+    Includes retry logic for bot challenge pages.
     """
     try:
         from crawl4ai import AsyncWebCrawler, BrowserConfig, CrawlerRunConfig
         from bs4 import BeautifulSoup
+
+        # Bot challenge indicators - these indicate the page hasn't fully loaded
+        challenge_indicators = [
+            'one moment', 'just a moment', 'please wait', 'checking your browser',
+            'cloudflare', 'ddos protection', 'attention required', 'robot challenge',
+            'checking the site connection', 'enable cookies', 'security check'
+        ]
 
         browser_config = BrowserConfig(
             headless=True,
@@ -497,8 +505,11 @@ async def _fetch_page_with_playwright(url: str) -> Optional[str]:
         )
 
         async with AsyncWebCrawler(config=browser_config) as crawler:
+            # First attempt with standard wait
             config = CrawlerRunConfig(
-                delay_before_return_html=3.0,  # Wait for JS to render
+                cache_mode="bypass",
+                delay_before_return_html=5.0,
+                page_timeout=60000,
                 wait_until='domcontentloaded',
             )
 
@@ -506,6 +517,37 @@ async def _fetch_page_with_playwright(url: str) -> Optional[str]:
 
             if result and result.html:
                 soup = BeautifulSoup(result.html, 'html.parser')
+                title = soup.find('title')
+                title_text = (title.get_text(strip=True) if title else "").lower()
+                body_text = soup.get_text()[:500].lower()
+
+                # Check if we hit a bot challenge page
+                is_challenge = any(ind in title_text or ind in body_text for ind in challenge_indicators)
+
+                if is_challenge:
+                    print(f"[VERIFICATION] Bot challenge detected for {url}, retrying with longer wait...")
+                    await asyncio.sleep(8)  # Wait for challenge to process
+
+                    # Retry with longer delay
+                    retry_config = CrawlerRunConfig(
+                        cache_mode="bypass",
+                        delay_before_return_html=12.0,  # 12 second delay
+                        page_timeout=120000,  # 2 minute timeout
+                        wait_until='networkidle',  # Wait for all network requests to complete
+                    )
+
+                    result = await crawler.arun(url=url, config=retry_config)
+                    if result and result.html:
+                        soup = BeautifulSoup(result.html, 'html.parser')
+                        title = soup.find('title')
+                        title_text = (title.get_text(strip=True) if title else "").lower()
+
+                        # If still showing challenge, give up
+                        if any(ind in title_text for ind in challenge_indicators):
+                            print(f"[VERIFICATION] Could not bypass bot protection for {url}")
+                            return None
+
+                # Extract content
                 for tag in soup(['script', 'style', 'nav', 'header', 'footer']):
                     tag.decompose()
                 return soup.get_text(separator=' ', strip=True)[:3000]
