@@ -783,29 +783,34 @@ PROJECTS PAGE CONTENT (from /projects/ or similar):
 
 VERIFICATION TASK:
 1. Check if the DESCRIPTION is present and meaningful. If missing or empty, extract what should be the description from the website content.
-2. **CRITICAL FOR PROJECTS**: Check if ALL projects are captured. Mining companies often have multiple projects listed on their /projects/ page.
-   - Look in BOTH the homepage AND the projects page content
-   - Extract ALL project names you can find (e.g., "Black Pine", "Goldstrike", etc.)
-   - If projects page content is available, that is your PRIMARY source for project names
+
+2. **CRITICAL FOR PROJECTS**:
+   - The saved data shows {current_data['projects_count']} projects
+   - Look in BOTH the homepage AND the projects page content for project names
+   - If you find ANY projects on the website that are NOT in the saved data, you MUST add them to "missing_projects"
+   - IMPORTANT: If projects_count is 0 and you find projects on the website, ALL those projects should go in "missing_projects"
+   - Extract project names like "La Plata", "Keno Silver", "Black Pine", etc.
+
 3. Check if TICKER/EXCHANGE is correct by looking at the website header (often shows "TSX-V: XXX" or "TSX: XXX").
    IMPORTANT: Canadian companies often have BOTH TSX and NYSE/OTC tickers. Always use the PRIMARY TSX/TSX-V ticker, not the US secondary ticker.
-   Example: If website shows "GOLD: TSX, GLDG: NYSE" - the correct ticker is "GOLD" not "GLDG".
+
 4. **CRITICAL**: If News Items is 0, this is a MAJOR issue - flag it as critical severity with field "news".
+
 5. Identify any other MISSING DATA that should have been captured.
 
 Respond with JSON only:
 {{
   "status": "complete" | "incomplete" | "needs_review",
   "issues": [
-    {{"field": "description", "severity": "critical" | "warning", "message": "...", "suggested_value": "..."}}
+    {{"field": "projects", "severity": "critical", "message": "0 projects captured but website shows X projects"}}
   ],
   "missing_projects": ["Project Name 1", "Project Name 2"],
-  "suggested_description": "..." (only if description is missing),
+  "suggested_description": "..." (only if description is missing or poor),
   "suggested_ticker": "..." (only if ticker appears wrong or missing),
-  "overall_score": 0-100 (completeness percentage)
+  "overall_score": 0-100 (completeness percentage - should be LOW if projects are missing!)
 }}
 
-Be thorough - extract ALL project names from the content. Mining companies often have 2-5 projects."""
+IMPORTANT: If saved projects count is 0 but you find projects on the website, put ALL found projects in "missing_projects" and set status to "incomplete"."""
 
     try:
         response = client.messages.create(
