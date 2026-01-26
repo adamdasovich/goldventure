@@ -611,6 +611,88 @@ def _fetch_pages_with_playwright(base_url: str) -> tuple:
         return None, None
 
 
+def _extract_tradingview_ticker(website_url: str) -> tuple:
+    """
+    Extract ticker from TradingView widget on a company website.
+    TradingView widgets embed the ticker in formats like:
+    - Plain JSON: "symbol": "TSXV:MFG"
+    - URL-encoded: %22symbol%22%3A%22TSXV%3AMFG%22
+
+    Returns: (ticker, exchange) or (None, None)
+    """
+    import re
+
+    async def _fetch_raw_html():
+        try:
+            from crawl4ai import AsyncWebCrawler, BrowserConfig, CrawlerRunConfig
+
+            browser_config = BrowserConfig(headless=True, verbose=False)
+            async with AsyncWebCrawler(config=browser_config) as crawler:
+                config = CrawlerRunConfig(
+                    cache_mode="bypass",
+                    delay_before_return_html=5.0,
+                    page_timeout=60000,
+                    wait_until='domcontentloaded',
+                )
+                result = await crawler.arun(url=website_url, config=config)
+                return result.html if result else None
+        except Exception as e:
+            print(f"[VERIFICATION] Playwright fetch failed for TradingView: {e}")
+            return None
+
+    # Get raw HTML using Playwright (httpx gets blocked by captchas)
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor() as executor:
+                future = executor.submit(asyncio.run, _fetch_raw_html())
+                raw_html = future.result(timeout=90)
+        else:
+            raw_html = loop.run_until_complete(_fetch_raw_html())
+    except RuntimeError:
+        raw_html = asyncio.run(_fetch_raw_html())
+    except Exception as e:
+        print(f"[VERIFICATION] TradingView extraction exception: {e}")
+        return None, None
+
+    if not raw_html:
+        return None, None
+
+    # TradingView widgets can have ticker in two formats:
+    # 1. Plain JSON in script: "symbol": "TSXV:MFG" or "symbol":"TSXV:MFG"
+    # 2. URL-encoded in iframe: %22symbol%22%3A%22TSXV%3AMFG%22
+
+    exchange_map = {'TSXV': 'TSXV', 'TSX': 'TSX', 'CSE': 'CSE', 'NEO': 'NEO', 'NYSE': 'NYSE', 'AMEX': 'NYSE'}
+
+    # Pattern 1: Plain JSON format - "symbol": "EXCHANGE:TICKER"
+    # Look for TradingView script with symbol
+    json_pattern = r'"symbol"\s*:\s*"([A-Z]+):([A-Z]+)"'
+    json_matches = re.findall(json_pattern, raw_html, re.IGNORECASE)
+
+    if json_matches:
+        for exchange_code, ticker_code in json_matches:
+            exchange_code = exchange_code.upper()
+            ticker_code = ticker_code.upper()
+            if exchange_code in exchange_map and 2 <= len(ticker_code) <= 5:
+                print(f"[VERIFICATION] Found TradingView ticker (JSON): {exchange_code}:{ticker_code}")
+                return ticker_code, exchange_map[exchange_code]
+
+    # Pattern 2: URL-encoded format - %22symbol%22%3A%22EXCHANGE%3ATICKER%22
+    encoded_pattern = r'%22symbol%22%3A%22([A-Z]+)%3A([A-Z]+)%22'
+    encoded_matches = re.findall(encoded_pattern, raw_html, re.IGNORECASE)
+
+    if encoded_matches:
+        for exchange_code, ticker_code in encoded_matches:
+            exchange_code = exchange_code.upper()
+            ticker_code = ticker_code.upper()
+            if exchange_code in exchange_map and 2 <= len(ticker_code) <= 5:
+                print(f"[VERIFICATION] Found TradingView ticker (encoded): {exchange_code}:{ticker_code}")
+                return ticker_code, exchange_map[exchange_code]
+
+    return None, None
+
+
 def verify_onboarded_company(company_id: int) -> Dict:
     """
     Post-save verification of onboarded company data using Claude.
@@ -651,6 +733,9 @@ def verify_onboarded_company(company_id: int) -> Dict:
     # Use Playwright to handle Cloudflare-protected sites (httpx fails on these)
     website_content = None
     projects_content = None
+    extracted_ticker = None
+    extracted_exchange = None
+
     if company.website:
         print(f"[VERIFICATION] Fetching pages with Playwright for {company.website}...")
         website_content, projects_content = _fetch_pages_with_playwright(company.website)
@@ -664,6 +749,12 @@ def verify_onboarded_company(company_id: int) -> Dict:
             print(f"[VERIFICATION] Projects page content fetched: {len(projects_content)} chars")
         else:
             print(f"[VERIFICATION] Warning: No projects page found")
+
+        # Try to extract ticker from TradingView widget (if ticker is missing)
+        if not current_data['ticker']:
+            extracted_ticker, extracted_exchange = _extract_tradingview_ticker(company.website)
+            if extracted_ticker:
+                print(f"[VERIFICATION] Found TradingView ticker: {extracted_exchange}:{extracted_ticker}")
 
     # Use Claude to verify
     client = get_claude_client()
@@ -756,6 +847,19 @@ Be thorough - extract ALL project names from the content. Mining companies often
         # Auto-fix issues if possible
         fixes_applied = []
 
+        # Fix missing ticker from TradingView extraction (takes precedence over Claude suggestion)
+        if extracted_ticker and not current_data['ticker']:
+            company.ticker_symbol = extracted_ticker
+            if extracted_exchange:
+                company.exchange = extracted_exchange
+                company.save(update_fields=['ticker_symbol', 'exchange'])
+                fixes_applied.append(f'Added ticker from TradingView: {extracted_exchange}:{extracted_ticker}')
+                print(f"[VERIFICATION] Auto-fixed: Ticker {extracted_exchange}:{extracted_ticker} for {company.name}")
+            else:
+                company.save(update_fields=['ticker_symbol'])
+                fixes_applied.append(f'Added ticker from TradingView: {extracted_ticker}')
+                print(f"[VERIFICATION] Auto-fixed: Ticker {extracted_ticker} for {company.name}")
+
         # Fix missing description
         if verification.get('suggested_description') and not current_data['description']:
             company.description = verification['suggested_description'][:1000]
@@ -777,9 +881,9 @@ Be thorough - extract ALL project names from the content. Mining companies often
                     fixes_applied.append(f'Added project: {project_name}')
                     print(f"[VERIFICATION] Auto-fixed: Added project '{project_name}' for {company.name}")
 
-        # Fix ticker if suggested and different
+        # Fix ticker if suggested and different (only if not already fixed by TradingView extraction)
         suggested_ticker = verification.get('suggested_ticker')
-        if suggested_ticker and suggested_ticker != current_data['ticker']:
+        if suggested_ticker and suggested_ticker != current_data['ticker'] and not extracted_ticker:
             old_ticker = company.ticker_symbol
             company.ticker_symbol = suggested_ticker
             company.save(update_fields=['ticker_symbol'])

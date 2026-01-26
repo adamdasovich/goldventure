@@ -1682,8 +1682,12 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
         verbose=False
     )
 
+    # Use longer delays to handle bot protection (Cloudflare, captchas)
     crawler_config = CrawlerRunConfig(
         cache_mode="bypass",
+        delay_before_return_html=5.0,  # 5 second delay to let page fully render
+        page_timeout=60000,
+        wait_until='networkidle',  # Wait for all network requests to complete
     )
 
     async with AsyncWebCrawler(config=browser_config) as crawler:
@@ -1930,6 +1934,47 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
                             'year': date_str[:4] if date_str else None
                         }
                         _add_news_item(news_by_url, news, cutoff_date, "WP-BLOCK")
+                    except Exception:
+                        continue
+
+                # ============================================================
+                # STRATEGY: DAT-ARTICAL pattern (Mayfair Gold)
+                # Structure: <div class="dat-artical">
+                #   <div class="date"><h3>December 18, 2025</h3></div>
+                #   <div class="articals"><h3><a href="...">Title</a></h3></div>
+                # </div>
+                # ============================================================
+                for artical in soup.select('.dat-artical, div.dat-artical'):
+                    try:
+                        # Get date from .date h3
+                        date_elem = artical.select_one('.date h3, .date')
+                        date_str = None
+                        if date_elem:
+                            date_str = parse_date_standalone(date_elem.get_text(strip=True))
+
+                        # Get title and link from .articals h3 a
+                        link = artical.select_one('.articals h3 a, .articals a, h3 a')
+                        if not link:
+                            continue
+
+                        title = link.get_text(strip=True)
+                        href = link.get('href', '')
+
+                        if not title or len(title) < 15:
+                            continue
+
+                        # Build full URL
+                        if href and not href.startswith('http'):
+                            href = urljoin(news_url, href)
+
+                        news = {
+                            'title': clean_news_title(title, href),
+                            'url': href,
+                            'date': date_str,
+                            'document_type': 'news_release',
+                            'year': date_str[:4] if date_str else None
+                        }
+                        _add_news_item(news_by_url, news, cutoff_date, "DAT-ARTICAL")
                     except Exception:
                         continue
 
