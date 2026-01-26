@@ -1748,8 +1748,10 @@ class CompanyDataScraper:
             import requests as sync_requests
             try:
                 # Use stream=True to avoid downloading the whole file
-                resp = sync_requests.get(url, headers={'User-Agent': 'Mozilla/5.0'}, stream=True, timeout=10)
+                # Use allow_redirects=True to follow redirect URLs like /presentation-link/ -> PDF
+                resp = sync_requests.get(url, headers={'User-Agent': 'Mozilla/5.0'}, stream=True, timeout=10, allow_redirects=True)
                 content_type = resp.headers.get('Content-Type', '').lower()
+                final_url = resp.url  # Get final URL after redirects
 
                 # Check if it's a PDF by content-type or by reading first bytes
                 is_pdf = 'application/pdf' in content_type
@@ -1761,29 +1763,36 @@ class CompanyDataScraper:
 
                 if is_pdf:
                     # This URL serves a PDF directly - add it as a document
+                    # Use original URL for visited tracking, but final_url for the document
                     self.visited_urls.add(url)
-                    url_lower = url.lower()
+                    self.visited_urls.add(final_url)  # Also mark final URL as visited
+
+                    # Classify based on both original URL and final URL
+                    combined_lower = (url + ' ' + final_url).lower()
 
                     # Determine document type from URL
                     doc_type = 'other'
-                    if any(kw in url_lower for kw in ['presentation', 'corp-presentation', 'corporate-presentation']):
+                    if any(kw in combined_lower for kw in ['presentation', 'corp-presentation', 'corporate-presentation']):
                         doc_type = 'presentation'
-                    elif any(kw in url_lower for kw in ['fact', '1pager', 'one-pager']):
+                    elif any(kw in combined_lower for kw in ['fact', '1pager', 'one-pager']):
                         doc_type = 'fact_sheet'
 
-                    # Extract title from URL slug
-                    path = urlparse(url).path.rstrip('/')
+                    # Extract title from final URL slug (the actual PDF filename)
+                    path = urlparse(final_url).path.rstrip('/')
                     slug = path.split('/')[-1] if path else 'document'
+                    # Remove .pdf extension if present
+                    if slug.lower().endswith('.pdf'):
+                        slug = slug[:-4]
                     title = slug.replace('-', ' ').replace('_', ' ').title()
 
                     doc = {
-                        'source_url': url,
+                        'source_url': final_url,  # Store actual PDF URL, not redirect URL
                         'title': title,
                         'document_type': doc_type,
                         'extracted_at': datetime.utcnow().isoformat(),
                     }
                     self.extracted_data['documents'].append(doc)
-                    print(f"[OK] Direct PDF detected at {url}: {title} ({doc_type})")
+                    print(f"[OK] Direct PDF detected at {final_url}: {title} ({doc_type})")
                     return
             except Exception as pdf_check_error:
                 # PDF check failed, continue with regular scraping
