@@ -943,6 +943,10 @@ class CompanyDataScraper:
             # Extract social media links
             self._extract_social_media(soup)
 
+            # ENHANCED: Extract direct document links from homepage (presentations, fact sheets)
+            # Many mining company homepages have "CORPORATE PRESENTATION" buttons linking directly to PDFs
+            await self._extract_homepage_documents(soup)
+
             # Extract flagship project from homepage (many mining companies feature their main project)
             page_text = soup.get_text()
             project_keywords = ['deposit', 'mine', 'project', 'property']
@@ -2927,6 +2931,114 @@ class CompanyDataScraper:
             link = soup.find('a', href=lambda x: x and domain in x.lower())
             if link:
                 self.extracted_data['social_media'][platform] = link['href']
+
+    async def _extract_homepage_documents(self, soup):
+        """
+        Extract direct document links from homepage (presentations, fact sheets).
+
+        Many mining company homepages have prominent "CORPORATE PRESENTATION" or
+        "FACT SHEET" buttons that link directly to PDFs. This captures those documents
+        that might otherwise be missed if they're not in a dedicated /investors/ section.
+        """
+        import requests as sync_requests
+
+        # Keywords that indicate document links worth checking
+        doc_keywords = [
+            'presentation', 'corporate presentation', 'investor presentation',
+            'fact sheet', 'factsheet', 'one-pager', '1-pager',
+            'corporate deck', 'investor deck', 'company deck'
+        ]
+
+        # Find all links that might be documents
+        for link in soup.find_all('a', href=True):
+            href = link.get('href', '').strip()
+            text = link.get_text(strip=True)
+            combined = (href + ' ' + text).lower()
+
+            # Skip if already visited
+            full_url = urljoin(self.base_url, href)
+            if full_url in self.visited_urls:
+                continue
+
+            # Check if this looks like a document link
+            is_potential_doc = False
+            doc_type = 'other'
+
+            # Direct PDF link
+            if '.pdf' in href.lower():
+                is_potential_doc = True
+                if any(kw in combined for kw in ['presentation', 'deck']):
+                    doc_type = 'presentation'
+                elif any(kw in combined for kw in ['fact', 'sheet', '1pager', 'one-pager']):
+                    doc_type = 'fact_sheet'
+
+            # URL or text contains document keywords (might redirect to PDF)
+            elif any(kw in combined for kw in doc_keywords):
+                is_potential_doc = True
+                if any(kw in combined for kw in ['presentation', 'deck']):
+                    doc_type = 'presentation'
+                elif any(kw in combined for kw in ['fact', 'sheet', '1pager', 'one-pager']):
+                    doc_type = 'fact_sheet'
+
+            if not is_potential_doc:
+                continue
+
+            # For non-PDF URLs, check if they serve a PDF
+            if '.pdf' not in href.lower():
+                try:
+                    resp = sync_requests.get(
+                        full_url,
+                        headers={'User-Agent': 'Mozilla/5.0'},
+                        stream=True,
+                        timeout=10,
+                        allow_redirects=True
+                    )
+                    content_type = resp.headers.get('Content-Type', '').lower()
+
+                    # Check if it's a PDF
+                    is_pdf = 'application/pdf' in content_type
+                    if not is_pdf and resp.status_code == 200:
+                        first_bytes = resp.raw.read(10)
+                        is_pdf = first_bytes.startswith(b'%PDF')
+
+                    # Get final URL after redirects
+                    if is_pdf:
+                        full_url = resp.url
+                    else:
+                        resp.close()
+                        continue
+                    resp.close()
+                except Exception as e:
+                    print(f"[HOMEPAGE-DOC] Could not check URL {full_url}: {e}")
+                    continue
+
+            # Add the document
+            self.visited_urls.add(full_url)
+
+            # Generate title from link text or URL
+            title = text if text and len(text) > 3 else None
+            if not title:
+                path = urlparse(full_url).path.rstrip('/')
+                slug = path.split('/')[-1].replace('.pdf', '').replace('-', ' ').replace('_', ' ')
+                title = slug.title() if slug else 'Corporate Document'
+
+            # Extract year from URL or title
+            year = None
+            year_match = re.search(r'(20\d{2})', full_url + ' ' + (title or ''))
+            if year_match:
+                year = int(year_match.group(1))
+
+            doc = {
+                'source_url': full_url,
+                'title': title,
+                'document_type': doc_type,
+                'extracted_at': datetime.utcnow().isoformat(),
+            }
+            if year:
+                doc['year'] = year
+
+            self.extracted_data['documents'].append(doc)
+            print(f"[HOMEPAGE-DOC] Found {doc_type}: {title} -> {full_url}")
 
     def _is_internal_link(self, href: str) -> bool:
         """Check if link is internal."""
