@@ -126,8 +126,8 @@ def validate_news_with_claude(news_items: List[Dict], company_name: str) -> List
         items_to_check.append({
             'index': i,
             'title': item.get('title', ''),
-            'url': item.get('source_url', ''),
-            'date': item.get('publication_date', '')
+            'url': item.get('url', ''),
+            'date': item.get('release_date', '')
         })
 
     if not items_to_check:
@@ -254,7 +254,7 @@ Respond with ONLY "valid" or "invalid":"""
         return _basic_description_filter(description)
 
 
-def validate_scraped_data(data: Dict, source_url: str) -> Dict:
+def validate_scraped_data(data: Dict, url: str) -> Dict:
     """
     Validate all scraped data using Claude.
 
@@ -705,7 +705,7 @@ def verify_onboarded_company(company_id: int) -> Dict:
 
     Returns a verification report with issues and suggestions.
     """
-    from core.models import Company, Project, CompanyNews
+    from core.models import Company, Project, NewsRelease
 
     try:
         company = Company.objects.get(id=company_id)
@@ -714,7 +714,7 @@ def verify_onboarded_company(company_id: int) -> Dict:
 
     # Gather current data
     projects = list(Project.objects.filter(company=company).values('name', 'country', 'primary_commodity'))
-    news_count = CompanyNews.objects.filter(company=company).count()
+    news_count = NewsRelease.objects.filter(company=company).count()
 
     current_data = {
         'name': company.name,
@@ -1022,14 +1022,14 @@ def cleanup_duplicate_news(company_id: int) -> Dict:
 
     Returns a report of what was cleaned up.
     """
-    from core.models import Company, CompanyNews
+    from core.models import Company, NewsRelease
 
     try:
         company = Company.objects.get(id=company_id)
     except Company.DoesNotExist:
         return {'status': 'error', 'message': f'Company {company_id} not found'}
 
-    news_items = list(CompanyNews.objects.filter(company=company))
+    news_items = list(NewsRelease.objects.filter(company=company))
 
     if not news_items:
         return {'status': 'ok', 'message': 'No news items to clean', 'removed': 0}
@@ -1037,7 +1037,7 @@ def cleanup_duplicate_news(company_id: int) -> Dict:
     # Track duplicates by slug
     slug_to_news = {}  # Map slug -> list of news items
     for news in news_items:
-        slug = _extract_url_slug(news.source_url)
+        slug = _extract_url_slug(news.url)
         if slug and len(slug) > 10:  # Only meaningful slugs
             if slug not in slug_to_news:
                 slug_to_news[slug] = []
@@ -1046,7 +1046,7 @@ def cleanup_duplicate_news(company_id: int) -> Dict:
     # Also track by title+date
     title_date_to_news = {}
     for news in news_items:
-        key = f"{news.title.lower().strip()}|{news.publication_date}"
+        key = f"{news.title.lower().strip()}|{news.release_date}"
         if key not in title_date_to_news:
             title_date_to_news[key] = []
         title_date_to_news[key].append(news)
@@ -1058,7 +1058,7 @@ def cleanup_duplicate_news(company_id: int) -> Dict:
     for slug, items in slug_to_news.items():
         if len(items) > 1:
             # Sort by URL depth (fewer slashes = more canonical)
-            items.sort(key=lambda x: x.source_url.count('/'))
+            items.sort(key=lambda x: x.url.count('/'))
             # Keep first, delete rest
             for item in items[1:]:
                 to_delete.add(item.id)
@@ -1073,7 +1073,7 @@ def cleanup_duplicate_news(company_id: int) -> Dict:
 
     # Delete duplicates
     if to_delete:
-        deleted_count = CompanyNews.objects.filter(id__in=to_delete).delete()[0]
+        deleted_count = NewsRelease.objects.filter(id__in=to_delete).delete()[0]
         print(f"[CLEANUP] Removed {deleted_count} duplicate news items for {company.name}")
         return {
             'status': 'cleaned',
