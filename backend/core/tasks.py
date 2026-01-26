@@ -1249,6 +1249,7 @@ def scrape_and_save_company_task(self, job_id: int, update_existing: bool = Fals
         traceback.print_exc()
 
         # Update job with failure
+        fallback_company = None
         try:
             job = ScrapingJob.objects.get(id=job_id)
             job.status = 'failed'
@@ -1257,16 +1258,73 @@ def scrape_and_save_company_task(self, job_id: int, update_existing: bool = Fals
             job.error_traceback = traceback.format_exc()
             job.save()
 
-            # Record failed discovery
-            FailedCompanyDiscovery.objects.update_or_create(
-                website_url=job.website_url,
-                defaults={
-                    'company_name': job.website_url,
-                    'failure_reason': str(e),
-                }
-            )
-        except:
-            pass
+            # FALLBACK: If scraping failed but we have a URL, try to create a minimal
+            # company and let Claude verification populate it with data.
+            # This handles cases where the scraper couldn't extract company name
+            # but the website is valid and contains useful information.
+            if job.website_url:
+                from urllib.parse import urlparse
+                from .models import Company
+
+                # Extract a fallback name from the domain (e.g., "libertygold.ca" -> "Libertygold")
+                parsed_url = urlparse(job.website_url)
+                domain = parsed_url.netloc.replace('www.', '')
+                fallback_name = domain.split('.')[0].title()  # "libertygold" -> "Libertygold"
+
+                # Check if company already exists with this URL
+                existing = Company.objects.filter(website_url__icontains=domain).first()
+                if existing:
+                    print(f"[FALLBACK] Company already exists for {domain}: {existing.name} (ID: {existing.id})")
+                    fallback_company = existing
+                else:
+                    # Create minimal company record - Claude verification will populate it
+                    print(f"[FALLBACK] Creating minimal company record for {job.website_url}")
+                    fallback_company = Company.objects.create(
+                        name=f"{fallback_name} (pending verification)",
+                        website_url=job.website_url,
+                        country='Canada',  # Default for junior mining
+                        description='Company data pending verification - scraped data incomplete.',
+                        is_verified=False,
+                    )
+                    print(f"[FALLBACK] Created fallback company: {fallback_company.name} (ID: {fallback_company.id})")
+
+                # Run Claude verification to populate the company with real data
+                # This can extract: proper company name, description, projects from website
+                if fallback_company:
+                    print(f"[FALLBACK] Running Claude verification on company {fallback_company.id}...")
+                    from core.claude_validator import verify_onboarded_company
+                    verification = verify_onboarded_company(fallback_company.id)
+                    print(f"[FALLBACK] Verification result: {verification.get('status', 'unknown')}")
+                    if verification.get('fixes_applied'):
+                        print(f"[FALLBACK] Auto-fixes applied: {verification['fixes_applied']}")
+
+                    # Also trigger news scraping
+                    scrape_company_news_task.delay(fallback_company.id)
+                    print(f"[FALLBACK] News scraping triggered for company {fallback_company.id}")
+            else:
+                # Record failed discovery only if we couldn't create a fallback
+                FailedCompanyDiscovery.objects.update_or_create(
+                    website_url=job.website_url or 'unknown',
+                    defaults={
+                        'company_name': job.website_url or 'unknown',
+                        'failure_reason': str(e),
+                    }
+                )
+        except Exception as fallback_error:
+            print(f"[FALLBACK] Failed to create fallback company: {fallback_error}")
+            import traceback
+            traceback.print_exc()
+
+        # Return appropriate response
+        if fallback_company:
+            return {
+                'status': 'partial_success',
+                'job_id': job_id,
+                'company_id': fallback_company.id,
+                'company_name': fallback_company.name,
+                'error': str(e),
+                'message': f'Scraping failed but fallback company created. Claude verification will populate data.'
+            }
 
         return {
             'status': 'error',
