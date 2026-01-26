@@ -796,6 +796,13 @@ Be thorough - extract ALL project names from the content. Mining companies often
             except Exception as e:
                 print(f"[VERIFICATION] Could not trigger news scrape: {e}")
 
+        # Clean up duplicate news items (e.g., same news with different URL paths)
+        if current_data['news_count'] > 0:
+            cleanup_result = cleanup_duplicate_news(company_id)
+            if cleanup_result.get('removed', 0) > 0:
+                fixes_applied.append(f"Removed {cleanup_result['removed']} duplicate news items")
+                print(f"[VERIFICATION] Cleaned up {cleanup_result['removed']} duplicate news for {company.name}")
+
         verification['fixes_applied'] = fixes_applied
         verification['company_id'] = company_id
         verification['company_name'] = company.name
@@ -884,3 +891,95 @@ def _log_verification_result(company, verification: Dict):
         if verification.get('fixes_applied'):
             for fix in verification['fixes_applied']:
                 print(f"  - [FIXED] {fix}")
+
+
+def _extract_url_slug(url: str) -> str:
+    """Extract the meaningful slug from a news URL."""
+    clean_url = url.split('?')[0].rstrip('/')
+    parts = clean_url.split('/')
+    slug = parts[-1] if parts else ''
+    if slug.isdigit() and len(slug) == 4 and len(parts) > 1:
+        slug = parts[-2]
+    return slug.lower()
+
+
+def cleanup_duplicate_news(company_id: int) -> Dict:
+    """
+    Detect and remove duplicate news items for a company.
+
+    Duplicates are identified by:
+    1. Same URL slug (e.g., /news/article vs /news/2026/article)
+    2. Same title + date combination
+
+    Returns a report of what was cleaned up.
+    """
+    from core.models import Company, CompanyNews
+
+    try:
+        company = Company.objects.get(id=company_id)
+    except Company.DoesNotExist:
+        return {'status': 'error', 'message': f'Company {company_id} not found'}
+
+    news_items = list(CompanyNews.objects.filter(company=company))
+
+    if not news_items:
+        return {'status': 'ok', 'message': 'No news items to clean', 'removed': 0}
+
+    # Track duplicates by slug
+    slug_to_news = {}  # Map slug -> list of news items
+    for news in news_items:
+        slug = _extract_url_slug(news.source_url)
+        if slug and len(slug) > 10:  # Only meaningful slugs
+            if slug not in slug_to_news:
+                slug_to_news[slug] = []
+            slug_to_news[slug].append(news)
+
+    # Also track by title+date
+    title_date_to_news = {}
+    for news in news_items:
+        key = f"{news.title.lower().strip()}|{news.publication_date}"
+        if key not in title_date_to_news:
+            title_date_to_news[key] = []
+        title_date_to_news[key].append(news)
+
+    # Find and remove duplicates
+    to_delete = set()
+
+    # Remove slug duplicates (keep the one with shortest URL path - usually canonical)
+    for slug, items in slug_to_news.items():
+        if len(items) > 1:
+            # Sort by URL depth (fewer slashes = more canonical)
+            items.sort(key=lambda x: x.source_url.count('/'))
+            # Keep first, delete rest
+            for item in items[1:]:
+                to_delete.add(item.id)
+
+    # Remove title+date duplicates that weren't caught by slug
+    for key, items in title_date_to_news.items():
+        remaining = [i for i in items if i.id not in to_delete]
+        if len(remaining) > 1:
+            # Keep one, delete rest
+            for item in remaining[1:]:
+                to_delete.add(item.id)
+
+    # Delete duplicates
+    if to_delete:
+        deleted_count = CompanyNews.objects.filter(id__in=to_delete).delete()[0]
+        print(f"[CLEANUP] Removed {deleted_count} duplicate news items for {company.name}")
+        return {
+            'status': 'cleaned',
+            'company_id': company_id,
+            'company_name': company.name,
+            'removed': deleted_count,
+            'remaining': len(news_items) - deleted_count,
+            'message': f'Removed {deleted_count} duplicate news items'
+        }
+
+    return {
+        'status': 'ok',
+        'company_id': company_id,
+        'company_name': company.name,
+        'removed': 0,
+        'remaining': len(news_items),
+        'message': 'No duplicates found'
+    }

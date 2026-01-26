@@ -1592,12 +1592,39 @@ def _extract_news_from_element(element, source_url: str, base_url: str) -> Optio
         return None
 
 
+def _extract_url_slug(url: str) -> str:
+    """
+    Extract the meaningful slug from a news URL.
+    Examples:
+      /news/20260112-max-resource-enters... -> 20260112-max-resource-enters...
+      /news/2026/20260112-max-resource... -> 20260112-max-resource...
+      /press-releases/2026/01/some-news -> some-news
+    """
+    # Remove query params and trailing slash
+    clean_url = url.split('?')[0].rstrip('/')
+    # Get the last path segment
+    parts = clean_url.split('/')
+    slug = parts[-1] if parts else ''
+    # If slug looks like a year (e.g., '2026'), try the second-to-last
+    if slug.isdigit() and len(slug) == 4 and len(parts) > 1:
+        slug = parts[-2]
+    return slug.lower()
+
+
+# Track seen slugs globally for deduplication across different URL paths
+_seen_slugs: Dict[str, str] = {}  # Map slug -> first URL seen
+
+
 def _add_news_item(news_by_url: Dict[str, Dict], news: Dict, cutoff_date: datetime, source: str) -> bool:
     """
     Add news item to collection, preferring items WITH dates over items WITHOUT dates.
+    Uses both URL and SLUG deduplication to catch same news with different URL paths.
     Returns True if item was added/updated, False if skipped.
     """
+    global _seen_slugs
+
     url_norm = news['url'].split('?')[0].rstrip('/')
+    slug = _extract_url_slug(news['url'])
 
     # Check date range first
     if news.get('date'):
@@ -1606,6 +1633,15 @@ def _add_news_item(news_by_url: Dict[str, Dict], news: Dict, cutoff_date: dateti
                 return False
         except:
             pass
+
+    # SLUG DEDUPLICATION: Check if we've seen this slug before with a different URL
+    # This catches cases like:
+    #   /news/20260112-article vs /news/2026/20260112-article vs /press-releases/2026/20260112-article
+    if slug and len(slug) > 10:  # Only for meaningful slugs (not 'news', '2026', etc.)
+        if slug in _seen_slugs and _seen_slugs[slug] != url_norm:
+            # Same slug, different URL - skip this duplicate
+            return False
+        _seen_slugs[slug] = url_norm
 
     # If URL not seen yet, add it
     if url_norm not in news_by_url:
@@ -1635,6 +1671,9 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
     Returns:
         List of news release dictionaries with title, url, date
     """
+    global _seen_slugs
+    _seen_slugs = {}  # Reset slug tracker for new crawl session
+
     news_by_url: Dict[str, Dict] = {}  # Map URL -> news item (prefer items with dates)
     cutoff_date = datetime.now() - timedelta(days=months * 30)
 
@@ -3036,4 +3075,29 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
     if len(deduped_news) < len(news_by_url):
         print(f"[DEDUP] Removed {len(news_by_url) - len(deduped_news)} duplicate news items by title+date")
 
-    return deduped_news
+    # Tertiary deduplication by URL slug (catch same news with different URL paths)
+    # e.g., /news/20260112-article vs /news/2026/20260112-article vs /press-releases/20260112-article
+    seen_slugs_final = {}  # Map slug -> news item
+    for news in deduped_news:
+        slug = _extract_url_slug(news['url'])
+        if slug and len(slug) > 10:  # Only for meaningful slugs
+            if slug not in seen_slugs_final:
+                seen_slugs_final[slug] = news
+            else:
+                # Keep the one with the simpler/shorter URL path (usually the canonical one)
+                existing_url = seen_slugs_final[slug]['url']
+                new_url = news['url']
+                # Prefer URLs with fewer path segments
+                existing_depth = existing_url.count('/')
+                new_depth = new_url.count('/')
+                if new_depth < existing_depth:
+                    seen_slugs_final[slug] = news
+        else:
+            # Short slugs (like 'news', '2026') - keep all, use URL as key
+            seen_slugs_final[news['url']] = news
+
+    final_news = list(seen_slugs_final.values())
+    if len(final_news) < len(deduped_news):
+        print(f"[DEDUP] Removed {len(deduped_news) - len(final_news)} duplicate news items by URL slug")
+
+    return final_news
