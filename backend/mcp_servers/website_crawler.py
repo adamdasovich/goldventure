@@ -2609,6 +2609,55 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
                         continue
 
                 # ============================================================
+                # STRATEGY 5b-NEWSCARD: Liberty Gold news-card pattern
+                # Structure: <a class="news-card" href="URL">
+                #   <div>...<p class="elementor-heading-title">DATE</p>...</div>
+                #   <div>...<h2 class="elementor-heading-title">TITLE</h2>...</div>
+                # </a>
+                # ============================================================
+                for news_card in soup.select('a.news-card[href]'):
+                    try:
+                        href = news_card.get('href', '')
+                        if not href or href.startswith('#'):
+                            continue
+
+                        # Find all heading elements inside
+                        headings = news_card.select('.elementor-heading-title')
+                        if len(headings) < 2:
+                            continue
+
+                        # First heading is typically date, second is title
+                        date_text = headings[0].get_text(strip=True)
+                        title = headings[1].get_text(strip=True)
+
+                        # Parse date
+                        date_str = parse_date_standalone(date_text)
+
+                        # If first wasn't date, try swapping
+                        if not date_str and len(headings) >= 2:
+                            date_str = parse_date_standalone(title)
+                            if date_str:
+                                title = date_text
+
+                        if not title or len(title) < 15:
+                            continue
+
+                        # Build full URL
+                        if not href.startswith('http'):
+                            href = urljoin(news_url, href)
+
+                        news = {
+                            'title': clean_news_title(title, href),
+                            'url': href,
+                            'date': date_str,
+                            'document_type': 'news_release',
+                            'year': date_str[:4] if date_str else None
+                        }
+                        _add_news_item(news_by_url, news, cutoff_date, "NEWSCARD")
+                    except Exception:
+                        continue
+
+                # ============================================================
                 # STRATEGY 5b-UIKIT: Scottie Resources UIKit Grid pattern
                 # Uses uk-grid with date in first column, title in second, links in third
                 # Structure: div[uk-grid] > div.uk-width-1-4@s (date) + div.uk-width-expand@s (title) + div (VIEW/PDF links)
