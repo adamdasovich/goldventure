@@ -299,6 +299,14 @@ def scrape_company_news_task(self, company_id):
         created_count = 0
         updated_count = 0
 
+        # Check if this is a new company being onboarded (no existing NewsRelease records)
+        # For new companies: use 90-day rule (3 months) to show recent financing history
+        # For existing companies: use 7-day rule to avoid re-flagging old news daily
+        existing_news_count = NewsRelease.objects.filter(company=company).count()
+        is_new_company = existing_news_count == 0
+        if is_new_company:
+            print(f"  [ONBOARDING] New company detected - will flag financing from last 90 days")
+
         for news in news_releases:
             title = news.get('title', '').strip()
             url = news.get('url', '').strip()
@@ -430,13 +438,15 @@ def scrape_company_news_task(self, company_id):
                 detected_keywords = [kw for kw in all_keywords if kw in title_lower]
 
                 # If financing keywords detected, create flag for superuser review
-                # But ONLY for recent news (within 7 days) - older news is not actionable
+                # For NEW companies (onboarding): use 90-day rule to show recent financing history
+                # For EXISTING companies: use 7-day rule to avoid re-flagging old news daily
                 if detected_keywords and release_date:
                     from core.models import NewsReleaseFlag, DismissedNewsURL
                     from datetime import timedelta
 
-                    # Only flag news releases within the last 7 days
-                    cutoff_date = datetime.now().date() - timedelta(days=7)
+                    # Use different cutoff based on whether this is a new company
+                    cutoff_days = 90 if is_new_company else 7
+                    cutoff_date = datetime.now().date() - timedelta(days=cutoff_days)
                     if release_date < cutoff_date:
                         print(f"  [SKIP] Old news (not flagging): {title[:50]}... (date: {release_date})")
                         continue
