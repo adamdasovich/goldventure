@@ -2370,6 +2370,51 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
                         continue
 
                 # ============================================================
+                # STRATEGY 5b-POWERPACK: PowerPack Posts Grid with schema.org metadata
+                # (GR Silver Mining pattern)
+                # Structure: div.pp-content-post with meta[itemprop="mainEntityOfPage"] for title
+                # and meta[itemprop="datePublished"] for date in YYYY-MM-DD format
+                # ============================================================
+                for post in soup.select('div.pp-content-post'):
+                    try:
+                        # Get title from meta tag
+                        title_meta = post.select_one('meta[itemprop="mainEntityOfPage"]')
+                        if not title_meta:
+                            continue
+                        title = title_meta.get('content', '')
+
+                        # Get date from meta tag (YYYY-MM-DD format)
+                        date_meta = post.select_one('meta[itemprop="datePublished"]')
+                        if not date_meta:
+                            continue
+                        date_str = date_meta.get('content', '')
+
+                        if not title or not date_str or len(title) < 15:
+                            continue
+
+                        # Validate date format
+                        if not re.match(r'^\d{4}-\d{2}-\d{2}$', date_str):
+                            continue
+
+                        # Get post URL if available
+                        link = post.select_one('a[href]')
+                        href = link.get('href', '') if link else news_url
+
+                        if href and not href.startswith('http'):
+                            href = urljoin(url, href)
+
+                        news = {
+                            'title': clean_news_title(title, href),
+                            'url': href,
+                            'date': date_str,
+                            'document_type': 'news_release',
+                            'year': date_str[:4] if date_str else None
+                        }
+                        _add_news_item(news_by_url, news, cutoff_date, "POWERPACK")
+                    except Exception:
+                        continue
+
+                # ============================================================
                 # STRATEGY 5b-ELEMENTOR: Elementor Loop pattern
                 # Handles multiple layouts:
                 # - LaFleur: h1.elementor-heading-title + time element + a.elementor-button
