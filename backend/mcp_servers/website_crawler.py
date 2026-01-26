@@ -114,9 +114,29 @@ def parse_date_comprehensive(text: str) -> Tuple[Optional[str], str]:
             date_str = f"{year}-{first}-{second}"  # MM/DD -> YYYY-MM-DD
             text = match.group(4).strip()
             return date_str, text
-        # Both <= 12: ambiguous, default to MM/DD/YY (US format)
-        elif 1 <= first_int <= 12 and 1 <= second_int <= 31:
-            date_str = f"{year}-{first}-{second}"
+        # Both <= 12: ambiguous - try DD/MM first (more common internationally)
+        # If that would be in the future, fall back to MM/DD
+        elif 1 <= first_int <= 12 and 1 <= second_int <= 12:
+            # Try DD/MM interpretation first
+            dd_mm_date = f"{year}-{second}-{first}"  # DD/MM -> YYYY-MM-DD
+            mm_dd_date = f"{year}-{first}-{second}"  # MM/DD -> YYYY-MM-DD
+
+            # Check if DD/MM interpretation is in the future
+            try:
+                dd_mm_parsed = datetime.strptime(dd_mm_date, '%Y-%m-%d')
+                mm_dd_parsed = datetime.strptime(mm_dd_date, '%Y-%m-%d')
+                today = datetime.now()
+
+                # If DD/MM is more than 7 days in future but MM/DD is not, use MM/DD
+                if dd_mm_parsed > today + timedelta(days=7) and mm_dd_parsed <= today + timedelta(days=7):
+                    date_str = mm_dd_date
+                else:
+                    # Default to DD/MM (European format, more common internationally)
+                    date_str = dd_mm_date
+            except ValueError:
+                # If parsing fails, default to DD/MM
+                date_str = dd_mm_date
+
             text = match.group(4).strip()
             return date_str, text
 
@@ -180,10 +200,22 @@ def parse_date_comprehensive(text: str) -> Tuple[Optional[str], str]:
         elif second_int > 12 and 1 <= first_int <= 12:
             date_str = f"{year}-{first}-{second}"  # MM/DD -> YYYY-MM-DD
             return date_str, original_text
-        # Both <= 12: ambiguous, default to MM/DD
-        elif 1 <= first_int <= 12 and 1 <= second_int <= 31:
-            date_str = f"{year}-{first}-{second}"
-            return date_str, original_text
+        # Both <= 12: ambiguous - default to DD/MM (international standard)
+        # Use future date check as sanity validation
+        elif 1 <= first_int <= 12 and 1 <= second_int <= 12:
+            dd_mm_date = f"{year}-{second}-{first}"  # DD/MM interpretation
+            mm_dd_date = f"{year}-{first}-{second}"  # MM/DD interpretation
+            try:
+                dd_mm_parsed = datetime.strptime(dd_mm_date, "%Y-%m-%d")
+                mm_dd_parsed = datetime.strptime(mm_dd_date, "%Y-%m-%d")
+                now = datetime.now()
+                future_threshold = now + timedelta(days=7)
+                # If DD/MM is far in future but MM/DD is not, use MM/DD
+                if dd_mm_parsed > future_threshold and mm_dd_parsed <= future_threshold:
+                    return mm_dd_date, original_text
+                return dd_mm_date, original_text
+            except:
+                return dd_mm_date, original_text
 
     return None, original_text
 
@@ -271,9 +303,28 @@ def parse_date_standalone(text: str) -> Optional[str]:
         # If second > 12, it MUST be MM/DD format (e.g., 01/25/26 = Jan 25)
         elif second_int > 12 and 1 <= first_int <= 12:
             return f"{year}-{first.zfill(2)}-{second.zfill(2)}"  # MM/DD -> YYYY-MM-DD
-        # Both <= 12: ambiguous, default to MM/DD (US format)
+        # Both <= 12: ambiguous - default to DD/MM (more common internationally)
+        # But use future date check as sanity validation
+        elif 1 <= first_int <= 12 and 1 <= second_int <= 12:
+            dd_mm_date = f"{year}-{second.zfill(2)}-{first.zfill(2)}"  # DD/MM interpretation
+            mm_dd_date = f"{year}-{first.zfill(2)}-{second.zfill(2)}"  # MM/DD interpretation
+            # Check if DD/MM interpretation is far in the future (>7 days)
+            try:
+                from datetime import datetime, timedelta
+                dd_mm_parsed = datetime.strptime(dd_mm_date, "%Y-%m-%d")
+                mm_dd_parsed = datetime.strptime(mm_dd_date, "%Y-%m-%d")
+                now = datetime.now()
+                future_threshold = now + timedelta(days=7)
+
+                # If DD/MM is far in future but MM/DD is not, use MM/DD
+                if dd_mm_parsed > future_threshold and mm_dd_parsed <= future_threshold:
+                    return mm_dd_date
+                # Otherwise default to DD/MM (international standard)
+                return dd_mm_date
+            except:
+                return dd_mm_date  # Default to DD/MM on any error
         else:
-            return f"{year}-{first.zfill(2)}-{second.zfill(2)}"
+            return f"{year}-{second.zfill(2)}-{first.zfill(2)}"  # Default DD/MM
 
     # Mon DD - NO YEAR (Freegold Ventures: "Jan 15", "Dec 19")
     # Infer year based on whether the date is in the future
