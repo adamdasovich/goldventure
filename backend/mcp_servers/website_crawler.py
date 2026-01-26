@@ -2922,6 +2922,55 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
                         continue
 
                 # ============================================================
+                # STRATEGY 5c-GRID: News section grid layout (New Pacific Metals pattern)
+                # Structure: <div class="row news-section">
+                #   <div class="col-lg-2">Dec 4, 2025</div>
+                #   <div class="col-lg-7"><a href="...">Title</a></div>
+                # </div>
+                # ============================================================
+                for news_row in soup.select('.news-section, .news-row, div.row:has(a[href*="/news"]):has(div[class*="col"])'):
+                    try:
+                        # Find all column divs
+                        cols = news_row.select('div[class*="col-"]')
+                        if len(cols) < 2:
+                            continue
+
+                        # First column typically has date
+                        date_str = None
+                        date_col = cols[0]
+                        date_text = date_col.get_text(strip=True)
+                        if date_text:
+                            date_str = parse_date_standalone(date_text)
+
+                        # Second or third column has the link/title
+                        title = None
+                        href = None
+                        for col in cols[1:]:
+                            link = col.select_one('a[href]')
+                            if link:
+                                title = link.get_text(strip=True)
+                                href = link.get('href', '')
+                                break
+
+                        if not title or not href or len(title) < 15:
+                            continue
+
+                        # Build full URL
+                        if not href.startswith('http'):
+                            href = urljoin(news_url, href)
+
+                        news = {
+                            'title': clean_news_title(title, href),
+                            'url': href,
+                            'date': date_str,
+                            'document_type': 'news_release',
+                            'year': date_str[:4] if date_str else None
+                        }
+                        _add_news_item(news_by_url, news, cutoff_date, "NEWS-GRID")
+                    except Exception:
+                        continue
+
+                # ============================================================
                 # STRATEGY 5d: Freegold Ventures - a.latest with h3 date
                 # Links with "latest" class containing h3 date (Mon DD format)
                 # <a class="latest" href="..."><h3>Jan 15</h3>Title</a>
