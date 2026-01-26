@@ -1808,6 +1808,11 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
             f'{url}/news/all/',  # Aston Bay
             f'{url}/news-releases/',
             f'{url}/press-releases/',
+            # WordPress category patterns (New Age Metals, many WP sites)
+            f'{url}/category/press/',
+            f'{url}/category/news/',
+            f'{url}/category/press-releases/',
+            f'{url}/category/news-releases/',
             f'{url}/investors/news/',
             f'{url}/investors/news-releases/',  # Canada Nickel
             f'{url}/investor-relations/news-releases/',  # NEO Battery Materials
