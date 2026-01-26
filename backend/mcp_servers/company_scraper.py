@@ -722,6 +722,26 @@ class CompanyDataScraper:
 
             # Extract ticker symbol (often in header or stock ticker bar)
             # Note: Be careful with OTC patterns - "OTCQB" and "OTCQX" are market tiers, not exchanges
+
+            # FIRST: Check for TradingView widgets (common on mining company websites)
+            # These contain the ticker in URL-encoded format: "symbol":"TSXV:MFG"
+            tradingview_pattern = r'tradingview[^"]*%22symbol%22%3A%22([A-Z]+)%3A([A-Z]+)%22'
+            raw_html = str(soup)
+            tv_matches = re.findall(tradingview_pattern, raw_html, re.IGNORECASE)
+            if tv_matches:
+                for exchange_code, ticker_code in tv_matches:
+                    exchange_code = exchange_code.upper()
+                    ticker_code = ticker_code.upper()
+                    # Map TradingView exchange codes to our format
+                    exchange_map = {'TSXV': 'TSXV', 'TSX': 'TSX', 'CSE': 'CSE', 'NEO': 'NEO'}
+                    if exchange_code in exchange_map and len(ticker_code) >= 2 and len(ticker_code) <= 5:
+                        self.extracted_data['company']['ticker_symbol'] = ticker_code
+                        self.extracted_data['company']['exchange'] = exchange_map[exchange_code]
+                        print(f"[TICKER] Found TradingView widget: {exchange_code}:{ticker_code}")
+                        # Don't continue searching - TradingView is authoritative
+                        break
+
+            # If TradingView didn't find ticker, use pattern matching
             ticker_patterns = [
                 # TSX Venture patterns: "TSX.V: SSE", "TSX-V: AMM", "TSXV: AMM", "TSXV:SGN" (no space)
                 r'\b(TSX[.\-\s]?V|TSXV)[:\s]*([A-Z]{2,5})\b',
