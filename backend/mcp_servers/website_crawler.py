@@ -2873,15 +2873,8 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
                 # STRATEGY 5c: WordPress archive lists (Angkor WP subdomain)
                 # Standard WP article/entry list with h2.entry-title
                 # ============================================================
-                wp_entries = soup.select('article.post, .post, .hentry, .type-post')
-                if '/category/' in news_url:
-                    print(f"[WP-DEBUG] Found {len(wp_entries)} WP entries on {news_url}")
-                for entry in wp_entries:
+                for entry in soup.select('article.post, article.hentry, article.type-post'):
                     try:
-                        # Skip non-article elements (menu items, etc.)
-                        if entry.name != 'article':
-                            continue
-
                         # Get title link
                         title_elem = entry.select_one('h2.entry-title a, h2 a, .entry-title a, h3 a')
                         if not title_elem:
