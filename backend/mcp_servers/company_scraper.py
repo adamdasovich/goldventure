@@ -77,6 +77,27 @@ class CompanyDataScraper:
             'social_media': {},
         }
         self.errors = []
+        self.scrape_start_time = None
+        self.max_scrape_seconds = 480  # 8 minutes default
+
+    def _time_remaining(self) -> float:
+        """Returns seconds remaining in time budget, or infinity if not tracking."""
+        if not self.scrape_start_time:
+            return float('inf')
+        elapsed = (datetime.now() - self.scrape_start_time).total_seconds()
+        return self.max_scrape_seconds - elapsed
+
+    def _should_continue_scraping(self, section_name: str = "") -> bool:
+        """
+        Check if we have enough time to continue scraping.
+        Logs a message if skipping due to time constraints.
+        """
+        remaining = self._time_remaining()
+        if remaining < 30:  # Less than 30 seconds remaining
+            elapsed = (datetime.now() - self.scrape_start_time).total_seconds()
+            print(f"[TIME-LIMIT] {elapsed:.0f}s elapsed, skipping {section_name or 'remaining sections'} (need 30s buffer)")
+            return False
+        return True
 
     async def scrape_company(
         self,
@@ -113,103 +134,119 @@ class CompanyDataScraper:
         }
         self.errors = []
 
+        # Track time budget - Celery task has 600s hard limit, aim to finish in 480s (8 min)
+        # to leave buffer for post-processing and database saves
+        self.scrape_start_time = datetime.now()
+        self.max_scrape_seconds = 480  # 8 minutes max for scraping
+
         browser_config = BrowserConfig(
             headless=True,
             verbose=False
         )
 
+        # Fast config - reduced delays to fit within time budget
+        # With ~50 potential pages, need to keep per-page time low
         crawler_config = CrawlerRunConfig(
             cache_mode="bypass",
-            # Wait longer for Cloudflare challenge pages to complete
-            delay_before_return_html=5.0,  # Wait 5 seconds after page loads
-            page_timeout=90000,  # 90 second timeout for slow pages
-            wait_until="domcontentloaded",  # Use domcontentloaded to avoid navigation issues
+            delay_before_return_html=2.0,  # 2 seconds (was 5s - too slow for 50 pages)
+            page_timeout=30000,  # 30 second timeout (was 90s - too long for failed pages)
+            wait_until="domcontentloaded",
         )
 
         async with AsyncWebCrawler(config=browser_config) as crawler:
-            # 1. Scrape homepage first (gets basic info, nav structure)
+            # 1. Scrape homepage first (gets basic info, nav structure) - ALWAYS do this
             if 'homepage' in sections:
                 print(f"[SCRAPE] Scraping homepage: {self.base_url}")
                 await self._scrape_homepage(crawler, crawler_config)
 
             # 2. Find and scrape About/Corporate section
-            if 'about' in sections or 'team' in sections:
+            if ('about' in sections or 'team' in sections) and self._should_continue_scraping('about'):
                 about_urls = self._find_section_urls(['about', 'corporate', 'company', 'who-we-are'])
                 for url in about_urls[:2]:  # Limit to 2 about pages
+                    if not self._should_continue_scraping('about pages'):
+                        break
                     print(f"[SCRAPE] Scraping about page: {url}")
                     await self._scrape_about_page(crawler, crawler_config, url)
 
             # 3. Find and scrape Team/Management section
-            if 'team' in sections:
+            if 'team' in sections and self._should_continue_scraping('team'):
                 team_urls = self._find_section_urls(['team', 'management', 'leadership', 'board', 'directors', 'executives'])
                 for url in team_urls[:3]:  # Limit to 3 team pages
+                    if not self._should_continue_scraping('team pages'):
+                        break
                     print(f"[SCRAPE] Scraping team page: {url}")
                     await self._scrape_team_page(crawler, crawler_config, url)
 
             # 4. Find and scrape Investors section
-            if 'investors' in sections:
-                # Include singular forms and variations to catch URLs like /corporate-presentation/ and /factsheet/
+            if 'investors' in sections and self._should_continue_scraping('investors'):
                 investor_urls = self._find_section_urls([
                     'investor', 'shareholders', 'financial', 'reports',
-                    'presentations', 'presentation',  # Both plural and singular
-                    'factsheet', 'fact-sheet', 'fact_sheet',  # Factsheet variations
+                    'presentations', 'presentation',
+                    'factsheet', 'fact-sheet', 'fact_sheet',
                 ])
-                for url in investor_urls[:5]:  # Increased limit to handle more document types
+                for url in investor_urls[:5]:
+                    if not self._should_continue_scraping('investor pages'):
+                        break
                     print(f"[SCRAPE] Scraping investor page: {url}")
                     await self._scrape_investor_page(crawler, crawler_config, url)
 
             # 5. Find and scrape Projects section
-            if 'projects' in sections:
+            if 'projects' in sections and self._should_continue_scraping('projects'):
                 project_urls = self._find_section_urls(['project', 'property', 'properties', 'assets', 'operations', 'exploration'])
                 for url in project_urls[:3]:
+                    if not self._should_continue_scraping('project pages'):
+                        break
                     print(f"[SCRAPE] Scraping projects page: {url}")
                     await self._scrape_projects_page(crawler, crawler_config, url)
 
                 # ENHANCED: Also look for potential project pages in nav_links
-                # Many mining sites use direct URLs like /laird-lake/ instead of /projects/laird-lake/
-                # These are often geographic names (lakes, mountains, rivers, claims)
-                potential_project_urls = self._find_potential_project_urls()
-                for url in potential_project_urls[:5]:
-                    if url not in self.visited_urls:
-                        print(f"[SCRAPE] Scraping potential project page: {url}")
-                        await self._scrape_projects_page(crawler, crawler_config, url)
+                if self._should_continue_scraping('potential projects'):
+                    potential_project_urls = self._find_potential_project_urls()
+                    for url in potential_project_urls[:5]:
+                        if not self._should_continue_scraping('potential project pages'):
+                            break
+                        if url not in self.visited_urls:
+                            print(f"[SCRAPE] Scraping potential project page: {url}")
+                            await self._scrape_projects_page(crawler, crawler_config, url)
 
                 # ENHANCED: Scrape project pages found in navigation dropdown menus
-                # These are direct links to project pages from dropdown menus (e.g., Cerrado Gold pattern)
-                nav_dropdown_projects = self.extracted_data.get('_nav_dropdown_projects', [])
-                for url in nav_dropdown_projects[:10]:
-                    if url not in self.visited_urls:
-                        print(f"[SCRAPE] Scraping nav dropdown project page: {url}")
-                        await self._scrape_projects_page(crawler, crawler_config, url)
+                if self._should_continue_scraping('nav dropdown projects'):
+                    nav_dropdown_projects = self.extracted_data.get('_nav_dropdown_projects', [])
+                    for url in nav_dropdown_projects[:10]:
+                        if not self._should_continue_scraping('nav dropdown project pages'):
+                            break
+                        if url not in self.visited_urls:
+                            print(f"[SCRAPE] Scraping nav dropdown project page: {url}")
+                            await self._scrape_projects_page(crawler, crawler_config, url)
 
                 # After scraping listing pages, visit individual project detail pages
-                # that were discovered (they will have source_url set)
-                detail_urls_to_visit = []
-                for project in self.extracted_data.get('projects', []):
-                    source_url = project.get('source_url', '')
-                    # Check if this is a project detail page we haven't visited
-                    if source_url and source_url not in self.visited_urls:
-                        # Check if it's a subpage (has more path components)
-                        path = urlparse(source_url).path.rstrip('/')
-                        parts = [p for p in path.split('/') if p]
-                        if len(parts) >= 2 and parts[0] in ['projects', 'project', 'properties', 'property']:
-                            detail_urls_to_visit.append(source_url)
+                if self._should_continue_scraping('project details'):
+                    detail_urls_to_visit = []
+                    for project in self.extracted_data.get('projects', []):
+                        source_url = project.get('source_url', '')
+                        if source_url and source_url not in self.visited_urls:
+                            path = urlparse(source_url).path.rstrip('/')
+                            parts = [p for p in path.split('/') if p]
+                            if len(parts) >= 2 and parts[0] in ['projects', 'project', 'properties', 'property']:
+                                detail_urls_to_visit.append(source_url)
 
-                # Visit up to 10 individual project pages to get full details
-                for url in detail_urls_to_visit[:10]:
-                    print(f"[SCRAPE] Scraping project detail page: {url}")
-                    await self._scrape_projects_page(crawler, crawler_config, url)
+                    for url in detail_urls_to_visit[:10]:
+                        if not self._should_continue_scraping('project detail pages'):
+                            break
+                        print(f"[SCRAPE] Scraping project detail page: {url}")
+                        await self._scrape_projects_page(crawler, crawler_config, url)
 
             # 6. Find and scrape News section
-            if 'news' in sections:
+            if 'news' in sections and self._should_continue_scraping('news'):
                 news_urls = self._find_section_urls(['news', 'press', 'media', 'releases'])
-                # Scrape all news URLs to capture multiple years
                 for url in news_urls[:10]:
+                    if not self._should_continue_scraping('news pages'):
+                        break
                     print(f"[SCRAPE] Scraping news page: {url}")
                     await self._scrape_news_page(crawler, crawler_config, url)
 
-            # 7. Find and scrape Contact section
-            if 'contact' in sections:
+            # 7. Find and scrape Contact section (lowest priority - skip if short on time)
+            if 'contact' in sections and self._should_continue_scraping('contact'):
                 contact_urls = self._find_section_urls(['contact', 'connect'])
                 for url in contact_urls[:1]:
                     print(f"[SCRAPE] Scraping contact page: {url}")
@@ -486,8 +523,8 @@ class CompanyDataScraper:
                     from crawl4ai import CrawlerRunConfig
                     retry_config = CrawlerRunConfig(
                         cache_mode="bypass",
-                        delay_before_return_html=10.0,  # 10 second delay
-                        page_timeout=120000,  # 2 minute timeout
+                        delay_before_return_html=5.0,  # 5 second delay for Cloudflare
+                        page_timeout=45000,  # 45 second timeout for Cloudflare retry
                         wait_until="domcontentloaded",
                     )
                     result = await crawler.arun(url=self.base_url, config=retry_config)
@@ -511,8 +548,8 @@ class CompanyDataScraper:
                 from crawl4ai import CrawlerRunConfig
                 retry_config = CrawlerRunConfig(
                     cache_mode="bypass",
-                    delay_before_return_html=10.0,  # 10 second delay for Cloudflare
-                    page_timeout=120000,  # 2 minute timeout
+                    delay_before_return_html=5.0,  # 5 second delay for Cloudflare
+                    page_timeout=45000,  # 45 second timeout for Cloudflare retry
                     wait_until="domcontentloaded",
                 )
                 result = await crawler.arun(url=self.base_url, config=retry_config)
