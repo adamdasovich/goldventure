@@ -547,6 +547,8 @@ When Claude makes a mistake and gets corrected, add it here:
 | 2026-01-27 | Added slow crawler config (5s delay, networkidle) without testing performance impact | ALWAYS test performance impact before deploying changes to scheduled tasks. The 5s delay per URL × 35 patterns = 175+ seconds per company, breaking the daily scrape. |
 | 2026-01-27 | Used sed shortcuts that broke file formatting | NEVER take shortcuts with file editing. Always use proper tools and verify changes. When editing server files, use Python or proper text manipulation, not sed hacks that can corrupt files. |
 | 2026-01-27 | Kept saying "now I'll fix it properly" after breaking things | DO IT RIGHT THE FIRST TIME. Don't rush. Think through the full impact. Use reliable methods. Verify each step. There is no excuse for sloppy work. |
+| 2026-01-27 | Deployed multiple "fixes" without investigating root cause | TIME-EXIT wasn't working because crawl4ai has a 60s page_timeout default - each URL that doesn't load blocks for 60s before the time check runs. ALWAYS investigate the ACTUAL root cause before coding a fix. The root cause was page_timeout, not just the time check logic. |
+| 2026-01-27 | Didn't understand crawl4ai library behavior | CrawlerRunConfig has `page_timeout=60000` by default. With 35+ URL patterns, slow sites cause multiple 60s timeouts = 300+ second scrapes. ALWAYS check library defaults and documentation before assuming code behavior. |
 
 ---
 
