@@ -758,7 +758,7 @@ class PropertyListingDetailSerializer(serializers.ModelSerializer):
         if request and request.user.is_authenticated:
             try:
                 return obj.prospector.user == request.user
-            except:
+            except (AttributeError, TypeError):
                 return False
         return False
 

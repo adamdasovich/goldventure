@@ -128,8 +128,8 @@ class RAGManager:
         existing_ids = [f"doc_{document.id}_chunk_{i}" for i in range(1000)]  # Assume max 1000 chunks
         try:
             self.collection.delete(ids=existing_ids)
-        except:
-            pass  # Ignore if IDs don't exist
+        except Exception:
+            pass  # Ignore if IDs don't exist in ChromaDB
 
         # Create chunks
         chunks = self.chunk_text(text)

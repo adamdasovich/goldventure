@@ -38,7 +38,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     if (storedToken && storedUser) {
       setAccessToken(storedToken);
-      setUser(JSON.parse(storedUser));
+      // Safely parse user data with error handling
+      try {
+        setUser(JSON.parse(storedUser));
+      } catch {
+        // Corrupted user data, clear storage
+        localStorage.removeItem('user');
+        localStorage.removeItem('accessToken');
+        localStorage.removeItem('refreshToken');
+        setIsLoading(false);
+        return;
+      }
 
       // Verify token is still valid
       fetchCurrentUser(storedToken).catch(() => {

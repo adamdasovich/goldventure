@@ -27,6 +27,12 @@ def get_user_from_token(token_string):
 
         # Fetch the user
         user = User.objects.get(id=user_id)
+
+        # Check if user is active (prevents deleted/disabled users from accessing)
+        if not user.is_active:
+            logger.warning(f"JWT Auth: User {user_id} is inactive")
+            return AnonymousUser()
+
         logger.info(f"JWT Auth: User {user.id} ({user.username}) authenticated via token")
         return user
     except (TokenError, InvalidToken) as e:

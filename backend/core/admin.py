@@ -182,6 +182,8 @@ class DocumentProcessingJobAdmin(admin.ModelAdmin):
 
     def batch_add_view(self, request):
         """View for adding multiple URLs at once"""
+        from urllib.parse import urlparse
+
         if request.method == 'POST':
             urls_text = request.POST.get('urls', '')
             urls = [url.strip() for url in urls_text.split('\n') if url.strip()]
@@ -191,7 +193,21 @@ class DocumentProcessingJobAdmin(admin.ModelAdmin):
             document_type = request.POST.get('document_type', 'ni43101')
 
             created_count = 0
+            skipped_count = 0
             for url in urls:
+                # Validate URL format before creating job
+                try:
+                    parsed = urlparse(url)
+                    if not parsed.scheme or parsed.scheme not in ('http', 'https'):
+                        skipped_count += 1
+                        continue
+                    if not parsed.netloc:
+                        skipped_count += 1
+                        continue
+                except (ValueError, TypeError):
+                    skipped_count += 1
+                    continue
+
                 DocumentProcessingJob.objects.create(
                     url=url,
                     document_type=document_type,
@@ -201,7 +217,11 @@ class DocumentProcessingJobAdmin(admin.ModelAdmin):
                 )
                 created_count += 1
 
-            messages.success(request, f'Created {created_count} processing jobs. Click "Process Queue" to start processing.')
+            msg = f'Created {created_count} processing jobs.'
+            if skipped_count > 0:
+                msg += f' Skipped {skipped_count} invalid URLs.'
+            msg += ' Click "Process Queue" to start processing.'
+            messages.success(request, msg)
             return redirect('..')
 
         context = {

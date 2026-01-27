@@ -502,8 +502,8 @@ EXTRACTED TABLES ({len(docling_data['tables'])} total tables, showing {len(filte
             if doc_info.get('report_date'):
                 try:
                     doc_date = datetime.strptime(doc_info['report_date'], "%Y-%m-%d").date()
-                except:
-                    pass
+                except (ValueError, TypeError):
+                    pass  # Use default date if parsing fails
 
             document = Document.objects.create(
                 company=company,
@@ -665,7 +665,7 @@ Return JSON array:
                     json_start = response.find('[')
                     json_end = response.rfind(']') + 1
                     resources = json.loads(response[json_start:json_end])
-                except:
+                except (json.JSONDecodeError, ValueError, TypeError):
                     resources = []
 
                 return {
@@ -728,7 +728,7 @@ Return JSON:
                 json_start = response.find('{')
                 json_end = response.rfind('}') + 1
                 economics = json.loads(response[json_start:json_end])
-            except:
+            except (json.JSONDecodeError, ValueError, TypeError):
                 economics = {}
 
             return {
@@ -885,8 +885,8 @@ Structure:
             if doc_info.get('report_date'):
                 try:
                     doc_date = datetime.strptime(doc_info['report_date'], "%Y-%m-%d").date()
-                except:
-                    pass
+                except (ValueError, TypeError):
+                    pass  # Use default date if parsing fails
 
             document = Document.objects.create(
                 company=company,
