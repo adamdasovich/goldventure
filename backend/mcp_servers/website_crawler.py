@@ -1835,10 +1835,17 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
             f'{url}/news/?current_year={current_year - 1}',
             f'{url}/news?current_year={current_year}',
             f'{url}/news?current_year={current_year - 1}',
-            f'https://wp.{domain}/news-releases/',  # Angkor Resources (WP subdomain)
-            f'https://wp.{domain}/press-releases/',  # Angkor Resources (WP subdomain)
             url,  # Homepage fallback for 55 North Mining style sites
         ]
+
+        # Only add wp.* subdomain patterns for known domains that use this structure
+        # This avoids DNS resolution failures for sites that don't have wp.* subdomains
+        wp_subdomain_domains = ['angkorresources.com', 'angkorgold.ca']
+        if any(wp_domain in domain for wp_domain in wp_subdomain_domains):
+            news_page_patterns.extend([
+                f'https://wp.{domain}/news-releases/',
+                f'https://wp.{domain}/press-releases/',
+            ])
 
         for news_url in news_page_patterns:
             try:
