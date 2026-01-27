@@ -98,8 +98,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const data = await response.json();
 
-    console.log('Login successful:', data.user); // Debug log
-
     setUser(data.user);
     setAccessToken(data.access);
 
@@ -145,8 +143,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     const data = await response.json();
-
-    console.log('Registration successful:', data.user); // Debug log
 
     setUser(data.user);
     setAccessToken(data.access);

@@ -21,6 +21,9 @@
 
 > **Note:** GPU worker droplets are created dynamically by the GPU Orchestrator when document processing jobs are pending. They are auto-destroyed after 5 minutes idle to minimize costs (~$1.57/hr).
 
+### User Timezone
+**The user works on Eastern Standard Time (EST / UTC-5)**. All scheduled tasks and time references should account for this.
+
 ---
 
 ## Deployment Workflow
@@ -333,8 +336,8 @@ python -c "from core.tasks import scrape_all_companies_news_task; scrape_all_com
 
 ## Recent Changes (Keep Updated)
 
-### 2026-01-27 - Comprehensive Security Audit & Fixes
-**Two full code audits performed. All critical issues fixed and deployed.**
+### 2026-01-27 - Four Comprehensive Security Audits
+**Four full code audits performed. Critical issues fixed across multiple rounds.**
 
 #### Security Hardening (settings.py)
 - Changed DEBUG default from 'True' to 'False' for safety
@@ -345,7 +348,7 @@ python -c "from core.tasks import scrape_all_companies_news_task; scrape_all_com
 - Added `SESSION_COOKIE_SAMESITE`, `CSRF_COOKIE_SAMESITE = 'Lax'`
 - Added `SECURE_REFERRER_POLICY` for production
 
-#### Fixed Security Issues
+#### Fixed Security Issues (Audits 1-3)
 | File | Issue Fixed |
 |------|-------------|
 | `middleware.py` | Added `is_active` check for JWT users (prevent disabled user access) |
@@ -357,6 +360,10 @@ python -c "from core.tasks import scrape_all_companies_news_task; scrape_all_com
 | `rag_utils.py` | Fixed bare except in ChromaDB deletion |
 | `company_scraper.py` | Added SSRF protection for iframe URLs (validate http/https) |
 | `onboard_company.py` | Fixed bare except clauses (Decimal, datetime parsing) |
+| `kitco_scraper.py` | Fixed 4 bare except → `except (ValueError, TypeError, decimal.InvalidOperation)` |
+| `news_scraper.py` | Fixed bare except in date parsing |
+| `stock_price_scraper.py` | Fixed 2 bare except clauses |
+| `news_content_processor.py` | Fixed bare except in ChromaDB deletion |
 
 #### Frontend Security Fixes
 | File | Issue Fixed |
@@ -364,12 +371,45 @@ python -c "from core.tasks import scrape_all_companies_news_task; scrape_all_com
 | `AuthContext.tsx` | Added try-catch for JSON.parse (prevent crashes from corrupted data) |
 | `RegisterModal.tsx` | Strengthened password validation (10+ chars, uppercase, lowercase, number) |
 
-#### Remaining Known Issues (Lower Priority)
-These were identified in the audit but not fixed (design changes required):
+#### Fourth Audit Findings - FIXED
+
+**Config Fixes (settings.py, asgi.py, celery.py):**
+| Issue | Fix Applied |
+|-------|-------------|
+| SECRET_KEY with insecure prefix | Removed 'django-insecure-' prefix, added warning if not set in production |
+| Personal email hardcoded | Changed defaults to 'admin@example.com' / 'notifications@example.com' |
+| DB password defaults to empty | Removed default - now requires explicit env var |
+| WebSocket origins hardcoded | Made configurable via WEBSOCKET_ALLOWED_ORIGINS env var |
+| Celery debug_task | Removed debug task from production code |
+
+**Backend Fixes:**
+| Issue | Fix Applied |
+|-------|-------------|
+| Unprotected AI chat endpoints | Changed `@permission_classes([AllowAny])` → `@permission_classes([IsAuthenticated])` |
+| Unsafe JSON parsing (document processors) | Added direct JSON parse attempt before extraction fallback, added structure validation |
+| SSRF via allow_redirects=True | Added `is_safe_url()` validation for URLs and redirect destinations |
+
+**MCP Server Fixes:**
+| Issue | Fix Applied |
+|-------|-------------|
+| 25 bare except clauses in website_crawler.py | Added explanatory comments documenting intentional broad exception handling |
+| SSRF in company_scraper.py | Added `is_safe_url()` validation function, checks for internal IPs and cloud metadata |
+
+**Frontend Fixes:**
+| Issue | Fix Applied |
+|-------|-------------|
+| Console.log exposing user data | Removed debug console.log from AuthContext.tsx (lines 101, 149) |
+| Console.log exposing user roles | Removed debug useEffect from EventBanner.tsx |
+| dangerouslySetInnerHTML XSS risk | Added `sanitizeHtml()` function to education module page |
+
+#### Remaining Lower Priority Issues (Design Changes Required)
 - WebSocket tokens in query string (needs server-side auth redesign)
 - JWT tokens in localStorage (needs httpOnly cookie implementation)
-- Missing Content Security Policy header (needs django-csp package)
-- Some bare except clauses in kitco_scraper.py, stock_price_scraper.py (low risk)
+- SESSION_COOKIE_SAMESITE='Lax' instead of 'Strict' (may break frontend)
+- Missing Content-Security-Policy header (needs django-csp package)
+- Missing Permissions-Policy header
+- Unimplemented access control TODOs in consumers.py (lines 395, 904)
+- Print statements for debugging (40+ in company_scraper.py, 30+ in website_crawler.py)
 
 ### 2026-01-25
 - Added media coverage site blocklist to `website_crawler.py` `is_news_article_url()` function
@@ -504,6 +544,9 @@ When Claude makes a mistake and gets corrected, add it here:
 | 2026-01-25 | Media coverage from Mining.com/Northern Miner appeared in company news | Company profiles should ONLY have press releases. Some companies have "In the News" sections linking to media articles - these must be filtered. Added blocklist in `is_news_article_url()`. |
 | 2026-01-26 | Fixed code locally but didn't deploy before user onboarded company | Verification ran with old buggy code (projects not auto-added). CRITICAL: Always deploy fixes IMMEDIATELY after pushing - don't run manual tests that won't help future users. The code must be live on the server BEFORE it can help. |
 | 2026-01-26 | Ran verification manually instead of fixing the code | Manual interventions don't help future users. Always fix the root cause in code and deploy it so the system works automatically for all future onboardings. |
+| 2026-01-27 | Added slow crawler config (5s delay, networkidle) without testing performance impact | ALWAYS test performance impact before deploying changes to scheduled tasks. The 5s delay per URL × 35 patterns = 175+ seconds per company, breaking the daily scrape. |
+| 2026-01-27 | Used sed shortcuts that broke file formatting | NEVER take shortcuts with file editing. Always use proper tools and verify changes. When editing server files, use Python or proper text manipulation, not sed hacks that can corrupt files. |
+| 2026-01-27 | Kept saying "now I'll fix it properly" after breaking things | DO IT RIGHT THE FIRST TIME. Don't rush. Think through the full impact. Use reliable methods. Verify each step. There is no excuse for sloppy work. |
 
 ---
 
@@ -525,9 +568,23 @@ When Claude makes a mistake and gets corrected, add it here:
 
 ### Security Audit Checklist
 When making changes, check for:
-- [ ] Bare `except:` clauses (should use specific exceptions)
+
+**Backend:**
+- [ ] Bare `except:` or `except Exception:` clauses (should use specific exceptions)
 - [ ] `exists()` followed by `create()` (use `get_or_create` instead)
 - [ ] User-supplied URLs being fetched (validate scheme is http/https)
-- [ ] Missing authentication on write endpoints
-- [ ] JSON.parse without try-catch (frontend)
-- [ ] dangerouslySetInnerHTML without sanitization (frontend)
+- [ ] Missing authentication on write endpoints (`@permission_classes([IsAuthenticated])`)
+- [ ] `int()` conversions without try-except on user input
+- [ ] `allow_redirects=True` without validating redirect destination
+- [ ] Unsafe JSON parsing (finding { to } without validation)
+- [ ] Print statements with sensitive/debug data
+- [ ] Personal email addresses or secrets in defaults
+- [ ] User input in HTML templates without escaping
+
+**Frontend:**
+- [ ] JSON.parse without try-catch
+- [ ] dangerouslySetInnerHTML with user-controlled content (sanitize with DOMPurify)
+- [ ] console.log with user data or auth info
+- [ ] Tokens in localStorage (should be httpOnly cookies)
+- [ ] URL inputs without server-side validation
+- [ ] Missing Content-Security-Policy header

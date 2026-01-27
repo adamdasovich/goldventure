@@ -707,7 +707,7 @@ def stock_quote(request, company_id):
 # ============================================================================
 
 @api_view(['POST'])
-@permission_classes([AllowAny])  # Change to IsAuthenticated in production
+@permission_classes([IsAuthenticated])
 def claude_chat(request):
     """
     Handle Claude chat requests with MCP tool access.
@@ -759,7 +759,7 @@ def claude_chat(request):
 
 
 @api_view(['POST'])
-@permission_classes([AllowAny])  # Change to IsAuthenticated in production
+@permission_classes([IsAuthenticated])
 def company_chat(request, company_id):
     """
     Handle company-specific Claude chat requests with MCP tool access.

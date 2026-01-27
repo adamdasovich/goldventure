@@ -275,21 +275,28 @@ Return ONLY valid JSON. Use null for missing values. Be precise with numbers."""
             # Analyze with Claude
             response_text = self._analyze_pdf_with_claude(pdf_base64, prompt, max_tokens=4000)
 
-            # Parse JSON response
+            # Parse JSON response - try direct parse first, then extract if needed
             import json
             try:
-                # Try to extract JSON from response
-                json_start = response_text.find('{')
-                json_end = response_text.rfind('}') + 1
-                if json_start != -1 and json_end > json_start:
-                    extracted_data = json.loads(response_text[json_start:json_end])
-                else:
-                    extracted_data = json.loads(response_text)
+                # First, try to parse the entire response as JSON
+                extracted_data = json.loads(response_text.strip())
             except json.JSONDecodeError:
-                return {
-                    "warning": "Could not parse structured data",
-                    "raw_analysis": response_text[:1000]
-                }
+                # Fall back to extracting JSON from response text
+                try:
+                    json_start = response_text.find('{')
+                    json_end = response_text.rfind('}') + 1
+                    if json_start != -1 and json_end > json_start:
+                        extracted_data = json.loads(response_text[json_start:json_end])
+                    else:
+                        raise json.JSONDecodeError("No JSON object found", response_text, 0)
+                    # Validate extracted data has expected structure
+                    if not isinstance(extracted_data, dict):
+                        raise json.JSONDecodeError("Extracted data is not a dict", response_text, 0)
+                except json.JSONDecodeError:
+                    return {
+                        "warning": "Could not parse structured data",
+                        "raw_analysis": response_text[:1000]
+                    }
 
             # Store document record
             doc_date = datetime.strptime(document_date, "%Y-%m-%d").date() if document_date else datetime.now().date()

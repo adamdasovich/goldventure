@@ -588,7 +588,7 @@ async def run_scrape_job(job_id: int = None):
                 try:
                     published_at = datetime.strptime(article_data['published_at'], '%Y-%m-%d')
                     published_at = timezone.make_aware(published_at)
-                except:
+                except (ValueError, TypeError):
                     pass
 
             # Create the article
