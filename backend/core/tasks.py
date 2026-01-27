@@ -489,7 +489,9 @@ def scrape_company_news_task(self, company_id):
                 updated_count += 1
 
         # Auto-process news content into vector database for semantic search
-        if created_count > 0:
+        # ONLY during onboarding (is_new_company=True) - skip during daily scrapes
+        # Daily scrapes were taking 500+ seconds per company due to URL fetching here
+        if created_count > 0 and is_new_company:
             try:
                 from mcp_servers.news_content_processor import NewsContentProcessor
                 processor = NewsContentProcessor(company_id=company.id)
