@@ -323,7 +323,7 @@ def scrape_company_news_task(self, company_id):
             if date_str:
                 try:
                     release_date = datetime.strptime(date_str, '%Y-%m-%d').date()
-                except:
+                except (ValueError, TypeError):
                     release_date = None
             else:
                 release_date = None
@@ -793,7 +793,7 @@ def scrape_single_company_news_task(self, company_id: int):
             if date_str:
                 try:
                     release_date = datetime.strptime(date_str, '%Y-%m-%d').date()
-                except:
+                except (ValueError, TypeError):
                     continue  # Skip entries without valid dates
             else:
                 continue  # Skip entries without valid dates
@@ -826,15 +826,30 @@ def scrape_single_company_news_task(self, company_id: int):
                 created_count += 1
 
                 # Check for financing keywords and flag
+                # NOTE: Keep in sync with scrape_company_news_task financing keywords
                 financing_keywords = [
                     'private placement', 'financing', 'funding round',
                     'capital raise', 'bought deal', 'equity financing',
-                    'flow-through', 'warrant', 'subscription', 'offering',
-                    'strategic investment', 'strategic partner'
+                    'debt financing', 'flow-through', 'warrant', 'subscription', 'offering'
                 ]
 
+                # STRATEGIC INVESTMENT DETECTION: Major miner investments in juniors
+                strategic_keywords = [
+                    'strategic investment', 'strategic partner', 'equity stake',
+                    'strategic alliance', 'strategic equity', 'cornerstone investor'
+                ]
+
+                # Major miner names to detect strategic investments
+                major_miners = [
+                    'barrick', 'newmont', 'agnico eagle', 'franco-nevada', 'kinross',
+                    'anglogold ashanti', 'gold fields', 'wheaton precious metals',
+                    'royal gold', 'eldorado gold', 'iamgold', 'endeavour mining',
+                    'b2gold', 'yamana gold'
+                ]
+
+                all_keywords = financing_keywords + strategic_keywords + major_miners
                 title_lower = title.lower()
-                detected_keywords = [kw for kw in financing_keywords if kw in title_lower]
+                detected_keywords = [kw for kw in all_keywords if kw in title_lower]
 
                 # Only flag recent news (within 7 days) - older news is not actionable
                 if detected_keywords and release_date:
@@ -1075,8 +1090,8 @@ def scrape_company_website_task(self, job_id: int, sections: list = None):
             job.completed_at = timezone.now()
             job.error_messages = ['Task timed out - exceeded 10 minute limit. The website may be too slow or complex.']
             job.save()
-        except:
-            pass
+        except Exception as e:
+            print(f"[ERROR] Failed to update job {job_id} status on timeout: {e}")
 
         return {
             'status': 'error',
@@ -1098,8 +1113,8 @@ def scrape_company_website_task(self, job_id: int, sections: list = None):
             job.error_messages = [str(e)]
             job.error_traceback = traceback.format_exc()
             job.save()
-        except:
-            pass
+        except Exception as update_err:
+            print(f"[ERROR] Failed to update job {job_id} status on error: {update_err}")
 
         # Retry on failure (but not for timeouts)
         try:
@@ -1239,8 +1254,8 @@ def scrape_and_save_company_task(self, job_id: int, update_existing: bool = Fals
             job.completed_at = timezone.now()
             job.error_messages = ['Task timed out - exceeded 10 minute limit']
             job.save()
-        except:
-            pass
+        except Exception as e:
+            print(f"[ERROR] Failed to update job {job_id} status on timeout: {e}")
         return {
             'status': 'error',
             'job_id': job_id,
@@ -1579,8 +1594,8 @@ def store_company_profile_in_rag_task(self, company_id: int):
         # Delete existing profile
         try:
             collection.delete(ids=[f"company_{company.id}_profile"])
-        except:
-            pass
+        except Exception:
+            pass  # Profile may not exist yet
 
         # Add profile
         collection.add(

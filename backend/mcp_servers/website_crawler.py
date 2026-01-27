@@ -214,7 +214,7 @@ def parse_date_comprehensive(text: str) -> Tuple[Optional[str], str]:
                 if dd_mm_parsed > future_threshold and mm_dd_parsed <= future_threshold:
                     return mm_dd_date, original_text
                 return dd_mm_date, original_text
-            except:
+            except (ValueError, TypeError):
                 return dd_mm_date, original_text
 
     return None, original_text
@@ -321,7 +321,7 @@ def parse_date_standalone(text: str) -> Optional[str]:
                     return mm_dd_date
                 # Otherwise default to DD/MM (international standard)
                 return dd_mm_date
-            except:
+            except (ValueError, TypeError):
                 return dd_mm_date  # Default to DD/MM on any error
         else:
             return f"{year}-{second.zfill(2)}-{first.zfill(2)}"  # Default DD/MM
@@ -1198,8 +1198,8 @@ async def crawl_technical_documents(url: str) -> List[Dict]:
                                 # If it's a project page, also add sub-paths for technical documents
                                 if '/project' in path.lower():
                                     project_pages.append(path.rstrip('/'))
-        except:
-            pass
+        except Exception as e:
+            print(f"[TECH-DOCS] Error scanning {url}: {e}")
 
         # Add technical document sub-paths under each discovered project page
         for project_path in project_pages:
@@ -1631,7 +1631,7 @@ def _add_news_item(news_by_url: Dict[str, Dict], news: Dict, cutoff_date: dateti
         try:
             if datetime.strptime(news['date'], '%Y-%m-%d') < cutoff_date:
                 return False
-        except:
+        except (ValueError, TypeError):
             pass
 
     # SLUG DEDUPLICATION: Check if we've seen this slug before with a different URL

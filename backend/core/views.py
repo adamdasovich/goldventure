@@ -227,7 +227,7 @@ def metals_prices(request):
                         change_percent = ((current_price - prev_price) / prev_price) * 100
                     else:
                         change_percent = 0.0
-                except:
+                except (ValueError, TypeError, ZeroDivisionError, KeyError, IndexError):
                     change_percent = 0.0
 
                 results.append({
@@ -961,7 +961,7 @@ def scrape_company_news(request, company_id):
 
 
 @api_view(['GET'])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 def check_scrape_status(request, task_id):
     """
     Check the status of a background news scraping task.
@@ -3620,7 +3620,12 @@ def news_sources_list(request):
 
     GET /api/news/sources/
     """
-    sources = NewsSource.objects.filter(is_active=True)
+    from django.db.models import Count, Q
+
+    # Use annotation to avoid N+1 query
+    sources = NewsSource.objects.filter(is_active=True).annotate(
+        visible_article_count=Count('articles', filter=Q(articles__is_visible=True))
+    )
 
     return Response({
         'sources': [
@@ -3628,7 +3633,7 @@ def news_sources_list(request):
                 'id': source.id,
                 'name': source.name,
                 'url': source.url,
-                'article_count': source.articles.filter(is_visible=True).count(),
+                'article_count': source.visible_article_count,
             }
             for source in sources
         ]
@@ -3832,8 +3837,8 @@ def news_scrape_trigger(request):
                 job.errors = [str(e)]
                 job.completed_at = timezone.now()
                 job.save()
-            except:
-                pass
+            except Exception as job_err:
+                print(f"[ERROR] Failed to update job status: {job_err}")
 
     # Start the scraper in a background thread
     thread = threading.Thread(target=run_scraper, args=(job.id,))
@@ -6256,7 +6261,7 @@ def _classify_news(title: str) -> dict:
     Returns a dict with news_type, is_material, financing info, and drill result info.
     """
     import re
-    from decimal import Decimal
+    from decimal import Decimal, InvalidOperation
 
     title_lower = title.lower()
     result = {
@@ -6368,7 +6373,7 @@ def _classify_news(title: str) -> dict:
                     try:
                         amount_str = amount_match.group(1).replace(',', '')
                         result['financing_amount'] = Decimal(amount_str) * 1000000
-                    except:
+                    except (ValueError, InvalidOperation, AttributeError):
                         pass
                 # Try to extract price per unit
                 price_match = re.search(
@@ -6378,7 +6383,7 @@ def _classify_news(title: str) -> dict:
                 if price_match:
                     try:
                         result['financing_price_per_unit'] = Decimal(price_match.group(1))
-                    except:
+                    except (ValueError, InvalidOperation, AttributeError):
                         pass
                 break
         if result['financing_type'] != 'none':
@@ -6699,7 +6704,7 @@ def _save_scraped_company_data(data: dict, source_url: str, update_existing: boo
         if news_item.get('publication_date'):
             try:
                 pub_date = datetime.strptime(news_item['publication_date'], '%Y-%m-%d').date()
-            except:
+            except (ValueError, TypeError):
                 pass
 
         # Skip news without dates
