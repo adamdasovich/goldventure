@@ -798,7 +798,8 @@ class CompanyDataScraper:
             # Fetch iframe content if found
             for iframe in stock_iframes[:2]:  # Limit to first 2 iframes
                 iframe_src = iframe.get('src', '')
-                if iframe_src:
+                # Validate iframe URL to prevent SSRF - only allow http/https
+                if iframe_src and iframe_src.startswith(('http://', 'https://')):
                     try:
                         iframe_resp = requests.get(iframe_src, headers={
                             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
