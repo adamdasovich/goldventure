@@ -333,6 +333,44 @@ python -c "from core.tasks import scrape_all_companies_news_task; scrape_all_com
 
 ## Recent Changes (Keep Updated)
 
+### 2026-01-27 - Comprehensive Security Audit & Fixes
+**Two full code audits performed. All critical issues fixed and deployed.**
+
+#### Security Hardening (settings.py)
+- Changed DEBUG default from 'True' to 'False' for safety
+- Reduced JWT access token lifetime from 24h to 1h
+- Added `BLACKLIST_AFTER_ROTATION` for JWT refresh tokens
+- Added rate limiting (100/hr anon, 1000/hr user)
+- Added `SESSION_COOKIE_HTTPONLY`, `CSRF_COOKIE_HTTPONLY`
+- Added `SESSION_COOKIE_SAMESITE`, `CSRF_COOKIE_SAMESITE = 'Lax'`
+- Added `SECURE_REFERRER_POLICY` for production
+
+#### Fixed Security Issues
+| File | Issue Fixed |
+|------|-------------|
+| `middleware.py` | Added `is_active` check for JWT users (prevent disabled user access) |
+| `admin.py` | Added URL validation in batch_add_view (prevent invalid URLs) |
+| `serializers.py` | Fixed bare except → `except (AttributeError, TypeError)` |
+| `tasks.py` | Fixed TOCTOU race conditions with `get_or_create` |
+| `views.py` | Fixed ViewSets (ResourceEstimate, SpeakerEvent, Financing) to require auth for writes |
+| `document_processor_hybrid.py` | Fixed bare except clauses (JSON, date parsing) |
+| `rag_utils.py` | Fixed bare except in ChromaDB deletion |
+| `company_scraper.py` | Added SSRF protection for iframe URLs (validate http/https) |
+| `onboard_company.py` | Fixed bare except clauses (Decimal, datetime parsing) |
+
+#### Frontend Security Fixes
+| File | Issue Fixed |
+|------|-------------|
+| `AuthContext.tsx` | Added try-catch for JSON.parse (prevent crashes from corrupted data) |
+| `RegisterModal.tsx` | Strengthened password validation (10+ chars, uppercase, lowercase, number) |
+
+#### Remaining Known Issues (Lower Priority)
+These were identified in the audit but not fixed (design changes required):
+- WebSocket tokens in query string (needs server-side auth redesign)
+- JWT tokens in localStorage (needs httpOnly cookie implementation)
+- Missing Content Security Policy header (needs django-csp package)
+- Some bare except clauses in kitco_scraper.py, stock_price_scraper.py (low risk)
+
 ### 2026-01-25
 - Added media coverage site blocklist to `website_crawler.py` `is_news_article_url()` function
   - Blocks Mining.com, Northern Miner, Kitco, Proactive Investors, and 15+ other media sites
@@ -466,3 +504,30 @@ When Claude makes a mistake and gets corrected, add it here:
 | 2026-01-25 | Media coverage from Mining.com/Northern Miner appeared in company news | Company profiles should ONLY have press releases. Some companies have "In the News" sections linking to media articles - these must be filtered. Added blocklist in `is_news_article_url()`. |
 | 2026-01-26 | Fixed code locally but didn't deploy before user onboarded company | Verification ran with old buggy code (projects not auto-added). CRITICAL: Always deploy fixes IMMEDIATELY after pushing - don't run manual tests that won't help future users. The code must be live on the server BEFORE it can help. |
 | 2026-01-26 | Ran verification manually instead of fixing the code | Manual interventions don't help future users. Always fix the root cause in code and deploy it so the system works automatically for all future onboardings. |
+
+---
+
+## Security Considerations
+
+### Authentication & Authorization
+- JWT tokens expire in 1 hour (access) and 7 days (refresh)
+- Rate limiting: 100 req/hr anonymous, 1000 req/hr authenticated
+- ViewSets use `get_permissions()` pattern: read=AllowAny, write=IsAuthenticated
+- WebSocket auth checks `is_active` on user after token decode
+
+### Known Security Patterns
+| Pattern | Location | Purpose |
+|---------|----------|---------|
+| `get_or_create` | tasks.py | Prevent TOCTOU race conditions |
+| URL validation | admin.py, company_scraper.py | Prevent SSRF attacks |
+| Specific exceptions | All files | Prevent silent error swallowing |
+| Rate limiting | settings.py | Prevent brute force/DoS |
+
+### Security Audit Checklist
+When making changes, check for:
+- [ ] Bare `except:` clauses (should use specific exceptions)
+- [ ] `exists()` followed by `create()` (use `get_or_create` instead)
+- [ ] User-supplied URLs being fetched (validate scheme is http/https)
+- [ ] Missing authentication on write endpoints
+- [ ] JSON.parse without try-catch (frontend)
+- [ ] dangerouslySetInnerHTML without sanitization (frontend)

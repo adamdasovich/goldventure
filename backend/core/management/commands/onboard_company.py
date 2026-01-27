@@ -364,7 +364,7 @@ class Command(BaseCommand):
                         try:
                             amount_str = amount_match.group(1).replace(',', '')
                             result['financing_amount'] = Decimal(amount_str) * 1000000
-                        except:
+                        except (ValueError, TypeError, AttributeError):
                             pass
                     # Try to extract price per unit
                     price_match = re.search(
@@ -374,7 +374,7 @@ class Command(BaseCommand):
                     if price_match:
                         try:
                             result['financing_price_per_unit'] = Decimal(price_match.group(1))
-                        except:
+                        except (ValueError, TypeError, AttributeError):
                             pass
                     break
             if result['financing_type'] != 'none':
@@ -808,7 +808,7 @@ class Command(BaseCommand):
             if news_item.get('publication_date'):
                 try:
                     pub_date = datetime.strptime(news_item['publication_date'], '%Y-%m-%d').date()
-                except:
+                except (ValueError, TypeError):
                     pass
 
             if not pub_date:
