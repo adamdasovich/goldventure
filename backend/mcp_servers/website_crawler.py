@@ -3160,11 +3160,15 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
                         print(f"[EARLY-EXIT] Found {recent_count} recent news items, stopping URL pattern search")
                         break
 
-                # EARLY EXIT 2: Time-based limit - stop after 60 seconds regardless of news found
-                # This prevents companies without recent news from taking 5+ minutes
+                # EARLY EXIT 2: Time-based limits to prevent long-running scrapes
                 elapsed_seconds = (datetime.now() - scrape_start_time).total_seconds()
+                # If we found news, exit after 60 seconds (we have data, stop searching)
                 if elapsed_seconds > 60 and len(news_by_url) > 0:
                     print(f"[TIME-EXIT] Scrape running for {elapsed_seconds:.1f}s with {len(news_by_url)} items, stopping early")
+                    break
+                # If no news found after 90 seconds, give up (probably won't find anything)
+                if elapsed_seconds > 90 and len(news_by_url) == 0:
+                    print(f"[TIME-EXIT] Scrape running for {elapsed_seconds:.1f}s with no news found, giving up")
                     break
 
             except Exception as e:
