@@ -5,6 +5,7 @@ Processes document queue jobs sequentially
 
 from celery import shared_task
 from django.utils import timezone
+from django.db import transaction
 from datetime import datetime
 from .models import DocumentProcessingJob, Company, NewsRelease, Document
 from mcp_servers.document_processor_hybrid import HybridDocumentProcessor
@@ -375,14 +376,16 @@ def scrape_company_news_task(self, company_id):
             # Create document processing job for PDF news releases (for vector DB)
             if url and '.pdf' in url.lower():
                 from core.models import DocumentProcessingJob
-                existing_job = DocumentProcessingJob.objects.filter(url=url).exists()
-                if not existing_job:
-                    job = DocumentProcessingJob.objects.create(
-                        url=url,
-                        document_type='news_release',
-                        company_name=company.name,
-                        status='pending'
-                    )
+                # Use get_or_create to avoid race condition (TOCTOU vulnerability)
+                job, job_created = DocumentProcessingJob.objects.get_or_create(
+                    url=url,
+                    defaults={
+                        'document_type': 'news_release',
+                        'company_name': company.name,
+                        'status': 'pending'
+                    }
+                )
+                if job_created:
                     news_record.processing_job = job
                     news_record.save(update_fields=['processing_job'])
 
@@ -694,28 +697,29 @@ def auto_discover_and_process_documents_task(self, company_ids=None, document_ty
                 # Create processing jobs (skip existing)
                 jobs_created = 0
                 for doc in documents:
-                    # Check if document already exists or job pending
+                    # Check if document already exists
                     existing = Document.objects.filter(
                         company=company,
                         file_url=doc['url']
                     ).exists()
-                    
-                    existing_job = DocumentProcessingJob.objects.filter(
-                        url=doc['url'],
-                        status__in=['completed', 'processing']
-                    ).exists()
-                    
-                    if existing or existing_job:
+
+                    if existing:
                         continue
-                    
-                    # Create processing job
-                    DocumentProcessingJob.objects.create(
+
+                    # Use get_or_create to avoid race condition (TOCTOU vulnerability)
+                    # Only create job if status would be 'pending' (not already completed/processing)
+                    job, job_created = DocumentProcessingJob.objects.get_or_create(
                         url=doc['url'],
-                        document_type=doc['document_type'],
-                        company_name=company.name,
-                        status='pending'
+                        defaults={
+                            'document_type': doc['document_type'],
+                            'company_name': company.name,
+                            'status': 'pending'
+                        }
                     )
-                    jobs_created += 1
+
+                    # Only count if newly created (not existing completed/processing)
+                    if job_created:
+                        jobs_created += 1
                 
                 total_jobs_created += jobs_created
                 companies_processed += 1

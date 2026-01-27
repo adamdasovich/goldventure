@@ -1645,7 +1645,12 @@ class ProjectViewSet(viewsets.ModelViewSet):
 class ResourceEstimateViewSet(viewsets.ModelViewSet):
     queryset = ResourceEstimate.objects.all()
     serializer_class = ResourceEstimateSerializer
-    permission_classes = [AllowAny]
+
+    def get_permissions(self):
+        """Allow read for anyone, require auth for write operations"""
+        if self.action in ['list', 'retrieve']:
+            return [AllowAny()]
+        return [IsAuthenticated()]
 
 
 class FinancingViewSet(viewsets.ModelViewSet):
@@ -1659,7 +1664,12 @@ class FinancingViewSet(viewsets.ModelViewSet):
     - DELETE /api/financings/{id}/ - Delete financing (superuser only)
     """
     serializer_class = FinancingSerializer
-    permission_classes = [AllowAny]
+
+    def get_permissions(self):
+        """Allow read for anyone, require auth for write operations"""
+        if self.action in ['list', 'retrieve']:
+            return [AllowAny()]
+        return [IsAuthenticated()]
 
     def get_queryset(self):
         """Filter financings by company if company query param is provided"""
@@ -1746,7 +1756,12 @@ class SpeakerEventViewSet(viewsets.ModelViewSet):
     - POST /api/events/{id}/end/ - End event
     - GET /api/events/upcoming/ - Get upcoming events
     """
-    permission_classes = [AllowAny]
+
+    def get_permissions(self):
+        """Allow read for anyone, require auth for write operations"""
+        if self.action in ['list', 'retrieve', 'upcoming']:
+            return [AllowAny()]
+        return [IsAuthenticated()]
 
     def get_queryset(self):
         queryset = SpeakerEvent.objects.select_related('company', 'created_by').prefetch_related('speakers__user')
