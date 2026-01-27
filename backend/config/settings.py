@@ -14,7 +14,12 @@ load_dotenv()
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-change-this-in-production')
+# In production, SECRET_KEY MUST be set via environment variable
+_default_key = 'dev-only-key-do-not-use-in-production-' + 'x' * 20
+SECRET_KEY = os.getenv('SECRET_KEY', _default_key)
+if not os.getenv('SECRET_KEY') and not os.getenv('DEBUG', 'False') == 'True':
+    import warnings
+    warnings.warn("SECRET_KEY environment variable not set! Using insecure default.", RuntimeWarning)
 
 # SECURITY WARNING: don't run with debug turned on in production!
 # Default to False for safety - must be explicitly set to True for development
@@ -78,7 +83,7 @@ DATABASES = {
         'ENGINE': 'django.db.backends.postgresql',
         'NAME': os.getenv('DB_NAME', 'goldventure_db'),
         'USER': os.getenv('DB_USER', 'postgres'),
-        'PASSWORD': os.getenv('DB_PASSWORD', ''),
+        'PASSWORD': os.getenv('DB_PASSWORD'),  # Required - no default for security
         'HOST': os.getenv('DB_HOST', 'localhost'),
         'PORT': os.getenv('DB_PORT', '5432'),
     }
@@ -203,10 +208,10 @@ EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', '')
 EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', '')
 DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'Junior Mining Intelligence <noreply@juniorminingintelligence.com>')
 
-# Notification Recipients
-ADMIN_EMAIL = os.getenv('ADMIN_EMAIL', 'adamdasovich@gmail.com')
-NI43101_NOTIFICATION_EMAIL = os.getenv('NI43101_NOTIFICATION_EMAIL', 'adamdasovich@gmail.com')
-FINANCING_NOTIFICATION_EMAIL = os.getenv('FINANCING_NOTIFICATION_EMAIL', 'adamdasovich@gmail.com')
+# Notification Recipients - MUST be set via environment variables in production
+ADMIN_EMAIL = os.getenv('ADMIN_EMAIL', 'admin@example.com')
+NI43101_NOTIFICATION_EMAIL = os.getenv('NI43101_NOTIFICATION_EMAIL', 'notifications@example.com')
+FINANCING_NOTIFICATION_EMAIL = os.getenv('FINANCING_NOTIFICATION_EMAIL', 'notifications@example.com')
 
 # ============================================================================
 # DJANGO CHANNELS & WEBSOCKET CONFIGURATION

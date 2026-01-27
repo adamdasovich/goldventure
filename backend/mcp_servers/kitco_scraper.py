@@ -163,7 +163,7 @@ class KitcoScraper:
                 for p in prices_with_commas:
                     try:
                         all_prices.append(Decimal(p.replace(',', '')))
-                    except:
+                    except (ValueError, TypeError, decimal.InvalidOperation):
                         pass
 
                 # Add non-comma prices if we don't have comma prices (for silver)
@@ -174,7 +174,7 @@ class KitcoScraper:
                             # Filter reasonable prices (silver > 20)
                             if val > 20:
                                 all_prices.append(val)
-                        except:
+                        except (ValueError, TypeError, decimal.InvalidOperation):
                             pass
 
                 if len(all_prices) >= 2:
@@ -194,7 +194,7 @@ class KitcoScraper:
                     try:
                         price_data['change_amount'] = Decimal(change_match.group(1))
                         price_data['change_percent'] = Decimal(change_match.group(2))
-                    except:
+                    except (ValueError, TypeError, decimal.InvalidOperation):
                         pass
 
                 break
@@ -219,7 +219,7 @@ class KitcoScraper:
                             if change_match:
                                 price_data['change_amount'] = Decimal(change_match.group(1))
                                 price_data['change_percent'] = Decimal(change_match.group(2))
-                        except:
+                        except (ValueError, TypeError, decimal.InvalidOperation):
                             pass
 
                     break

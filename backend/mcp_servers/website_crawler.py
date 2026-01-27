@@ -1589,7 +1589,7 @@ def _extract_news_from_element(element, source_url: str, base_url: str) -> Optio
             'year': date_str[:4] if date_str else None
         }
     except Exception:
-        return None
+        return None  # Parsing failed - return None to signal no valid news item
 
 
 def _extract_url_slug(url: str) -> str:
@@ -1682,13 +1682,14 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
         verbose=False
     )
 
-    # Use longer delays to handle bot protection (Cloudflare, captchas)
+    # Fast config for daily news scraping - no delays, no networkidle
+    # The slow config (5s delay, networkidle) caused 2+ hour scrapes
     crawler_config = CrawlerRunConfig(
         cache_mode="bypass",
-        delay_before_return_html=5.0,  # 5 second delay to let page fully render
-        page_timeout=60000,
-        wait_until='networkidle',  # Wait for all network requests to complete
     )
+
+    # Track scrape start time for time-based early exit
+    scrape_start_time = datetime.now()
 
     async with AsyncWebCrawler(config=browser_config) as crawler:
         current_year = datetime.now().year
@@ -1794,13 +1795,13 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
                                 }
                                 _add_news_item(news_by_url, news, cutoff_date, f"ASPX-{year}")
                             except Exception:
-                                continue
+                                continue  # Skip malformed item, continue with next
 
                         print(f"[ASPX] Processed year {year}")
                     except Exception:
-                        continue
+                        continue  # Skip malformed item, continue with next
             except Exception:
-                continue
+                continue  # Skip failed pattern, try next
 
         # Streamlined news page patterns
         news_page_patterns = [
@@ -1947,7 +1948,7 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
                         }
                         _add_news_item(news_by_url, news, cutoff_date, "WP-BLOCK")
                     except Exception:
-                        continue
+                        continue  # Skip malformed item, continue with next
 
                 # ============================================================
                 # STRATEGY: DAT-ARTICAL pattern (Mayfair Gold)
@@ -1988,7 +1989,7 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
                         }
                         _add_news_item(news_by_url, news, cutoff_date, "DAT-ARTICAL")
                     except Exception:
-                        continue
+                        continue  # Skip malformed item, continue with next
 
                 # ============================================================
                 # STRATEGY 3: Aston Bay pattern - date in stacked divs (Mon/DD/YYYY)
@@ -2049,7 +2050,7 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
                         }
                         _add_news_item(news_by_url, news, cutoff_date, "ASTON")
                     except Exception:
-                        continue
+                        continue  # Skip malformed item, continue with next
 
                 # ============================================================
                 # STRATEGY 4: Garibaldi uk-grid pattern - date/title in separate columns
@@ -2102,7 +2103,7 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
                         }
                         _add_news_item(news_by_url, news, cutoff_date, "UK-GRID")
                     except Exception:
-                        continue
+                        continue  # Skip malformed item, continue with next
 
                 # ============================================================
                 # STRATEGY 4b: Avino news-entry pattern
@@ -2148,7 +2149,7 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
                         }
                         _add_news_item(news_by_url, news, cutoff_date, "NEWS-ENTRY")
                     except Exception:
-                        continue
+                        continue  # Skip malformed item, continue with next
 
                 # ============================================================
                 # STRATEGY 4c: Blue Lagoon news-archive-list pattern
@@ -2196,7 +2197,7 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
                         }
                         _add_news_item(news_by_url, news, cutoff_date, "NEWS-ARCHIVE-LIST")
                     except Exception:
-                        continue
+                        continue  # Skip malformed item, continue with next
 
                 # ============================================================
                 # STRATEGY 4d: Ultimate Elements Grid pattern (CanAlaska)
@@ -2261,7 +2262,7 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
                         }
                         _add_news_item(news_by_url, news, cutoff_date, "UE-GRID")
                     except Exception:
-                        continue
+                        continue  # Skip malformed item, continue with next
 
                 # ============================================================
                 # STRATEGY 4e: Cassiar Gold pattern - news_item with h3 date
@@ -2298,7 +2299,7 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
                         }
                         _add_news_item(news_by_url, news, cutoff_date, "NEWS-ITEM-H3")
                     except Exception:
-                        continue
+                        continue  # Skip malformed item, continue with next
 
                 # ============================================================
                 # STRATEGY 4f: Cosa Resources pattern - div.news-link with date in parent
@@ -2342,7 +2343,7 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
                         }
                         _add_news_item(news_by_url, news, cutoff_date, "NEWS-LINK")
                     except Exception:
-                        continue
+                        continue  # Skip malformed item, continue with next
 
                 # ============================================================
                 # STRATEGY 4g: Globex Mining pattern - PDF press releases with embedded titles
@@ -2406,7 +2407,7 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
                         }
                         _add_news_item(news_by_url, news, cutoff_date, "PDF-EMBEDDED-TITLE")
                     except Exception:
-                        continue
+                        continue  # Skip malformed item, continue with next
 
                 # ============================================================
                 # STRATEGY 4h: GoGold Resources pattern - div.file with p and span
@@ -2457,7 +2458,7 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
                         }
                         _add_news_item(news_by_url, news, cutoff_date, "FILE-DIV")
                     except Exception:
-                        continue
+                        continue  # Skip malformed item, continue with next
 
                 # ============================================================
                 # STRATEGY 5a: 55 North Mining - Homepage PDF news pattern
@@ -2509,7 +2510,7 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
                         }
                         _add_news_item(news_by_url, news, cutoff_date, "PDF-NEWS")
                     except Exception:
-                        continue
+                        continue  # Skip malformed item, continue with next
 
                 # ============================================================
                 # STRATEGY 5b-NEW: WP Posts Pro plugin (Centurion Minerals pattern)
@@ -2550,7 +2551,7 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
                         }
                         _add_news_item(news_by_url, news, cutoff_date, "WPP")
                     except Exception:
-                        continue
+                        continue  # Skip malformed item, continue with next
 
                 # ============================================================
                 # STRATEGY 5b-POWERPACK: PowerPack Posts Grid with schema.org metadata
@@ -2595,7 +2596,7 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
                         }
                         _add_news_item(news_by_url, news, cutoff_date, "POWERPACK")
                     except Exception:
-                        continue
+                        continue  # Skip malformed item, continue with next
 
                 # ============================================================
                 # STRATEGY 5b-ELEMENTOR: Elementor Loop pattern
@@ -2702,7 +2703,7 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
                         }
                         _add_news_item(news_by_url, news, cutoff_date, "ELEMENTOR")
                     except Exception:
-                        continue
+                        continue  # Skip malformed item, continue with next
 
                 # ============================================================
                 # STRATEGY 5b-NEWSCARD: Liberty Gold news-card pattern
@@ -2751,7 +2752,7 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
                         }
                         _add_news_item(news_by_url, news, cutoff_date, "NEWSCARD")
                     except Exception:
-                        continue
+                        continue  # Skip malformed item, continue with next
 
                 # ============================================================
                 # STRATEGY 5b-UIKIT: Scottie Resources UIKit Grid pattern
@@ -2821,7 +2822,7 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
                         }
                         _add_news_item(news_by_url, news, cutoff_date, "UIKIT")
                     except Exception:
-                        continue
+                        continue  # Skip malformed item, continue with next
 
                 # ============================================================
                 # STRATEGY 5b: ATEX Resources - Article with time element
@@ -2874,7 +2875,7 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
                         }
                         _add_news_item(news_by_url, news, cutoff_date, "ARTICLE")
                     except Exception:
-                        continue
+                        continue  # Skip malformed item, continue with next
 
                 # ============================================================
                 # STRATEGY 5c: WordPress archive lists (Angkor WP subdomain)
@@ -2926,7 +2927,7 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
                         }
                         _add_news_item(news_by_url, news, cutoff_date, "WP-ENTRY")
                     except Exception:
-                        continue
+                        continue  # Skip malformed item, continue with next
 
                 # ============================================================
                 # STRATEGY 5c-GRID: News section grid layout (New Pacific Metals pattern)
@@ -2978,7 +2979,7 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
                         }
                         _add_news_item(news_by_url, news, cutoff_date, "NEWS-GRID")
                     except Exception:
-                        continue
+                        continue  # Skip malformed item, continue with next
 
                 # ============================================================
                 # STRATEGY 5d: Freegold Ventures - a.latest with h3 date
@@ -3024,7 +3025,7 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
                         }
                         _add_news_item(news_by_url, news, cutoff_date, "LATEST")
                     except Exception:
-                        continue
+                        continue  # Skip malformed item, continue with next
 
                 # ============================================================
                 # STRATEGY 5: Structured news-item elements with date/title divs
@@ -3144,6 +3145,27 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
                         'year': date_str[:4] if date_str else None
                     }
                     _add_news_item(news_by_url, news, cutoff_date, "ELEMENTOR")
+
+                # ============================================================
+                # EARLY EXIT CHECKS - prevent scrapes from running 2+ hours
+                # ============================================================
+
+                # EARLY EXIT 1: For daily scraping, stop if we found enough recent news
+                # This dramatically speeds up the scrape by skipping unnecessary URL patterns
+                if months <= 6:  # Only for short-term scraping (daily scrape uses months=3)
+                    recent_count = sum(1 for n in news_by_url.values()
+                                      if n.get('date') and
+                                      datetime.strptime(n['date'], '%Y-%m-%d') > datetime.now() - timedelta(days=30))
+                    if recent_count >= 3:
+                        print(f"[EARLY-EXIT] Found {recent_count} recent news items, stopping URL pattern search")
+                        break
+
+                # EARLY EXIT 2: Time-based limit - stop after 60 seconds regardless of news found
+                # This prevents companies without recent news from taking 5+ minutes
+                elapsed_seconds = (datetime.now() - scrape_start_time).total_seconds()
+                if elapsed_seconds > 60 and len(news_by_url) > 0:
+                    print(f"[TIME-EXIT] Scrape running for {elapsed_seconds:.1f}s with {len(news_by_url)} items, stopping early")
+                    break
 
             except Exception as e:
                 # Silently continue if this news URL doesn't exist

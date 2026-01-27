@@ -326,8 +326,8 @@ class NewsContentProcessor(BaseMCPServer):
         try:
             existing_ids = [f"{prefix}_chunk_{i}" for i in range(100)]
             self.collection.delete(ids=existing_ids)
-        except:
-            pass
+        except Exception:
+            pass  # ChromaDB may not have these IDs
 
         # Get content - use existing or fetch from URL
         text = existing_text

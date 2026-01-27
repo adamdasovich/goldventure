@@ -17,6 +17,46 @@ from decimal import Decimal
 from pathlib import Path
 import tempfile
 import json
+import ipaddress
+from urllib.parse import urlparse
+
+
+def is_safe_url(url: str) -> bool:
+    """
+    Validate URL is safe to fetch (prevent SSRF attacks).
+    Blocks internal IPs, localhost, and cloud metadata endpoints.
+    """
+    try:
+        parsed = urlparse(url)
+
+        # Only allow http/https
+        if parsed.scheme not in ('http', 'https'):
+            return False
+
+        hostname = parsed.hostname
+        if not hostname:
+            return False
+
+        # Block localhost variants
+        if hostname in ('localhost', '127.0.0.1', '0.0.0.0', '::1'):
+            return False
+
+        # Block common cloud metadata endpoints
+        if hostname in ('169.254.169.254', 'metadata.google.internal'):
+            return False
+
+        # Try to parse as IP address and check for private/reserved ranges
+        try:
+            ip = ipaddress.ip_address(hostname)
+            if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved:
+                return False
+        except ValueError:
+            # Not an IP address, likely a domain name - that's fine
+            pass
+
+        return True
+    except Exception:
+        return False
 
 from docling.document_converter import DocumentConverter
 from docling_core.types.doc import ImageRefMode, PictureItem, TableItem
@@ -239,9 +279,24 @@ class HybridDocumentProcessor(BaseMCPServer):
         max_retries = 3
         last_error = None
 
+        # Validate URL is safe (prevent SSRF)
+        if not is_safe_url(url):
+            raise Exception(f"URL validation failed - potentially unsafe: {url}")
+
         for attempt in range(max_retries):
             try:
-                response = requests.get(url, headers=headers, timeout=60, allow_redirects=True)
+                # Use allow_redirects=False to manually validate redirects
+                response = requests.get(url, headers=headers, timeout=60, allow_redirects=False)
+
+                # Handle redirects manually to validate each destination
+                redirect_count = 0
+                while response.is_redirect and redirect_count < 5:
+                    redirect_url = response.headers.get('Location')
+                    if redirect_url and not is_safe_url(redirect_url):
+                        raise Exception(f"Redirect to unsafe URL blocked: {redirect_url}")
+                    response = requests.get(redirect_url, headers=headers, timeout=60, allow_redirects=False)
+                    redirect_count += 1
+
                 response.raise_for_status()
 
                 # Create temp file
@@ -478,23 +533,31 @@ EXTRACTED TABLES ({len(docling_data['tables'])} total tables, showing {len(filte
 
             response_text = self._ask_claude(prompt, context, max_tokens=4000)
 
-            # Parse JSON response
+            # Parse JSON response - try direct parse first, then extract if needed
             try:
-                json_start = response_text.find('{')
-                json_end = response_text.rfind('}') + 1
-                if json_start != -1 and json_end > json_start:
-                    extracted_data = json.loads(response_text[json_start:json_end])
-                else:
-                    extracted_data = json.loads(response_text)
+                # First, try to parse the entire response as JSON
+                extracted_data = json.loads(response_text.strip())
             except json.JSONDecodeError:
-                return {
-                    "warning": "Could not parse structured data",
-                    "raw_analysis": response_text[:1000],
-                    "docling_stats": {
-                        "tables_found": len(docling_data['tables']),
-                        "pages": docling_data['page_count']
+                # Fall back to extracting JSON from response text
+                try:
+                    json_start = response_text.find('{')
+                    json_end = response_text.rfind('}') + 1
+                    if json_start != -1 and json_end > json_start:
+                        extracted_data = json.loads(response_text[json_start:json_end])
+                    else:
+                        raise json.JSONDecodeError("No JSON object found", response_text, 0)
+                    # Validate extracted data has expected structure
+                    if not isinstance(extracted_data, dict):
+                        raise json.JSONDecodeError("Extracted data is not a dict", response_text, 0)
+                except json.JSONDecodeError:
+                    return {
+                        "warning": "Could not parse structured data",
+                        "raw_analysis": response_text[:1000],
+                        "docling_stats": {
+                            "tables_found": len(docling_data['tables']),
+                            "pages": docling_data['page_count']
+                        }
                     }
-                }
 
             # Store document
             doc_info = extracted_data.get('document_info', {})

@@ -23,13 +23,16 @@ from core import routing
 from core.middleware import JWTAuthMiddlewareStack
 
 # Configure allowed origins for WebSocket connections
-ALLOWED_WEBSOCKET_ORIGINS = [
+# Can be overridden via WEBSOCKET_ALLOWED_ORIGINS environment variable (comma-separated)
+_default_ws_origins = [
     'juniorminingintelligence.com',
     'www.juniorminingintelligence.com',
     'api.juniorminingintelligence.com',
     'localhost:3000',
     '127.0.0.1:3000',
 ]
+_env_origins = os.environ.get('WEBSOCKET_ALLOWED_ORIGINS', '')
+ALLOWED_WEBSOCKET_ORIGINS = _env_origins.split(',') if _env_origins else _default_ws_origins
 
 # Configure ASGI application with WebSocket support
 application = ProtocolTypeRouter({

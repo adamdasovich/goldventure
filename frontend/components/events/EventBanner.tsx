@@ -68,16 +68,6 @@ export function EventBanner({ companyId }: EventBannerProps) {
   // Check if user has staff access (staff, superuser, or event creator)
   const hasStaffAccess = user && (user.is_staff || user.is_superuser);
 
-  // Debug: Log user data and staff access
-  useEffect(() => {
-    console.log('=== EventBanner User Debug ===');
-    console.log('User object:', user);
-    console.log('is_staff:', user?.is_staff);
-    console.log('is_superuser:', user?.is_superuser);
-    console.log('hasStaffAccess:', hasStaffAccess);
-    console.log('============================');
-  }, [user, hasStaffAccess]);
-
   useEffect(() => {
     fetchUpcomingEvent();
   }, [companyId]);

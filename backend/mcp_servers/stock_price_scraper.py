@@ -190,7 +190,7 @@ class StockPriceScraper:
                         quote_data['high'] = vals[1]
                         quote_data['low'] = vals[2]
                         break
-                    except:
+                    except (ValueError, TypeError, decimal.InvalidOperation):
                         pass
 
             # Extract change percent from a standalone number near the change
@@ -202,7 +202,7 @@ class StockPriceScraper:
                         if -50 < pct < 100:  # Reasonable percent range
                             quote_data['change_percent'] = pct
                             break
-                    except:
+                    except (ValueError, TypeError, decimal.InvalidOperation):
                         pass
 
             if quote_data['close'] is None or quote_data['close'] <= 0:
