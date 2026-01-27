@@ -1682,10 +1682,13 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
         verbose=False
     )
 
-    # Fast config for daily news scraping - no delays, no networkidle
+    # Fast config for daily news scraping - no delays, short timeout
     # The slow config (5s delay, networkidle) caused 2+ hour scrapes
+    # page_timeout=15000 (15 seconds) prevents slow/unreachable sites from blocking
+    # (default was 60000ms which caused 300+ second scrapes when multiple URLs timed out)
     crawler_config = CrawlerRunConfig(
         cache_mode="bypass",
+        page_timeout=15000,  # 15 seconds max per URL (was 60s default)
     )
 
     # Track scrape start time for time-based early exit
@@ -1849,6 +1852,16 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
             ])
 
         for news_url in news_page_patterns:
+            # PRE-PATTERN TIME CHECK: Skip remaining patterns if we've exceeded time limits
+            # This check runs BEFORE each URL fetch, so we don't waste time on slow URLs
+            elapsed_so_far = (datetime.now() - scrape_start_time).total_seconds()
+            if elapsed_so_far > 60 and len(news_by_url) > 0:
+                print(f"[TIME-EXIT] {elapsed_so_far:.1f}s elapsed with {len(news_by_url)} items, skipping remaining patterns")
+                break
+            if elapsed_so_far > 90:
+                print(f"[TIME-EXIT] {elapsed_so_far:.1f}s elapsed, skipping remaining patterns")
+                break
+
             try:
                 result = await crawler.arun(url=news_url, config=crawler_config)
                 if not result.success:
