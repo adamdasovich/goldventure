@@ -1851,6 +1851,11 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
             f'{url}/news/?current_year={current_year - 1}',
             f'{url}/news?current_year={current_year}',
             f'{url}/news?current_year={current_year - 1}',
+            # Northisle WordPress pattern: ?post_year= filtering
+            f'{url}/news-releases?post_year={current_year}',
+            f'{url}/news-releases?post_year={current_year - 1}',
+            f'{url}/news-releases?post_year={current_year - 2}',
+            f'{url}/news-releases?post_year={current_year - 3}',
             url,  # Homepage fallback for 55 North Mining style sites
         ]
 
@@ -1972,6 +1977,53 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
                             'year': date_str[:4] if date_str else None
                         }
                         _add_news_item(news_by_url, news, cutoff_date, "WP-BLOCK")
+                    except Exception as e:
+                        logger.debug(f"Skipping malformed news item: {e}")
+                        continue  # Skip malformed item, continue with next
+
+                # ============================================================
+                # STRATEGY: Northisle WordPress theme pattern
+                # Structure: <div class="news-releases__post">
+                #   <div class="news-ttl"><span>Title</span><div class="date">January 21, 2026</div></div>
+                #   <a href="..." class="btn-link">Read More</a>
+                # </div>
+                # ============================================================
+                for post in soup.select('.news-releases__post'):
+                    try:
+                        # Get title from .news-ttl span
+                        title_elem = post.select_one('.news-ttl span')
+                        if not title_elem:
+                            continue
+                        title = title_elem.get_text(strip=True)
+                        if not title or len(title) < 15:
+                            continue
+
+                        # Get date from .date
+                        date_elem = post.select_one('.date')
+                        date_str = None
+                        if date_elem:
+                            date_str = parse_date_standalone(date_elem.get_text(strip=True))
+
+                        # Get link from a.btn-link
+                        link = post.select_one('a.btn-link')
+                        if not link:
+                            continue
+                        href = link.get('href', '')
+                        if not href:
+                            continue
+
+                        # Build full URL
+                        if not href.startswith('http'):
+                            href = urljoin(news_url, href)
+
+                        news = {
+                            'title': clean_news_title(title, href),
+                            'url': href,
+                            'date': date_str,
+                            'document_type': 'news_release',
+                            'year': date_str[:4] if date_str else None
+                        }
+                        _add_news_item(news_by_url, news, cutoff_date, "NORTHISLE-WP")
                     except Exception as e:
                         logger.debug(f"Skipping malformed news item: {e}")
                         continue  # Skip malformed item, continue with next
