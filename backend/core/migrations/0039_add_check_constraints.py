@@ -198,8 +198,15 @@ class Migration(migrations.Migration):
         migrations.AddConstraint(
             model_name='metalprice',
             constraint=models.CheckConstraint(
-                check=models.Q(price__gte=0),
-                name='metalprice_price_non_negative',
+                check=models.Q(ask_price__gte=0) | models.Q(ask_price__isnull=True),
+                name='metalprice_ask_price_non_negative',
+            ),
+        ),
+        migrations.AddConstraint(
+            model_name='metalprice',
+            constraint=models.CheckConstraint(
+                check=models.Q(bid_price__gte=0) | models.Q(bid_price__isnull=True),
+                name='metalprice_bid_price_non_negative',
             ),
         ),
 
