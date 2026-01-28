@@ -211,26 +211,12 @@ class Migration(migrations.Migration):
         ),
 
         # =====================================================================
-        # INVESTOR HOLDING CONSTRAINTS
-        # =====================================================================
-        migrations.AddConstraint(
-            model_name='investorholding',
-            constraint=models.CheckConstraint(
-                check=(
-                    models.Q(percentage_ownership__gte=0, percentage_ownership__lte=100) |
-                    models.Q(percentage_ownership__isnull=True)
-                ),
-                name='holding_percentage_valid',
-            ),
-        ),
-
-        # =====================================================================
         # STORE PRODUCT CONSTRAINTS
         # =====================================================================
         migrations.AddConstraint(
             model_name='storeproduct',
             constraint=models.CheckConstraint(
-                check=models.Q(price__gte=0),
+                check=models.Q(price_cents__gte=0),
                 name='storeproduct_price_non_negative',
             ),
         ),
@@ -238,8 +224,8 @@ class Migration(migrations.Migration):
             model_name='storeproduct',
             constraint=models.CheckConstraint(
                 check=(
-                    models.Q(compare_at_price__gte=0) |
-                    models.Q(compare_at_price__isnull=True)
+                    models.Q(compare_at_price_cents__gte=0) |
+                    models.Q(compare_at_price_cents__isnull=True)
                 ),
                 name='storeproduct_compare_price_non_negative',
             ),
@@ -247,8 +233,8 @@ class Migration(migrations.Migration):
         migrations.AddConstraint(
             model_name='storeproduct',
             constraint=models.CheckConstraint(
-                check=models.Q(stock_quantity__gte=0),
-                name='storeproduct_stock_non_negative',
+                check=models.Q(inventory_count__gte=0),
+                name='storeproduct_inventory_non_negative',
             ),
         ),
     ]
