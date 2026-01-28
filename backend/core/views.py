@@ -2,7 +2,15 @@
 API Views for GoldVenture Platform
 """
 
+import logging
+
 from rest_framework import viewsets, status, permissions
+
+# Configure logger for views
+logger = logging.getLogger(__name__)
+
+from .constants import CacheTTL, Timeouts, TruncationLimits, QueryLimits
+
 from rest_framework.decorators import api_view, permission_classes, action
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
@@ -151,10 +159,10 @@ def metals_prices(request):
                     'cached': False,
                     'source': 'Kitco (scraped)'
                 }
-                cache.set('metals_prices', response_data, 300)
+                cache.set('metals_prices', response_data, CacheTTL.DEFAULT)
                 return Response(response_data)
     except Exception as e:
-        print(f"Error fetching Kitco prices: {e}")
+        logger.error(f"Error fetching Kitco prices: {e}")
 
     # Fallback to Twelve Data API if no Kitco data
     api_key = getattr(settings, 'TWELVE_DATA_API_KEY', None)
@@ -186,7 +194,7 @@ def metals_prices(request):
             'cached': False,
             'source': 'Estimated'
         }
-        cache.set('metals_prices', response_data, 300)
+        cache.set('metals_prices', response_data, CacheTTL.DEFAULT)
         return Response(response_data)
 
     # Use Twelve Data API as fallback
@@ -205,7 +213,7 @@ def metals_prices(request):
                 'apikey': api_key
             }
 
-            response = requests.get(url, params=params, timeout=10)
+            response = requests.get(url, params=params, timeout=Timeouts.DEFAULT)
             data = response.json()
 
             if 'price' in data:
@@ -219,7 +227,7 @@ def metals_prices(request):
                         'outputsize': 2,
                         'apikey': api_key
                     }
-                    prev_response = requests.get(prev_url, params=prev_params, timeout=10)
+                    prev_response = requests.get(prev_url, params=prev_params, timeout=Timeouts.DEFAULT)
                     prev_data = prev_response.json()
 
                     if 'values' in prev_data and len(prev_data['values']) >= 2:
@@ -277,7 +285,7 @@ def metals_prices(request):
         'source': 'Twelve Data (fallback)'
     }
 
-    cache.set('metals_prices', response_data, 300)
+    cache.set('metals_prices', response_data, CacheTTL.DEFAULT)
     return Response(response_data)
 
 
@@ -327,7 +335,7 @@ def metal_historical(request, symbol):
             'apikey': api_key
         }
 
-        response = requests.get(url, params=params, timeout=15)
+        response = requests.get(url, params=params, timeout=Timeouts.MEDIUM)
         data = response.json()
 
         if 'values' in data and data['values']:
@@ -351,7 +359,7 @@ def metal_historical(request, symbol):
             }
 
             # Cache for 1 hour
-            cache.set(cache_key, response_data, 3600)
+            cache.set(cache_key, response_data, CacheTTL.LONG)
 
             return Response(response_data)
         else:
@@ -406,7 +414,7 @@ def _get_stockwatch_quote(ticker_symbol: str, exchange: str) -> dict:
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
         }
 
-        response = requests.get(url, headers=headers, timeout=10)
+        response = requests.get(url, headers=headers, timeout=Timeouts.DEFAULT)
         response.raise_for_status()
 
         soup = BeautifulSoup(response.text, 'html.parser')
@@ -561,6 +569,13 @@ def stock_quote(request, company_id):
             status=status.HTTP_404_NOT_FOUND
         )
 
+    # Validate ticker symbol exists
+    if not company.ticker_symbol:
+        return Response(
+            {'error': 'No ticker symbol configured for this company'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
     # Check in-memory cache first (5 minute TTL)
     cache_key = f'stock_quote_{company_id}'
     cached_data = cache.get(cache_key)
@@ -573,24 +588,41 @@ def stock_quote(request, company_id):
     # Build ticker symbol for Yahoo Finance / Alpha Vantage
     ticker = company.ticker_symbol
     exchange_upper = company.exchange.upper() if company.exchange else ''
-    if exchange_upper == 'TSXV':
+
+    # Normalize exchange variations to standard codes
+    if exchange_upper in ('TSXV', 'TSX VENTURE', 'TSX-V', 'TSXVENTURE'):
         yahoo_ticker = f"{ticker}.V"
         av_ticker = f"{ticker}.V"
-    elif exchange_upper == 'TSX':
+        exchange_code = 'TSXV'
+    elif exchange_upper in ('TSX', 'TORONTO', 'TORONTO STOCK EXCHANGE'):
         yahoo_ticker = f"{ticker}.TO"
         av_ticker = f"{ticker}.TO"
-    elif exchange_upper == 'CSE':
+        exchange_code = 'TSX'
+    elif exchange_upper in ('CSE', 'CANADIAN SECURITIES EXCHANGE'):
         yahoo_ticker = f"{ticker}.CN"
         av_ticker = f"{ticker}.CN"
-    elif exchange_upper == 'ASX':
+        exchange_code = 'CSE'
+    elif exchange_upper in ('ASX', 'AUSTRALIAN SECURITIES EXCHANGE'):
         yahoo_ticker = f"{ticker}.AX"
         av_ticker = f"{ticker}.AX"
-    elif exchange_upper == 'AIM' or exchange_upper == 'LSE':
+        exchange_code = 'ASX'
+    elif exchange_upper in ('AIM', 'LSE', 'LONDON STOCK EXCHANGE'):
         yahoo_ticker = f"{ticker}.L"
         av_ticker = f"{ticker}.L"
+        exchange_code = exchange_upper
+    elif exchange_upper in ('NYSE', 'NASDAQ', 'AMEX', 'OTC', 'OTCQX', 'OTCQB'):
+        yahoo_ticker = ticker  # US stocks don't need suffix
+        av_ticker = ticker
+        exchange_code = exchange_upper
     else:
         yahoo_ticker = ticker
         av_ticker = ticker
+        exchange_code = exchange_upper
+
+    logger.debug(
+        f"Stock quote lookup: {company.name} - raw exchange='{company.exchange}' "
+        f"normalized='{exchange_code}' yahoo_ticker='{yahoo_ticker}'"
+    )
 
     # Try Yahoo Finance first (more up-to-date for Canadian stocks)
     yahoo_result = _get_yahoo_finance_quote(yahoo_ticker)
@@ -613,8 +645,8 @@ def stock_quote(request, company_id):
         return Response(response_data)
 
     # Yahoo Finance failed - try StockWatch for Canadian stocks (CSE, TSXV, TSX)
-    if exchange_upper in ['CSE', 'TSXV', 'TSX']:
-        stockwatch_result = _get_stockwatch_quote(ticker, exchange_upper)
+    if exchange_code in ['CSE', 'TSXV', 'TSX']:
+        stockwatch_result = _get_stockwatch_quote(ticker, exchange_code)
 
         if 'error' not in stockwatch_result and stockwatch_result.get('price', 0) > 0:
             response_data = {
@@ -635,7 +667,7 @@ def stock_quote(request, company_id):
 
     # StockWatch failed or not Canadian - try Alpha Vantage as fallback
     # Note: Alpha Vantage does NOT support CSE stocks
-    if exchange_upper != 'CSE':
+    if exchange_code != 'CSE':
         from mcp_servers.alpha_vantage import AlphaVantageServer
 
         alpha_vantage = AlphaVantageServer(company_id=company_id)
@@ -691,13 +723,21 @@ def stock_quote(request, company_id):
         }
 
         # Cache for 2 minutes (shorter since it's fallback data)
-        cache.set(cache_key, response_data, 120)
+        cache.set(cache_key, response_data, CacheTTL.SHORT)
         return Response(response_data)
 
     # No data available from any source
-    error_msg = yahoo_result.get('error', quote_result.get('error', 'Unable to fetch stock data'))
+    logger.warning(
+        f"Stock quote failed for {company.name} ({company.ticker_symbol}:{company.exchange}). "
+        f"Yahoo: {yahoo_result.get('error', 'N/A')}"
+    )
     return Response(
-        {'error': error_msg},
+        {
+            'error': 'Unable to fetch stock data',
+            'ticker': company.ticker_symbol,
+            'exchange': company.exchange,
+            'details': f"Try setting ticker to format like 'XYZ.V' for TSXV or 'XYZ.TO' for TSX"
+        },
         status=status.HTTP_503_SERVICE_UNAVAILABLE
     )
 
@@ -1207,7 +1247,8 @@ class CompanyViewSet(viewsets.ModelViewSet):
         return CompanySerializer
 
     def get_queryset(self):
-        queryset = Company.objects.filter(is_active=True)
+        # Exclude soft-deleted and inactive companies
+        queryset = Company.objects.filter(is_active=True, is_deleted=False)
 
         # Only show approved companies to non-superusers
         if not (self.request.user and self.request.user.is_superuser):
@@ -1352,8 +1393,7 @@ class CompanyViewSet(viewsets.ModelViewSet):
         Requires authentication. Companies submitted by users will have approval_status='pending_approval'
         and must be approved by a superuser before becoming visible to the public.
         """
-        print("=== CUSTOM CREATE METHOD CALLED ===")
-        print(f"Request data: {request.data}")
+        logger.debug(f"CompanyViewSet.create called with data: {request.data}")
 
         if not request.user.is_authenticated:
             return Response(
@@ -1448,9 +1488,7 @@ class CompanyViewSet(viewsets.ModelViewSet):
                 is_active=True
             )
         except Exception as e:
-            import traceback
-            print(f"ERROR creating company: {str(e)}")
-            print(traceback.format_exc())
+            logger.exception(f"Error creating company: {str(e)}")
             return Response({
                 'error': f'Failed to create company: {str(e)}'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -1706,7 +1744,6 @@ class ProjectViewSet(viewsets.ModelViewSet):
 # ============================================================================
 
 class ResourceEstimateViewSet(viewsets.ModelViewSet):
-    queryset = ResourceEstimate.objects.all()
     serializer_class = ResourceEstimateSerializer
 
     def get_permissions(self):
@@ -1714,6 +1751,10 @@ class ResourceEstimateViewSet(viewsets.ModelViewSet):
         if self.action in ['list', 'retrieve']:
             return [AllowAny()]
         return [IsAuthenticated()]
+
+    def get_queryset(self):
+        """Optimize queries with select_related for project FK"""
+        return ResourceEstimate.objects.select_related('project', 'project__company').all()
 
 
 class FinancingViewSet(viewsets.ModelViewSet):
@@ -1736,7 +1777,8 @@ class FinancingViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         """Filter financings by company if company query param is provided"""
-        queryset = Financing.objects.select_related('company').all()
+        # Exclude soft-deleted financings
+        queryset = Financing.objects.select_related('company').filter(is_deleted=False)
         company_id = self.request.query_params.get('company')
         if company_id:
             queryset = queryset.filter(company_id=company_id)
@@ -2043,7 +2085,12 @@ class EventQuestionViewSet(viewsets.ModelViewSet):
     - POST /api/event-questions/{id}/upvote/ - Upvote a question
     """
     serializer_class = EventQuestionSerializer
-    permission_classes = [AllowAny]
+
+    def get_permissions(self):
+        """Require authentication for write operations"""
+        if self.action in ['create', 'update', 'partial_update', 'destroy', 'upvote']:
+            return [IsAuthenticated()]
+        return [AllowAny()]
 
     def get_queryset(self):
         queryset = EventQuestion.objects.select_related('user', 'answered_by')
@@ -2088,7 +2135,12 @@ class EventReactionViewSet(viewsets.ModelViewSet):
     - GET /api/event-reactions/?event={event_id} - Get reactions for an event
     """
     serializer_class = EventReactionSerializer
-    permission_classes = [AllowAny]
+
+    def get_permissions(self):
+        """Require authentication for write operations"""
+        if self.action in ['create', 'update', 'partial_update', 'destroy']:
+            return [IsAuthenticated()]
+        return [AllowAny()]
 
     def get_queryset(self):
         queryset = EventReaction.objects.select_related('user')
@@ -2170,6 +2222,17 @@ def register_user(request):
     if User.objects.filter(email=email).exists():
         return Response(
             {'error': 'Email already exists'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    # Validate password strength using Django's built-in validators
+    from django.contrib.auth.password_validation import validate_password
+    from django.core.exceptions import ValidationError as DjangoValidationError
+    try:
+        validate_password(password)
+    except DjangoValidationError as e:
+        return Response(
+            {'error': ' '.join(e.messages)},
             status=status.HTTP_400_BAD_REQUEST
         )
 
@@ -3916,7 +3979,7 @@ def news_scrape_trigger(request):
                 job.completed_at = timezone.now()
                 job.save()
             except Exception as job_err:
-                print(f"[ERROR] Failed to update job status: {job_err}")
+                logger.error(f"Failed to update job status: {job_err}")
 
     # Start the scraper in a background thread
     thread = threading.Thread(target=run_scraper, args=(job.id,))
@@ -5503,7 +5566,7 @@ class StoreOrderViewSet(viewsets.ReadOnlyModelViewSet):
     def get_queryset(self):
         return StoreOrder.objects.filter(
             user=self.request.user
-        ).prefetch_related('items')
+        ).prefetch_related('items', 'items__product', 'items__variant')
 
 
 class StoreShippingRateViewSet(viewsets.ViewSet):
@@ -6565,7 +6628,7 @@ def _save_scraped_company_data(data: dict, source_url: str, update_existing: boo
         from core.claude_validator import validate_scraped_data
         data = validate_scraped_data(data, source_url)
     except Exception as e:
-        print(f"[SAVE COMPANY] Claude validation failed, using raw data: {e}")
+        logger.warning(f"Claude validation failed, using raw data: {e}")
 
     company_data = data.get('company', {})
 
@@ -6704,10 +6767,10 @@ def _save_scraped_company_data(data: dict, source_url: str, update_existing: boo
             # Keep other document types (news_release, financial_statement, etc.)
             filtered_docs.append(doc)
 
-    print(f"[SAVE COMPANY] Filtered documents: {len(filtered_docs)} from {len(documents)} total")
+    logger.info(f"Filtered documents: {len(filtered_docs)} from {len(documents)} total")
     for doc_type, count in seen_types.items():
         if count > 0:
-            print(f"  - {doc_type}: {count} (limit: {type_limits.get(doc_type, 1)})")
+            logger.debug(f"  - {doc_type}: {count} (limit: {type_limits.get(doc_type, 1)})")
 
     for doc_data in filtered_docs:
         doc_type = doc_data.get('document_type', 'other')
@@ -6771,11 +6834,11 @@ def _save_scraped_company_data(data: dict, source_url: str, update_existing: boo
                         'source_url': item.get('url', ''),
                         'publication_date': item.get('date'),
                     })
-                print(f"[FALLBACK] website_crawler found {len(news_items)} news items")
+                logger.info(f"website_crawler found {len(news_items)} news items")
             finally:
                 loop.close()
         except Exception as e:
-            print(f"[FALLBACK] website_crawler error: {e}")
+            logger.warning(f"website_crawler error: {e}")
 
     for news_item in news_items[:50]:
         pub_date = None
@@ -7785,7 +7848,7 @@ def create_closed_financing(request):
                 source_news_flag = NewsReleaseFlag.objects.get(id=source_news_flag_id)
             except NewsReleaseFlag.DoesNotExist:
                 # Log warning but don't fail - the flag might have been deleted
-                print(f"Warning: NewsReleaseFlag {source_news_flag_id} not found")
+                logger.warning(f"NewsReleaseFlag {source_news_flag_id} not found")
 
         # Detect and remove duplicate financing rounds if this came from a news flag
         # Look for 'announced' status financings for the same company within a date range
@@ -7808,7 +7871,7 @@ def create_closed_financing(request):
             # Delete duplicates
             duplicates_removed = duplicate_financings.count()
             if duplicates_removed > 0:
-                print(f"Removing {duplicates_removed} duplicate announced financing(s) for {company.name}")
+                logger.info(f"Removing {duplicates_removed} duplicate announced financing(s) for {company.name}")
                 duplicate_financings.delete()
 
         # Create the financing
