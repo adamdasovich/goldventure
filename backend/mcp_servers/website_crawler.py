@@ -1848,8 +1848,9 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
                     continue
 
             if brighter_slug:
-                # Fetch news from BrighterIR API
-                api_url = f"https://polaris.brighterir.com/public/{brighter_slug}/news/rns?draw=1&start=0&length=100"
+                # Fetch news from BrighterIR API (newest first via DataTables order param)
+                # order[0][column]=0 (date column), order[0][dir]=desc (descending)
+                api_url = f"https://polaris.brighterir.com/public/{brighter_slug}/news/rns?draw=1&start=0&length=200&order%5B0%5D%5Bcolumn%5D=0&order%5B0%5D%5Bdir%5D=desc"
                 async with aiohttp.ClientSession() as session:
                     async with session.get(
                         api_url,
