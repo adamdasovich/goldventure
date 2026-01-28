@@ -1250,8 +1250,9 @@ class CompanyViewSet(viewsets.ModelViewSet):
         return CompanySerializer
 
     def get_queryset(self):
-        # Exclude soft-deleted and inactive companies
-        queryset = Company.objects.filter(is_active=True, is_deleted=False)
+        # Filter to active companies only
+        # Note: is_deleted field requires migration 0041 to be applied
+        queryset = Company.objects.filter(is_active=True)
 
         # Only show approved companies to non-superusers
         if not (self.request.user and self.request.user.is_superuser):
@@ -1780,8 +1781,8 @@ class FinancingViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         """Filter financings by company if company query param is provided"""
-        # Exclude soft-deleted financings
-        queryset = Financing.objects.select_related('company').filter(is_deleted=False)
+        # Note: is_deleted field requires migration 0041 to be applied
+        queryset = Financing.objects.select_related('company').all()
         company_id = self.request.query_params.get('company')
         if company_id:
             queryset = queryset.filter(company_id=company_id)
