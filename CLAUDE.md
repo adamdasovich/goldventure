@@ -578,6 +578,7 @@ When Claude makes a mistake and gets corrected, add it here:
 | 2026-01-27 | Didn't understand crawl4ai library behavior | CrawlerRunConfig has `page_timeout=60000` by default. With 35+ URL patterns, slow sites cause multiple 60s timeouts = 300+ second scrapes. ALWAYS check library defaults and documentation before assuming code behavior. |
 | 2026-01-27 | Daily scrape took 500+ seconds per company | Root cause was NewsContentProcessor._process_company_news() fetching content from each news URL after scraping (15s timeout × N items). Fix: Skip content processing during daily scrapes (only during onboarding). ALWAYS trace the FULL code path - the scraping was fast (13-60s), but post-processing was adding 500+ seconds. |
 | 2026-01-28 | Assumed ticker wasn't scraped without checking | The ticker WAS scraped (NIM on TSX Venture). NEVER assume or state anything without investigating first. Read the actual data, check the database, look at the code. Making false claims wastes time and frustrates the user. |
+| 2026-01-28 | Manually triggered scrape while scheduled batch was running | Caused 246 tasks (2x123 companies) to run. ALWAYS check if a batch is already running before triggering a test. Fix: Added distributed lock using Django cache to prevent duplicate concurrent batches. |
 
 ---
 
