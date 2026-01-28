@@ -84,6 +84,7 @@ class Company(models.Model):
     incorporation_date = models.DateField(null=True, blank=True)
     jurisdiction = models.CharField(max_length=100, blank=True)
     website = models.URLField(blank=True)
+    news_url = models.URLField(blank=True, help_text="Custom news page URL if different from standard patterns")
     headquarters_city = models.CharField(max_length=100, blank=True)
     headquarters_country = models.CharField(max_length=100, blank=True)
 
