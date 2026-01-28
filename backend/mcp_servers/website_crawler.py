@@ -1879,11 +1879,9 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
                 print(f"[TIME-EXIT] {elapsed_so_far:.1f}s elapsed, skipping remaining patterns")
                 break
 
-            print(f"[TRY-URL] {news_url}")
             try:
                 result = await crawler.arun(url=news_url, config=crawler_config)
                 if not result.success:
-                    print(f"[URL-FAIL] {news_url} - success=False")
                     continue
 
                 soup = BeautifulSoup(result.html, 'html.parser')
