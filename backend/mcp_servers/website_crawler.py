@@ -1818,6 +1818,11 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
             f'{url}/news/',
             f'{url}/news/all/',  # Aston Bay
             f'{url}/news-releases/',
+            # Northisle WordPress pattern: ?post_year= filtering (moved up - must be right after base URL)
+            f'{url}/news-releases?post_year={current_year}',
+            f'{url}/news-releases?post_year={current_year - 1}',
+            f'{url}/news-releases?post_year={current_year - 2}',
+            f'{url}/news-releases?post_year={current_year - 3}',
             f'{url}/press-releases/',
             # WordPress category patterns (New Age Metals, many WP sites)
             f'{url}/category/press/',
@@ -1851,11 +1856,6 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
             f'{url}/news/?current_year={current_year - 1}',
             f'{url}/news?current_year={current_year}',
             f'{url}/news?current_year={current_year - 1}',
-            # Northisle WordPress pattern: ?post_year= filtering
-            f'{url}/news-releases?post_year={current_year}',
-            f'{url}/news-releases?post_year={current_year - 1}',
-            f'{url}/news-releases?post_year={current_year - 2}',
-            f'{url}/news-releases?post_year={current_year - 3}',
             url,  # Homepage fallback for 55 North Mining style sites
         ]
 
