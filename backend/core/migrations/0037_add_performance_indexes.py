@@ -52,7 +52,7 @@ class Migration(migrations.Migration):
         ),
         migrations.AddIndex(
             model_name='companynews',
-            index=models.Index(fields=['is_financing', '-publication_date'], name='compnews_fin_date_idx'),
+            index=models.Index(fields=['is_material', '-publication_date'], name='compnews_mat_date_idx'),
         ),
 
         # NewsReleaseFlag indexes - admin review queries
