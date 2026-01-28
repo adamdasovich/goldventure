@@ -1813,6 +1813,93 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
                 logger.debug(f"Skipping failed pattern: {e}")
                 continue  # Skip failed pattern, try next
 
+        # ============================================================
+        # SPECIAL CASE: BrighterIR (Orosur, UK-listed companies)
+        # These sites use BrighterIR iframe widgets for news
+        # News is loaded via AJAX from polaris.brighterir.com API
+        # ============================================================
+        try:
+            import aiohttp
+            import re as regex
+
+            # Check homepage and investor pages for BrighterIR iframe
+            brighter_pages = [
+                f'{base_url}/',
+                f'{base_url}/investors/',
+                f'{base_url}/investors/news/',
+                f'{base_url}/investors/regulatory-news-alerts/',
+            ]
+
+            brighter_slug = None
+            for page_url in brighter_pages:
+                try:
+                    result = await crawler.arun(url=page_url, config=crawler_config)
+                    if not result.success:
+                        continue
+
+                    # Look for BrighterIR iframe
+                    # Pattern: polaris.brighterir.com/public/{slug}/news/rns
+                    match = regex.search(r'polaris\.brighterir\.com/public/([^/]+)/news', result.html)
+                    if match:
+                        brighter_slug = match.group(1)
+                        print(f"[BRIGHTERIR] Found BrighterIR widget: {brighter_slug}")
+                        break
+                except Exception:
+                    continue
+
+            if brighter_slug:
+                # Fetch news from BrighterIR API
+                api_url = f"https://polaris.brighterir.com/public/{brighter_slug}/news/rns?draw=1&start=0&length=100"
+                async with aiohttp.ClientSession() as session:
+                    async with session.get(
+                        api_url,
+                        headers={
+                            "X-Requested-With": "XMLHttpRequest",
+                            "Accept": "application/json"
+                        },
+                        timeout=aiohttp.ClientTimeout(total=15)
+                    ) as response:
+                        if response.status == 200:
+                            data = await response.json()
+                            items_found = 0
+                            for item in data.get('data', []):
+                                try:
+                                    # Parse headline - extract title and URL from HTML
+                                    headline_html = item.get('headline', '')
+                                    headline_match = regex.search(r'href="([^"]+)"[^>]*>([^<]+)</a>', headline_html)
+                                    if not headline_match:
+                                        continue
+
+                                    news_url = headline_match.group(1)
+                                    title = headline_match.group(2).strip()
+                                    # Clean HTML entities
+                                    title = title.replace('&ndash;', '-').replace('&amp;', '&')
+
+                                    if not title or len(title) < 15:
+                                        continue
+
+                                    # Parse timestamp - format: <time datetime="2020-04-14">
+                                    timestamp_html = item.get('timestamp', '')
+                                    date_match = regex.search(r'datetime="(\d{4}-\d{2}-\d{2})"', timestamp_html)
+                                    date_str = date_match.group(1) if date_match else None
+
+                                    news = {
+                                        'title': clean_news_title(title, news_url),
+                                        'url': news_url,
+                                        'date': date_str,
+                                        'document_type': 'news_release',
+                                        'year': date_str[:4] if date_str else None
+                                    }
+                                    _add_news_item(news_by_url, news, cutoff_date, "BRIGHTERIR")
+                                    items_found += 1
+                                except Exception as e:
+                                    logger.debug(f"Skipping malformed BrighterIR item: {e}")
+                                    continue
+
+                            print(f"[BRIGHTERIR] Found {items_found} news items from API")
+        except Exception as e:
+            logger.debug(f"BrighterIR extraction failed: {e}")
+
         # Streamlined news page patterns
         news_page_patterns = [
             f'{url}/news/',
