@@ -1835,6 +1835,11 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
             # Year-based archive pages under news-releases (Aftermath Silver pattern)
             f'{url}/news-releases/{current_year}/',
             f'{url}/news-releases/{current_year - 1}/',
+            # Northern Dynasty pattern: /news/news-releases/YYYY/
+            f'{url}/news/news-releases/{current_year}/',
+            f'{url}/news/news-releases/{current_year - 1}/',
+            f'{url}/news/news-releases/{current_year - 2}/',
+            f'{url}/news/news-releases/{current_year - 3}/',
             # GoGold Resources pattern: /investors/press-releases/YYYY/
             f'{url}/investors/press-releases/{current_year}/',
             f'{url}/investors/press-releases/{current_year - 1}/',
