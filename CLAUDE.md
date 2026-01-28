@@ -581,6 +581,7 @@ When Claude makes a mistake and gets corrected, add it here:
 | 2026-01-28 | Manually triggered scrape while scheduled batch was running | Caused 246 tasks (2x123 companies) to run. ALWAYS check if a batch is already running before triggering a test. Fix: Added distributed lock using Django cache to prevent duplicate concurrent batches. |
 | 2026-01-28 | Northern Dynasty only had 1 news item instead of 52 | Website uses year-based URL pattern `/news/news-releases/YYYY/` that wasn't in scraper. ALWAYS investigate actual website structure when news is missing - many sites organize by year. Fix: Added year-based URL patterns. |
 | 2026-01-28 | Northisle only had 3 news items instead of 10 | Two issues: (1) `?post_year=` URLs need trailing slash BEFORE query params (`/news-releases/?post_year=` not `/news-releases?post_year=`), (2) URL patterns far down the list never get reached due to 60s timeout. Fix: Add trailing slash and move year-filtered patterns right after base URL. |
+| 2026-01-28 | Orosur Mining had 0 news items | Website uses BrighterIR - a third-party IR platform that loads news via iframe widgets (common for UK/AIM-listed companies). Standard HTML scraping doesn't work. Fix: Added BrighterIR detection (look for `polaris.brighterir.com` iframe) and API extraction with `X-Requested-With: XMLHttpRequest` header. |
 
 ---
 
