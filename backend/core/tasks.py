@@ -396,7 +396,8 @@ def scrape_company_news_task(self, company_id):
                 crawl_news_releases(
                     url=company.website,
                     months=NEWS_SCRAPE_MONTHS_ONBOARDING,  # Use constant for consistency
-                    max_depth=2
+                    max_depth=2,
+                    custom_news_url=company.news_url if company.news_url else None
                 )
             )
         finally:
@@ -847,7 +848,8 @@ def scrape_single_company_news_task(self, company_id: int):
                     crawl_news_releases(
                         url=company.website,
                         months=NEWS_SCRAPE_MONTHS_DAILY,
-                        max_depth=2
+                        max_depth=2,
+                        custom_news_url=company.news_url if company.news_url else None
                     ),
                     timeout=ASYNC_SCRAPE_TIMEOUT
                 )

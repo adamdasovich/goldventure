@@ -1310,7 +1310,7 @@ async def crawl_company_website(url: str, max_depth: int = 2) -> List[Dict]:
     return documents
 
 
-async def crawl_news_releases(url: str, months: int = 6, max_depth: int = 2) -> List[Dict]:
+async def crawl_news_releases(url: str, months: int = 6, max_depth: int = 2, custom_news_url: str = None) -> List[Dict]:
     """
     Crawl a company website for NEWS RELEASES.
     OPTIMIZED: Only uses HTML news extraction for speed.
@@ -1320,12 +1320,13 @@ async def crawl_news_releases(url: str, months: int = 6, max_depth: int = 2) -> 
         url: Company website URL
         months: Number of months to look back (default 6)
         max_depth: How deep to crawl (default 2) - unused, kept for API compatibility
+        custom_news_url: Optional custom news page URL for sites with non-standard patterns
 
     Returns:
         List of news release documents with dates, sorted by newest first
     """
     # Use optimized HTML-only extraction (much faster than recursive PDF crawl)
-    html_news = await crawl_html_news_pages(url, months=months)
+    html_news = await crawl_html_news_pages(url, months=months, custom_news_url=custom_news_url)
 
     # IMPORTANT: Sort by date FIRST (items with dates come before items without)
     # This ensures that when we deduplicate by title, we keep the version WITH the date
@@ -1663,7 +1664,7 @@ def _add_news_item(news_by_url: Dict[str, Dict], news: Dict, cutoff_date: dateti
     return False
 
 
-async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
+async def crawl_html_news_pages(url: str, months: int = 6, custom_news_url: str = None) -> List[Dict]:
     """
     Crawl HTML news pages from a company website.
     Supports: external news wires, multiple date formats, various HTML layouts.
@@ -1671,6 +1672,8 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
     Args:
         url: Company website URL
         months: Number of months to look back
+        custom_news_url: Optional custom news page URL for sites with non-standard patterns
+                        (e.g., /en/puma-news/ instead of /en/news/)
 
     Returns:
         List of news release dictionaries with title, url, date
@@ -1904,7 +1907,20 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
         # Streamlined news page patterns
         # IMPORTANT: Order matters! Year-based patterns should be early to capture
         # historical news before timeout kicks in (60-90 seconds)
-        news_page_patterns = [
+        news_page_patterns = []
+
+        # If a custom news URL is provided, add it FIRST (highest priority)
+        # This handles sites with non-standard paths like /en/puma-news/
+        if custom_news_url:
+            custom_news_url = custom_news_url.rstrip('/')
+            news_page_patterns.append(custom_news_url)
+            # Also add year-based variants of the custom URL
+            news_page_patterns.append(f'{custom_news_url}/{current_year}/')
+            news_page_patterns.append(f'{custom_news_url}/{current_year - 1}/')
+            print(f"[CUSTOM-URL] Using custom news URL: {custom_news_url}")
+
+        # Standard patterns follow
+        news_page_patterns.extend([
             f'{url}/news/',
             f'{url}/news/all/',  # Aston Bay
             # Multilingual site patterns (/en/, /es/ prefixes) - Panoro Minerals, etc.
@@ -1955,7 +1971,7 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
             f'{url}/news?current_year={current_year}',
             f'{url}/news?current_year={current_year - 1}',
             url,  # Homepage fallback for 55 North Mining style sites
-        ]
+        ])
 
         # Only add wp.* subdomain patterns for known domains that use this structure
         # This avoids DNS resolution failures for sites that don't have wp.* subdomains
