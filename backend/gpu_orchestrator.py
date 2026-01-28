@@ -383,8 +383,8 @@ class GPUOrchestrator:
                 if check.returncode == 0:
                     logger.info("Worker is running despite SSH timeout")
                     return True
-            except:
-                pass
+            except (subprocess.SubprocessError, OSError, subprocess.TimeoutExpired):
+                pass  # SSH check failed, fall through to error logging
             logger.error("Worker start failed with timeout")
             return False
 
@@ -641,8 +641,8 @@ CHROMA_PORT=8002
                         created_at = datetime.fromisoformat(created_at_str.replace('Z', '+00:00'))
                         from datetime import timezone as tz
                         droplet_age_seconds = (datetime.now(tz.utc) - created_at).total_seconds()
-                    except:
-                        pass
+                    except (ValueError, TypeError):
+                        pass  # Failed to parse date, use default age of 0
 
                 # HARD SAFETY: Destroy ANY gpu-worker droplet older than MAX_GPU_RUNTIME
                 if droplet_age_seconds > self.MAX_GPU_RUNTIME:
