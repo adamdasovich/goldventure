@@ -101,13 +101,22 @@ export default function CompanyDetailPage() {
   const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api';
 
   useEffect(() => {
+    // Create AbortController for cleanup
+    const abortController = new AbortController();
+
     if (companyId) {
-      fetchCompanyDetails();
-      fetchNewsReleases();
-      fetchFinancings();
-      fetchStockQuote();
-      fetchCompanyResources();
+      // Pass abort signal to fetch functions
+      fetchCompanyDetails(abortController.signal);
+      fetchNewsReleases(abortController.signal);
+      fetchFinancings(abortController.signal);
+      fetchStockQuote(abortController.signal);
+      fetchCompanyResources(abortController.signal);
     }
+
+    // Cleanup: abort requests on dependency change or unmount
+    return () => {
+      abortController.abort();
+    };
   }, [companyId]);
 
   // Check user's representative status for this company
@@ -165,68 +174,87 @@ export default function CompanyDetailPage() {
     }
   };
 
-  const fetchCompanyResources = async () => {
+  const fetchCompanyResources = async (signal?: AbortSignal) => {
     try {
       setResourcesLoading(true);
-      const res = await fetch(`${API_URL}/company-portal/resources/?company=${companyId}`);
+      const res = await fetch(`${API_URL}/company-portal/resources/?company=${companyId}`, { signal });
+      if (signal?.aborted) return;
       if (res.ok) {
         const data = await res.json();
         setCompanyResources(data.results || data || []);
       }
     } catch (err) {
+      if (err instanceof Error && err.name === 'AbortError') return;
       console.error('Failed to fetch company resources:', err);
     } finally {
-      setResourcesLoading(false);
+      if (!signal?.aborted) {
+        setResourcesLoading(false);
+      }
     }
   };
 
-  const fetchStockQuote = async () => {
+  const fetchStockQuote = async (signal?: AbortSignal) => {
     try {
       setStockLoading(true);
-      const res = await fetch(`${API_URL}/companies/${companyId}/stock-quote/`);
+      const res = await fetch(`${API_URL}/companies/${companyId}/stock-quote/`, { signal });
+      if (signal?.aborted) return;
       if (res.ok) {
         const data = await res.json();
         setStockQuote(data);
       }
     } catch (err) {
+      if (err instanceof Error && err.name === 'AbortError') return;
       console.error('Failed to fetch stock quote:', err);
     } finally {
-      setStockLoading(false);
+      if (!signal?.aborted) {
+        setStockLoading(false);
+      }
     }
   };
 
-  const fetchCompanyDetails = async () => {
+  const fetchCompanyDetails = async (signal?: AbortSignal) => {
     try {
       setLoading(true);
       const [companyData, projectsData] = await Promise.all([
         companyAPI.getById(parseInt(companyId)),
         companyAPI.getProjects(parseInt(companyId))
       ]);
+      if (signal?.aborted) return;
       setCompany(companyData);
       setProjects(projectsData);
       setError(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to fetch company details');
+      if (err instanceof Error && err.name === 'AbortError') return;
+      if (!signal?.aborted) {
+        setError(err instanceof Error ? err.message : 'Failed to fetch company details');
+      }
     } finally {
-      setLoading(false);
+      if (!signal?.aborted) {
+        setLoading(false);
+      }
     }
   };
 
-  const fetchNewsReleases = async () => {
+  const fetchNewsReleases = async (signal?: AbortSignal) => {
     try {
       setNewsLoading(true);
       const data = await newsAPI.getNewsReleases(parseInt(companyId));
+      if (signal?.aborted) return;
       setNewsData(data);
     } catch (err) {
+      if (err instanceof Error && err.name === 'AbortError') return;
       console.error('Failed to fetch news releases:', err);
     } finally {
-      setNewsLoading(false);
+      if (!signal?.aborted) {
+        setNewsLoading(false);
+      }
     }
   };
 
-  const fetchFinancings = async () => {
+  const fetchFinancings = async (signal?: AbortSignal) => {
     try {
-      const res = await fetch(`${API_URL}/financings/?company=${companyId}`);
+      const res = await fetch(`${API_URL}/financings/?company=${companyId}`, { signal });
+      if (signal?.aborted) return;
       if (res.ok) {
         const data = await res.json();
         const financingsList = data.results || data;
@@ -236,17 +264,19 @@ export default function CompanyDetailPage() {
           (f: any) => f.status === 'announced' || f.status === 'closing' || f.status === 'open'
         );
         for (const financing of openFinancings) {
-          fetchInterestAggregate(financing.id);
+          fetchInterestAggregate(financing.id, signal);
         }
       }
     } catch (err) {
+      if (err instanceof Error && err.name === 'AbortError') return;
       console.error('Failed to fetch financings:', err);
     }
   };
 
-  const fetchInterestAggregate = async (financingId: number) => {
+  const fetchInterestAggregate = async (financingId: number, signal?: AbortSignal) => {
     try {
-      const res = await fetch(`${API_URL}/investment-interest/aggregate/${financingId}/`);
+      const res = await fetch(`${API_URL}/investment-interest/aggregate/${financingId}/`, { signal });
+      if (signal?.aborted) return;
       if (res.ok) {
         const data = await res.json();
         setInterestAggregates(prev => ({
@@ -255,6 +285,7 @@ export default function CompanyDetailPage() {
         }));
       }
     } catch (err) {
+      if (err instanceof Error && err.name === 'AbortError') return;
       console.error('Failed to fetch interest aggregate:', err);
     }
   };

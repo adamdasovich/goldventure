@@ -8,10 +8,14 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
 
+    // Forward authorization header from the original request
+    const authHeader = request.headers.get('Authorization');
+
     const response = await fetch(`${BACKEND_URL}/api/claude/chat/`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        ...(authHeader && { 'Authorization': authHeader }),
       },
       body: JSON.stringify(body),
     });

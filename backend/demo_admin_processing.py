@@ -24,10 +24,14 @@ def demo_batch_processing():
     admin_user = User.objects.filter(is_superuser=True).first()
     if not admin_user:
         print("\n[!] No admin user found. Creating one...")
+        # Use environment variable for password, fail if not set
+        admin_password = os.environ.get('ADMIN_PASSWORD')
+        if not admin_password:
+            raise ValueError("ADMIN_PASSWORD environment variable required to create admin user")
         admin_user = User.objects.create_superuser(
             username='admin',
             email='admin@example.com',
-            password='admin123'
+            password=admin_password
         )
         print(f"[OK] Created admin user: {admin_user.username}")
     else:
