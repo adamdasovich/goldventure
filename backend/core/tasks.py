@@ -12,6 +12,7 @@ from .models import DocumentProcessingJob, Company, NewsRelease, Document
 from mcp_servers.document_processor_hybrid import HybridDocumentProcessor
 from mcp_servers.website_crawler import crawl_news_releases
 from django.db.models import Q
+from django.core.cache import cache
 import asyncio
 
 # Configure task logger
@@ -975,8 +976,28 @@ def scrape_all_companies_news_task(self):
 
     IMPORTANT: Tasks are staggered with 30-second delays between each company
     to avoid overwhelming target websites and getting IP-blocked.
+
+    Uses a distributed lock to prevent duplicate batches from running concurrently.
     """
+    # Distributed lock to prevent duplicate batch runs
+    LOCK_KEY = 'scrape_all_companies_news_lock'
+    LOCK_TTL = 7200  # 2 hours - longer than expected batch duration
+
+    # Try to acquire lock - returns True only if lock was successfully set
+    lock_acquired = cache.add(LOCK_KEY, self.request.id, timeout=LOCK_TTL)
+
+    if not lock_acquired:
+        existing_task_id = cache.get(LOCK_KEY)
+        logger.warning(f"Skipping scrape batch - another batch is already running (task: {existing_task_id})")
+        return {
+            'status': 'skipped',
+            'reason': 'batch_already_running',
+            'existing_task_id': existing_task_id,
+            'message': f'A scrape batch is already running (task: {existing_task_id}). Skipping to prevent duplicates.'
+        }
+
     logger.info("Starting company news scrape - spawning individual tasks with staggered delays...")
+    logger.info(f"Acquired batch lock (key: {LOCK_KEY}, task: {self.request.id})")
 
     # Delay between each company scrape (seconds)
     # This prevents overwhelming target websites and getting IP-blocked
@@ -1019,6 +1040,8 @@ def scrape_all_companies_news_task(self):
 
     except Exception as e:
         logger.error(f"Error queuing company news scrape tasks: {str(e)}")
+        # Release lock on error so future runs can proceed
+        cache.delete(LOCK_KEY)
         return {
             'status': 'error',
             'error': str(e),
