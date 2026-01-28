@@ -3,6 +3,7 @@ Background Tasks for Document Processing and News Scraping
 Processes document queue jobs sequentially
 """
 
+import logging
 from celery import shared_task
 from django.utils import timezone
 from django.db import transaction
@@ -12,6 +13,9 @@ from mcp_servers.document_processor_hybrid import HybridDocumentProcessor
 from mcp_servers.website_crawler import crawl_news_releases
 from django.db.models import Q
 import asyncio
+
+# Configure task logger
+logger = logging.getLogger(__name__)
 
 
 def process_general_document(document_url: str, document_type: str,
@@ -68,9 +72,9 @@ def process_general_document(document_url: str, document_type: str,
             rag_manager = RAGManager()
             full_text = docling_data['text']
             chunks_stored = rag_manager.store_document_chunks(document, full_text)
-            print(f"Stored {chunks_stored} chunks for semantic search")
+            logger.info(f"Stored {chunks_stored} chunks for semantic search")
         except Exception as e:
-            print(f"Error storing document chunks for RAG: {str(e)}")
+            logger.error(f"Error storing document chunks for RAG: {str(e)}")
 
         return {
             "success": True,
@@ -96,7 +100,7 @@ def process_document_queue():
     """
     pending_jobs = DocumentProcessingJob.objects.filter(status='pending').order_by('created_at')
 
-    print(f"Found {pending_jobs.count()} pending jobs to process")
+    logger.info(f"Found {pending_jobs.count()} pending jobs to process")
 
     for job in pending_jobs:
         process_single_job(job)
@@ -188,11 +192,11 @@ def process_single_job(job: DocumentProcessingJob):
 
             job.save()
 
-            print(f" Job {job.id} completed successfully")
-            print(f"  - Document ID: {job.document_id}")
-            print(f"  - Resources created: {job.resources_created}")
-            print(f"  - Chunks created: {job.chunks_created}")
-            print(f"  - Processing time: {job.duration_display}")
+            logger.info(f" Job {job.id} completed successfully")
+            logger.info(f"  - Document ID: {job.document_id}")
+            logger.info(f"  - Resources created: {job.resources_created}")
+            logger.info(f"  - Chunks created: {job.chunks_created}")
+            logger.info(f"  - Processing time: {job.duration_display}")
 
             # Send email notification for NI 43-101 reports
             if job.document_type == 'ni43101' and job.document_id:
@@ -202,7 +206,7 @@ def process_single_job(job: DocumentProcessingJob):
                     if document.company:
                         send_ni43101_discovery_notification(document, document.company)
                 except Exception as e:
-                    print(f"   Failed to send NI 43-101 notification: {str(e)}")
+                    logger.info(f"   Failed to send NI 43-101 notification: {str(e)}")
 
             # Update CompanyNews record if this was a news_release
             if job.document_type == 'news_release':
@@ -223,9 +227,9 @@ def process_single_job(job: DocumentProcessingJob):
                                 if not news_record.summary and document.raw_text:
                                     news_record.summary = document.raw_text[:500].strip() + "..."
                         news_record.save()
-                        print(f"   Updated CompanyNews record: {news_record.title[:50]}...")
+                        logger.info(f"   Updated CompanyNews record: {news_record.title[:50]}...")
                 except Exception as e:
-                    print(f"   Failed to update CompanyNews record: {str(e)}")
+                    logger.info(f"   Failed to update CompanyNews record: {str(e)}")
 
         else:
             # Processing failed
@@ -240,7 +244,7 @@ def process_single_job(job: DocumentProcessingJob):
 
             job.save()
 
-            print(f" Job {job.id} failed: {error_msg}")
+            logger.info(f" Job {job.id} failed: {error_msg}")
 
     except Exception as e:
         # Handle unexpected errors
@@ -254,7 +258,7 @@ def process_single_job(job: DocumentProcessingJob):
 
         job.save()
 
-        print(f" Job {job.id} failed with exception: {str(e)}")
+        logger.info(f" Job {job.id} failed with exception: {str(e)}")
         import traceback
         traceback.print_exc()
 
@@ -306,7 +310,7 @@ def scrape_company_news_task(self, company_id):
         existing_news_count = NewsRelease.objects.filter(company=company).count()
         is_new_company = existing_news_count == 0
         if is_new_company:
-            print(f"  [ONBOARDING] New company detected - will flag financing from last 90 days")
+            logger.info(f"  [ONBOARDING] New company detected - will flag financing from last 90 days")
 
         for news in news_releases:
             title = news.get('title', '').strip()
@@ -451,7 +455,7 @@ def scrape_company_news_task(self, company_id):
                     cutoff_days = 90 if is_new_company else 7
                     cutoff_date = datetime.now().date() - timedelta(days=cutoff_days)
                     if release_date < cutoff_date:
-                        print(f"  [SKIP] Old news (not flagging): {title[:50]}... (date: {release_date})")
+                        logger.info(f"  [SKIP] Old news (not flagging): {title[:50]}... (date: {release_date})")
                         continue
 
                     # Check if URL or title is similar to a previously dismissed news
@@ -462,7 +466,7 @@ def scrape_company_news_task(self, company_id):
                         similarity_threshold=0.85
                     )
                     if is_similar:
-                        print(f"  [SKIP] Similar to previously dismissed: {title[:50]}...")
+                        logger.info(f"  [SKIP] Similar to previously dismissed: {title[:50]}...")
                         continue
 
                     # Only create flag if one doesn't already exist
@@ -474,8 +478,8 @@ def scrape_company_news_task(self, company_id):
                         }
                     )
 
-                    print(f"   Flagged financing-related news: {title[:60]}...")
-                    print(f"     Keywords: {', '.join(detected_keywords)}")
+                    logger.info(f"   Flagged financing-related news: {title[:60]}...")
+                    logger.info(f"     Keywords: {', '.join(detected_keywords)}")
 
                     # Send email notification for new flags only
                     if flag_created:
@@ -483,7 +487,7 @@ def scrape_company_news_task(self, company_id):
                             from core.notifications import send_financing_flag_notification
                             send_financing_flag_notification(flag, company, obj)
                         except Exception as e:
-                            print(f"      Failed to send financing flag notification: {str(e)}")
+                            logger.info(f"      Failed to send financing flag notification: {str(e)}")
 
             else:
                 updated_count += 1
@@ -497,9 +501,9 @@ def scrape_company_news_task(self, company_id):
                 processor = NewsContentProcessor(company_id=company.id)
                 process_result = processor._process_company_news(company.name, limit=created_count + 5)
                 chunks_created = process_result.get('chunks_created', 0)
-                print(f"  Processed {process_result.get('news_items_processed', 0)} news items into {chunks_created} searchable chunks")
+                logger.info(f"  Processed {process_result.get('news_items_processed', 0)} news items into {chunks_created} searchable chunks")
             except Exception as e:
-                print(f"  Warning: News content processing failed: {str(e)}")
+                logger.warning(f"  Warning: News content processing failed: {str(e)}")
                 # Don't fail the whole task if content processing fails
 
         return {
@@ -544,15 +548,15 @@ def scrape_metals_prices_task(self):
         result = scrape_and_save_metals_prices()
 
         if result['success']:
-            print(f"Successfully scraped {result['scraped']} metals prices from Kitco")
+            logger.info(f"Successfully scraped {result['scraped']} metals prices from Kitco")
             return result
         else:
-            print(f"Metals scrape failed: {result.get('error', 'Unknown error')}")
+            logger.info(f"Metals scrape failed: {result.get('error', 'Unknown error')}")
             # Retry on failure
             raise Exception(result.get('error', 'Scraping failed'))
 
     except Exception as e:
-        print(f"Error in metals scraping task: {str(e)}")
+        logger.error(f"Error in metals scraping task: {str(e)}")
         self.retry(exc=e, countdown=300)  # Retry after 5 minutes
 
         return {
@@ -579,20 +583,20 @@ def fetch_stock_prices_task(self):
         result = fetch_and_save_stock_prices()
 
         if result['success']:
-            print(f"Successfully fetched {result['successful']} stock prices")
-            print(f"Failed: {result['failed']}, Skipped: {result['skipped']}")
+            logger.info(f"Successfully fetched {result['successful']} stock prices")
+            logger.info(f"Failed: {result['failed']}, Skipped: {result['skipped']}")
             return result
         else:
             # Partial success - some companies had errors
-            print(f"Stock price fetch completed with errors:")
-            print(f"Successful: {result['successful']}, Failed: {result['failed']}")
+            logger.info(f"Stock price fetch completed with errors:")
+            logger.info(f"Successful: {result['successful']}, Failed: {result['failed']}")
             if result['errors']:
                 for error in result['errors'][:5]:  # Show first 5 errors
-                    print(f"  - {error}")
+                    logger.info(f"  - {error}")
             return result
 
     except Exception as e:
-        print(f"Error in stock price fetching task: {str(e)}")
+        logger.error(f"Error in stock price fetching task: {str(e)}")
         self.retry(exc=e, countdown=300)  # Retry after 5 minutes
 
         return {
@@ -643,17 +647,17 @@ def auto_discover_and_process_documents_task(self, company_ids=None, document_ty
         total_jobs_created = 0
         companies_processed = 0
         
-        print(f"Auto-discovery task: Processing {len(companies)} companies")
+        logger.info(f"Auto-discovery task: Processing {len(companies)} companies")
         
         for company in companies:
             try:
-                print(f"Crawling {company.name}...")
+                logger.info(f"Crawling {company.name}...")
                 
                 # Discover documents
                 documents = asyncio.run(crawl_company_website(company.website, max_depth=2))
 
                 if not documents:
-                    print(f"  No documents discovered for {company.name}")
+                    logger.info(f"  No documents discovered for {company.name}")
                     continue
 
                 # Filter by document type if specified
@@ -679,21 +683,21 @@ def auto_discover_and_process_documents_task(self, company_ids=None, document_ty
                         if doc_type not in seen_types:
                             filtered_docs.append(doc)
                             seen_types.add(doc_type)
-                            print(f"    [KEEP] {doc_type}: {doc.get('title', 'No title')[:50]}")
+                            logger.info(f"    [KEEP] {doc_type}: {doc.get('title', 'No title')[:50]}")
 
                     # For presentations, keep most recent only
                     elif doc_type == 'presentation':
                         if 'presentation' not in seen_types:
                             filtered_docs.append(doc)
                             seen_types.add('presentation')
-                            print(f"    [KEEP] presentation: {doc.get('title', 'No title')[:50]}")
+                            logger.info(f"    [KEEP] presentation: {doc.get('title', 'No title')[:50]}")
 
                     # Skip old financial statements, news releases (handled separately), and 'other' types
                     elif doc_type in ['financial_statement', 'news_release', 'other']:
                         continue
 
                 documents = filtered_docs
-                print(f"  Filtered to {len(documents)} important documents (from {len(documents)} discovered)")
+                logger.info(f"  Filtered to {len(documents)} important documents (from {len(documents)} discovered)")
                 total_discovered += len(documents)
                 
                 # Create processing jobs (skip existing)
@@ -726,15 +730,15 @@ def auto_discover_and_process_documents_task(self, company_ids=None, document_ty
                 total_jobs_created += jobs_created
                 companies_processed += 1
                 
-                print(f"  Created {jobs_created} new processing jobs")
+                logger.info(f"  Created {jobs_created} new processing jobs")
                 
             except Exception as e:
-                print(f"  Error processing {company.name}: {str(e)}")
+                logger.info(f"  Error processing {company.name}: {str(e)}")
                 continue
         
         # Auto-process the queue
         if total_jobs_created > 0:
-            print(f"\nAuto-processing {total_jobs_created} new jobs...")
+            logger.info(f"\nAuto-processing {total_jobs_created} new jobs...")
             process_document_queue()
         
         return {
@@ -746,7 +750,7 @@ def auto_discover_and_process_documents_task(self, company_ids=None, document_ty
         }
         
     except Exception as e:
-        print(f"Error in auto-discovery task: {str(e)}")
+        logger.error(f"Error in auto-discovery task: {str(e)}")
         return {
             'status': 'error',
             'error': str(e),
@@ -764,7 +768,7 @@ def scrape_single_company_news_task(self, company_id: int):
     """
     try:
         company = Company.objects.get(id=company_id)
-        print(f"Scraping news for {company.name}...")
+        logger.info(f"Scraping news for {company.name}...")
 
         # Run the async crawler
         loop = asyncio.new_event_loop()
@@ -865,7 +869,7 @@ def scrape_single_company_news_task(self, company_id: int):
                     # Only flag news releases within the last 7 days
                     cutoff_date = datetime.now().date() - timedelta(days=7)
                     if release_date < cutoff_date:
-                        print(f"  [SKIP] Old news (not flagging): {title[:50]}...")
+                        logger.info(f"  [SKIP] Old news (not flagging): {title[:50]}...")
                     else:
                         # Check if URL or title is similar to previously dismissed - never re-flag
                         is_similar, matched_dismissed = DismissedNewsURL.is_similar_to_dismissed(
@@ -875,7 +879,7 @@ def scrape_single_company_news_task(self, company_id: int):
                             similarity_threshold=0.85
                         )
                         if is_similar:
-                            print(f"  [SKIP] Similar to dismissed: {title[:50]}...")
+                            logger.info(f"  [SKIP] Similar to dismissed: {title[:50]}...")
                         else:
                             flag, flag_created = NewsReleaseFlag.objects.get_or_create(
                                 news_release=obj,
@@ -885,16 +889,16 @@ def scrape_single_company_news_task(self, company_id: int):
                                 }
                             )
                             if flag_created:
-                                print(f"  [FLAG] Flagged: {title[:50]}...")
+                                logger.info(f"  [FLAG] Flagged: {title[:50]}...")
                                 try:
                                     from core.notifications import send_financing_flag_notification
                                     send_financing_flag_notification(flag, company, obj)
                                 except Exception as e:
-                                    print(f"  [WARN] Notification error: {str(e)}")
+                                    logger.info(f"  [WARN] Notification error: {str(e)}")
             else:
                 updated_count += 1
 
-        print(f"   {company.name}: {created_count} new, {updated_count} updated")
+        logger.info(f"   {company.name}: {created_count} new, {updated_count} updated")
         return {
             'company_id': company_id,
             'company_name': company.name,
@@ -906,7 +910,7 @@ def scrape_single_company_news_task(self, company_id: int):
     except Company.DoesNotExist:
         return {'company_id': company_id, 'status': 'error', 'message': 'Company not found'}
     except Exception as e:
-        print(f"   Error scraping company {company_id}: {str(e)}")
+        logger.error(f"   Error scraping company {company_id}: {str(e)}")
         return {'company_id': company_id, 'status': 'error', 'message': str(e)}
 
 
@@ -918,7 +922,7 @@ def scrape_all_companies_news_task(self):
 
     Scheduled to run daily in the morning via Celery Beat.
     """
-    print("Starting company news scrape - spawning individual tasks...")
+    logger.info("Starting company news scrape - spawning individual tasks...")
 
     try:
         # Get all companies with websites
@@ -927,7 +931,7 @@ def scrape_all_companies_news_task(self):
         ).exclude(website='').order_by('name')
 
         total_companies = companies.count()
-        print(f"Found {total_companies} companies with websites to scrape")
+        logger.info(f"Found {total_companies} companies with websites to scrape")
 
         # Spawn individual tasks for each company (run in batches)
         task_ids = []
@@ -935,10 +939,10 @@ def scrape_all_companies_news_task(self):
             # Queue individual task for each company
             task = scrape_single_company_news_task.delay(company.id)
             task_ids.append(task.id)
-            print(f"  Queued: {company.name} (task {task.id})")
+            logger.info(f"  Queued: {company.name} (task {task.id})")
 
-        print(f"\nQueued {len(task_ids)} individual scraping tasks")
-        print("Tasks will run in parallel based on worker concurrency")
+        logger.info(f"\nQueued {len(task_ids)} individual scraping tasks")
+        logger.info("Tasks will run in parallel based on worker concurrency")
 
         return {
             'status': 'success',
@@ -948,7 +952,7 @@ def scrape_all_companies_news_task(self):
         }
 
     except Exception as e:
-        print(f"Error queuing company news scrape tasks: {str(e)}")
+        logger.error(f"Error queuing company news scrape tasks: {str(e)}")
         return {
             'status': 'error',
             'error': str(e),
@@ -967,7 +971,7 @@ def scrape_mining_news_task(self):
     from mcp_servers.news_scraper import run_scrape_job
     from .models import NewsScrapeJob
 
-    print("Starting mining news scrape task...")
+    logger.info("Starting mining news scrape task...")
 
     try:
         # Create a new scrape job record
@@ -975,12 +979,12 @@ def scrape_mining_news_task(self):
             status='pending',
             is_scheduled=True
         )
-        print(f"Created scrape job {job.id}")
+        logger.info(f"Created scrape job {job.id}")
 
         # Run the async scraper
         result = asyncio.run(run_scrape_job(job_id=job.id))
 
-        print(f"Mining news scrape completed: {result}")
+        logger.info(f"Mining news scrape completed: {result}")
         return {
             'status': 'success',
             'job_id': job.id,
@@ -990,7 +994,7 @@ def scrape_mining_news_task(self):
         }
 
     except Exception as e:
-        print(f"Error in mining news scrape task: {str(e)}")
+        logger.error(f"Error in mining news scrape task: {str(e)}")
         # Retry on failure
         try:
             self.retry(exc=e)
@@ -1026,7 +1030,7 @@ def scrape_company_website_task(self, job_id: int, sections: list = None):
     from .models import ScrapingJob
     from celery.exceptions import SoftTimeLimitExceeded
 
-    print(f"[ASYNC SCRAPE] Starting company scrape task for job {job_id}...")
+    logger.info(f"[ASYNC SCRAPE] Starting company scrape task for job {job_id}...")
 
     try:
         # Get the scraping job
@@ -1034,7 +1038,7 @@ def scrape_company_website_task(self, job_id: int, sections: list = None):
 
         # Check if job is already completed or failed (idempotency for acks_late redelivery)
         if job.status in ['success', 'partial', 'failed', 'cancelled']:
-            print(f"[ASYNC SCRAPE] Job {job_id} already has status '{job.status}', skipping")
+            logger.info(f"[ASYNC SCRAPE] Job {job_id} already has status '{job.status}', skipping")
             return {
                 'status': 'skipped',
                 'job_id': job_id,
@@ -1046,7 +1050,7 @@ def scrape_company_website_task(self, job_id: int, sections: list = None):
         job.save()
 
         url = job.website_url
-        print(f"[ASYNC SCRAPE] Scraping URL: {url}")
+        logger.info(f"[ASYNC SCRAPE] Scraping URL: {url}")
 
         # Run the async scraper
         result = asyncio.run(scrape_company_website(url, sections=sections))
@@ -1065,10 +1069,10 @@ def scrape_company_website_task(self, job_id: int, sections: list = None):
         job.news_found = len(data.get('news', []))
         job.save()
 
-        print(f"[ASYNC SCRAPE] Job {job_id} completed successfully")
-        print(f"  - Documents: {job.documents_found}")
-        print(f"  - People: {job.people_found}")
-        print(f"  - News: {job.news_found}")
+        logger.info(f"[ASYNC SCRAPE] Job {job_id} completed successfully")
+        logger.info(f"  - Documents: {job.documents_found}")
+        logger.info(f"  - People: {job.people_found}")
+        logger.info(f"  - News: {job.news_found}")
 
         return {
             'status': 'success',
@@ -1080,7 +1084,7 @@ def scrape_company_website_task(self, job_id: int, sections: list = None):
         }
 
     except ScrapingJob.DoesNotExist:
-        print(f"[ASYNC SCRAPE] Job {job_id} not found")
+        logger.info(f"[ASYNC SCRAPE] Job {job_id} not found")
         return {
             'status': 'error',
             'job_id': job_id,
@@ -1089,7 +1093,7 @@ def scrape_company_website_task(self, job_id: int, sections: list = None):
 
     except SoftTimeLimitExceeded:
         # Task timed out - mark as failed with timeout message
-        print(f"[ASYNC SCRAPE] Job {job_id} timed out (exceeded 10 minute limit)")
+        logger.info(f"[ASYNC SCRAPE] Job {job_id} timed out (exceeded 10 minute limit)")
         try:
             job = ScrapingJob.objects.get(id=job_id)
             job.status = 'failed'
@@ -1097,7 +1101,7 @@ def scrape_company_website_task(self, job_id: int, sections: list = None):
             job.error_messages = ['Task timed out - exceeded 10 minute limit. The website may be too slow or complex.']
             job.save()
         except Exception as e:
-            print(f"[ERROR] Failed to update job {job_id} status on timeout: {e}")
+            logger.error(f" Failed to update job {job_id} status on timeout: {e}")
 
         return {
             'status': 'error',
@@ -1107,7 +1111,7 @@ def scrape_company_website_task(self, job_id: int, sections: list = None):
         }
 
     except Exception as e:
-        print(f"[ASYNC SCRAPE] Job {job_id} failed: {str(e)}")
+        logger.info(f"[ASYNC SCRAPE] Job {job_id} failed: {str(e)}")
         import traceback
         traceback.print_exc()
 
@@ -1120,7 +1124,7 @@ def scrape_company_website_task(self, job_id: int, sections: list = None):
             job.error_traceback = traceback.format_exc()
             job.save()
         except Exception as update_err:
-            print(f"[ERROR] Failed to update job {job_id} status on error: {update_err}")
+            logger.error(f" Failed to update job {job_id} status on error: {update_err}")
 
         # Retry on failure (but not for timeouts)
         try:
@@ -1157,7 +1161,7 @@ def scrape_and_save_company_task(self, job_id: int, update_existing: bool = Fals
     import sys
     import importlib
 
-    print(f"[ASYNC SCRAPE+SAVE] Starting scrape and save task for job {job_id}...")
+    logger.info(f"[ASYNC SCRAPE+SAVE] Starting scrape and save task for job {job_id}...")
 
     try:
         # Get the scraping job
@@ -1165,7 +1169,7 @@ def scrape_and_save_company_task(self, job_id: int, update_existing: bool = Fals
 
         # Check if job is already completed (idempotency)
         if job.status in ['success', 'partial', 'failed', 'cancelled']:
-            print(f"[ASYNC SCRAPE+SAVE] Job {job_id} already has status '{job.status}', skipping")
+            logger.info(f"[ASYNC SCRAPE+SAVE] Job {job_id} already has status '{job.status}', skipping")
             return {
                 'status': 'skipped',
                 'job_id': job_id,
@@ -1178,7 +1182,7 @@ def scrape_and_save_company_task(self, job_id: int, update_existing: bool = Fals
 
         url = job.website_url
         sections = job.sections_to_process
-        print(f"[ASYNC SCRAPE+SAVE] Scraping URL: {url}")
+        logger.info(f"[ASYNC SCRAPE+SAVE] Scraping URL: {url}")
 
         # Get user if provided
         User = get_user_model()
@@ -1218,17 +1222,17 @@ def scrape_and_save_company_task(self, job_id: int, update_existing: bool = Fals
                 from core.claude_validator import verify_onboarded_company
                 verification = verify_onboarded_company(company.id)
             except Exception as e:
-                print(f"[ASYNC SCRAPE+SAVE] Verification failed for company {company.id}: {e}")
+                logger.info(f"[ASYNC SCRAPE+SAVE] Verification failed for company {company.id}: {e}")
                 verification = {'status': 'error', 'message': str(e)}
 
-            print(f"[ASYNC SCRAPE+SAVE] Job {job_id} completed successfully")
-            print(f"  - Company: {company.name} (ID: {company.id})")
-            print(f"  - Documents: {job.documents_found}")
-            print(f"  - People: {job.people_found}")
-            print(f"  - News scraping triggered")
-            print(f"  - Verification: {verification.get('status', 'unknown')} (score: {verification.get('overall_score', 0)})")
+            logger.info(f"[ASYNC SCRAPE+SAVE] Job {job_id} completed successfully")
+            logger.info(f"  - Company: {company.name} (ID: {company.id})")
+            logger.info(f"  - Documents: {job.documents_found}")
+            logger.info(f"  - People: {job.people_found}")
+            logger.info(f"  - News scraping triggered")
+            logger.info(f"  - Verification: {verification.get('status', 'unknown')} (score: {verification.get('overall_score', 0)})")
             if verification.get('fixes_applied'):
-                print(f"  - Auto-fixes applied: {verification['fixes_applied']}")
+                logger.info(f"  - Auto-fixes applied: {verification['fixes_applied']}")
 
             return {
                 'status': 'success',
@@ -1245,7 +1249,7 @@ def scrape_and_save_company_task(self, job_id: int, update_existing: bool = Fals
             raise Exception("Failed to create company record")
 
     except ScrapingJob.DoesNotExist:
-        print(f"[ASYNC SCRAPE+SAVE] Job {job_id} not found")
+        logger.info(f"[ASYNC SCRAPE+SAVE] Job {job_id} not found")
         return {
             'status': 'error',
             'job_id': job_id,
@@ -1253,7 +1257,7 @@ def scrape_and_save_company_task(self, job_id: int, update_existing: bool = Fals
         }
 
     except SoftTimeLimitExceeded:
-        print(f"[ASYNC SCRAPE+SAVE] Job {job_id} timed out")
+        logger.info(f"[ASYNC SCRAPE+SAVE] Job {job_id} timed out")
         try:
             job = ScrapingJob.objects.get(id=job_id)
             job.status = 'failed'
@@ -1261,7 +1265,7 @@ def scrape_and_save_company_task(self, job_id: int, update_existing: bool = Fals
             job.error_messages = ['Task timed out - exceeded 10 minute limit']
             job.save()
         except Exception as e:
-            print(f"[ERROR] Failed to update job {job_id} status on timeout: {e}")
+            logger.error(f" Failed to update job {job_id} status on timeout: {e}")
         return {
             'status': 'error',
             'job_id': job_id,
@@ -1270,7 +1274,7 @@ def scrape_and_save_company_task(self, job_id: int, update_existing: bool = Fals
         }
 
     except Exception as e:
-        print(f"[ASYNC SCRAPE+SAVE] Job {job_id} failed: {str(e)}")
+        logger.info(f"[ASYNC SCRAPE+SAVE] Job {job_id} failed: {str(e)}")
         import traceback
         traceback.print_exc()
 
@@ -1300,11 +1304,11 @@ def scrape_and_save_company_task(self, job_id: int, update_existing: bool = Fals
                 # Check if company already exists with this URL
                 existing = Company.objects.filter(website_url__icontains=domain).first()
                 if existing:
-                    print(f"[FALLBACK] Company already exists for {domain}: {existing.name} (ID: {existing.id})")
+                    logger.info(f"[FALLBACK] Company already exists for {domain}: {existing.name} (ID: {existing.id})")
                     fallback_company = existing
                 else:
                     # Create minimal company record - Claude verification will populate it
-                    print(f"[FALLBACK] Creating minimal company record for {job.website_url}")
+                    logger.info(f"[FALLBACK] Creating minimal company record for {job.website_url}")
                     fallback_company = Company.objects.create(
                         name=f"{fallback_name} (pending verification)",
                         website_url=job.website_url,
@@ -1312,21 +1316,21 @@ def scrape_and_save_company_task(self, job_id: int, update_existing: bool = Fals
                         description='Company data pending verification - scraped data incomplete.',
                         is_verified=False,
                     )
-                    print(f"[FALLBACK] Created fallback company: {fallback_company.name} (ID: {fallback_company.id})")
+                    logger.info(f"[FALLBACK] Created fallback company: {fallback_company.name} (ID: {fallback_company.id})")
 
                 # Run Claude verification to populate the company with real data
                 # This can extract: proper company name, description, projects from website
                 if fallback_company:
-                    print(f"[FALLBACK] Running Claude verification on company {fallback_company.id}...")
+                    logger.info(f"[FALLBACK] Running Claude verification on company {fallback_company.id}...")
                     from core.claude_validator import verify_onboarded_company
                     verification = verify_onboarded_company(fallback_company.id)
-                    print(f"[FALLBACK] Verification result: {verification.get('status', 'unknown')}")
+                    logger.info(f"[FALLBACK] Verification result: {verification.get('status', 'unknown')}")
                     if verification.get('fixes_applied'):
-                        print(f"[FALLBACK] Auto-fixes applied: {verification['fixes_applied']}")
+                        logger.info(f"[FALLBACK] Auto-fixes applied: {verification['fixes_applied']}")
 
                     # Also trigger news scraping
                     scrape_company_news_task.delay(fallback_company.id)
-                    print(f"[FALLBACK] News scraping triggered for company {fallback_company.id}")
+                    logger.info(f"[FALLBACK] News scraping triggered for company {fallback_company.id}")
             else:
                 # Record failed discovery only if we couldn't create a fallback
                 FailedCompanyDiscovery.objects.update_or_create(
@@ -1337,7 +1341,7 @@ def scrape_and_save_company_task(self, job_id: int, update_existing: bool = Fals
                     }
                 )
         except Exception as fallback_error:
-            print(f"[FALLBACK] Failed to create fallback company: {fallback_error}")
+            logger.info(f"[FALLBACK] Failed to create fallback company: {fallback_error}")
             import traceback
             traceback.print_exc()
 
@@ -1379,7 +1383,7 @@ def cleanup_stuck_jobs_task(self):
     from .models import ScrapingJob, DocumentProcessingJob
     from datetime import timedelta
 
-    print("[CLEANUP] Running stuck jobs cleanup task...")
+    logger.info("[CLEANUP] Running stuck jobs cleanup task...")
 
     now = timezone.now()
     stuck_running_threshold = now - timedelta(minutes=15)
@@ -1402,7 +1406,7 @@ def cleanup_stuck_jobs_task(self):
     scraping_fixed = 0
     for job in stuck_scraping_running:
         duration = (now - job.started_at).total_seconds() / 60
-        print(f"[CLEANUP] Marking stuck ScrapingJob {job.id} as failed (running for {duration:.1f} minutes)")
+        logger.info(f"[CLEANUP] Marking stuck ScrapingJob {job.id} as failed (running for {duration:.1f} minutes)")
         job.status = 'failed'
         job.completed_at = now
         job.error_messages = [f'Job stuck in running state for {duration:.1f} minutes. Likely worker crash or restart.']
@@ -1418,7 +1422,7 @@ def cleanup_stuck_jobs_task(self):
     processing_fixed = 0
     for job in stuck_processing:
         duration = (now - job.started_at).total_seconds() / 60
-        print(f"[CLEANUP] Marking stuck DocumentProcessingJob {job.id} as failed (processing for {duration:.1f} minutes)")
+        logger.info(f"[CLEANUP] Marking stuck DocumentProcessingJob {job.id} as failed (processing for {duration:.1f} minutes)")
         job.status = 'failed'
         job.completed_at = now
         job.error_message = f'Job stuck in processing state for {duration:.1f} minutes. Likely worker crash or restart.'
@@ -1426,7 +1430,7 @@ def cleanup_stuck_jobs_task(self):
         processing_fixed += 1
 
     total_fixed = scraping_fixed + processing_fixed
-    print(f"[CLEANUP] Fixed {total_fixed} stuck jobs (ScrapingJobs: {scraping_fixed}, DocumentProcessingJobs: {processing_fixed})")
+    logger.info(f"[CLEANUP] Fixed {total_fixed} stuck jobs (ScrapingJobs: {scraping_fixed}, DocumentProcessingJobs: {processing_fixed})")
 
     return {
         'status': 'success',
@@ -1457,7 +1461,7 @@ def process_company_news_for_rag_task(self, company_id: int, limit: int = 20):
     from .models import Company, NewsChunk
     from mcp_servers.news_content_processor import NewsContentProcessor
 
-    print(f"[RAG TASK] Starting news processing for company {company_id}...")
+    logger.info(f"[RAG TASK] Starting news processing for company {company_id}...")
 
     try:
         company = Company.objects.get(id=company_id)
@@ -1465,7 +1469,7 @@ def process_company_news_for_rag_task(self, company_id: int, limit: int = 20):
         # Check if already has chunks (avoid reprocessing)
         existing_chunks = NewsChunk.objects.filter(company=company).count()
         if existing_chunks > 0:
-            print(f"[RAG TASK] Company {company.name} already has {existing_chunks} chunks, skipping")
+            logger.info(f"[RAG TASK] Company {company.name} already has {existing_chunks} chunks, skipping")
             return {
                 'status': 'skipped',
                 'company': company.name,
@@ -1478,7 +1482,7 @@ def process_company_news_for_rag_task(self, company_id: int, limit: int = 20):
         result = processor._process_company_news(company.name, limit=limit)
 
         if result.get('success'):
-            print(f"[RAG TASK] Processed {result.get('news_items_processed', 0)} news items, "
+            logger.info(f"[RAG TASK] Processed {result.get('news_items_processed', 0)} news items, "
                   f"created {result.get('chunks_created', 0)} chunks for {company.name}")
             return {
                 'status': 'success',
@@ -1489,7 +1493,7 @@ def process_company_news_for_rag_task(self, company_id: int, limit: int = 20):
             }
         else:
             error_msg = result.get('error', 'Unknown error')
-            print(f"[RAG TASK] Processing failed for {company.name}: {error_msg}")
+            logger.info(f"[RAG TASK] Processing failed for {company.name}: {error_msg}")
             return {
                 'status': 'error',
                 'company': company.name,
@@ -1497,7 +1501,7 @@ def process_company_news_for_rag_task(self, company_id: int, limit: int = 20):
             }
 
     except Company.DoesNotExist:
-        print(f"[RAG TASK] Company {company_id} not found")
+        logger.info(f"[RAG TASK] Company {company_id} not found")
         return {
             'status': 'error',
             'company_id': company_id,
@@ -1505,7 +1509,7 @@ def process_company_news_for_rag_task(self, company_id: int, limit: int = 20):
         }
 
     except Exception as e:
-        print(f"[RAG TASK] Error processing company {company_id}: {str(e)}")
+        logger.info(f"[RAG TASK] Error processing company {company_id}: {str(e)}")
         import traceback
         traceback.print_exc()
 
@@ -1542,7 +1546,7 @@ def store_company_profile_in_rag_task(self, company_id: int):
     from django.conf import settings
     from mcp_servers.embeddings import get_embedding_function
 
-    print(f"[RAG TASK] Storing profile for company {company_id}...")
+    logger.info(f"[RAG TASK] Storing profile for company {company_id}...")
 
     try:
         company = Company.objects.get(id=company_id)
@@ -1616,7 +1620,7 @@ def store_company_profile_in_rag_task(self, company_id: int):
             }]
         )
 
-        print(f"[RAG TASK] Stored {len(full_profile)} chars of profile for {company.name}")
+        logger.info(f"[RAG TASK] Stored {len(full_profile)} chars of profile for {company.name}")
         return {
             'status': 'success',
             'company': company.name,
@@ -1627,5 +1631,5 @@ def store_company_profile_in_rag_task(self, company_id: int):
         return {'status': 'error', 'error': f'Company {company_id} not found'}
 
     except Exception as e:
-        print(f"[RAG TASK] Error storing profile for {company_id}: {str(e)}")
+        logger.info(f"[RAG TASK] Error storing profile for {company_id}: {str(e)}")
         return {'status': 'error', 'error': str(e)}

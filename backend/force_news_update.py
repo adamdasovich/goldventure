@@ -68,7 +68,7 @@ def force_update():
         if date_str:
             try:
                 release_date = datetime.strptime(date_str, '%Y-%m-%d').date()
-            except:
+            except ValueError:
                 release_date = None
         else:
             release_date = None
