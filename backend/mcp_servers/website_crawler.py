@@ -1948,7 +1948,9 @@ async def crawl_html_news_pages(url: str, months: int = 6, custom_news_url: str 
             f'{url}/investor-relations/news-releases/',  # NEO Battery Materials
             f'{url}/investor-relations/press-releases/',  # IR press releases pattern
             f'{url}/news/press-releases/',
-            f'{url}/news/{current_year}/',  # Garibaldi (year-based)
+            f'{url}/news/{current_year}/',  # Garibaldi, Silver Tiger (year-based)
+            f'{url}/news/{current_year - 1}/',  # Previous year - Silver Tiger has /news/2025/
+            f'{url}/news/{current_year - 2}/',  # Two years ago
             f'{url}/news-{current_year}/',  # ATEX Resources (year-suffix pattern)
             f'{url}/news-{current_year - 1}/',  # ATEX Resources (previous year)
             # Year-based archive pages under news-releases (Aftermath Silver pattern)
