@@ -816,30 +816,44 @@ def auto_discover_and_process_documents_task(self, company_ids=None, document_ty
         }
 
 
+# Timeout for async operations (Celery's soft_time_limit doesn't work with asyncio)
+ASYNC_SCRAPE_TIMEOUT = 300  # 5 minutes - enforced inside event loop
+
+
 @shared_task(bind=True, max_retries=2, default_retry_delay=60, time_limit=600, soft_time_limit=580, on_failure=log_task_failure)
 def scrape_single_company_news_task(self, company_id: int):
     """
     Background task to scrape news releases for a SINGLE company.
     This task is spawned by scrape_all_companies_news_task for each company.
 
-    Time limit: 10 minutes per company
+    Time limit: 10 minutes per company (but asyncio timeout at 5 min)
+
+    NOTE: Celery's soft_time_limit doesn't work with asyncio because signals
+    can't interrupt the event loop. We use asyncio.wait_for() to enforce timeout.
     """
     try:
         company = Company.objects.get(id=company_id)
         logger.info(f"Scraping news for {company.name}...")
 
-        # Run the async crawler
+        # Run the async crawler with explicit timeout
+        # (Celery's soft_time_limit doesn't interrupt asyncio)
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
 
         try:
             news_releases = loop.run_until_complete(
-                crawl_news_releases(
-                    url=company.website,
-                    months=NEWS_SCRAPE_MONTHS_DAILY,  # Use constant for consistency
-                    max_depth=2
+                asyncio.wait_for(
+                    crawl_news_releases(
+                        url=company.website,
+                        months=NEWS_SCRAPE_MONTHS_DAILY,
+                        max_depth=2
+                    ),
+                    timeout=ASYNC_SCRAPE_TIMEOUT
                 )
             )
+        except asyncio.TimeoutError:
+            logger.error(f"   {company.name}: Timed out after {ASYNC_SCRAPE_TIMEOUT}s")
+            return {'company_id': company_id, 'company_name': company.name, 'status': 'timeout', 'created': 0, 'updated': 0}
         finally:
             loop.close()
 
