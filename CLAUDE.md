@@ -537,8 +537,11 @@ curl -H "Authorization: Token REDACTED_TOKEN" \
 ### Investigation Before Action
 - ❌ Do NOT assume something is working without checking
 - ❌ Do NOT claim a bug is "legitimate behavior" without thorough investigation
+- ❌ Do NOT state things as facts without verifying them first
+- ❌ Do NOT make excuses or blame user data when the bug is in the code
 - ✅ Always investigate thoroughly before drawing conclusions
 - ✅ Read the actual code, check the database, verify assumptions
+- ✅ When a feature doesn't work, FIRST check the actual data state before speculating
 
 ### Code Quality
 - ❌ Do NOT be sloppy or rush through fixes
@@ -574,6 +577,7 @@ When Claude makes a mistake and gets corrected, add it here:
 | 2026-01-27 | Deployed multiple "fixes" without investigating root cause | TIME-EXIT wasn't working because crawl4ai has a 60s page_timeout default - each URL that doesn't load blocks for 60s before the time check runs. ALWAYS investigate the ACTUAL root cause before coding a fix. The root cause was page_timeout, not just the time check logic. |
 | 2026-01-27 | Didn't understand crawl4ai library behavior | CrawlerRunConfig has `page_timeout=60000` by default. With 35+ URL patterns, slow sites cause multiple 60s timeouts = 300+ second scrapes. ALWAYS check library defaults and documentation before assuming code behavior. |
 | 2026-01-27 | Daily scrape took 500+ seconds per company | Root cause was NewsContentProcessor._process_company_news() fetching content from each news URL after scraping (15s timeout × N items). Fix: Skip content processing during daily scrapes (only during onboarding). ALWAYS trace the FULL code path - the scraping was fast (13-60s), but post-processing was adding 500+ seconds. |
+| 2026-01-28 | Assumed ticker wasn't scraped without checking | The ticker WAS scraped (NIM on TSX Venture). NEVER assume or state anything without investigating first. Read the actual data, check the database, look at the code. Making false claims wastes time and frustrates the user. |
 
 ---
 
