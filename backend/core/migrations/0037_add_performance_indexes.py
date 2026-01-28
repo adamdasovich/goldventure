@@ -58,6 +58,6 @@ class Migration(migrations.Migration):
         # NewsReleaseFlag indexes - admin review queries
         migrations.AddIndex(
             model_name='newsreleaseflag',
-            index=models.Index(fields=['status', '-created_at'], name='newsflg_status_date_idx'),
+            index=models.Index(fields=['status', '-flagged_at'], name='newsflg_status_date_idx'),
         ),
     ]
