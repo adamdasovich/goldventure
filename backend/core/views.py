@@ -495,50 +495,53 @@ def _get_stockwatch_quote(ticker_symbol: str, exchange: str) -> dict:
 
 def _get_yahoo_finance_quote(ticker_symbol: str) -> dict:
     """
-    Fetch real-time stock quote from Yahoo Finance using yfinance.
-    Uses history() method which is more reliable than info property.
+    Fetch real-time stock quote from Yahoo Finance using direct API.
+    The yfinance library has issues with some Canadian stocks, so we use
+    direct HTTP requests to the Yahoo Finance API instead.
     Returns dict with quote data or error.
     """
     try:
-        import yfinance as yf
+        url = f'https://query1.finance.yahoo.com/v8/finance/chart/{ticker_symbol}'
+        params = {'interval': '1d', 'range': '5d'}
+        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
 
-        stock = yf.Ticker(ticker_symbol)
+        response = requests.get(url, params=params, headers=headers, timeout=Timeouts.DEFAULT)
+        data = response.json()
 
-        # Use history() which is more reliable and less rate-limited
-        # Get last 2 days of data to calculate change
-        hist = stock.history(period='2d')
+        # Check for valid response
+        if 'chart' not in data or 'result' not in data['chart'] or not data['chart']['result']:
+            error_msg = data.get('chart', {}).get('error', {}).get('description', 'No data found')
+            return {'error': f'Yahoo Finance: {error_msg}'}
 
-        if hist.empty:
-            return {'error': f'No data found for {ticker_symbol}'}
+        result = data['chart']['result'][0]
+        meta = result.get('meta', {})
 
-        # Get the most recent data
-        latest = hist.iloc[-1]
-        price = float(latest['Close'])
-        volume = int(latest['Volume'])
+        price = meta.get('regularMarketPrice', 0)
+        if not price or price <= 0:
+            return {'error': f'No price data for {ticker_symbol}'}
 
-        # Calculate change from previous day
-        if len(hist) >= 2:
-            prev = hist.iloc[-2]
-            previous_close = float(prev['Close'])
-            change = price - previous_close
-            change_percent = (change / previous_close * 100) if previous_close else 0
-        else:
-            previous_close = price
-            change = 0
-            change_percent = 0
+        previous_close = meta.get('chartPreviousClose', price)
+        change = price - previous_close if previous_close else 0
+        change_percent = (change / previous_close * 100) if previous_close else 0
+
+        volume = meta.get('regularMarketVolume', 0)
+        day_high = meta.get('regularMarketDayHigh', price)
+        day_low = meta.get('regularMarketDayLow', price)
 
         return {
-            'price': round(price, 4),
-            'previous_close': round(previous_close, 4),
-            'change': round(change, 4),
-            'change_percent': round(change_percent, 2),
-            'volume': volume,
-            'day_high': float(latest.get('High', price)),
-            'day_low': float(latest.get('Low', price)),
+            'price': round(float(price), 4),
+            'previous_close': round(float(previous_close), 4),
+            'change': round(float(change), 4),
+            'change_percent': round(float(change_percent), 2),
+            'volume': int(volume) if volume else 0,
+            'day_high': round(float(day_high), 4),
+            'day_low': round(float(day_low), 4),
             'source': 'yahoo_finance'
         }
-    except Exception as e:
-        return {'error': f'Yahoo Finance error: {str(e)}'}
+    except requests.RequestException as e:
+        return {'error': f'Yahoo Finance request error: {str(e)}'}
+    except (KeyError, ValueError, TypeError) as e:
+        return {'error': f'Yahoo Finance parse error: {str(e)}'}
 
 
 @api_view(['GET'])
