@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, useRef, useCallback, ReactNode } from 'react';
 
 interface User {
   id: number;
@@ -22,14 +22,82 @@ interface AuthContextType {
   login: (username: string, password: string) => Promise<void>;
   register: (username: string, email: string, password: string, fullName: string, userType: string) => Promise<void>;
   logout: () => void;
+  refreshAccessToken: () => Promise<string | null>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+// Token refresh interval: 50 minutes (tokens expire in 1 hour)
+const TOKEN_REFRESH_INTERVAL = 50 * 60 * 1000;
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const refreshIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const isRefreshingRef = useRef(false);
+
+  // Refresh the access token using the refresh token
+  const refreshAccessToken = useCallback(async (): Promise<string | null> => {
+    // Prevent multiple simultaneous refresh requests
+    if (isRefreshingRef.current) {
+      return accessToken;
+    }
+
+    const refreshToken = localStorage.getItem('refreshToken');
+    if (!refreshToken) {
+      return null;
+    }
+
+    isRefreshingRef.current = true;
+
+    try {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api'}/auth/token/refresh/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ refresh: refreshToken }),
+      });
+
+      if (!response.ok) {
+        // Refresh token is invalid, log out
+        throw new Error('Refresh token expired');
+      }
+
+      const data = await response.json();
+      const newAccessToken = data.access;
+
+      setAccessToken(newAccessToken);
+      localStorage.setItem('accessToken', newAccessToken);
+
+      // If a new refresh token was returned (token rotation), store it
+      if (data.refresh) {
+        localStorage.setItem('refreshToken', data.refresh);
+      }
+
+      return newAccessToken;
+    } catch {
+      // Refresh failed, log out the user
+      logout();
+      return null;
+    } finally {
+      isRefreshingRef.current = false;
+    }
+  }, [accessToken]);
+
+  // Set up automatic token refresh
+  const setupTokenRefresh = useCallback(() => {
+    // Clear any existing interval
+    if (refreshIntervalRef.current) {
+      clearInterval(refreshIntervalRef.current);
+    }
+
+    // Set up new refresh interval
+    refreshIntervalRef.current = setInterval(() => {
+      refreshAccessToken();
+    }, TOKEN_REFRESH_INTERVAL);
+  }, [refreshAccessToken]);
 
   // Load user from localStorage on mount
   useEffect(() => {
@@ -50,13 +118,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      // Verify token is still valid
-      fetchCurrentUser(storedToken).catch(() => {
-        // Token is invalid, clear everything
-        logout();
+      // Verify token is still valid, or try to refresh it
+      fetchCurrentUser(storedToken).catch(async () => {
+        // Token might be expired, try to refresh
+        const newToken = await refreshAccessToken();
+        if (newToken) {
+          // Refresh succeeded, fetch user with new token
+          fetchCurrentUser(newToken).catch(() => {
+            logout();
+          });
+        } else {
+          logout();
+        }
       });
+
+      // Set up automatic token refresh
+      setupTokenRefresh();
     }
     setIsLoading(false);
+
+    // Cleanup on unmount
+    return () => {
+      if (refreshIntervalRef.current) {
+        clearInterval(refreshIntervalRef.current);
+      }
+    };
   }, []);
 
   const fetchCurrentUser = async (token: string) => {
@@ -105,6 +191,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.setItem('refreshToken', data.refresh);
     localStorage.setItem('user', JSON.stringify(data.user));
 
+    // Set up automatic token refresh
+    setupTokenRefresh();
+
     // Force reload to ensure fresh state
     window.location.reload();
   };
@@ -151,11 +240,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.setItem('refreshToken', data.refresh);
     localStorage.setItem('user', JSON.stringify(data.user));
 
+    // Set up automatic token refresh
+    setupTokenRefresh();
+
     // Force reload to ensure fresh state
     window.location.reload();
   };
 
   const logout = () => {
+    // Clear the token refresh interval
+    if (refreshIntervalRef.current) {
+      clearInterval(refreshIntervalRef.current);
+      refreshIntervalRef.current = null;
+    }
+
     setUser(null);
     setAccessToken(null);
     localStorage.removeItem('accessToken');
@@ -175,6 +273,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         login,
         register,
         logout,
+        refreshAccessToken,
       }}
     >
       {children}

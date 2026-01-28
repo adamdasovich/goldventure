@@ -918,11 +918,18 @@ def scrape_single_company_news_task(self, company_id: int):
 def scrape_all_companies_news_task(self):
     """
     Background task to queue news scraping for ALL companies with websites.
-    Spawns individual tasks for each company to run in parallel.
+    Spawns individual tasks for each company with staggered delays.
 
     Scheduled to run daily in the morning via Celery Beat.
+
+    IMPORTANT: Tasks are staggered with 30-second delays between each company
+    to avoid overwhelming target websites and getting IP-blocked.
     """
-    logger.info("Starting company news scrape - spawning individual tasks...")
+    logger.info("Starting company news scrape - spawning individual tasks with staggered delays...")
+
+    # Delay between each company scrape (seconds)
+    # This prevents overwhelming target websites and getting IP-blocked
+    SCRAPE_DELAY_SECONDS = 30
 
     try:
         # Get all companies with websites
@@ -932,23 +939,31 @@ def scrape_all_companies_news_task(self):
 
         total_companies = companies.count()
         logger.info(f"Found {total_companies} companies with websites to scrape")
+        logger.info(f"Staggering tasks with {SCRAPE_DELAY_SECONDS}s delay between each")
+        logger.info(f"Estimated total time: {(total_companies * SCRAPE_DELAY_SECONDS) / 60:.1f} minutes")
 
-        # Spawn individual tasks for each company (run in batches)
+        # Spawn individual tasks for each company with staggered delays
         task_ids = []
-        for company in companies:
-            # Queue individual task for each company
-            task = scrape_single_company_news_task.delay(company.id)
+        for i, company in enumerate(companies):
+            # Queue individual task with countdown delay
+            # First company starts immediately, subsequent ones are delayed
+            countdown = i * SCRAPE_DELAY_SECONDS
+            task = scrape_single_company_news_task.apply_async(
+                args=[company.id],
+                countdown=countdown
+            )
             task_ids.append(task.id)
-            logger.info(f"  Queued: {company.name} (task {task.id})")
+            logger.info(f"  Queued: {company.name} (task {task.id}, delay: {countdown}s)")
 
-        logger.info(f"\nQueued {len(task_ids)} individual scraping tasks")
-        logger.info("Tasks will run in parallel based on worker concurrency")
+        logger.info(f"\nQueued {len(task_ids)} individual scraping tasks with staggered delays")
 
         return {
             'status': 'success',
             'total_companies': total_companies,
             'tasks_queued': len(task_ids),
-            'message': f"Queued {len(task_ids)} company news scraping tasks"
+            'delay_between_tasks': SCRAPE_DELAY_SECONDS,
+            'estimated_duration_minutes': (total_companies * SCRAPE_DELAY_SECONDS) / 60,
+            'message': f"Queued {len(task_ids)} company news scraping tasks with {SCRAPE_DELAY_SECONDS}s stagger"
         }
 
     except Exception as e:

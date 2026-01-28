@@ -706,6 +706,45 @@ def stock_quote(request, company_id):
 # CLAUDE CHAT API
 # ============================================================================
 
+import re
+
+# Prompt injection patterns to detect and block
+PROMPT_INJECTION_PATTERNS = [
+    r'ignore\s+(all\s+)?(previous|prior|above)\s+(instructions|prompts|rules)',
+    r'disregard\s+(all\s+)?(previous|prior|above)',
+    r'forget\s+(all\s+)?(previous|prior|above|your)\s+(instructions|rules|context)',
+    r'new\s+instructions?\s*:',
+    r'system\s*:\s*you\s+are',
+    r'you\s+are\s+now\s+a',
+    r'act\s+as\s+if\s+you\s+(are|were)',
+    r'pretend\s+(you\s+)?(are|were|to\s+be)',
+    r'override\s+(your\s+)?(instructions|rules|guidelines)',
+    r'(reveal|show|output|print)\s+(your\s+)?(system\s+)?prompt',
+    r'what\s+(is|are)\s+your\s+(system\s+)?prompt',
+]
+
+
+def check_prompt_injection(message: str) -> tuple:
+    """
+    Check message for potential prompt injection attacks.
+    Returns (is_safe, matched_pattern) - is_safe=True means no injection detected.
+    """
+    if not message:
+        return True, None
+    message_lower = message.lower()
+    for pattern in PROMPT_INJECTION_PATTERNS:
+        if re.search(pattern, message_lower, re.IGNORECASE):
+            return False, pattern
+    return True, None
+
+
+def get_or_create_ai_usage(user):
+    """Get or create AI usage record for user."""
+    from .models import UserAIUsage
+    usage, created = UserAIUsage.objects.get_or_create(user=user)
+    return usage
+
+
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def claude_chat(request):
@@ -722,6 +761,8 @@ def claude_chat(request):
 
     The optimized client uses progressive tool discovery and result filtering
     for significant token savings (50-90% reduction in tool tokens).
+
+    Rate limited: 50 messages/day, 100k tokens/day per user (configurable).
     """
 
     message = request.data.get('message')
@@ -733,6 +774,23 @@ def claude_chat(request):
         return Response(
             {'error': 'message is required'},
             status=status.HTTP_400_BAD_REQUEST
+        )
+
+    # Check for prompt injection
+    is_safe, matched_pattern = check_prompt_injection(message)
+    if not is_safe:
+        return Response(
+            {'error': 'Message contains disallowed content patterns.'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    # Check user AI usage limits
+    usage = get_or_create_ai_usage(request.user)
+    can_send, limit_error = usage.can_send_message()
+    if not can_send:
+        return Response(
+            {'error': limit_error, 'limit_reached': True},
+            status=status.HTTP_429_TOO_MANY_REQUESTS
         )
 
     try:
@@ -748,6 +806,18 @@ def claude_chat(request):
             conversation_history=conversation_history,
             system_prompt=system_prompt
         )
+
+        # Record usage (estimate tokens if not provided)
+        tokens_used = result.get('tokens_used', 0) or result.get('usage', {}).get('total_tokens', 1000)
+        usage.record_usage(tokens_used)
+
+        # Add usage info to response
+        result['usage_remaining'] = {
+            'messages_today': usage.messages_today,
+            'message_limit': usage.daily_message_limit,
+            'tokens_today': usage.tokens_today,
+            'token_limit': usage.daily_token_limit,
+        }
 
         return Response(result)
 
@@ -770,6 +840,8 @@ def company_chat(request, company_id):
         "conversation_history": [...],  # optional
         "optimized": true  # optional - use token-efficient client
     }
+
+    Rate limited: 50 messages/day, 100k tokens/day per user (configurable).
     """
 
     message = request.data.get('message')
@@ -780,6 +852,23 @@ def company_chat(request, company_id):
         return Response(
             {'error': 'message is required'},
             status=status.HTTP_400_BAD_REQUEST
+        )
+
+    # Check for prompt injection
+    is_safe, matched_pattern = check_prompt_injection(message)
+    if not is_safe:
+        return Response(
+            {'error': 'Message contains disallowed content patterns.'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    # Check user AI usage limits
+    usage = get_or_create_ai_usage(request.user)
+    can_send, limit_error = usage.can_send_message()
+    if not can_send:
+        return Response(
+            {'error': limit_error, 'limit_reached': True},
+            status=status.HTTP_429_TOO_MANY_REQUESTS
         )
 
     try:
@@ -813,6 +902,18 @@ Be concise but thorough. Cite data sources and dates when relevant."""
             conversation_history=conversation_history,
             system_prompt=system_prompt
         )
+
+        # Record usage (estimate tokens if not provided)
+        tokens_used = result.get('tokens_used', 0) or result.get('usage', {}).get('total_tokens', 1000)
+        usage.record_usage(tokens_used)
+
+        # Add usage info to response
+        result['usage_remaining'] = {
+            'messages_today': usage.messages_today,
+            'message_limit': usage.daily_message_limit,
+            'tokens_today': usage.tokens_today,
+            'token_limit': usage.daily_token_limit,
+        }
 
         return Response(result)
 
@@ -1135,6 +1236,15 @@ class CompanyViewSet(viewsets.ModelViewSet):
                     projects__primary_commodity__in=commodities
                 ).distinct()
 
+        # Optimize queries to avoid N+1 - prefetch commonly accessed relations
+        # This prevents separate queries for each company's projects/news/documents
+        queryset = queryset.prefetch_related(
+            'projects',
+            'news_releases',
+            'documents',
+            'financings',
+        )
+
         return queryset.order_by('name')
 
     @action(detail=True, methods=['get'])
@@ -1431,9 +1541,6 @@ class CompanyViewSet(viewsets.ModelViewSet):
             )
 
         from django.utils import timezone
-        import asyncio
-        from mcp_servers.company_scraper import scrape_company_website
-        from core.models import ScrapingJob
 
         # Approve the company first
         company.approval_status = 'approved'
@@ -1442,82 +1549,38 @@ class CompanyViewSet(viewsets.ModelViewSet):
         company.save(update_fields=['approval_status', 'reviewed_by', 'reviewed_at', 'updated_at'])
 
         # Trigger onboarding/scraping if website URL is provided
+        # IMPORTANT: This is now ASYNC - scraping runs in background via Celery
+        # Previously this blocked the HTTP request for 60-120 seconds
         if company.website:
-            try:
-                # Create scraping job
-                job = ScrapingJob.objects.create(
-                    company_name_input=company.name,
-                    website_url=company.website,
-                    status='running',
-                    started_at=timezone.now(),
-                    sections_to_process=['all'],
-                    initiated_by=request.user,
-                    company=company
-                )
+            from .tasks import scrape_and_save_company_task
+            from core.models import ScrapingJob
 
-                # Run the scraper
-                result = asyncio.run(scrape_company_website(company.website))
-                data = result['data']
-                errors = result['errors']
+            # Create scraping job record (will be updated by Celery task)
+            job = ScrapingJob.objects.create(
+                company_name_input=company.name,
+                website_url=company.website,
+                status='pending',
+                sections_to_process=['all'],
+                initiated_by=request.user,
+                company=company
+            )
 
-                # Update the existing company with scraped data
-                updated_company = _save_scraped_company_data(data, company.website, update_existing=True, user=request.user)
+            # Queue the scraping task - returns immediately
+            # The task will: scrape website, save data, run verification, trigger news scrape
+            task = scrape_and_save_company_task.delay(
+                job_id=job.id,
+                user_id=request.user.id
+            )
 
-                # Update job with success
-                job.company = updated_company or company
-                job.status = 'success'
-                job.completed_at = timezone.now()
-                job.data_extracted = data
-                job.documents_found = len(data.get('documents', []))
-                job.people_found = len(data.get('people', []))
-                job.news_found = len(data.get('news', []))
-                job.sections_completed = ['all']
-                job.error_messages = errors
-                job.save()
-
-                # Document processing jobs are created by the scraper
-                # The GPU Orchestrator will automatically pick them up and process on GPU
-                # DO NOT process on CPU - it causes 100% CPU and is very slow
-                processing_jobs = data.get('_processing_jobs_created', [])
-                if processing_jobs:
-                    # Jobs will be processed by GPU worker automatically
-                    pass
-
-                # CRITICAL: Trigger comprehensive news scraping via Celery task
-                # scrape_company_website() has LIMITED news strategies
-                # scrape_company_news_task uses crawl_news_releases() with ALL strategies
-                # (NEWS-ENTRY, G2, WP-BLOCK, ELEMENTOR, UIKIT, ITEM, LINK, ASPX)
-                from .tasks import scrape_company_news_task
-                final_company = updated_company or company
-                news_task = scrape_company_news_task.delay(final_company.id)
-
-                return Response({
-                    'success': True,
-                    'message': f'{company.name} has been approved and onboarded successfully. Comprehensive news scraping triggered.',
-                    'company_id': company.id,
-                    'onboarding_completed': True,
-                    'documents_found': len(data.get('documents', [])),
-                    'people_found': len(data.get('people', [])),
-                    'news_found': len(data.get('news', [])),
-                    'news_scrape_task_id': news_task.id,
-                })
-
-            except Exception as e:
-                # If scraping fails, still keep the company approved
-                # but mark the scraping job as failed
-                if 'job' in locals():
-                    job.status = 'failed'
-                    job.completed_at = timezone.now()
-                    job.error_messages = [str(e)]
-                    job.save()
-
-                return Response({
-                    'success': True,
-                    'message': f'{company.name} has been approved, but onboarding failed.',
-                    'company_id': company.id,
-                    'onboarding_completed': False,
-                    'onboarding_error': str(e)
-                })
+            return Response({
+                'success': True,
+                'message': f'{company.name} has been approved. Onboarding is now running in the background.',
+                'company_id': company.id,
+                'onboarding_status': 'in_progress',
+                'scraping_job_id': job.id,
+                'task_id': task.id,
+                'note': 'Check scraping job status for progress. News scraping will be triggered automatically after onboarding completes.'
+            })
 
         # No website URL provided, just approve
         return Response({

@@ -4831,3 +4831,70 @@ class DismissedNewsURL(models.Model):
 
         return False, None
 
+
+class UserAIUsage(models.Model):
+    """
+    Track AI chat usage per user for cost control.
+    Prevents unlimited API spend by enforcing daily limits.
+    """
+    user = models.OneToOneField(
+        User,
+        on_delete=models.CASCADE,
+        related_name='ai_usage'
+    )
+
+    # Daily counters (reset at midnight)
+    messages_today = models.IntegerField(default=0, help_text="Messages sent today")
+    tokens_today = models.IntegerField(default=0, help_text="Total tokens used today (input + output)")
+    last_reset_date = models.DateField(auto_now_add=True, help_text="Date of last counter reset")
+
+    # Lifetime stats
+    total_messages = models.IntegerField(default=0)
+    total_tokens = models.IntegerField(default=0)
+
+    # Limits (can be customized per user)
+    daily_message_limit = models.IntegerField(default=50, help_text="Max messages per day (0 = unlimited)")
+    daily_token_limit = models.IntegerField(default=100000, help_text="Max tokens per day (0 = unlimited)")
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'user_ai_usage'
+        verbose_name = 'User AI Usage'
+        verbose_name_plural = 'User AI Usage'
+
+    def __str__(self):
+        return f"{self.user.username}: {self.messages_today} msgs today"
+
+    def reset_if_new_day(self):
+        """Reset daily counters if it's a new day."""
+        from datetime import date
+        today = date.today()
+        if self.last_reset_date < today:
+            self.messages_today = 0
+            self.tokens_today = 0
+            self.last_reset_date = today
+            self.save(update_fields=['messages_today', 'tokens_today', 'last_reset_date'])
+
+    def can_send_message(self) -> tuple:
+        """Check if user can send a message. Returns (allowed, error_message)."""
+        self.reset_if_new_day()
+
+        if self.daily_message_limit > 0 and self.messages_today >= self.daily_message_limit:
+            return False, f"Daily message limit reached ({self.daily_message_limit} messages). Resets at midnight."
+
+        if self.daily_token_limit > 0 and self.tokens_today >= self.daily_token_limit:
+            return False, f"Daily token limit reached ({self.daily_token_limit:,} tokens). Resets at midnight."
+
+        return True, None
+
+    def record_usage(self, tokens_used: int = 0):
+        """Record a message and token usage."""
+        self.reset_if_new_day()
+        self.messages_today += 1
+        self.tokens_today += tokens_used
+        self.total_messages += 1
+        self.total_tokens += tokens_used
+        self.save()
+
