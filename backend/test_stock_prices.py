@@ -38,10 +38,14 @@ def test_stock_price_queries():
     user = User.objects.filter(is_superuser=True).first()
     if not user:
         print("\nNo admin user found. Creating one...")
+        # Use environment variable for password, fail if not set
+        admin_password = os.environ.get('ADMIN_PASSWORD')
+        if not admin_password:
+            raise ValueError("ADMIN_PASSWORD environment variable required to create admin user")
         user = User.objects.create_superuser(
             username='admin',
             email='admin@example.com',
-            password='admin123'
+            password=admin_password
         )
 
     # Initialize Claude client
@@ -154,10 +158,14 @@ def test_mining_companies():
 
     user = User.objects.filter(is_superuser=True).first()
     if not user:
+        # Use environment variable for password, fail if not set
+        admin_password = os.environ.get('ADMIN_PASSWORD')
+        if not admin_password:
+            raise ValueError("ADMIN_PASSWORD environment variable required to create admin user")
         user = User.objects.create_superuser(
             username='admin',
             email='admin@example.com',
-            password='admin123'
+            password=admin_password
         )
 
     client = ClaudeClient(company_id=None, user=user)
@@ -218,10 +226,14 @@ def interactive_stock_chat():
 
     user = User.objects.filter(is_superuser=True).first()
     if not user:
+        # Use environment variable for password, fail if not set
+        admin_password = os.environ.get('ADMIN_PASSWORD')
+        if not admin_password:
+            raise ValueError("ADMIN_PASSWORD environment variable required to create admin user")
         user = User.objects.create_superuser(
             username='admin',
             email='admin@example.com',
-            password='admin123'
+            password=admin_password
         )
 
     client = ClaudeClient(company_id=None, user=user)

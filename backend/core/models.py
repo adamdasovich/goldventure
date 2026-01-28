@@ -6,7 +6,11 @@ Designed for tracking projects, investors, financings, and market intelligence
 from django.db import models
 from django.contrib.auth.models import AbstractUser
 from django.core.validators import MinValueValidator, MaxValueValidator
+from django.utils import timezone
 from decimal import Decimal
+
+# Note: Abstract base models available in base_models.py for future refactoring
+# from .base_models import TimestampedModel, SoftDeleteModel, ActivatableModel
 
 
 # ============================================================================
@@ -101,6 +105,17 @@ class Company(models.Model):
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    # Soft delete fields (critical records should never be hard deleted)
+    is_deleted = models.BooleanField(default=False, db_index=True)
+    deleted_at = models.DateTimeField(null=True, blank=True)
+    deleted_by = models.ForeignKey(
+        'User',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='deleted_companies'
+    )
 
     # Auto-population fields
     tagline = models.CharField(max_length=500, blank=True, help_text="Company tagline or slogan")
@@ -204,6 +219,21 @@ class Company(models.Model):
 
         self.data_completeness_score = int((score / total_weight) * 100)
         return self.data_completeness_score
+
+    def soft_delete(self, user=None):
+        """Soft delete this company record."""
+        self.is_deleted = True
+        self.deleted_at = timezone.now()
+        if user:
+            self.deleted_by = user
+        self.save(update_fields=['is_deleted', 'deleted_at', 'deleted_by'])
+
+    def restore(self):
+        """Restore a soft-deleted company record."""
+        self.is_deleted = False
+        self.deleted_at = None
+        self.deleted_by = None
+        self.save(update_fields=['is_deleted', 'deleted_at', 'deleted_by'])
 
 
 # ============================================================================
@@ -461,9 +491,35 @@ class Financing(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    # Soft delete fields (financial records should never be hard deleted)
+    is_deleted = models.BooleanField(default=False, db_index=True)
+    deleted_at = models.DateTimeField(null=True, blank=True)
+    deleted_by = models.ForeignKey(
+        'User',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='deleted_financings'
+    )
+
     class Meta:
         db_table = 'financings'
         ordering = ['-announced_date']
+
+    def soft_delete(self, user=None):
+        """Soft delete this financing record."""
+        self.is_deleted = True
+        self.deleted_at = timezone.now()
+        if user:
+            self.deleted_by = user
+        self.save(update_fields=['is_deleted', 'deleted_at', 'deleted_by'])
+
+    def restore(self):
+        """Restore a soft-deleted financing record."""
+        self.is_deleted = False
+        self.deleted_at = None
+        self.deleted_by = None
+        self.save(update_fields=['is_deleted', 'deleted_at', 'deleted_by'])
 
     def mark_as_closed(self, user=None):
         """Mark this financing as closed for display on the closed financings page."""
@@ -4897,4 +4953,52 @@ class UserAIUsage(models.Model):
         self.total_messages += 1
         self.total_tokens += tokens_used
         self.save()
+
+
+# ============================================================================
+# FAILED TASK LOG - Dead Letter Queue for Celery
+# ============================================================================
+
+class FailedTaskLog(models.Model):
+    """
+    Stores permanently failed Celery tasks for review and potential reprocessing.
+    Acts as a 'dead letter queue' for tasks that failed after all retries.
+    """
+    task_name = models.CharField(max_length=255, db_index=True)
+    task_id = models.CharField(max_length=255, unique=True)
+    args = models.TextField(blank=True, default='')
+    kwargs = models.TextField(blank=True, default='')
+    exception_type = models.CharField(max_length=255)
+    exception_message = models.TextField()
+    traceback = models.TextField()
+
+    # Status for manual review
+    STATUS_CHOICES = [
+        ('pending', 'Pending Review'),
+        ('reviewed', 'Reviewed'),
+        ('reprocessed', 'Reprocessed'),
+        ('ignored', 'Ignored'),
+    ]
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending', db_index=True)
+    review_notes = models.TextField(blank=True)
+    reviewed_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='reviewed_failed_tasks'
+    )
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        db_table = 'failed_task_log'
+        ordering = ['-created_at']
+        verbose_name = 'Failed Task Log'
+        verbose_name_plural = 'Failed Task Logs'
+        indexes = [
+            models.Index(fields=['task_name', '-created_at'], name='failedtask_name_date_idx'),
+            models.Index(fields=['status', '-created_at'], name='failedtask_status_date_idx'),
+        ]
+
+    def __str__(self):
+        return f"{self.task_name} ({self.task_id[:8]}...) - {self.status}"
 

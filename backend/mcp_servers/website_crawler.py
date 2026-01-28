@@ -6,6 +6,7 @@ Updated: Comprehensive date parsing, external news wire support, title cleaning
 """
 
 import asyncio
+import logging
 from urllib.parse import urljoin, urlparse
 from typing import List, Dict, Set, Optional, Tuple
 import re
@@ -13,6 +14,8 @@ import sys
 from datetime import datetime, timedelta
 from crawl4ai import AsyncWebCrawler, BrowserConfig, CrawlerRunConfig
 from bs4 import BeautifulSoup
+
+logger = logging.getLogger(__name__)
 
 # Fix Windows console encoding for Unicode characters
 if sys.platform == 'win32':
@@ -1588,7 +1591,8 @@ def _extract_news_from_element(element, source_url: str, base_url: str) -> Optio
             'document_type': 'news_release',
             'year': date_str[:4] if date_str else None
         }
-    except Exception:
+    except Exception as e:
+        logger.debug(f"Failed to parse news item from HTML: {e}")
         return None  # Parsing failed - return None to signal no valid news item
 
 
@@ -1797,13 +1801,16 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
                                     'year': date_str[:4] if date_str else year
                                 }
                                 _add_news_item(news_by_url, news, cutoff_date, f"ASPX-{year}")
-                            except Exception:
+                            except Exception as e:
+                                logger.debug(f"Skipping malformed ASPX news item: {e}")
                                 continue  # Skip malformed item, continue with next
 
                         print(f"[ASPX] Processed year {year}")
-                    except Exception:
+                    except Exception as e:
+                        logger.debug(f"Skipping malformed news item: {e}")
                         continue  # Skip malformed item, continue with next
-            except Exception:
+            except Exception as e:
+                logger.debug(f"Skipping failed pattern: {e}")
                 continue  # Skip failed pattern, try next
 
         # Streamlined news page patterns
@@ -1960,7 +1967,8 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
                             'year': date_str[:4] if date_str else None
                         }
                         _add_news_item(news_by_url, news, cutoff_date, "WP-BLOCK")
-                    except Exception:
+                    except Exception as e:
+                        logger.debug(f"Skipping malformed news item: {e}")
                         continue  # Skip malformed item, continue with next
 
                 # ============================================================
@@ -2001,7 +2009,8 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
                             'year': date_str[:4] if date_str else None
                         }
                         _add_news_item(news_by_url, news, cutoff_date, "DAT-ARTICAL")
-                    except Exception:
+                    except Exception as e:
+                        logger.debug(f"Skipping malformed news item: {e}")
                         continue  # Skip malformed item, continue with next
 
                 # ============================================================
@@ -2062,7 +2071,8 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
                             'year': date_str[:4] if date_str else None
                         }
                         _add_news_item(news_by_url, news, cutoff_date, "ASTON")
-                    except Exception:
+                    except Exception as e:
+                        logger.debug(f"Skipping malformed news item: {e}")
                         continue  # Skip malformed item, continue with next
 
                 # ============================================================
@@ -2115,7 +2125,8 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
                             'year': date_str[:4] if date_str else None
                         }
                         _add_news_item(news_by_url, news, cutoff_date, "UK-GRID")
-                    except Exception:
+                    except Exception as e:
+                        logger.debug(f"Skipping malformed news item: {e}")
                         continue  # Skip malformed item, continue with next
 
                 # ============================================================
@@ -2161,7 +2172,8 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
                             'year': date_str[:4] if date_str else None
                         }
                         _add_news_item(news_by_url, news, cutoff_date, "NEWS-ENTRY")
-                    except Exception:
+                    except Exception as e:
+                        logger.debug(f"Skipping malformed news item: {e}")
                         continue  # Skip malformed item, continue with next
 
                 # ============================================================
@@ -2209,7 +2221,8 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
                             'year': date_str[:4] if date_str else None
                         }
                         _add_news_item(news_by_url, news, cutoff_date, "NEWS-ARCHIVE-LIST")
-                    except Exception:
+                    except Exception as e:
+                        logger.debug(f"Skipping malformed news item: {e}")
                         continue  # Skip malformed item, continue with next
 
                 # ============================================================
@@ -2274,7 +2287,8 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
                             'year': date_str[:4] if date_str else None
                         }
                         _add_news_item(news_by_url, news, cutoff_date, "UE-GRID")
-                    except Exception:
+                    except Exception as e:
+                        logger.debug(f"Skipping malformed news item: {e}")
                         continue  # Skip malformed item, continue with next
 
                 # ============================================================
@@ -2311,7 +2325,8 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
                             'year': date_str[:4] if date_str else None
                         }
                         _add_news_item(news_by_url, news, cutoff_date, "NEWS-ITEM-H3")
-                    except Exception:
+                    except Exception as e:
+                        logger.debug(f"Skipping malformed news item: {e}")
                         continue  # Skip malformed item, continue with next
 
                 # ============================================================
@@ -2355,7 +2370,8 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
                             'year': date_str[:4] if date_str else None
                         }
                         _add_news_item(news_by_url, news, cutoff_date, "NEWS-LINK")
-                    except Exception:
+                    except Exception as e:
+                        logger.debug(f"Skipping malformed news item: {e}")
                         continue  # Skip malformed item, continue with next
 
                 # ============================================================
@@ -2419,7 +2435,8 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
                             'year': year
                         }
                         _add_news_item(news_by_url, news, cutoff_date, "PDF-EMBEDDED-TITLE")
-                    except Exception:
+                    except Exception as e:
+                        logger.debug(f"Skipping malformed news item: {e}")
                         continue  # Skip malformed item, continue with next
 
                 # ============================================================
@@ -2470,7 +2487,8 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
                             'year': date_str[:4] if date_str else None
                         }
                         _add_news_item(news_by_url, news, cutoff_date, "FILE-DIV")
-                    except Exception:
+                    except Exception as e:
+                        logger.debug(f"Skipping malformed news item: {e}")
                         continue  # Skip malformed item, continue with next
 
                 # ============================================================
@@ -2522,7 +2540,8 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
                             'year': date_str[:4] if date_str else None
                         }
                         _add_news_item(news_by_url, news, cutoff_date, "PDF-NEWS")
-                    except Exception:
+                    except Exception as e:
+                        logger.debug(f"Skipping malformed news item: {e}")
                         continue  # Skip malformed item, continue with next
 
                 # ============================================================
@@ -2563,7 +2582,8 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
                             'year': date_str[:4] if date_str else None
                         }
                         _add_news_item(news_by_url, news, cutoff_date, "WPP")
-                    except Exception:
+                    except Exception as e:
+                        logger.debug(f"Skipping malformed news item: {e}")
                         continue  # Skip malformed item, continue with next
 
                 # ============================================================
@@ -2608,7 +2628,8 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
                             'year': date_str[:4] if date_str else None
                         }
                         _add_news_item(news_by_url, news, cutoff_date, "POWERPACK")
-                    except Exception:
+                    except Exception as e:
+                        logger.debug(f"Skipping malformed news item: {e}")
                         continue  # Skip malformed item, continue with next
 
                 # ============================================================
@@ -2715,7 +2736,8 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
                             'year': date_str[:4] if date_str else None
                         }
                         _add_news_item(news_by_url, news, cutoff_date, "ELEMENTOR")
-                    except Exception:
+                    except Exception as e:
+                        logger.debug(f"Skipping malformed news item: {e}")
                         continue  # Skip malformed item, continue with next
 
                 # ============================================================
@@ -2764,7 +2786,8 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
                             'year': date_str[:4] if date_str else None
                         }
                         _add_news_item(news_by_url, news, cutoff_date, "NEWSCARD")
-                    except Exception:
+                    except Exception as e:
+                        logger.debug(f"Skipping malformed news item: {e}")
                         continue  # Skip malformed item, continue with next
 
                 # ============================================================
@@ -2834,7 +2857,8 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
                             'year': date_str[:4] if date_str else None
                         }
                         _add_news_item(news_by_url, news, cutoff_date, "UIKIT")
-                    except Exception:
+                    except Exception as e:
+                        logger.debug(f"Skipping malformed news item: {e}")
                         continue  # Skip malformed item, continue with next
 
                 # ============================================================
@@ -2887,7 +2911,8 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
                             'year': date_str[:4] if date_str else None
                         }
                         _add_news_item(news_by_url, news, cutoff_date, "ARTICLE")
-                    except Exception:
+                    except Exception as e:
+                        logger.debug(f"Skipping malformed news item: {e}")
                         continue  # Skip malformed item, continue with next
 
                 # ============================================================
@@ -2939,7 +2964,8 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
                             'year': date_str[:4] if date_str else None
                         }
                         _add_news_item(news_by_url, news, cutoff_date, "WP-ENTRY")
-                    except Exception:
+                    except Exception as e:
+                        logger.debug(f"Skipping malformed news item: {e}")
                         continue  # Skip malformed item, continue with next
 
                 # ============================================================
@@ -2991,7 +3017,8 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
                             'year': date_str[:4] if date_str else None
                         }
                         _add_news_item(news_by_url, news, cutoff_date, "NEWS-GRID")
-                    except Exception:
+                    except Exception as e:
+                        logger.debug(f"Skipping malformed news item: {e}")
                         continue  # Skip malformed item, continue with next
 
                 # ============================================================
@@ -3037,7 +3064,8 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
                             'year': date_str[:4] if date_str else None
                         }
                         _add_news_item(news_by_url, news, cutoff_date, "LATEST")
-                    except Exception:
+                    except Exception as e:
+                        logger.debug(f"Skipping malformed news item: {e}")
                         continue  # Skip malformed item, continue with next
 
                 # ============================================================

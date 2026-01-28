@@ -18,6 +18,109 @@ import asyncio
 logger = logging.getLogger(__name__)
 
 
+# =============================================================================
+# TASK FAILURE HANDLING - Dead Letter Queue Alternative
+# =============================================================================
+
+def log_task_failure(self, exc, task_id, args, kwargs, einfo):
+    """
+    Handler for permanent task failures (after all retries exhausted).
+    Logs detailed information for debugging and monitoring.
+
+    This serves as a 'dead letter queue' alternative - logging failed tasks
+    so they can be investigated and potentially reprocessed manually.
+    """
+    logger.error(
+        f"TASK PERMANENTLY FAILED: {self.name}\n"
+        f"  Task ID: {task_id}\n"
+        f"  Args: {args}\n"
+        f"  Kwargs: {kwargs}\n"
+        f"  Exception: {exc}\n"
+        f"  Traceback: {einfo}",
+        extra={
+            'task_name': self.name,
+            'task_id': task_id,
+            'task_args': str(args),
+            'task_kwargs': str(kwargs),
+            'exception_type': type(exc).__name__,
+            'exception_message': str(exc),
+        }
+    )
+
+    # Optionally store failed tasks in database for later review
+    try:
+        from .models import FailedTaskLog
+        FailedTaskLog.objects.create(
+            task_name=self.name,
+            task_id=task_id,
+            args=str(args),
+            kwargs=str(kwargs),
+            exception_type=type(exc).__name__,
+            exception_message=str(exc),
+            traceback=str(einfo),
+        )
+    except Exception as e:
+        # FailedTaskLog model may not exist yet - just log to file
+        logger.warning(f"Could not log failed task to database: {e}")
+
+# =============================================================================
+# CONSTANTS - Centralized configuration for consistency across tasks
+# =============================================================================
+
+# Financing detection keywords (used for flagging news releases for review)
+FINANCING_KEYWORDS = [
+    'private placement',
+    'financing',
+    'funding round',
+    'capital raise',
+    'bought deal',
+    'equity financing',
+    'debt financing',
+    'flow-through',
+    'warrant',
+    'subscription',
+    'offering'
+]
+
+# Strategic investment keywords (major miner investments in juniors)
+STRATEGIC_KEYWORDS = [
+    'strategic investment',
+    'strategic partner',
+    'equity stake',
+    'strategic alliance',
+    'strategic equity',
+    'cornerstone investor',
+]
+
+# Major miner names to detect strategic investments
+MAJOR_MINERS = [
+    'barrick',
+    'newmont',
+    'agnico eagle',
+    'franco-nevada',
+    'kinross',
+    'anglogold ashanti',
+    'gold fields',
+    'wheaton precious metals',
+    'royal gold',
+    'eldorado gold',
+    'iamgold',
+    'endeavour mining',
+    'b2gold',
+    'yamana gold',
+]
+
+# Combined keywords for news flagging
+ALL_FINANCING_KEYWORDS = FINANCING_KEYWORDS + STRATEGIC_KEYWORDS + MAJOR_MINERS
+
+# News scraping configuration
+NEWS_SCRAPE_MONTHS_ONBOARDING = 48  # Months to look back for new companies
+NEWS_SCRAPE_MONTHS_DAILY = 3  # Months to look back for daily scrapes
+NEWS_FLAG_DAYS_ONBOARDING = 90  # Days to flag financing news for new companies
+NEWS_FLAG_DAYS_DAILY = 7  # Days to flag financing news for existing companies
+NEWS_SIMILARITY_THRESHOLD = 0.85  # Threshold for detecting duplicate news
+
+
 def process_general_document(document_url: str, document_type: str,
                             company_name: str, processor: HybridDocumentProcessor) -> dict:
     """
@@ -206,7 +309,7 @@ def process_single_job(job: DocumentProcessingJob):
                     if document.company:
                         send_ni43101_discovery_notification(document, document.company)
                 except Exception as e:
-                    logger.info(f"   Failed to send NI 43-101 notification: {str(e)}")
+                    logger.warning(f"Failed to send NI 43-101 notification: {str(e)}")
 
             # Update CompanyNews record if this was a news_release
             if job.document_type == 'news_release':
@@ -229,7 +332,7 @@ def process_single_job(job: DocumentProcessingJob):
                         news_record.save()
                         logger.info(f"   Updated CompanyNews record: {news_record.title[:50]}...")
                 except Exception as e:
-                    logger.info(f"   Failed to update CompanyNews record: {str(e)}")
+                    logger.warning(f"Failed to update CompanyNews record: {str(e)}")
 
         else:
             # Processing failed
@@ -244,7 +347,7 @@ def process_single_job(job: DocumentProcessingJob):
 
             job.save()
 
-            logger.info(f" Job {job.id} failed: {error_msg}")
+            logger.error(f"Job {job.id} failed: {error_msg}")
 
     except Exception as e:
         # Handle unexpected errors
@@ -258,12 +361,10 @@ def process_single_job(job: DocumentProcessingJob):
 
         job.save()
 
-        logger.info(f" Job {job.id} failed with exception: {str(e)}")
-        import traceback
-        traceback.print_exc()
+        logger.exception(f"Job {job.id} failed with exception: {str(e)}")
 
 
-@shared_task(bind=True, max_retries=3)
+@shared_task(bind=True, max_retries=3, time_limit=1800, soft_time_limit=1740, on_failure=log_task_failure)
 def scrape_company_news_task(self, company_id):
     """
     Background task to scrape news releases for a company.
@@ -293,7 +394,7 @@ def scrape_company_news_task(self, company_id):
             news_releases = loop.run_until_complete(
                 crawl_news_releases(
                     url=company.website,
-                    months=48,  # Increased from 6 to 48 months to capture older news
+                    months=NEWS_SCRAPE_MONTHS_ONBOARDING,  # Use constant for consistency
                     max_depth=2
                 )
             )
@@ -397,52 +498,9 @@ def scrape_company_news_task(self, company_id):
                 created_count += 1
 
                 # FINANCING DETECTION: Check for financing keywords in title
-                financing_keywords = [
-                    'private placement',
-                    'financing',
-                    'funding round',
-                    'capital raise',
-                    'bought deal',
-                    'equity financing',
-                    'debt financing',
-                    'flow-through',
-                    'warrant',
-                    'subscription',
-                    'offering'
-                ]
-
-                # STRATEGIC INVESTMENT DETECTION: Major miner investments in juniors
-                strategic_keywords = [
-                    'strategic investment',
-                    'strategic partner',
-                    'equity stake',
-                    'strategic alliance',
-                    'strategic equity',
-                    'cornerstone investor',
-                ]
-
-                # Major miner names to detect strategic investments
-                major_miners = [
-                    'barrick',
-                    'newmont',
-                    'agnico eagle',
-                    'franco-nevada',
-                    'kinross',
-                    'anglogold ashanti',
-                    'gold fields',
-                    'wheaton precious metals',
-                    'royal gold',
-                    'eldorado gold',
-                    'iamgold',
-                    'endeavour mining',
-                    'b2gold',
-                    'yamana gold',
-                ]
-
-                all_keywords = financing_keywords + strategic_keywords + major_miners
-
+                # Uses centralized constants from top of file
                 title_lower = title.lower()
-                detected_keywords = [kw for kw in all_keywords if kw in title_lower]
+                detected_keywords = [kw for kw in ALL_FINANCING_KEYWORDS if kw in title_lower]
 
                 # If financing keywords detected, create flag for superuser review
                 # For NEW companies (onboarding): use 90-day rule to show recent financing history
@@ -452,7 +510,7 @@ def scrape_company_news_task(self, company_id):
                     from datetime import timedelta
 
                     # Use different cutoff based on whether this is a new company
-                    cutoff_days = 90 if is_new_company else 7
+                    cutoff_days = NEWS_FLAG_DAYS_ONBOARDING if is_new_company else NEWS_FLAG_DAYS_DAILY
                     cutoff_date = datetime.now().date() - timedelta(days=cutoff_days)
                     if release_date < cutoff_date:
                         logger.info(f"  [SKIP] Old news (not flagging): {title[:50]}... (date: {release_date})")
@@ -463,7 +521,7 @@ def scrape_company_news_task(self, company_id):
                         company=company,
                         url=url,
                         title=title,
-                        similarity_threshold=0.85
+                        similarity_threshold=NEWS_SIMILARITY_THRESHOLD
                     )
                     if is_similar:
                         logger.info(f"  [SKIP] Similar to previously dismissed: {title[:50]}...")
@@ -487,7 +545,7 @@ def scrape_company_news_task(self, company_id):
                             from core.notifications import send_financing_flag_notification
                             send_financing_flag_notification(flag, company, obj)
                         except Exception as e:
-                            logger.info(f"      Failed to send financing flag notification: {str(e)}")
+                            logger.warning(f"Failed to send financing flag notification: {str(e)}")
 
             else:
                 updated_count += 1
@@ -533,7 +591,7 @@ def scrape_company_news_task(self, company_id):
         }
 
 
-@shared_task(bind=True, max_retries=3)
+@shared_task(bind=True, max_retries=3, time_limit=300, soft_time_limit=280, on_failure=log_task_failure)
 def scrape_metals_prices_task(self):
     """
     Scheduled task to scrape precious metals prices from Kitco.
@@ -551,7 +609,7 @@ def scrape_metals_prices_task(self):
             logger.info(f"Successfully scraped {result['scraped']} metals prices from Kitco")
             return result
         else:
-            logger.info(f"Metals scrape failed: {result.get('error', 'Unknown error')}")
+            logger.error(f"Metals scrape failed: {result.get('error', 'Unknown error')}")
             # Retry on failure
             raise Exception(result.get('error', 'Scraping failed'))
 
@@ -565,7 +623,7 @@ def scrape_metals_prices_task(self):
         }
 
 
-@shared_task(bind=True, max_retries=3)
+@shared_task(bind=True, max_retries=3, time_limit=600, soft_time_limit=580, on_failure=log_task_failure)
 def fetch_stock_prices_task(self):
     """
     Scheduled task to fetch and store daily stock prices for all companies.
@@ -605,7 +663,7 @@ def fetch_stock_prices_task(self):
         }
 
 
-@shared_task(bind=True)
+@shared_task(bind=True, time_limit=3600, soft_time_limit=3540, on_failure=log_task_failure)
 def auto_discover_and_process_documents_task(self, company_ids=None, document_types=None, limit=None):
     """
     Celery task to automatically discover and process documents for companies.
@@ -733,7 +791,7 @@ def auto_discover_and_process_documents_task(self, company_ids=None, document_ty
                 logger.info(f"  Created {jobs_created} new processing jobs")
                 
             except Exception as e:
-                logger.info(f"  Error processing {company.name}: {str(e)}")
+                logger.warning(f"Error processing {company.name}: {str(e)}")
                 continue
         
         # Auto-process the queue
@@ -758,7 +816,7 @@ def auto_discover_and_process_documents_task(self, company_ids=None, document_ty
         }
 
 
-@shared_task(bind=True, max_retries=2, default_retry_delay=60, time_limit=600, soft_time_limit=580)
+@shared_task(bind=True, max_retries=2, default_retry_delay=60, time_limit=600, soft_time_limit=580, on_failure=log_task_failure)
 def scrape_single_company_news_task(self, company_id: int):
     """
     Background task to scrape news releases for a SINGLE company.
@@ -778,7 +836,7 @@ def scrape_single_company_news_task(self, company_id: int):
             news_releases = loop.run_until_complete(
                 crawl_news_releases(
                     url=company.website,
-                    months=3,  # Last 3 months for daily scrapes
+                    months=NEWS_SCRAPE_MONTHS_DAILY,  # Use constant for consistency
                     max_depth=2
                 )
             )
@@ -836,38 +894,17 @@ def scrape_single_company_news_task(self, company_id: int):
                 created_count += 1
 
                 # Check for financing keywords and flag
-                # NOTE: Keep in sync with scrape_company_news_task financing keywords
-                financing_keywords = [
-                    'private placement', 'financing', 'funding round',
-                    'capital raise', 'bought deal', 'equity financing',
-                    'debt financing', 'flow-through', 'warrant', 'subscription', 'offering'
-                ]
-
-                # STRATEGIC INVESTMENT DETECTION: Major miner investments in juniors
-                strategic_keywords = [
-                    'strategic investment', 'strategic partner', 'equity stake',
-                    'strategic alliance', 'strategic equity', 'cornerstone investor'
-                ]
-
-                # Major miner names to detect strategic investments
-                major_miners = [
-                    'barrick', 'newmont', 'agnico eagle', 'franco-nevada', 'kinross',
-                    'anglogold ashanti', 'gold fields', 'wheaton precious metals',
-                    'royal gold', 'eldorado gold', 'iamgold', 'endeavour mining',
-                    'b2gold', 'yamana gold'
-                ]
-
-                all_keywords = financing_keywords + strategic_keywords + major_miners
+                # Uses centralized constants from top of file (ALL_FINANCING_KEYWORDS)
                 title_lower = title.lower()
-                detected_keywords = [kw for kw in all_keywords if kw in title_lower]
+                detected_keywords = [kw for kw in ALL_FINANCING_KEYWORDS if kw in title_lower]
 
-                # Only flag recent news (within 7 days) - older news is not actionable
+                # Only flag recent news (within NEWS_FLAG_DAYS_DAILY) - older news is not actionable
                 if detected_keywords and release_date:
                     from core.models import NewsReleaseFlag, DismissedNewsURL
                     from datetime import timedelta
 
-                    # Only flag news releases within the last 7 days
-                    cutoff_date = datetime.now().date() - timedelta(days=7)
+                    # Only flag news releases within the configured days
+                    cutoff_date = datetime.now().date() - timedelta(days=NEWS_FLAG_DAYS_DAILY)
                     if release_date < cutoff_date:
                         logger.info(f"  [SKIP] Old news (not flagging): {title[:50]}...")
                     else:
@@ -876,7 +913,7 @@ def scrape_single_company_news_task(self, company_id: int):
                             company=company,
                             url=url,
                             title=title,
-                            similarity_threshold=0.85
+                            similarity_threshold=NEWS_SIMILARITY_THRESHOLD
                         )
                         if is_similar:
                             logger.info(f"  [SKIP] Similar to dismissed: {title[:50]}...")
@@ -894,7 +931,7 @@ def scrape_single_company_news_task(self, company_id: int):
                                     from core.notifications import send_financing_flag_notification
                                     send_financing_flag_notification(flag, company, obj)
                                 except Exception as e:
-                                    logger.info(f"  [WARN] Notification error: {str(e)}")
+                                    logger.warning(f"Notification error: {str(e)}")
             else:
                 updated_count += 1
 
@@ -914,7 +951,7 @@ def scrape_single_company_news_task(self, company_id: int):
         return {'company_id': company_id, 'status': 'error', 'message': str(e)}
 
 
-@shared_task(bind=True, max_retries=1, time_limit=300)
+@shared_task(bind=True, max_retries=1, time_limit=300, on_failure=log_task_failure)
 def scrape_all_companies_news_task(self):
     """
     Background task to queue news scraping for ALL companies with websites.
@@ -975,7 +1012,7 @@ def scrape_all_companies_news_task(self):
         }
 
 
-@shared_task(bind=True, max_retries=3, default_retry_delay=300)
+@shared_task(bind=True, max_retries=3, default_retry_delay=300, time_limit=600, soft_time_limit=580, on_failure=log_task_failure)
 def scrape_mining_news_task(self):
     """
     Background task to scrape mining news from configured sources.
@@ -1021,7 +1058,7 @@ def scrape_mining_news_task(self):
             }
 
 
-@shared_task(bind=True, max_retries=2, default_retry_delay=60, time_limit=600, soft_time_limit=580, acks_late=True)
+@shared_task(bind=True, max_retries=2, default_retry_delay=60, time_limit=600, soft_time_limit=580, acks_late=True, on_failure=log_task_failure)
 def scrape_company_website_task(self, job_id: int, sections: list = None):
     """
     Background task to scrape a company website using Crawl4AI.
@@ -1126,9 +1163,7 @@ def scrape_company_website_task(self, job_id: int, sections: list = None):
         }
 
     except Exception as e:
-        logger.info(f"[ASYNC SCRAPE] Job {job_id} failed: {str(e)}")
-        import traceback
-        traceback.print_exc()
+        logger.exception(f"[ASYNC SCRAPE] Job {job_id} failed: {str(e)}")
 
         # Update job with failure
         try:
@@ -1153,7 +1188,7 @@ def scrape_company_website_task(self, job_id: int, sections: list = None):
             }
 
 
-@shared_task(bind=True, max_retries=1, time_limit=600, soft_time_limit=580, acks_late=True)
+@shared_task(bind=True, max_retries=1, time_limit=600, soft_time_limit=580, acks_late=True, on_failure=log_task_failure)
 def scrape_and_save_company_task(self, job_id: int, update_existing: bool = False, user_id: int = None):
     """
     Background task to scrape a company website AND save to database.
@@ -1237,7 +1272,7 @@ def scrape_and_save_company_task(self, job_id: int, update_existing: bool = Fals
                 from core.claude_validator import verify_onboarded_company
                 verification = verify_onboarded_company(company.id)
             except Exception as e:
-                logger.info(f"[ASYNC SCRAPE+SAVE] Verification failed for company {company.id}: {e}")
+                logger.warning(f"[ASYNC SCRAPE+SAVE] Verification failed for company {company.id}: {e}")
                 verification = {'status': 'error', 'message': str(e)}
 
             logger.info(f"[ASYNC SCRAPE+SAVE] Job {job_id} completed successfully")
@@ -1289,9 +1324,7 @@ def scrape_and_save_company_task(self, job_id: int, update_existing: bool = Fals
         }
 
     except Exception as e:
-        logger.info(f"[ASYNC SCRAPE+SAVE] Job {job_id} failed: {str(e)}")
-        import traceback
-        traceback.print_exc()
+        logger.exception(f"[ASYNC SCRAPE+SAVE] Job {job_id} failed: {str(e)}")
 
         # Update job with failure
         fallback_company = None
@@ -1356,9 +1389,7 @@ def scrape_and_save_company_task(self, job_id: int, update_existing: bool = Fals
                     }
                 )
         except Exception as fallback_error:
-            logger.info(f"[FALLBACK] Failed to create fallback company: {fallback_error}")
-            import traceback
-            traceback.print_exc()
+            logger.exception(f"[FALLBACK] Failed to create fallback company: {fallback_error}")
 
         # Return appropriate response
         if fallback_company:
@@ -1379,7 +1410,7 @@ def scrape_and_save_company_task(self, job_id: int, update_existing: bool = Fals
         }
 
 
-@shared_task(bind=True)
+@shared_task(bind=True, time_limit=300, soft_time_limit=280, on_failure=log_task_failure)
 def cleanup_stuck_jobs_task(self):
     """
     Periodic task to clean up stuck jobs.
@@ -1455,7 +1486,7 @@ def cleanup_stuck_jobs_task(self):
     }
 
 
-@shared_task(bind=True, max_retries=2, default_retry_delay=60, time_limit=300, soft_time_limit=280)
+@shared_task(bind=True, max_retries=2, default_retry_delay=60, time_limit=300, soft_time_limit=280, on_failure=log_task_failure)
 def process_company_news_for_rag_task(self, company_id: int, limit: int = 20):
     """
     Background Celery task to process a company's news into the RAG knowledge base.
@@ -1508,7 +1539,7 @@ def process_company_news_for_rag_task(self, company_id: int, limit: int = 20):
             }
         else:
             error_msg = result.get('error', 'Unknown error')
-            logger.info(f"[RAG TASK] Processing failed for {company.name}: {error_msg}")
+            logger.error(f"[RAG TASK] Processing failed for {company.name}: {error_msg}")
             return {
                 'status': 'error',
                 'company': company.name,
@@ -1524,9 +1555,7 @@ def process_company_news_for_rag_task(self, company_id: int, limit: int = 20):
         }
 
     except Exception as e:
-        logger.info(f"[RAG TASK] Error processing company {company_id}: {str(e)}")
-        import traceback
-        traceback.print_exc()
+        logger.exception(f"[RAG TASK] Error processing company {company_id}: {str(e)}")
 
         # Retry on failure
         try:
@@ -1540,7 +1569,7 @@ def process_company_news_for_rag_task(self, company_id: int, limit: int = 20):
             }
 
 
-@shared_task(bind=True, time_limit=600, soft_time_limit=580)
+@shared_task(bind=True, time_limit=600, soft_time_limit=580, on_failure=log_task_failure)
 def store_company_profile_in_rag_task(self, company_id: int):
     """
     Background task to store a company's profile in the RAG knowledge base.
@@ -1646,5 +1675,5 @@ def store_company_profile_in_rag_task(self, company_id: int):
         return {'status': 'error', 'error': f'Company {company_id} not found'}
 
     except Exception as e:
-        logger.info(f"[RAG TASK] Error storing profile for {company_id}: {str(e)}")
+        logger.error(f"[RAG TASK] Error storing profile for {company_id}: {str(e)}")
         return {'status': 'error', 'error': str(e)}

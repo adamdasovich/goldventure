@@ -95,6 +95,9 @@ export default function DashboardPage() {
   const [investmentDashboardLoading, setInvestmentDashboardLoading] = useState(false);
 
   useEffect(() => {
+    // Create AbortController for cleanup on unmount or dependency change
+    const abortController = new AbortController();
+
     const fetchDashboardData = async () => {
       if (!accessToken) return;
 
@@ -104,6 +107,7 @@ export default function DashboardPage() {
         // Fetch user's listings
         const listingsRes = await fetch(`${API_URL}/properties/listings/?my_listings=true`, {
           headers: { 'Authorization': `Bearer ${accessToken}` },
+          signal: abortController.signal,
         });
         const listingsData = listingsRes.ok ? await listingsRes.json() : [];
         const listings = Array.isArray(listingsData) ? listingsData : listingsData.results || [];
@@ -111,6 +115,7 @@ export default function DashboardPage() {
         // Fetch watchlist
         const watchlistRes = await fetch(`${API_URL}/properties/watchlist/`, {
           headers: { 'Authorization': `Bearer ${accessToken}` },
+          signal: abortController.signal,
         });
         const watchlistData = watchlistRes.ok ? await watchlistRes.json() : [];
         const watchlist = Array.isArray(watchlistData) ? watchlistData : watchlistData.results || [];
@@ -118,9 +123,13 @@ export default function DashboardPage() {
         // Fetch inquiries
         const inquiriesRes = await fetch(`${API_URL}/properties/inquiries/`, {
           headers: { 'Authorization': `Bearer ${accessToken}` },
+          signal: abortController.signal,
         });
         const inquiriesData = inquiriesRes.ok ? await inquiriesRes.json() : [];
         const inquiries = Array.isArray(inquiriesData) ? inquiriesData : inquiriesData.results || [];
+
+        // Check if request was aborted before updating state
+        if (abortController.signal.aborted) return;
 
         // Calculate stats
         const activeListings = listings.filter((l: PropertyListingListItem) => l.status === 'active').length;
@@ -153,9 +162,13 @@ export default function DashboardPage() {
         })));
 
       } catch (err) {
+        // Ignore abort errors (expected on cleanup)
+        if (err instanceof Error && err.name === 'AbortError') return;
         console.error('Failed to fetch dashboard data:', err);
       } finally {
-        setLoading(false);
+        if (!abortController.signal.aborted) {
+          setLoading(false);
+        }
       }
     };
 
@@ -169,6 +182,11 @@ export default function DashboardPage() {
     } else if (!authLoading && !accessToken) {
       setLoading(false);
     }
+
+    // Cleanup: abort any in-flight requests when effect dependencies change or component unmounts
+    return () => {
+      abortController.abort();
+    };
   }, [accessToken, authLoading, user?.id, user?.is_superuser]);
 
   // Fetch pending company access requests (superuser only)

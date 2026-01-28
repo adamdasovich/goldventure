@@ -86,6 +86,8 @@ DATABASES = {
         'PASSWORD': os.getenv('DB_PASSWORD'),  # Required - no default for security
         'HOST': os.getenv('DB_HOST', 'localhost'),
         'PORT': os.getenv('DB_PORT', '5432'),
+        # Connection pooling - reuse connections for 10 minutes to reduce overhead
+        'CONN_MAX_AGE': 600,
     }
 }
 
@@ -306,6 +308,7 @@ CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = 'UTC'
 CELERY_TASK_TRACK_STARTED = True
 CELERY_TASK_TIME_LIMIT = 30 * 60  # 30 minutes max
+CELERY_RESULT_EXPIRES = 86400  # 24 hours - prevent Redis memory bloat from old results
 
 # Celery Beat Schedule - Periodic Tasks
 from celery.schedules import crontab
