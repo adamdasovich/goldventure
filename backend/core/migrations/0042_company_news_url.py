@@ -24,6 +24,7 @@ class Migration(migrations.Migration):
             name='news_url',
             field=models.URLField(
                 blank=True,
+                default='',
                 help_text='Custom news page URL if different from standard patterns'
             ),
         ),
