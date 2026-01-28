@@ -1902,9 +1902,19 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
             logger.debug(f"BrighterIR extraction failed: {e}")
 
         # Streamlined news page patterns
+        # IMPORTANT: Order matters! Year-based patterns should be early to capture
+        # historical news before timeout kicks in (60-90 seconds)
         news_page_patterns = [
             f'{url}/news/',
             f'{url}/news/all/',  # Aston Bay
+            # Multilingual site patterns (/en/, /es/ prefixes) - Panoro Minerals, etc.
+            # Put these early as they're more specific than base patterns
+            f'{url}/en/news/',
+            f'{url}/en/news/{current_year}/',
+            f'{url}/en/news/{current_year - 1}/',
+            f'{url}/en/news/{current_year - 2}/',
+            f'{url}/en/news-releases/',
+            f'{url}/en/press-releases/',
             f'{url}/news-releases/',
             # Northisle WordPress pattern: ?post_year= filtering (needs trailing slash before query params)
             f'{url}/news-releases/?post_year={current_year}',
@@ -2014,6 +2024,82 @@ async def crawl_html_news_pages(url: str, months: int = 6) -> List[Dict]:
                         'year': date_str[:4] if date_str else None
                     }
                     _add_news_item(news_by_url, news, cutoff_date, "G2")
+
+                # ============================================================
+                # STRATEGY: Osisko Development / list-item pattern
+                # Structure: <div class="list-item">
+                #   <div class="date"><div class="month">Jan</div><div class="day">28</div><div class="year">2026</div></div>
+                #   <div class="text"><div class="title flex"><a href="slug">Title</a><a class="pdf">PDF</a></div></div>
+                # </div>
+                # Key: News page URL is a relative slug (not PDF), date is in separate month/day/year divs
+                # ============================================================
+                for list_item in soup.select('.list-item, div.list-item'):
+                    try:
+                        # Get date from separate month/day/year divs
+                        date_div = list_item.select_one('.date, div.date')
+                        if not date_div:
+                            continue
+
+                        month_elem = date_div.select_one('.month, div.month')
+                        day_elem = date_div.select_one('.day, div.day')
+                        year_elem = date_div.select_one('.year, div.year')
+
+                        if not (month_elem and day_elem and year_elem):
+                            continue
+
+                        month_text = month_elem.get_text(strip=True)
+                        day_text = day_elem.get_text(strip=True)
+                        year_text = year_elem.get_text(strip=True)
+
+                        # Parse month
+                        month_num = MONTH_MAP.get(month_text.lower()[:3], None)
+                        if not month_num:
+                            continue
+
+                        date_str = f"{year_text}-{month_num}-{day_text.zfill(2)}"
+
+                        # Find the news link (NOT the PDF link - look for a without .pdf class)
+                        # The title is in .title or .text div
+                        title_container = list_item.select_one('.title, .text, div.title, div.text')
+                        if not title_container:
+                            continue
+
+                        # Find the first link that is NOT a PDF link
+                        news_link = None
+                        for link in title_container.select('a'):
+                            href = link.get('href', '')
+                            link_class = link.get('class', [])
+                            # Skip PDF links (class="pdf" or href ends with .pdf)
+                            if 'pdf' in link_class or href.lower().endswith('.pdf') or '/_resources/' in href:
+                                continue
+                            news_link = link
+                            break
+
+                        if not news_link:
+                            continue
+
+                        href = news_link.get('href', '')
+                        title = news_link.get_text(strip=True)
+
+                        if not title or len(title) < 15:
+                            continue
+
+                        # Build full URL
+                        if href and not href.startswith('http'):
+                            # Handle relative URLs - common on WordPress sites
+                            href = urljoin(news_url, href)
+
+                        news = {
+                            'title': clean_news_title(title, href),
+                            'url': href,
+                            'date': date_str,
+                            'document_type': 'news_release',
+                            'year': year_text
+                        }
+                        _add_news_item(news_by_url, news, cutoff_date, "LIST-ITEM")
+                    except Exception as e:
+                        logger.debug(f"Skipping malformed list-item: {e}")
+                        continue
 
                 # ============================================================
                 # STRATEGY 2: WordPress/document card news (Canada Nickel)
