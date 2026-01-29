@@ -239,7 +239,7 @@ class CompanyDataScraper:
             # 6. Find and scrape News section
             if 'news' in sections and self._should_continue_scraping('news'):
                 news_urls = self._find_section_urls(['news', 'press', 'media', 'releases'])
-                for url in news_urls[:15]:  # Allow more patterns for year-based archives
+                for url in news_urls[:20]:  # Allow more patterns for year-based archives
                     if not self._should_continue_scraping('news pages'):
                         break
                     print(f"[SCRAPE] Scraping news page: {url}")
@@ -305,6 +305,9 @@ class CompanyDataScraper:
                     common_patterns.extend([
                         # Pattern: /news/2025/ or /news/2024/
                         f"{self.base_url}/{keyword}/{year}/",
+                        # Tinka Resources pattern: /{year}-2/ (e.g., /2025-2/, /2024-2/)
+                        # Put early as these sites organize ALL news by year archive pages
+                        f"{self.base_url}/{year}-2/",
                         # Pattern: /2025/news/ or /2024/news/
                         f"{self.base_url}/{year}/{keyword}/",
                         # Pattern: /news-2025/ or /news-2024/
@@ -315,9 +318,6 @@ class CompanyDataScraper:
                         f"{self.base_url}/press-releases/{year}/",
                         # Pattern: /news-releases/2025/
                         f"{self.base_url}/news-releases/{year}/",
-                        # Tinka Resources pattern: /{year}-2/ (e.g., /2025-2/, /2024-2/)
-                        # Put early as these sites organize ALL news by year archive pages
-                        f"{self.base_url}/{year}-2/",
                     ])
 
                 # Also add non-year-specific news URLs
