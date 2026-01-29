@@ -239,7 +239,7 @@ class CompanyDataScraper:
             # 6. Find and scrape News section
             if 'news' in sections and self._should_continue_scraping('news'):
                 news_urls = self._find_section_urls(['news', 'press', 'media', 'releases'])
-                for url in news_urls[:10]:
+                for url in news_urls[:15]:  # Allow more patterns for year-based archives
                     if not self._should_continue_scraping('news pages'):
                         break
                     print(f"[SCRAPE] Scraping news page: {url}")
