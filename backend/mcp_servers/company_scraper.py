@@ -339,6 +339,8 @@ class CompanyDataScraper:
                         f"{self.base_url}/media/press-releases/{year}/",
                         f"{self.base_url}/investors/news/{year}/",
                         f"{self.base_url}/investors/press-releases/{year}/",
+                        # Tinka Resources pattern: /{year}-2/ (e.g., /2025-2/, /2024-2/)
+                        f"{self.base_url}/{year}-2/",
                     ])
 
             for pattern in common_patterns:
