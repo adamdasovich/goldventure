@@ -2641,6 +2641,81 @@ async def crawl_html_news_pages(url: str, months: int = 6, custom_news_url: str 
                         continue  # Skip malformed item, continue with next
 
                 # ============================================================
+                # STRATEGY: Surge Copper / Tailwind flex-based news layout
+                # Structure: <div class="flex flex-wrap py-3 ...">
+                #   <div class="w-full md:w-1/5 px-2">Nov 19, 2025</div>
+                #   <div class="flex-1 ..."><a href="/news-releases/...">Title</a></div>
+                # </div>
+                # Key: Date is in first child div (Tailwind width class), title link in flex-1 div
+                # ============================================================
+                for flex_row in soup.select('div.flex.flex-wrap'):
+                    try:
+                        # Skip if this doesn't look like a news row (check for news-related classes)
+                        row_classes = ' '.join(flex_row.get('class', []))
+                        if 'nav' in row_classes.lower() or 'header' in row_classes.lower():
+                            continue
+
+                        # Get direct children divs
+                        child_divs = flex_row.find_all('div', recursive=False)
+                        if len(child_divs) < 2:
+                            continue
+
+                        # First div should contain the date (look for Tailwind width classes)
+                        first_div = child_divs[0]
+                        first_classes = ' '.join(first_div.get('class', []))
+
+                        # Check for Tailwind responsive width classes (w-1/5, md:w-1/5, etc.)
+                        if not any(c in first_classes for c in ['w-1/', 'w-full', 'px-2', 'md:w-1/']):
+                            continue
+
+                        date_text = first_div.get_text(strip=True)
+                        date_str = parse_date_standalone(date_text)
+                        if not date_str:
+                            continue
+
+                        # Find the link in subsequent divs (look for flex-1 or similar)
+                        title_link = None
+                        for div in child_divs[1:]:
+                            div_classes = ' '.join(div.get('class', []))
+                            if 'flex-1' in div_classes or 'flex-grow' in div_classes:
+                                title_link = div.select_one('a[href]')
+                                if title_link:
+                                    break
+
+                        if not title_link:
+                            # Fallback: just find any link in the row
+                            title_link = flex_row.select_one('a[href*="/news"]')
+
+                        if not title_link:
+                            continue
+
+                        href = title_link.get('href', '')
+                        title = title_link.get_text(strip=True)
+
+                        if not title or len(title) < 15:
+                            continue
+
+                        # Skip PDF links
+                        if href.lower().endswith('.pdf'):
+                            continue
+
+                        # Build full URL
+                        if href and not href.startswith('http'):
+                            href = urljoin(news_url, href)
+
+                        news = {
+                            'title': clean_news_title(title, href),
+                            'url': href,
+                            'date': date_str,
+                            'document_type': 'news_release',
+                            'year': date_str[:4] if date_str else None
+                        }
+                        _add_news_item(news_by_url, news, cutoff_date, "TAILWIND-FLEX")
+                    except Exception as e:
+                        logger.debug(f"Skipping malformed flex news item: {e}")
+                        continue
+
+                # ============================================================
                 # STRATEGY 4d: Ultimate Elements Grid pattern (CanAlaska)
                 # Structure: <div class="uc_post_title"><a><div class="ue_p_title">TITLE</div></a></div>
                 #            <div class="ue-meta-data"><div class="ue-grid-item-meta-data">DATE</div></div>
