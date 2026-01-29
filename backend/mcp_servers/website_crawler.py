@@ -1904,6 +1904,78 @@ async def crawl_html_news_pages(url: str, months: int = 6, custom_news_url: str 
         except Exception as e:
             logger.debug(f"BrighterIR extraction failed: {e}")
 
+        # ============================================================
+        # SPECIAL CASE: WordPress REST API (Silvercorp Metals, etc.)
+        # Many mining sites use WordPress with REST API enabled
+        # News is available via /wp-json/wp/v2/posts endpoint
+        # This is MUCH more reliable than HTML scraping for WP sites
+        # that use JavaScript to render content (Beaver Builder, etc.)
+        # ============================================================
+        try:
+            import aiohttp
+
+            # Try WordPress REST API endpoint
+            wp_api_url = f"{base_url}/wp-json/wp/v2/posts?per_page=100"
+            print(f"[WORDPRESS] Checking WordPress REST API: {wp_api_url}")
+
+            async with aiohttp.ClientSession() as session:
+                async with session.get(
+                    wp_api_url,
+                    headers={
+                        "Accept": "application/json",
+                        "User-Agent": "Mozilla/5.0 (compatible; NewsBot/1.0)"
+                    },
+                    timeout=aiohttp.ClientTimeout(total=15)
+                ) as response:
+                    if response.status == 200:
+                        content_type = response.headers.get('Content-Type', '')
+                        if 'application/json' in content_type:
+                            data = await response.json()
+                            if isinstance(data, list) and len(data) > 0:
+                                # Check if this looks like a valid WP posts response
+                                first_post = data[0]
+                                if 'title' in first_post and 'link' in first_post and 'date' in first_post:
+                                    items_found = 0
+                                    for post in data:
+                                        try:
+                                            # Extract title (may contain HTML entities)
+                                            title_obj = post.get('title', {})
+                                            title = title_obj.get('rendered', '') if isinstance(title_obj, dict) else str(title_obj)
+                                            # Clean HTML entities
+                                            title = title.replace('&#8211;', '-').replace('&#8217;', "'")
+                                            title = title.replace('&ndash;', '-').replace('&amp;', '&')
+                                            title = title.replace('&#8220;', '"').replace('&#8221;', '"')
+
+                                            if not title or len(title) < 15:
+                                                continue
+
+                                            # Parse date from ISO format (2026-01-27T14:05:41)
+                                            date_raw = post.get('date', '')
+                                            date_str = None
+                                            if date_raw and len(date_raw) >= 10:
+                                                date_str = date_raw[:10]  # Extract YYYY-MM-DD
+
+                                            news_url = post.get('link', '')
+                                            if not news_url:
+                                                continue
+
+                                            news = {
+                                                'title': clean_news_title(title, news_url),
+                                                'url': news_url,
+                                                'date': date_str,
+                                                'document_type': 'news_release',
+                                                'year': date_str[:4] if date_str else None
+                                            }
+                                            _add_news_item(news_by_url, news, cutoff_date, "WORDPRESS-API")
+                                            items_found += 1
+                                        except Exception as e:
+                                            logger.debug(f"Skipping malformed WordPress post: {e}")
+                                            continue
+
+                                    print(f"[WORDPRESS] Found {items_found} news items from REST API")
+        except Exception as e:
+            logger.debug(f"WordPress REST API extraction failed: {e}")
+
         # Streamlined news page patterns
         # IMPORTANT: Order matters! Year-based patterns should be early to capture
         # historical news before timeout kicks in (60-90 seconds)
