@@ -2596,55 +2596,55 @@ class CompanyDataScraper:
                         if not any(n.get('title', '').lower() == title.lower() for n in news_found):
                             news_found.append(news)
 
-            # Strategy 4: Handle flex-wrap div news layouts (like Freegold Ventures)
+            # Strategy 4: Handle flex-wrap div news layouts (Surge Copper, Freegold Ventures)
             # Pattern: div.flex.flex-wrap containing date div + title link
-            if not news_found or len(news_found) < 3:
-                flex_rows = soup.find_all('div', class_=lambda c: c and 'flex' in c and 'flex-wrap' in c)
-                for row in flex_rows[:100]:
-                    row_text = row.get_text(strip=True)
+            # ALWAYS run this strategy - it extracts dates which generic link scan doesn't
+            flex_rows = soup.find_all('div', class_=lambda c: c and 'flex' in c and 'flex-wrap' in c)
+            for row in flex_rows[:100]:
+                row_text = row.get_text(strip=True)
 
-                    # Look for "Month Day, Year" date format
-                    date_pattern = r'(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{1,2}),?\s+(\d{4})'
-                    date_match = re.search(date_pattern, row_text, re.IGNORECASE)
+                # Look for "Month Day, Year" date format (e.g., "Nov 19, 2025")
+                date_pattern = r'(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{1,2}),?\s+(\d{4})'
+                date_match = re.search(date_pattern, row_text, re.IGNORECASE)
 
-                    if not date_match:
-                        continue
+                if not date_match:
+                    continue
 
-                    # Parse the date
-                    month_map = {
-                        'jan': '01', 'feb': '02', 'mar': '03', 'apr': '04',
-                        'may': '05', 'jun': '06', 'jul': '07', 'aug': '08',
-                        'sep': '09', 'oct': '10', 'nov': '11', 'dec': '12'
+                # Parse the date
+                month_map = {
+                    'jan': '01', 'feb': '02', 'mar': '03', 'apr': '04',
+                    'may': '05', 'jun': '06', 'jul': '07', 'aug': '08',
+                    'sep': '09', 'oct': '10', 'nov': '11', 'dec': '12'
+                }
+                month = month_map.get(date_match.group(1).lower()[:3], '01')
+                day = date_match.group(2).zfill(2)
+                year = date_match.group(3)
+                pub_date = f"{year}-{month}-{day}"
+
+                # Find the news link in this row
+                news_link = None
+                title = None
+                source_url = None
+
+                for link in row.find_all('a', href=True):
+                    href = link.get('href', '')
+                    link_text = link.get_text(strip=True)
+                    # Look for links to news articles (news, news-releases, press-releases, etc.)
+                    if any(p in href.lower() for p in ['/news', '/press', '/release', '/announcement']) and len(link_text) > 20:
+                        title = link_text
+                        source_url = urljoin(url, href)
+                        break
+
+                if title and pub_date:
+                    news = {
+                        'title': title[:500],
+                        'publication_date': pub_date,
+                        'source_url': source_url or url,
+                        'extracted_at': datetime.utcnow().isoformat(),
                     }
-                    month = month_map.get(date_match.group(1).lower()[:3], '01')
-                    day = date_match.group(2).zfill(2)
-                    year = date_match.group(3)
-                    pub_date = f"{year}-{month}-{day}"
-
-                    # Find the news link in this row
-                    news_link = None
-                    title = None
-                    source_url = None
-
-                    for link in row.find_all('a', href=True):
-                        href = link.get('href', '')
-                        link_text = link.get_text(strip=True)
-                        # Look for links to news articles (not navigation)
-                        if '/news/' in href and len(link_text) > 20:
-                            title = link_text
-                            source_url = urljoin(url, href)
-                            break
-
-                    if title and pub_date:
-                        news = {
-                            'title': title[:500],
-                            'publication_date': pub_date,
-                            'source_url': source_url or url,
-                            'extracted_at': datetime.utcnow().isoformat(),
-                        }
-                        # Avoid duplicates
-                        if not any(n.get('title', '').lower() == title.lower() for n in news_found):
-                            news_found.append(news)
+                    # Avoid duplicates
+                    if not any(n.get('title', '').lower() == title.lower() for n in news_found):
+                        news_found.append(news)
 
             # Find news links - look for links that appear to be news items
             # Common patterns: links with dates, links in list items, links with news-like URLs
