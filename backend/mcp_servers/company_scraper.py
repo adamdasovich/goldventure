@@ -315,6 +315,9 @@ class CompanyDataScraper:
                         f"{self.base_url}/press-releases/{year}/",
                         # Pattern: /news-releases/2025/
                         f"{self.base_url}/news-releases/{year}/",
+                        # Tinka Resources pattern: /{year}-2/ (e.g., /2025-2/, /2024-2/)
+                        # Put early as these sites organize ALL news by year archive pages
+                        f"{self.base_url}/{year}-2/",
                     ])
 
                 # Also add non-year-specific news URLs
@@ -339,8 +342,6 @@ class CompanyDataScraper:
                         f"{self.base_url}/media/press-releases/{year}/",
                         f"{self.base_url}/investors/news/{year}/",
                         f"{self.base_url}/investors/press-releases/{year}/",
-                        # Tinka Resources pattern: /{year}-2/ (e.g., /2025-2/, /2024-2/)
-                        f"{self.base_url}/{year}-2/",
                     ])
 
             for pattern in common_patterns:
