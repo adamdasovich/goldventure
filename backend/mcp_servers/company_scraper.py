@@ -2646,6 +2646,54 @@ class CompanyDataScraper:
                     if not any(n.get('title', '').lower() == title.lower() for n in news_found):
                         news_found.append(news)
 
+            # Strategy 5: Elementor-based news pages (Tinka Resources)
+            # Pattern: <h2 class="elementor-heading-title">January 23, 2026</h2>
+            #          <h2 class="elementor-heading-title"><a href="PDF">Title</a></h2>
+            # Date and title are in separate h2 elements with elementor-heading-title class
+            elementor_headings = soup.find_all(['h2', 'h3'], class_=lambda c: c and 'elementor-heading-title' in c)
+            i = 0
+            while i < len(elementor_headings) - 1:
+                heading = elementor_headings[i]
+                heading_text = heading.get_text(strip=True)
+
+                # Check if this heading contains a date (e.g., "January 23, 2026")
+                date_pattern = r'(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{1,2}),?\s+(\d{4})'
+                date_match = re.match(date_pattern, heading_text, re.IGNORECASE)
+
+                if date_match:
+                    # Parse the date
+                    month_map = {
+                        'january': '01', 'february': '02', 'march': '03', 'april': '04',
+                        'may': '05', 'june': '06', 'july': '07', 'august': '08',
+                        'september': '09', 'october': '10', 'november': '11', 'december': '12'
+                    }
+                    month = month_map.get(date_match.group(1).lower(), '01')
+                    day = date_match.group(2).zfill(2)
+                    year = date_match.group(3)
+                    pub_date = f"{year}-{month}-{day}"
+
+                    # Look at next heading for title/link
+                    next_heading = elementor_headings[i + 1]
+                    title_link = next_heading.find('a', href=True)
+
+                    if title_link:
+                        title = title_link.get_text(strip=True)
+                        href = title_link.get('href', '')
+
+                        if title and len(title) > 15:
+                            news = {
+                                'title': title[:500],
+                                'publication_date': pub_date,
+                                'source_url': urljoin(url, href),
+                                'extracted_at': datetime.utcnow().isoformat(),
+                            }
+                            if not any(n.get('title', '').lower() == title.lower() for n in news_found):
+                                news_found.append(news)
+                            i += 2  # Skip both date and title headings
+                            continue
+
+                i += 1
+
             # Find news links - look for links that appear to be news items
             # Common patterns: links with dates, links in list items, links with news-like URLs
             for link in soup.find_all('a', href=True):
