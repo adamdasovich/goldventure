@@ -2192,6 +2192,100 @@ async def crawl_html_news_pages(url: str, months: int = 6, custom_news_url: str 
                         continue
 
                 # ============================================================
+                # STRATEGY: Skyharbour / Tab-based news with month/day in date div
+                # Structure: <div id="tab-2026" data-id="2026" class="tab-content">
+                #   <div class="date"><div class="month">Jan</div><div class="day">23</div></div>
+                #   <div class="text"><div class="title"><a href="slug">Title</a></div></div>
+                # </div>
+                # Key: Year comes from parent tab container (id="tab-YYYY" or data-id="YYYY")
+                # Date structure has month/day child divs but NO year div
+                # ============================================================
+                for tab in soup.select('[id^="tab-"], [data-id], .tab-content'):
+                    try:
+                        # Extract year from tab container
+                        tab_year = None
+                        tab_id = tab.get('id', '')
+                        tab_data_id = tab.get('data-id', '')
+                        tab_data_title = tab.get('data-title', '')
+
+                        # Try to get year from various attributes
+                        for attr_val in [tab_id, tab_data_id, tab_data_title]:
+                            year_match = re.search(r'(20\d{2})', str(attr_val))
+                            if year_match:
+                                tab_year = year_match.group(1)
+                                break
+
+                        if not tab_year:
+                            continue
+
+                        # Find all news items within this tab
+                        # Look for date/text pairs - date has month/day divs, text has title link
+                        date_divs = tab.select('div.date')
+
+                        for date_div in date_divs:
+                            try:
+                                month_elem = date_div.select_one('.month, div.month')
+                                day_elem = date_div.select_one('.day, div.day')
+
+                                if not (month_elem and day_elem):
+                                    continue
+
+                                month_text = month_elem.get_text(strip=True)
+                                day_text = day_elem.get_text(strip=True).strip()
+
+                                # Parse month
+                                month_num = MONTH_MAP.get(month_text.lower()[:3], None)
+                                if not month_num:
+                                    continue
+
+                                date_str = f"{tab_year}-{month_num}-{day_text.zfill(2)}"
+
+                                # Find the sibling text/title div with the link
+                                # Could be next sibling or within parent
+                                parent = date_div.parent
+                                title_link = None
+                                title = None
+
+                                # Try to find title in sibling .text div
+                                text_div = parent.select_one('.text, div.text')
+                                if text_div:
+                                    title_link = text_div.select_one('.title a, div.title a, a')
+
+                                # If not found, try next sibling
+                                if not title_link:
+                                    next_sib = date_div.find_next_sibling()
+                                    if next_sib:
+                                        title_link = next_sib.select_one('a') or (next_sib if next_sib.name == 'a' else None)
+
+                                if not title_link:
+                                    continue
+
+                                href = title_link.get('href', '')
+                                title = title_link.get_text(strip=True)
+
+                                if not title or len(title) < 15:
+                                    continue
+
+                                # Build full URL
+                                if href and not href.startswith('http'):
+                                    href = urljoin(news_url, href)
+
+                                news = {
+                                    'title': clean_news_title(title, href),
+                                    'url': href,
+                                    'date': date_str,
+                                    'document_type': 'news_release',
+                                    'year': tab_year
+                                }
+                                _add_news_item(news_by_url, news, cutoff_date, "TAB-DATE")
+                            except Exception as e:
+                                logger.debug(f"Skipping malformed tab news item: {e}")
+                                continue
+                    except Exception as e:
+                        logger.debug(f"Skipping malformed tab: {e}")
+                        continue
+
+                # ============================================================
                 # STRATEGY 2: WordPress/document card news (Canada Nickel)
                 # Uses: .wp-block-post-title h3 a, time or p.date
                 # ============================================================
