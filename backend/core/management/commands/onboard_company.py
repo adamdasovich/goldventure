@@ -183,7 +183,7 @@ class Command(BaseCommand):
             'contact', 'news', 'investors', 'corporate', 'highlights',
             'properties', 'assets', 'portfolio', 'locations', 'location',
             'recent posts', 'blog', 'articles', 'events', 'webinars',
-            'subscribe', 'newsletter', 'email signup', 'social media',
+            'subscribe', 'newsletter', 'email signup', 'social media', 'mailing list',
             'technical information', 'project details', 'exploration',
             'drill program', 'drilling program', 'exploration program'
         ]
@@ -929,10 +929,12 @@ class Command(BaseCommand):
                     stage = self._infer_project_stage_from_name(project_name)
                     # Default country to empty string if not provided (DB requires non-null)
                     country = project_data.get('location') or ''
+                    # Ensure description is never None (DB requires non-null)
+                    description = project_data.get('description') or ''
                     Project.objects.create(
                         company=company,
                         name=project_name,
-                        description=project_data.get('description', ''),
+                        description=description,
                         country=country,
                         project_stage=stage,
                         primary_commodity=commodity,
