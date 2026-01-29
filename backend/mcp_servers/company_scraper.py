@@ -964,15 +964,21 @@ class CompanyDataScraper:
             canadian_patterns = ticker_patterns[:6]  # TSX, TSXV, CSE, NEO patterns
             # OTC patterns (secondary - often dual-listed)
             otc_patterns = ticker_patterns[6:8]  # OTCQB/OTCQX patterns
-            # Other patterns
-            other_patterns = ticker_patterns[8:]
+            # Reverse and parenthetical patterns (ticker first, then exchange)
+            reverse_patterns = ticker_patterns[8:]
 
-            # Priority 1: Look for Canadian exchange tickers in targeted ticker elements
+            # Priority 1: Look for ANY Canadian pattern in targeted ticker elements FIRST
+            # This includes both "TSX.V: SYH" and "SYH: TSX.V" formats
+            # IMPORTANT: Check ticker elements with ALL patterns before searching full page
+            # to avoid picking up other companies' tickers mentioned in body text
             ticker_found = False
-            for idx, pattern in enumerate(canadian_patterns):
+            all_canadian_with_reverse = canadian_patterns + reverse_patterns
+            for idx, pattern in enumerate(all_canadian_with_reverse):
                 match = re.search(pattern, ticker_text, re.IGNORECASE)
                 if match:
-                    ticker, exchange = extract_ticker_from_match(match, idx)
+                    # Determine correct pattern index for extract_ticker_from_match
+                    actual_idx = idx if idx < 6 else idx - 6 + 8
+                    ticker, exchange = extract_ticker_from_match(match, actual_idx)
                     if ticker and exchange:  # Validate extraction succeeded
                         self.extracted_data['company']['ticker_symbol'] = ticker
                         self.extracted_data['company']['exchange'] = exchange
@@ -980,7 +986,22 @@ class CompanyDataScraper:
                         print(f"[TICKER] Found Canadian exchange in ticker elements: {exchange}:{ticker}")
                         break
 
-            # Priority 2: Look for Canadian exchange tickers in full page text
+            # Priority 2: Look for OTC tickers in targeted ticker elements
+            if not ticker_found:
+                for idx, pattern in enumerate(otc_patterns):
+                    match = re.search(pattern, ticker_text, re.IGNORECASE)
+                    if match:
+                        ticker, exchange = extract_ticker_from_match(match, idx + 6)
+                        if ticker and exchange:  # Validate extraction succeeded
+                            self.extracted_data['company']['ticker_symbol'] = ticker
+                            self.extracted_data['company']['exchange'] = exchange
+                            ticker_found = True
+                            print(f"[TICKER] Found OTC in ticker elements: {exchange}:{ticker}")
+                            break
+
+            # Priority 3: Look for Canadian exchange tickers in full page text
+            # WARNING: This can pick up other companies' tickers mentioned in body text
+            # Only use this as a fallback when ticker elements don't have the info
             if not ticker_found:
                 full_page_text = soup.get_text()
                 for idx, pattern in enumerate(canadian_patterns):
@@ -994,32 +1015,18 @@ class CompanyDataScraper:
                             print(f"[TICKER] Found Canadian exchange in page text: {exchange}:{ticker}")
                             break
 
-            # Priority 3: Look for OTC tickers ONLY in targeted ticker elements (not full page)
-            # This prevents picking up random OTC-like text from page content
+            # Priority 4: Other patterns (reverse patterns, parenthetical) in full page
             if not ticker_found:
-                for idx, pattern in enumerate(otc_patterns):
-                    match = re.search(pattern, ticker_text, re.IGNORECASE)
-                    if match:
-                        ticker, exchange = extract_ticker_from_match(match, idx + 6)
-                        if ticker and exchange:  # Validate extraction succeeded
-                            self.extracted_data['company']['ticker_symbol'] = ticker
-                            self.extracted_data['company']['exchange'] = exchange
-                            ticker_found = True
-                            print(f"[TICKER] Found OTC in ticker elements: {exchange}:{ticker}")
-                            break
-
-            # Priority 4: Other patterns (reverse patterns, parenthetical)
-            if not ticker_found:
-                combined_text = ticker_text + " " + soup.get_text()
-                for idx, pattern in enumerate(other_patterns):
-                    match = re.search(pattern, combined_text, re.IGNORECASE)
+                full_page_text = soup.get_text() if 'full_page_text' not in dir() else full_page_text
+                for idx, pattern in enumerate(reverse_patterns):
+                    match = re.search(pattern, full_page_text, re.IGNORECASE)
                     if match:
                         ticker, exchange = extract_ticker_from_match(match, idx + 8)
                         if ticker and exchange:  # Validate extraction succeeded
                             self.extracted_data['company']['ticker_symbol'] = ticker
                             self.extracted_data['company']['exchange'] = exchange
                             ticker_found = True
-                            print(f"[TICKER] Found via other pattern: {exchange}:{ticker}")
+                            print(f"[TICKER] Found via reverse pattern: {exchange}:{ticker}")
                             break
 
             if not ticker_found:
