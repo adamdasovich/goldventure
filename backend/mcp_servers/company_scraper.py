@@ -287,9 +287,14 @@ class CompanyDataScraper:
             common_patterns = [
                 f"{self.base_url}/{keyword}/",
                 f"{self.base_url}/{keyword}",
-                f"{self.base_url}/{keyword}s/",
-                f"{self.base_url}/{keyword}s",
             ]
+            # Only add plural 's' suffix if keyword doesn't already end in 's'
+            # (e.g., 'news' is already plural - don't create '/newss/')
+            if not keyword.endswith('s'):
+                common_patterns.extend([
+                    f"{self.base_url}/{keyword}s/",
+                    f"{self.base_url}/{keyword}s",
+                ])
 
             # For news, add multiple year-based URL patterns that mining company sites commonly use
             if keyword in ['news', 'press', 'releases']:
