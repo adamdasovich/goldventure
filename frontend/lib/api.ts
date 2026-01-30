@@ -205,13 +205,18 @@ export const financingAPI = {
 
 // Claude Chat API - Uses local Next.js API route to avoid CORS issues
 export const claudeAPI = {
-  chat: async (request: ChatRequest): Promise<ChatResponse> => {
+  chat: async (request: ChatRequest, accessToken?: string): Promise<ChatResponse> => {
     // Use local API route to proxy to backend (avoids CORS issues)
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+    if (accessToken) {
+      headers['Authorization'] = `Bearer ${accessToken}`;
+    }
+
     const response = await fetch('/api/claude/chat/', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers,
       body: JSON.stringify(request),
     });
 

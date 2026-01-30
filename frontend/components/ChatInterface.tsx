@@ -6,10 +6,12 @@ import { Input } from './ui/Input';
 import { Button } from './ui/Button';
 import { Badge } from './ui/Badge';
 import { claudeAPI } from '@/lib/api';
+import { useAuth } from '@/contexts/AuthContext';
 import type { ChatMessage, ToolCall } from '@/types/api';
 import LogoIcon from './LogoIcon';
 
 export default function ChatInterface() {
+  const { accessToken } = useAuth();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -39,6 +41,17 @@ export default function ChatInterface() {
   const handleSend = async () => {
     if (!input.trim() || isLoading) return;
 
+    // Check if user is authenticated before sending
+    if (!accessToken) {
+      setMessages([
+        ...messages,
+        { role: 'user', content: input.trim() },
+        { role: 'assistant', content: 'Please log in to use the chat feature.' },
+      ]);
+      setInput('');
+      return;
+    }
+
     const userMessage = input.trim();
     setInput('');
     setIsLoading(true);
@@ -51,7 +64,7 @@ export default function ChatInterface() {
       const response = await claudeAPI.chat({
         message: userMessage,
         conversation_history: messages,
-      });
+      }, accessToken);
 
       // Add assistant response
       setMessages([...newMessages, { role: 'assistant', content: response.message }]);
