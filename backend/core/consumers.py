@@ -115,7 +115,7 @@ class ForumConsumer(AsyncWebsocketConsumer):
         - Broadcast user left event
         - Leave channel group
         """
-        if hasattr(self, 'discussion_group_name'):
+        if hasattr(self, 'discussion_group_name') and self.user and self.user.is_authenticated:
             # Update presence
             await self.update_presence(is_online=False, is_typing=False)
 
@@ -398,6 +398,11 @@ class ForumConsumer(AsyncWebsocketConsumer):
     @database_sync_to_async
     def update_presence(self, is_online: bool = True, is_typing: bool = False):
         """Update or create user presence."""
+        # Skip if user is not authenticated
+        if not self.user or not self.user.is_authenticated:
+            logger.debug("Skipping presence update for unauthenticated user")
+            return
+
         # Skip if discussion_id is invalid (e.g., 0 or None)
         if not self.discussion_id or self.discussion_id == 0:
             logger.warning(f"Attempted to update presence with invalid discussion_id: {self.discussion_id}")
