@@ -1506,26 +1506,35 @@ def _extract_news_from_element(element, source_url: str, base_url: str) -> Optio
     Handles structures like:
     - Laurion: <div class="news-item"><div class="date">01.07.2026</div><div class="title"><a>...</a></div></div>
     - 1911 Gold: <div class="news-item"><span class="date">December 17, 2025</span><a class="title">...</a></div>
+    - Troilus: <a class="news-item" href="..."><div class="news-date">22.01.2026</div><div class="news-title">...</div></a>
     """
     try:
         date_str = None
         title = None
         link_url = None
 
+        # Check if the element ITSELF is an <a> tag (Troilus pattern: <a class='news-item' href='...'><div>...</div></a>)
+        if element.name == 'a' and element.get('href'):
+            link_url = element.get('href', '')
+
         # Strategy 1: Look for dedicated date element (div.date, span.date, time, .news-date)
         date_elem = element.find(['div', 'span', 'time'], class_=lambda c: c and 'date' in str(c).lower())
         if date_elem:
             date_str = parse_date_standalone(date_elem.get_text(strip=True))
 
-        # Strategy 2: Look for dedicated title element (div.title a, div.news-title a, a.title, h2, h3)
+        # Strategy 2: Look for dedicated title element (div.title, div.news-title)
         title_elem = element.find('div', class_='title')
         if not title_elem:
-            title_elem = element.find('div', class_='news-title')  # GoldMining pattern
+            title_elem = element.find('div', class_='news-title')  # GoldMining, Troilus pattern
         if title_elem:
             title_link = title_elem.find('a', href=True)
             if title_link:
                 title = title_link.get_text(strip=True)
                 link_url = title_link.get('href', '')
+            else:
+                # Troilus pattern: <a class="news-item"><div class="news-title">Title</div></a>
+                # The title div has text but no link inside (parent is the link)
+                title = title_elem.get_text(strip=True)
 
         # Try a.title or a with class containing 'title' (e.g., news-item__title)
         if not title:
@@ -3560,9 +3569,9 @@ async def crawl_html_news_pages(url: str, months: int = 6, custom_news_url: str 
 
                 # ============================================================
                 # STRATEGY 5: Structured news-item elements with date/title divs
-                # Handles: Laurion (.news-item .date), 1911 Gold, etc.
+                # Handles: Laurion (.news-item .date), 1911 Gold, Troilus (<a class='news-item'>), etc.
                 # ============================================================
-                for selector in ['.news-item', '.news_item', '.press-release', '.news-release', 'article.post', 'article']:
+                for selector in ['.news-item', '.news_item', '.press-release', '.news-release', 'article.post', 'article', 'a.news-item']:
                     for item in soup.select(selector)[:50]:
                         news = _extract_news_from_element(item, news_url, url)
                         if news:
