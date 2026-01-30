@@ -249,16 +249,16 @@ The function filters OUT these media coverage sites:
 - Check added 2026-01-22 in `tasks.py` lines ~432 and ~821
 - Similarity threshold for dismissed news: 0.85
 
-### Celery
-- Worker dies silently - always check: `ps aux | grep celery`
+### Celery (Systemd Services)
+- Now managed by systemd with auto-restart on failure
 - Beat schedules tasks, Worker executes them - BOTH must be running
-- Restart command:
+- Check status: `systemctl status celery-worker celery-beat`
+- Restart commands:
   ```bash
-  pkill -f 'celery -A config'
-  cd /var/www/goldventure/backend && source venv/bin/activate
-  celery -A config beat --detach --logfile=/var/log/celery-beat.log --pidfile=/var/run/celery-beat.pid
-  celery -A config worker --detach --concurrency=2 --logfile=/var/log/celery-worker.log --pidfile=/var/run/celery-worker.pid
+  systemctl restart celery-worker
+  systemctl restart celery-beat
   ```
+- View logs: `journalctl -u celery-worker -f` or `tail -f /var/log/celery-worker.log`
 
 ### Server Paths
 - **Correct:** `/var/www/goldventure`
