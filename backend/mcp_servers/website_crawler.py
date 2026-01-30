@@ -2729,6 +2729,71 @@ async def crawl_html_news_pages(url: str, months: int = 6, custom_news_url: str 
                         continue
 
                 # ============================================================
+                # STRATEGY: Grande Portage / Tailwind flex layout (no flex-wrap)
+                # Structure: <div class="flex">
+                #   <div class="w-1/5">January 19, 2026</div>
+                #   <div class="w-4/5"><a href="/news/...">Title</a></div>
+                # </div>
+                # Key: Date in w-1/5 child, title link in w-4/5 child
+                # ============================================================
+                for flex_row in soup.select('div.flex'):
+                    try:
+                        # Get direct children divs
+                        child_divs = flex_row.find_all('div', recursive=False)
+                        if len(child_divs) < 2:
+                            continue
+
+                        # Look for w-1/5 (date) and w-4/5 (title) pattern
+                        date_div = None
+                        title_div = None
+                        for div in child_divs:
+                            div_classes = ' '.join(div.get('class', []))
+                            if 'w-1/5' in div_classes:
+                                date_div = div
+                            elif 'w-4/5' in div_classes:
+                                title_div = div
+
+                        if not date_div or not title_div:
+                            continue
+
+                        # Extract date
+                        date_text = date_div.get_text(strip=True)
+                        date_str = parse_date_standalone(date_text)
+                        if not date_str:
+                            continue
+
+                        # Extract title and link from title_div
+                        title_link = title_div.select_one('a[href]')
+                        if not title_link:
+                            continue
+
+                        href = title_link.get('href', '')
+                        title = title_link.get_text(strip=True)
+
+                        if not title or len(title) < 15:
+                            continue
+
+                        # Skip PDF links
+                        if href.lower().endswith('.pdf'):
+                            continue
+
+                        # Build full URL
+                        if href and not href.startswith('http'):
+                            href = urljoin(news_url, href)
+
+                        news = {
+                            'title': clean_news_title(title, href),
+                            'url': href,
+                            'date': date_str,
+                            'document_type': 'news_release',
+                            'year': date_str[:4] if date_str else None
+                        }
+                        _add_news_item(news_by_url, news, cutoff_date, "TAILWIND-W15-W45")
+                    except Exception as e:
+                        logger.debug(f"Skipping malformed w-1/5 news item: {e}")
+                        continue
+
+                # ============================================================
                 # STRATEGY 4d: Ultimate Elements Grid pattern (CanAlaska)
                 # Structure: <div class="uc_post_title"><a><div class="ue_p_title">TITLE</div></a></div>
                 #            <div class="ue-meta-data"><div class="ue-grid-item-meta-data">DATE</div></div>
