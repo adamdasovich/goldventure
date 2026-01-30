@@ -203,30 +203,14 @@ export const financingAPI = {
     }),
 };
 
-// Claude Chat API - Uses local Next.js API route to avoid CORS issues
+// Claude Chat API - calls Django backend directly (nginx proxies /api/ to backend)
 export const claudeAPI = {
-  chat: async (request: ChatRequest, accessToken?: string): Promise<ChatResponse> => {
-    // Use local API route to proxy to backend (avoids CORS issues)
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-    };
-    if (accessToken) {
-      headers['Authorization'] = `Bearer ${accessToken}`;
-    }
-
-    const response = await fetch('/api/claude/chat', {
+  chat: (request: ChatRequest, accessToken?: string): Promise<ChatResponse> =>
+    apiFetch<ChatResponse>('/claude/chat/', {
       method: 'POST',
-      headers,
+      headers: accessToken ? { 'Authorization': `Bearer ${accessToken}` } : {},
       body: JSON.stringify(request),
-    });
-
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({ error: 'Network error' }));
-      throw new Error(error.error || `API Error: ${response.status}`);
-    }
-
-    return response.json();
-  },
+    }),
 
   companyChat: (companyId: number, request: ChatRequest) =>
     apiFetch<ChatResponse>(`/companies/${companyId}/chat/`, {
