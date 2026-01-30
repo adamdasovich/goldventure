@@ -214,7 +214,7 @@ export const claudeAPI = {
       headers['Authorization'] = `Bearer ${accessToken}`;
     }
 
-    const response = await fetch('/api/claude/chat/', {
+    const response = await fetch('/api/claude/chat', {
       method: 'POST',
       headers,
       body: JSON.stringify(request),
