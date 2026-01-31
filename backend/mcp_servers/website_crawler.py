@@ -512,7 +512,8 @@ def is_news_article_url(url: str) -> bool:
     news_wires = [
         'globenewswire.com', 'newswire.ca', 'prnewswire.com',
         'businesswire.com', 'accesswire.com', 'newsfilecorp.com',
-        'cision.com', 'marketwatch.com/press-release'
+        'cision.com', 'marketwatch.com/press-release',
+        'investi.com.au',  # Australian investor relations platform for ASX announcements
     ]
     if any(p in url_lower for p in news_wires):
         return True
@@ -1989,6 +1990,91 @@ async def crawl_html_news_pages(url: str, months: int = 6, custom_news_url: str 
         except Exception as e:
             logger.debug(f"WordPress REST API extraction failed: {e}")
 
+        # ============================================================
+        # SPECIAL CASE: Wix Sites with RSS Feed
+        # Wix sites render content with JavaScript, making HTML scraping difficult
+        # However, Wix blogs have a standard RSS feed at /blog-feed.xml
+        # This RSS feed contains all blog posts with proper dates and URLs
+        # ============================================================
+        try:
+            import aiohttp
+            import xml.etree.ElementTree as ET
+
+            # Try Wix RSS feed endpoint
+            wix_rss_url = f"{base_url}/blog-feed.xml"
+            print(f"[WIX-RSS] Checking Wix RSS feed: {wix_rss_url}")
+
+            async with aiohttp.ClientSession() as session:
+                async with session.get(
+                    wix_rss_url,
+                    headers={
+                        "Accept": "application/rss+xml, application/xml, text/xml",
+                        "User-Agent": "Mozilla/5.0 (compatible; NewsBot/1.0)"
+                    },
+                    timeout=aiohttp.ClientTimeout(total=15)
+                ) as response:
+                    if response.status == 200:
+                        content_type = response.headers.get('Content-Type', '')
+                        if 'xml' in content_type:
+                            xml_content = await response.text()
+                            # Parse RSS XML
+                            root = ET.fromstring(xml_content)
+                            channel = root.find('channel')
+                            if channel is not None:
+                                items_found = 0
+                                for item in channel.findall('item'):
+                                    try:
+                                        title_elem = item.find('title')
+                                        link_elem = item.find('link')
+                                        pubdate_elem = item.find('pubDate')
+
+                                        if title_elem is None or link_elem is None:
+                                            continue
+
+                                        title = title_elem.text or ''
+                                        # Clean CDATA wrapper if present
+                                        title = title.strip()
+                                        if not title or len(title) < 15:
+                                            continue
+
+                                        news_url = link_elem.text or ''
+                                        if not news_url:
+                                            continue
+
+                                        # Parse pubDate (format: "Thu, 22 Jan 2026 12:03:27 GMT")
+                                        date_str = None
+                                        if pubdate_elem is not None and pubdate_elem.text:
+                                            try:
+                                                from email.utils import parsedate_to_datetime
+                                                dt = parsedate_to_datetime(pubdate_elem.text)
+                                                date_str = dt.strftime('%Y-%m-%d')
+                                            except Exception:
+                                                # Try to parse manually
+                                                pubdate_text = pubdate_elem.text
+                                                date_match = re.search(r'(\d{1,2})\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{4})', pubdate_text)
+                                                if date_match:
+                                                    day = date_match.group(1).zfill(2)
+                                                    month = MONTH_MAP.get(date_match.group(2).lower(), '01')
+                                                    year = date_match.group(3)
+                                                    date_str = f"{year}-{month}-{day}"
+
+                                        news = {
+                                            'title': clean_news_title(title, news_url),
+                                            'url': news_url,
+                                            'date': date_str,
+                                            'document_type': 'news_release',
+                                            'year': date_str[:4] if date_str else None
+                                        }
+                                        _add_news_item(news_by_url, news, cutoff_date, "WIX-RSS")
+                                        items_found += 1
+                                    except Exception as e:
+                                        logger.debug(f"Skipping malformed Wix RSS item: {e}")
+                                        continue
+
+                                print(f"[WIX-RSS] Found {items_found} news items from RSS feed")
+        except Exception as e:
+            logger.debug(f"Wix RSS feed extraction failed: {e}")
+
         # Streamlined news page patterns
         # IMPORTANT: Order matters! Year-based patterns should be early to capture
         # historical news before timeout kicks in (60-90 seconds)
@@ -2023,6 +2109,7 @@ async def crawl_html_news_pages(url: str, months: int = 6, custom_news_url: str 
             f'{url}/news-releases/?post_year={current_year - 2}',
             f'{url}/news-releases/?post_year={current_year - 3}',
             f'{url}/press-releases/',
+            f'{url}/pressreleases/',  # Northern Shield - no hyphen variant
             # WordPress category patterns (New Age Metals, many WP sites)
             f'{url}/category/press/',
             f'{url}/category/news/',
@@ -2087,6 +2174,93 @@ async def crawl_html_news_pages(url: str, months: int = 6, custom_news_url: str 
 
                 soup = BeautifulSoup(result.html, 'html.parser')
                 print(f"[SCAN] {news_url}")
+
+                # ============================================================
+                # SPECIAL CASE: Investi Widget (Australian ASX announcements)
+                # Detects Investi JavaScript widget and calls API directly
+                # ============================================================
+                try:
+                    investi_script = soup.find('script', src=lambda x: x and 'investi.com.au' in x)
+                    investi_div = soup.find('div', id='investi-announcements')
+
+                    if investi_script or investi_div:
+                        print(f"[INVESTI] Detected Investi widget on page")
+
+                        # Extract API key from script URL
+                        api_key = None
+                        if investi_script:
+                            src = investi_script.get('src', '')
+                            api_key_match = re.search(r'apiKey=([a-f0-9-]+)', src)
+                            if api_key_match:
+                                api_key = api_key_match.group(1)
+
+                        # Extract ticker - try multiple methods
+                        ticker = None
+
+                        # Method 1: From Investi PDF links in rendered HTML
+                        investi_links = soup.find_all('a', href=lambda x: x and 'investi.com.au/api/announcements/' in x)
+                        if investi_links:
+                            href = investi_links[0].get('href', '')
+                            ticker_match = re.search(r'/api/announcements/([a-z0-9]+)/', href.lower())
+                            if ticker_match:
+                                ticker = ticker_match.group(1).upper()
+
+                        # Method 2: Search raw HTML for Investi announcement URLs
+                        if not ticker:
+                            raw_html = str(result.html) if hasattr(result, 'html') else str(soup)
+                            ticker_match = re.search(r'investi\.com\.au/api/announcements/([a-z0-9]+)/', raw_html.lower())
+                            if ticker_match:
+                                ticker = ticker_match.group(1).upper()
+
+                        if api_key and ticker:
+                            print(f"[INVESTI] Found API key and ticker: {ticker}")
+
+                            # Call Investi API directly
+                            investi_api_url = f"https://api.investi.com.au/api/announcements?ticker={ticker}&limit=50&apiKey={api_key}"
+
+                            async with aiohttp.ClientSession() as session:
+                                async with session.get(investi_api_url, timeout=aiohttp.ClientTimeout(total=15)) as resp:
+                                    if resp.status == 200:
+                                        announcements = await resp.json()
+                                        items_found = 0
+
+                                        for ann in announcements:
+                                            try:
+                                                title = ann.get('headline', '').strip()
+                                                date_str_raw = ann.get('date', '')  # ISO format: 2026-01-30T10:03:44
+                                                local_path = ann.get('localPath', '')  # /api/announcements/mth/xxx.pdf
+
+                                                if not title or not local_path:
+                                                    continue
+
+                                                # Parse ISO date
+                                                date_str = None
+                                                if date_str_raw:
+                                                    try:
+                                                        dt = datetime.fromisoformat(date_str_raw.replace('Z', '+00:00'))
+                                                        date_str = dt.strftime('%Y-%m-%d')
+                                                    except (ValueError, TypeError):
+                                                        pass
+
+                                                # Build full PDF URL
+                                                pdf_url = f"https://api.investi.com.au{local_path}"
+
+                                                news = {
+                                                    'title': title,
+                                                    'url': pdf_url,
+                                                    'date': date_str,
+                                                    'document_type': 'news_release',
+                                                    'year': date_str[:4] if date_str else None
+                                                }
+                                                _add_news_item(news_by_url, news, cutoff_date, "INVESTI-API")
+                                                items_found += 1
+                                            except Exception as e:
+                                                logger.debug(f"Skipping malformed Investi announcement: {e}")
+                                                continue
+
+                                        print(f"[INVESTI-API] Found {items_found} announcements from Investi API")
+                except Exception as e:
+                    logger.debug(f"Investi API extraction failed: {e}")
 
                 # ============================================================
                 # STRATEGY 1: G2 Goldfields pattern - dates in <strong> tags
@@ -2791,6 +2965,98 @@ async def crawl_html_news_pages(url: str, months: int = 6, custom_news_url: str 
                         _add_news_item(news_by_url, news, cutoff_date, "TAILWIND-W15-W45")
                     except Exception as e:
                         logger.debug(f"Skipping malformed w-1/5 news item: {e}")
+                        continue
+
+                # ============================================================
+                # STRATEGY 4d.5: Elementor Toggle/Accordion pattern (Lahontan Gold)
+                # Structure: <div id="elementor-tab-content-XXXX" class="elementor-tab-content ...">
+                #   <p>Date</p><p><a href="...">Title</a></p>
+                #   <p>Date</p><p><a href="...">Title</a></p>
+                # Alternating <p> tags with dates and links
+                # ============================================================
+                for tab_content in soup.select('[id^="elementor-tab-content-"]'):
+                    try:
+                        # Get all <p> tags in this tab
+                        p_tags = tab_content.find_all('p', recursive=False)
+                        if len(p_tags) < 2:
+                            # Also check for nested p tags
+                            p_tags = tab_content.find_all('p')
+
+                        i = 0
+                        while i < len(p_tags) - 1:
+                            try:
+                                date_p = p_tags[i]
+                                link_p = p_tags[i + 1]
+
+                                # Check if first p contains a date (no link)
+                                if date_p.find('a'):
+                                    # This p has a link, skip to check next pair
+                                    i += 1
+                                    continue
+
+                                date_text = date_p.get_text(strip=True)
+                                date_str = parse_date_standalone(date_text)
+
+                                # Check if second p contains a link
+                                link = link_p.find('a')
+                                if not link:
+                                    i += 1
+                                    continue
+
+                                href = link.get('href', '')
+                                title = link.get_text(strip=True)
+
+                                if not href or not title or len(title) < 10:
+                                    i += 2
+                                    continue
+
+                                # Make URL absolute
+                                if href and not href.startswith('http'):
+                                    href = urljoin(news_url, href)
+
+                                # For Elementor toggle, allow PDF links on the same domain
+                                # These are often direct press release PDFs (Lahontan pattern)
+                                href_domain = urlparse(href).netloc.replace('www.', '')
+                                source_domain = urlparse(news_url).netloc.replace('www.', '')
+                                is_same_domain_pdf = href.lower().endswith('.pdf') and href_domain == source_domain
+
+                                if not is_same_domain_pdf and not is_valid_news_url(href):
+                                    i += 2
+                                    continue
+
+                                # Extract year from URL path - more reliable than displayed date
+                                # URL patterns: /2026/01/ or filenames like 27JAN2026-FINAL.pdf
+                                url_year = None
+                                url_year_match = re.search(r'/(\d{4})/\d{1,2}/', href)
+                                if url_year_match:
+                                    url_year = url_year_match.group(1)
+                                else:
+                                    # Check filename for patterns like 27JAN2026
+                                    filename_year_match = re.search(r'\d{1,2}[A-Z]{3}(\d{4})', href.upper())
+                                    if filename_year_match:
+                                        url_year = filename_year_match.group(1)
+
+                                # If URL year differs from parsed date year, use URL year
+                                final_date = date_str
+                                if url_year and date_str:
+                                    parsed_year = date_str[:4]
+                                    if url_year != parsed_year:
+                                        final_date = url_year + date_str[4:]
+
+                                news = {
+                                    'title': clean_news_title(title, href),
+                                    'url': href,
+                                    'date': final_date,
+                                    'document_type': 'news_release',
+                                    'year': final_date[:4] if final_date else None
+                                }
+                                _add_news_item(news_by_url, news, cutoff_date, "ELEMENTOR-TOGGLE")
+                                i += 2  # Move to next date/link pair
+                            except Exception:
+                                i += 1
+                                continue
+                    except Exception as e:
+                        logger.debug(f"Skipping malformed elementor-tab item: {e}")
                         continue
 
                 # ============================================================
