@@ -2697,6 +2697,89 @@ class CompanyDataScraper:
 
                 i += 1
 
+            # Strategy 6: Elementor inner-section based news layout (Omega Pacific, etc.)
+            # Pattern: section.elementor-inner-section with columns containing:
+            #   - Title text + Date text in one column
+            #   - "Read More" button linking to newswire (newsfilecorp, globenewswire, etc.) in another
+            elementor_sections = soup.find_all('section', class_=lambda c: c and 'elementor-inner-section' in c)
+            for section in elementor_sections[:50]:  # Limit to 50 sections
+                section_text = section.get_text(strip=True)
+
+                # Look for news wire links in this section
+                news_wire_patterns = ['newsfilecorp', 'globenewswire', 'accesswire', 'businesswire',
+                                     'prnewswire', 'newswire.ca', 'cision.com']
+                wire_link = None
+                for link in section.find_all('a', href=True):
+                    href = link.get('href', '').lower()
+                    if any(wire in href for wire in news_wire_patterns):
+                        wire_link = link.get('href')
+                        break
+
+                if not wire_link:
+                    continue
+
+                # Extract date from section text
+                # Pattern: "Nov 24, 2025" or "November 24, 2025"
+                date_pattern_short = r'(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{1,2}),?\s+(\d{4})'
+                date_pattern_long = r'(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{1,2}),?\s+(\d{4})'
+
+                pub_date = None
+                month_map_short = {
+                    'jan': '01', 'feb': '02', 'mar': '03', 'apr': '04',
+                    'may': '05', 'jun': '06', 'jul': '07', 'aug': '08',
+                    'sep': '09', 'oct': '10', 'nov': '11', 'dec': '12'
+                }
+                month_map_long = {
+                    'january': '01', 'february': '02', 'march': '03', 'april': '04',
+                    'may': '05', 'june': '06', 'july': '07', 'august': '08',
+                    'september': '09', 'october': '10', 'november': '11', 'december': '12'
+                }
+
+                date_match = re.search(date_pattern_short, section_text, re.IGNORECASE)
+                if date_match:
+                    month = month_map_short.get(date_match.group(1).lower()[:3], '01')
+                    day = date_match.group(2).zfill(2)
+                    year = date_match.group(3)
+                    pub_date = f"{year}-{month}-{day}"
+                else:
+                    date_match = re.search(date_pattern_long, section_text, re.IGNORECASE)
+                    if date_match:
+                        month = month_map_long.get(date_match.group(1).lower(), '01')
+                        day = date_match.group(2).zfill(2)
+                        year = date_match.group(3)
+                        pub_date = f"{year}-{month}-{day}"
+
+                # Extract title - find text-editor widgets or paragraphs
+                title = None
+                text_widgets = section.find_all('div', class_=lambda c: c and 'text-editor' in c)
+                for widget in text_widgets:
+                    widget_text = widget.get_text(strip=True)
+                    # Skip if it's just a date or "Read More"
+                    if len(widget_text) > 20 and not re.match(date_pattern_short, widget_text, re.IGNORECASE) and not re.match(date_pattern_long, widget_text, re.IGNORECASE):
+                        if widget_text.lower() not in ['read more', 'view', 'pdf', 'download']:
+                            title = widget_text
+                            break
+
+                # If no title found in text-editor, try paragraphs
+                if not title:
+                    for p in section.find_all('p'):
+                        p_text = p.get_text(strip=True)
+                        if len(p_text) > 20 and not re.match(date_pattern_short, p_text, re.IGNORECASE) and not re.match(date_pattern_long, p_text, re.IGNORECASE):
+                            if p_text.lower() not in ['read more', 'view', 'pdf', 'download']:
+                                title = p_text
+                                break
+
+                if title and (pub_date or wire_link):
+                    news = {
+                        'title': title[:500],
+                        'publication_date': pub_date,
+                        'source_url': wire_link,
+                        'extracted_at': datetime.utcnow().isoformat(),
+                    }
+                    # Avoid duplicates
+                    if not any(n.get('source_url') == wire_link for n in news_found):
+                        news_found.append(news)
+
             # Find news links - look for links that appear to be news items
             # Common patterns: links with dates, links in list items, links with news-like URLs
             for link in soup.find_all('a', href=True):
