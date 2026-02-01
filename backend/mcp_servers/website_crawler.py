@@ -2773,6 +2773,96 @@ async def crawl_html_news_pages(url: str, months: int = 6, custom_news_url: str 
                         continue  # Skip malformed item, continue with next
 
                 # ============================================================
+                # STRATEGY: Targa Exploration / div.post with month/day spans pattern
+                # Structure: <div class="post">
+                #   <div class="date"><span class="month">January</span><span class="day">15</span></div>
+                #   <h3>Title</h3>
+                #   <a href="...">Read More</a> or <a href="...pdf">PDF</a>
+                # </div>
+                # Key: Date has separate month/day spans (NO year), year must be inferred
+                # ============================================================
+                for post in soup.select('div.post'):
+                    try:
+                        # Look for span.month and span.day in this post
+                        month_span = post.select_one('span.month')
+                        day_span = post.select_one('span.day')
+
+                        if not month_span or not day_span:
+                            continue
+
+                        month_text = month_span.get_text(strip=True).lower()
+                        day_text = day_span.get_text(strip=True)
+
+                        # Map full month names to numbers
+                        month_map_full = {
+                            'january': '01', 'february': '02', 'march': '03', 'april': '04',
+                            'may': '05', 'june': '06', 'july': '07', 'august': '08',
+                            'september': '09', 'october': '10', 'november': '11', 'december': '12'
+                        }
+
+                        month_num = month_map_full.get(month_text)
+                        if not month_num:
+                            # Try abbreviated month
+                            month_num = MONTH_MAP.get(month_text[:3], None)
+
+                        if not month_num:
+                            continue
+
+                        day = day_text.zfill(2)
+
+                        # Infer year: if the month is in the future, use previous year
+                        current_year = datetime.now().year
+                        current_month = datetime.now().month
+                        post_month = int(month_num)
+                        year = current_year if post_month <= current_month else current_year - 1
+
+                        date_str = f"{year}-{month_num}-{day}"
+
+                        # Get title from h3
+                        title_elem = post.select_one('h3')
+                        if not title_elem:
+                            continue
+
+                        title = title_elem.get_text(strip=True)
+                        if not title or len(title) < 15:
+                            continue
+
+                        # Find a link - prefer article link over PDF
+                        source_url = None
+                        for link in post.find_all('a', href=True):
+                            href = link.get('href', '')
+                            if href and not href.lower().endswith('.pdf'):
+                                source_url = href
+                                break
+
+                        # If no article link, use PDF link
+                        if not source_url:
+                            for link in post.find_all('a', href=True):
+                                href = link.get('href', '')
+                                if href:
+                                    source_url = href
+                                    break
+
+                        if not source_url:
+                            continue
+
+                        # Build full URL
+                        if not source_url.startswith('http'):
+                            source_url = urljoin(news_url, source_url)
+
+                        news = {
+                            'title': clean_news_title(title, source_url),
+                            'url': source_url,
+                            'date': date_str,
+                            'document_type': 'news_release',
+                            'year': str(year)
+                        }
+                        _add_news_item(news_by_url, news, cutoff_date, "DIV-POST-MONTHDAY")
+                    except Exception as e:
+                        logger.debug(f"Skipping malformed div.post item: {e}")
+                        continue
+
+                # ============================================================
                 # STRATEGY 3: Aston Bay pattern - date in stacked divs (Mon/DD/YYYY)
                 # Structure: <div class="flex"><div class="uk-width-auto">date</div><div class="uk-width-expand">title</div></div>
                 # ============================================================

@@ -2421,6 +2421,79 @@ class CompanyDataScraper:
             soup = BeautifulSoup(result.html, 'html.parser')
             news_found = []
 
+            # ============================================================
+            # STRATEGY 0: WordPress REST API (Silver X Mining, Silvercorp, etc.)
+            # Many mining sites use WordPress with REST API enabled
+            # News is available via /wp-json/wp/v2/posts endpoint
+            # This is MUCH more reliable than HTML scraping for WP sites
+            # ============================================================
+            try:
+                import aiohttp
+                from urllib.parse import urlparse
+                parsed = urlparse(url)
+                base_url = f"{parsed.scheme}://{parsed.netloc}"
+                wp_api_url = f"{base_url}/wp-json/wp/v2/posts?per_page=100"
+                print(f"[WORDPRESS] Checking WordPress REST API: {wp_api_url}")
+
+                async with aiohttp.ClientSession() as session:
+                    async with session.get(
+                        wp_api_url,
+                        headers={
+                            "Accept": "application/json",
+                            "User-Agent": "Mozilla/5.0 (compatible; GoldVenture/1.0)"
+                        },
+                        timeout=aiohttp.ClientTimeout(total=15)
+                    ) as response:
+                        if response.status == 200:
+                            content_type = response.headers.get('Content-Type', '')
+                            if 'application/json' in content_type:
+                                data = await response.json()
+                                if isinstance(data, list) and len(data) > 0:
+                                    # Check if this looks like a valid WP posts response
+                                    first_post = data[0]
+                                    if 'title' in first_post and 'link' in first_post and 'date' in first_post:
+                                        wp_items_found = 0
+                                        for post in data:
+                                            try:
+                                                # Extract title (may contain HTML entities)
+                                                title_obj = post.get('title', {})
+                                                title = title_obj.get('rendered', '') if isinstance(title_obj, dict) else str(title_obj)
+                                                # Clean HTML entities
+                                                title = title.replace('&#8211;', '-').replace('&#8217;', "'")
+                                                title = title.replace('&ndash;', '-').replace('&amp;', '&')
+                                                title = title.replace('&#8220;', '"').replace('&#8221;', '"')
+
+                                                if not title or len(title) < 15:
+                                                    continue
+
+                                                # Parse date from ISO format (2026-01-27T14:05:41)
+                                                date_raw = post.get('date', '')
+                                                date_str = None
+                                                if date_raw and len(date_raw) >= 10:
+                                                    date_str = date_raw[:10]  # Extract YYYY-MM-DD
+
+                                                news_url = post.get('link', '')
+                                                if not news_url:
+                                                    continue
+
+                                                news = {
+                                                    'title': title[:500],
+                                                    'publication_date': date_str,
+                                                    'source_url': news_url,
+                                                    'extracted_at': datetime.utcnow().isoformat(),
+                                                }
+                                                # Avoid duplicates
+                                                if not any(n.get('source_url') == news_url for n in news_found):
+                                                    news_found.append(news)
+                                                    wp_items_found += 1
+                                            except Exception as e:
+                                                logger.debug(f"Skipping malformed WordPress post: {e}")
+                                                continue
+
+                                        print(f"[WORDPRESS] Found {wp_items_found} news items from REST API")
+            except Exception as e:
+                logger.debug(f"WordPress REST API check failed: {e}")
+
             # Strategy 1: Find news items using various selectors
             # Order matters - put specific semantic elements first, wildcards last
             news_selectors = [
@@ -2778,6 +2851,82 @@ class CompanyDataScraper:
                     }
                     # Avoid duplicates
                     if not any(n.get('source_url') == wire_link for n in news_found):
+                        news_found.append(news)
+
+            # Strategy 7: WordPress div.post with month/day spans (Targa Exploration pattern)
+            # Pattern: <div class="post">
+            #            <p class="meta"><span class="month">January</span><span class="day">30</span></p>
+            #            <h3>TITLE</h3>
+            #            <a class="read-more" href="...">Read More</a>
+            #          </div>
+            # Note: Year is NOT in the date element, infer from current context
+            current_year = datetime.now().year
+            posts = soup.find_all('div', class_='post')
+            for post in posts[:50]:  # Limit to 50 posts
+                # Find month and day spans
+                month_span = post.find('span', class_='month')
+                day_span = post.find('span', class_='day')
+
+                if not month_span or not day_span:
+                    continue
+
+                month_text = month_span.get_text(strip=True).lower()
+                day_text = day_span.get_text(strip=True)
+
+                # Map month name to number
+                month_map_full = {
+                    'january': '01', 'february': '02', 'march': '03', 'april': '04',
+                    'may': '05', 'june': '06', 'july': '07', 'august': '08',
+                    'september': '09', 'october': '10', 'november': '11', 'december': '12'
+                }
+                month = month_map_full.get(month_text)
+                if not month:
+                    continue
+
+                day = day_text.zfill(2)
+
+                # Determine year - if month is in the future, use previous year
+                current_month = datetime.now().month
+                post_month = int(month)
+                year = current_year if post_month <= current_month else current_year - 1
+                pub_date = f"{year}-{month}-{day}"
+
+                # Find title in h3
+                title_elem = post.find('h3')
+                if not title_elem:
+                    continue
+                title = title_elem.get_text(strip=True)
+                if not title or len(title) < 15:
+                    continue
+
+                # Find the news URL - prefer "Read More" link to the article, not PDF
+                source_url = None
+                for link in post.find_all('a', class_='read-more'):
+                    href = link.get('href', '')
+                    link_text = link.get_text(strip=True).lower()
+                    # Prefer article link over PDF
+                    if 'pdf' not in link_text and '.pdf' not in href.lower():
+                        source_url = href
+                        break
+                    elif not source_url:
+                        # Use PDF as fallback
+                        source_url = href
+
+                if not source_url:
+                    # Try any link in the post
+                    link = post.find('a', href=True)
+                    if link:
+                        source_url = link.get('href')
+
+                if title and source_url:
+                    news = {
+                        'title': title[:500],
+                        'publication_date': pub_date,
+                        'source_url': source_url if source_url.startswith('http') else urljoin(url, source_url),
+                        'extracted_at': datetime.utcnow().isoformat(),
+                    }
+                    # Avoid duplicates
+                    if not any(n.get('title', '').lower() == title.lower() for n in news_found):
                         news_found.append(news)
 
             # Find news links - look for links that appear to be news items

@@ -374,5 +374,19 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'core.tasks.cleanup_stuck_jobs_task',
         'schedule': crontab(minute='*/15'),  # Every 15 minutes
     },
+
+    # Cleanup orphaned browser (Chrome/Chromium) processes every 10 minutes
+    # Prevents memory accumulation from crashed/frozen scraping tasks
+    'cleanup-browser-processes': {
+        'task': 'core.tasks.cleanup_browser_processes_task',
+        'schedule': crontab(minute='*/10'),  # Every 10 minutes
+    },
+
+    # Worker health check every 5 minutes
+    # Verifies workers are responsive and monitors memory/Chrome process count
+    'celery-worker-health-check': {
+        'task': 'core.tasks.celery_worker_health_check_task',
+        'schedule': crontab(minute='*/5'),  # Every 5 minutes
+    },
 }
 
