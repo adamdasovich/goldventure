@@ -6203,22 +6203,36 @@ def scrape_company_preview(request):
             sections_to_process=sections or ['all'],
             initiated_by=request.user
         )
-
-        # Queue the Celery task
-        scrape_company_website_task.delay(job.id, sections=sections)
-
-        return Response({
-            'success': True,
-            'job_id': job.id,
-            'status': 'pending',
-            'message': 'Scraping job queued. Poll /api/admin/companies/scraping-jobs/<job_id>/ for status.'
-        })
-
     except Exception as e:
+        logger.error(f"[PREVIEW] Failed to create ScrapingJob: {e}")
         return Response(
-            {'error': str(e)},
+            {'error': f'Failed to create job: {str(e)}'},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
+
+    # Queue the Celery task with separate error handling
+    try:
+        task = scrape_company_website_task.delay(job.id, sections=sections)
+        logger.info(f"[PREVIEW] Task {task.id} queued for ScrapingJob {job.id}")
+    except Exception as e:
+        # If task queueing fails (e.g., Redis down), mark job as failed
+        job.status = 'failed'
+        job.error_messages = [f'Failed to queue task: {str(e)}']
+        job.completed_at = timezone.now()
+        job.save()
+        logger.error(f"[PREVIEW] Failed to queue task for job {job.id}: {e}")
+        return Response({
+            'error': 'Failed to queue scraping task. Task queue may be unavailable.',
+            'details': str(e),
+            'job_id': job.id,
+        }, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+
+    return Response({
+        'success': True,
+        'job_id': job.id,
+        'status': 'pending',
+        'message': 'Scraping job queued. Poll /api/admin/companies/scraping-jobs/<job_id>/ for status.'
+    })
 
 
 @api_view(['POST'])
@@ -6265,12 +6279,26 @@ def scrape_company_save(request):
         initiated_by=request.user
     )
 
-    # Trigger async Celery task
-    task = scrape_and_save_company_task.delay(
-        job_id=job.id,
-        update_existing=update_existing,
-        user_id=request.user.id
-    )
+    # Trigger async Celery task with error handling
+    try:
+        task = scrape_and_save_company_task.delay(
+            job_id=job.id,
+            update_existing=update_existing,
+            user_id=request.user.id
+        )
+        logger.info(f"[ONBOARD] Task {task.id} queued for ScrapingJob {job.id}")
+    except Exception as e:
+        # If task queueing fails (e.g., Redis down), mark job as failed
+        job.status = 'failed'
+        job.error_messages = [f'Failed to queue task: {str(e)}']
+        job.completed_at = timezone.now()
+        job.save()
+        logger.error(f"[ONBOARD] Failed to queue task for job {job.id}: {e}")
+        return Response({
+            'error': 'Failed to queue scraping task. Task queue may be unavailable.',
+            'details': str(e),
+            'job_id': job.id,
+        }, status=status.HTTP_503_SERVICE_UNAVAILABLE)
 
     return Response({
         'success': True,

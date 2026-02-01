@@ -310,6 +310,14 @@ CELERY_TASK_TRACK_STARTED = True
 CELERY_TASK_TIME_LIMIT = 30 * 60  # 30 minutes max
 CELERY_RESULT_EXPIRES = 86400  # 24 hours - prevent Redis memory bloat from old results
 
+# CRITICAL: Task reliability settings to prevent task loss
+CELERY_TASK_ACKS_LATE = True  # Acknowledge only after successful completion (prevents loss on worker crash)
+CELERY_TASK_REJECT_ON_WORKER_LOST = True  # Requeue task if worker crashes/loses connection
+CELERY_WORKER_PREFETCH_MULTIPLIER = 1  # Don't prefetch more than 1 task (prevents task hoarding)
+CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True  # Retry Redis connection on startup
+CELERY_BROKER_CONNECTION_RETRY = True  # Keep retrying broker connection
+CELERY_BROKER_CONNECTION_MAX_RETRIES = 10  # Max retries before giving up
+
 # Celery Beat Schedule - Periodic Tasks
 from celery.schedules import crontab
 
