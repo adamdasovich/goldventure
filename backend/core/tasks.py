@@ -1400,9 +1400,8 @@ def scrape_and_save_company_task(self, job_id: int, update_existing: bool = Fals
                     fallback_company = Company.objects.create(
                         name=f"{fallback_name} (pending verification)",
                         website=job.website_url,
-                        country='Canada',  # Default for junior mining
+                        headquarters_country='Canada',  # Default for junior mining
                         description='Company data pending verification - scraped data incomplete.',
-                        is_verified=False,
                     )
                     logger.info(f"[FALLBACK] Created fallback company: {fallback_company.name} (ID: {fallback_company.id})")
 
