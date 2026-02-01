@@ -1098,7 +1098,7 @@ def scrape_mining_news_task(self):
             }
 
 
-@shared_task(bind=True, max_retries=2, default_retry_delay=60, time_limit=600, soft_time_limit=580, acks_late=True, on_failure=log_task_failure)
+@shared_task(bind=True, max_retries=3, default_retry_delay=60, time_limit=1200, soft_time_limit=1140, acks_late=True, on_failure=log_task_failure)
 def scrape_company_website_task(self, job_id: int, sections: list = None):
     """
     Background task to scrape a company website using Crawl4AI.
@@ -1228,7 +1228,7 @@ def scrape_company_website_task(self, job_id: int, sections: list = None):
             }
 
 
-@shared_task(bind=True, max_retries=1, time_limit=600, soft_time_limit=580, acks_late=True, on_failure=log_task_failure)
+@shared_task(bind=True, max_retries=3, default_retry_delay=60, time_limit=1200, soft_time_limit=1140, acks_late=True, on_failure=log_task_failure)
 def scrape_and_save_company_task(self, job_id: int, update_existing: bool = False, user_id: int = None):
     """
     Background task to scrape a company website AND save to database.
@@ -1480,21 +1480,24 @@ def cleanup_stuck_jobs_task(self):
     stuck_running_threshold = now - timedelta(minutes=15)
     stuck_pending_threshold = now - timedelta(minutes=30)
 
-    # Cleanup stuck ScrapingJobs
+    # Cleanup stuck ScrapingJobs - running too long
     stuck_scraping_running = ScrapingJob.objects.filter(
         status='running',
         started_at__lt=stuck_running_threshold
     )
 
+    # Find jobs stuck in pending (never started) for more than 5 minutes
+    stuck_pending_threshold_short = now - timedelta(minutes=5)
     stuck_scraping_pending = ScrapingJob.objects.filter(
         status='pending',
-        started_at__isnull=True
-    ).filter(
-        # Filter by created_at being older than threshold
-        # Note: Django auto-adds created_at if the model has it
+        started_at__isnull=True,
+        created_at__lt=stuck_pending_threshold_short
     )
 
     scraping_fixed = 0
+    scraping_retried = 0
+
+    # Mark stuck running jobs as failed
     for job in stuck_scraping_running:
         duration = (now - job.started_at).total_seconds() / 60
         logger.info(f"[CLEANUP] Marking stuck ScrapingJob {job.id} as failed (running for {duration:.1f} minutes)")
@@ -1503,6 +1506,25 @@ def cleanup_stuck_jobs_task(self):
         job.error_messages = [f'Job stuck in running state for {duration:.1f} minutes. Likely worker crash or restart.']
         job.save()
         scraping_fixed += 1
+
+    # RETRY stuck pending jobs by re-queueing them
+    for job in stuck_scraping_pending:
+        age_minutes = (now - job.created_at).total_seconds() / 60
+        logger.warning(f"[CLEANUP] ScrapingJob {job.id} stuck in pending for {age_minutes:.1f} minutes - retrying...")
+        try:
+            # Re-queue the task
+            from core.tasks import scrape_and_save_company_task
+            task = scrape_and_save_company_task.delay(job_id=job.id, update_existing=False)
+            logger.info(f"[CLEANUP] Re-queued task {task.id} for ScrapingJob {job.id}")
+            scraping_retried += 1
+        except Exception as e:
+            # If retry fails, mark as failed
+            logger.error(f"[CLEANUP] Failed to retry ScrapingJob {job.id}: {e}")
+            job.status = 'failed'
+            job.completed_at = now
+            job.error_messages = [f'Job stuck in pending for {age_minutes:.1f} minutes. Retry failed: {str(e)}']
+            job.save()
+            scraping_fixed += 1
 
     # Cleanup stuck DocumentProcessingJobs
     stuck_processing = DocumentProcessingJob.objects.filter(
@@ -1521,11 +1543,12 @@ def cleanup_stuck_jobs_task(self):
         processing_fixed += 1
 
     total_fixed = scraping_fixed + processing_fixed
-    logger.info(f"[CLEANUP] Fixed {total_fixed} stuck jobs (ScrapingJobs: {scraping_fixed}, DocumentProcessingJobs: {processing_fixed})")
+    logger.info(f"[CLEANUP] Fixed {total_fixed} stuck jobs (ScrapingJobs: {scraping_fixed}, DocumentProcessingJobs: {processing_fixed}), Retried: {scraping_retried}")
 
     return {
         'status': 'success',
         'scraping_jobs_fixed': scraping_fixed,
+        'scraping_jobs_retried': scraping_retried,
         'processing_jobs_fixed': processing_fixed,
         'total_fixed': total_fixed
     }
