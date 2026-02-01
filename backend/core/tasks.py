@@ -1409,6 +1409,11 @@ def scrape_and_save_company_task(self, job_id: int, update_existing: bool = Fals
                 # Run Claude verification to populate the company with real data
                 # This can extract: proper company name, description, projects from website
                 if fallback_company:
+                    # CRITICAL: Link the job to the fallback company to prevent orphaned jobs
+                    job.company = fallback_company
+                    job.save(update_fields=['company'])
+                    logger.info(f"[FALLBACK] Linked ScrapingJob {job.id} to company {fallback_company.id}")
+
                     logger.info(f"[FALLBACK] Running Claude verification on company {fallback_company.id}...")
                     from core.claude_validator import verify_onboarded_company
                     verification = verify_onboarded_company(fallback_company.id)
