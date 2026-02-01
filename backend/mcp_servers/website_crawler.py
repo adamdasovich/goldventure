@@ -1991,6 +1991,73 @@ async def crawl_html_news_pages(url: str, months: int = 6, custom_news_url: str 
             logger.debug(f"WordPress REST API extraction failed: {e}")
 
         # ============================================================
+        # SPECIAL CASE: Strapi CMS API (Q-Gold, React-based sites)
+        # Some mining sites use Strapi headless CMS with React frontend
+        # News is available via /api/news endpoint as JSON
+        # ============================================================
+        try:
+            import aiohttp
+
+            # Try Strapi API endpoint
+            strapi_api_url = f"{base_url}/api/news"
+            print(f"[STRAPI] Checking Strapi CMS API: {strapi_api_url}")
+
+            async with aiohttp.ClientSession() as session:
+                async with session.get(
+                    strapi_api_url,
+                    headers={
+                        "Accept": "application/json",
+                        "User-Agent": "Mozilla/5.0 (compatible; NewsBot/1.0)"
+                    },
+                    timeout=aiohttp.ClientTimeout(total=15)
+                ) as response:
+                    if response.status == 200:
+                        content_type = response.headers.get('Content-Type', '')
+                        if 'application/json' in content_type:
+                            data = await response.json()
+                            # Strapi v4 returns { data: [...] }
+                            items = data.get('data', []) if isinstance(data, dict) else data
+                            if isinstance(items, list) and len(items) > 0:
+                                # Check if this looks like a valid Strapi response
+                                first_item = items[0]
+                                if 'Title' in first_item and 'Date' in first_item:
+                                    items_found = 0
+                                    for item in items:
+                                        try:
+                                            title = item.get('Title', '')
+                                            if not title or len(title) < 15:
+                                                continue
+
+                                            # Parse date (YYYY-MM-DD format)
+                                            date_raw = item.get('Date', '')
+                                            date_str = None
+                                            if date_raw and len(date_raw) >= 10:
+                                                date_str = date_raw[:10]
+
+                                            # Build URL - Strapi items may have documentId or id
+                                            doc_id = item.get('documentId') or item.get('id')
+                                            # Create a slug from the title for the URL
+                                            slug = re.sub(r'[^a-zA-Z0-9]+', '-', title.lower()).strip('-')[:80]
+                                            news_url = f"{base_url}/news/{slug}" if slug else f"{base_url}/news/{doc_id}"
+
+                                            news = {
+                                                'title': clean_news_title(title, news_url),
+                                                'url': news_url,
+                                                'date': date_str,
+                                                'document_type': 'news_release',
+                                                'year': date_str[:4] if date_str else None
+                                            }
+                                            _add_news_item(news_by_url, news, cutoff_date, "STRAPI-API")
+                                            items_found += 1
+                                        except Exception as e:
+                                            logger.debug(f"Skipping malformed Strapi item: {e}")
+                                            continue
+
+                                    print(f"[STRAPI] Found {items_found} news items from Strapi API")
+        except Exception as e:
+            logger.debug(f"Strapi CMS API extraction failed: {e}")
+
+        # ============================================================
         # SPECIAL CASE: Wix Sites with RSS Feed
         # Wix sites render content with JavaScript, making HTML scraping difficult
         # However, Wix blogs have a standard RSS feed at /blog-feed.xml
