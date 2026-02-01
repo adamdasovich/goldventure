@@ -4,6 +4,7 @@ Uses Crawl4AI to automatically extract comprehensive company information from mi
 """
 
 import asyncio
+import logging
 import re
 import sys
 import requests
@@ -13,6 +14,8 @@ from typing import Dict, List, Optional, Any
 from datetime import datetime
 from bs4 import BeautifulSoup
 from crawl4ai import AsyncWebCrawler, BrowserConfig, CrawlerRunConfig
+
+logger = logging.getLogger(__name__)
 
 
 def is_safe_url(url: str) -> bool:
