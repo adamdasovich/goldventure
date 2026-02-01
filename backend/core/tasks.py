@@ -1390,7 +1390,7 @@ def scrape_and_save_company_task(self, job_id: int, update_existing: bool = Fals
                 fallback_name = domain.split('.')[0].title()  # "libertygold" -> "Libertygold"
 
                 # Check if company already exists with this URL
-                existing = Company.objects.filter(website_url__icontains=domain).first()
+                existing = Company.objects.filter(website__icontains=domain).first()
                 if existing:
                     logger.info(f"[FALLBACK] Company already exists for {domain}: {existing.name} (ID: {existing.id})")
                     fallback_company = existing
@@ -1399,7 +1399,7 @@ def scrape_and_save_company_task(self, job_id: int, update_existing: bool = Fals
                     logger.info(f"[FALLBACK] Creating minimal company record for {job.website_url}")
                     fallback_company = Company.objects.create(
                         name=f"{fallback_name} (pending verification)",
-                        website_url=job.website_url,
+                        website=job.website_url,
                         country='Canada',  # Default for junior mining
                         description='Company data pending verification - scraped data incomplete.',
                         is_verified=False,
