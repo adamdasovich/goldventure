@@ -2142,6 +2142,96 @@ async def crawl_html_news_pages(url: str, months: int = 6, custom_news_url: str 
         except Exception as e:
             logger.debug(f"Wix RSS feed extraction failed: {e}")
 
+        # ============================================================
+        # SPECIAL CASE: Wix Sites without RSS (Red Canyon pattern)
+        # Some Wix sites don't have RSS but use /news/ page with posts
+        # Posts have URLs like /news/article-slug and dates as "Jan 26, 2026"
+        # ============================================================
+        try:
+            wix_news_url = f"{base_url}/news"
+            print(f"[WIX-HTML] Checking Wix news page: {wix_news_url}")
+
+            wix_result = await crawler.arun(url=wix_news_url, config=crawler_config)
+            if wix_result.success:
+                wix_soup = BeautifulSoup(wix_result.html, 'html.parser')
+
+                # Check if this looks like a Wix site
+                is_wix = 'wix' in wix_result.html.lower() or 'parastorage' in wix_result.html.lower()
+
+                if is_wix:
+                    # Find all news links (Wix uses /news/slug pattern)
+                    news_links = []
+                    for a in wix_soup.find_all('a', href=True):
+                        href = a.get('href', '')
+                        # Normalize URL
+                        if href.startswith('/'):
+                            href = urljoin(base_url, href)
+                        # Check for news article pattern - look for /news/ followed by a slug
+                        # Skip bare /news or /news/ links
+                        if '/news/' in href:
+                            # Extract path after /news/
+                            news_idx = href.find('/news/')
+                            path_after_news = href[news_idx + 6:].rstrip('/')
+                            # Must have a slug (not empty)
+                            if path_after_news and path_after_news != 'news':
+                                text = a.get_text(strip=True)
+                                # If text is generic like "Read More", extract title from URL slug
+                                if not text or text.lower() in ['read more', 'news', 'more', 'view']:
+                                    # Extract title from URL slug
+                                    slug = path_after_news.split('?')[0].split('#')[0]
+                                    text = slug.replace('-', ' ').replace('%20', ' ').title()
+                                if text and len(text) > 5:
+                                    news_links.append({'url': href, 'title': text})
+
+                    # Find all dates in span elements (format: "Jan 26, 2026")
+                    dates_found = []
+                    date_pattern = re.compile(r'(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]* (\d{1,2}),? (\d{4})')
+                    for span in wix_soup.find_all('span'):
+                        text = span.get_text(strip=True)
+                        match = date_pattern.match(text)
+                        if match:
+                            month_abbr, day, year = match.groups()
+                            month_map = {'Jan': '01', 'Feb': '02', 'Mar': '03', 'Apr': '04', 'May': '05', 'Jun': '06',
+                                        'Jul': '07', 'Aug': '08', 'Sep': '09', 'Oct': '10', 'Nov': '11', 'Dec': '12'}
+                            date_str = f"{year}-{month_map.get(month_abbr[:3], '01')}-{int(day):02d}"
+                            dates_found.append(date_str)
+
+                    # Remove duplicate dates (they often appear twice)
+                    unique_dates = list(dict.fromkeys(dates_found))
+
+                    # Match news links with dates (assuming same order)
+                    # Filter to unique URLs
+                    seen_urls = set()
+                    unique_links = []
+                    for link in news_links:
+                        url_clean = link['url'].rstrip('/').lower()
+                        if url_clean not in seen_urls:
+                            seen_urls.add(url_clean)
+                            unique_links.append(link)
+
+                    items_found = 0
+                    for i, link in enumerate(unique_links):
+                        try:
+                            date_str = unique_dates[i] if i < len(unique_dates) else None
+
+                            news = {
+                                'title': clean_news_title(link['title'], link['url']),
+                                'url': link['url'],
+                                'date': date_str,
+                                'document_type': 'news_release',
+                                'year': date_str[:4] if date_str else None
+                            }
+                            if _add_news_item(news_by_url, news, cutoff_date, "WIX-HTML"):
+                                items_found += 1
+                        except Exception as e:
+                            logger.debug(f"Skipping malformed Wix HTML item: {e}")
+                            continue
+
+                    if items_found > 0:
+                        print(f"[WIX-HTML] Found {items_found} news items from Wix HTML")
+        except Exception as e:
+            logger.debug(f"Wix HTML extraction failed: {e}")
+
         # Streamlined news page patterns
         # IMPORTANT: Order matters! Year-based patterns should be early to capture
         # historical news before timeout kicks in (60-90 seconds)
