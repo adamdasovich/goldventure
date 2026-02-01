@@ -636,3 +636,4 @@ When making changes, check for:
 - [ ] Tokens in localStorage (should be httpOnly cookies)
 - [ ] URL inputs without server-side validation
 - [ ] Missing Content-Security-Policy header
+| 2026-02-01 | Silver X Mining had only 1 news item instead of 100 | `company_scraper.py` had 6+ HTML-based news extraction strategies but NO WordPress REST API support - even though `website_crawler.py` had it. Many WordPress sites (Silver X Mining, Silvercorp) have REST API at `/wp-json/wp/v2/posts` returning news as JSON. Fix: Added Strategy 0 (WordPress REST API) to `_scrape_news_page()` in `company_scraper.py` - checks API BEFORE HTML scraping. LESSON: Two scrapers (`company_scraper.py` for onboarding, `website_crawler.py` for daily scrapes) - ensure both have same detection capabilities! |

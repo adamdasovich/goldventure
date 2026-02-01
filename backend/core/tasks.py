@@ -1554,6 +1554,188 @@ def cleanup_stuck_jobs_task(self):
     }
 
 
+@shared_task(bind=True, time_limit=120, soft_time_limit=100, on_failure=log_task_failure)
+def cleanup_browser_processes_task(self):
+    """
+    Periodic task to clean up orphaned Chrome/Chromium processes.
+
+    These processes are spawned by crawl4ai/playwright during web scraping.
+    If a Celery worker crashes or gets OOM-killed, the browser processes
+    can become orphaned and accumulate, consuming memory.
+
+    This task:
+    1. Finds Chrome processes older than 10 minutes (should complete within that time)
+    2. Kills them gracefully, then forcefully if needed
+    3. Cleans up /tmp/playwright* directories
+
+    Runs every 10 minutes to prevent memory accumulation.
+    """
+    import subprocess
+    import os
+
+    logger.info("[BROWSER-CLEANUP] Starting browser process cleanup...")
+
+    killed_count = 0
+    errors = []
+
+    try:
+        # Find Chrome/Chromium processes older than 10 minutes
+        # Using ps with elapsed time (etime) to find old processes
+        result = subprocess.run(
+            ['ps', 'aux'],
+            capture_output=True,
+            text=True,
+            timeout=30
+        )
+
+        if result.returncode == 0:
+            lines = result.stdout.strip().split('\n')
+            for line in lines:
+                # Look for Chrome/Chromium processes
+                if 'chrome' in line.lower() or 'chromium' in line.lower():
+                    parts = line.split()
+                    if len(parts) >= 2:
+                        pid = parts[1]
+                        try:
+                            # Check process age using /proc/<pid>/stat
+                            stat_file = f'/proc/{pid}/stat'
+                            if os.path.exists(stat_file):
+                                # Get process start time
+                                with open(stat_file, 'r') as f:
+                                    stat = f.read().split()
+                                    # Field 22 is starttime (in clock ticks since boot)
+                                    if len(stat) > 21:
+                                        starttime = int(stat[21])
+                                        # Get system uptime
+                                        with open('/proc/uptime', 'r') as u:
+                                            uptime = float(u.read().split()[0])
+                                        # Get clock ticks per second
+                                        clk_tck = os.sysconf(os.sysconf_names['SC_CLK_TCK'])
+                                        # Calculate process age in seconds
+                                        process_age = uptime - (starttime / clk_tck)
+
+                                        # Kill if older than 10 minutes (600 seconds)
+                                        if process_age > 600:
+                                            logger.info(f"[BROWSER-CLEANUP] Killing old Chrome process {pid} (age: {process_age/60:.1f} min)")
+                                            # Try graceful kill first
+                                            subprocess.run(['kill', '-15', pid], timeout=5)
+                                            # Give it a moment
+                                            import time
+                                            time.sleep(1)
+                                            # Force kill if still running
+                                            if os.path.exists(f'/proc/{pid}'):
+                                                subprocess.run(['kill', '-9', pid], timeout=5)
+                                            killed_count += 1
+                        except (ValueError, FileNotFoundError, PermissionError) as e:
+                            # Process may have already exited
+                            pass
+                        except Exception as e:
+                            errors.append(f"Error checking process {pid}: {e}")
+
+        # Clean up old playwright temp directories
+        import glob
+        import shutil
+        playwright_dirs = glob.glob('/tmp/playwright_*')
+        cleaned_dirs = 0
+        for pdir in playwright_dirs:
+            try:
+                # Check if directory is older than 15 minutes
+                dir_age = time.time() - os.path.getmtime(pdir)
+                if dir_age > 900:  # 15 minutes
+                    shutil.rmtree(pdir, ignore_errors=True)
+                    cleaned_dirs += 1
+            except Exception as e:
+                errors.append(f"Error cleaning {pdir}: {e}")
+
+        logger.info(f"[BROWSER-CLEANUP] Killed {killed_count} old Chrome processes, cleaned {cleaned_dirs} temp dirs")
+
+    except Exception as e:
+        logger.error(f"[BROWSER-CLEANUP] Error during cleanup: {e}")
+        errors.append(str(e))
+
+    return {
+        'status': 'success',
+        'killed_processes': killed_count,
+        'errors': errors[:5] if errors else []  # Limit errors in response
+    }
+
+
+@shared_task(bind=True, time_limit=60, soft_time_limit=50, on_failure=log_task_failure)
+def celery_worker_health_check_task(self):
+    """
+    Periodic health check task that verifies Celery workers are responsive.
+
+    This task simply runs and returns success. If Celery workers are frozen
+    or unresponsive, this task will timeout and the failure will be logged.
+
+    Additionally, it logs memory usage to help detect memory pressure issues
+    before they cause OOM kills.
+    """
+    import subprocess
+
+    logger.info("[HEALTH-CHECK] Celery worker health check running...")
+
+    health_data = {
+        'status': 'healthy',
+        'worker_id': self.request.id,
+        'timestamp': timezone.now().isoformat()
+    }
+
+    try:
+        # Check memory usage
+        result = subprocess.run(
+            ['free', '-m'],
+            capture_output=True,
+            text=True,
+            timeout=10
+        )
+        if result.returncode == 0:
+            lines = result.stdout.strip().split('\n')
+            for line in lines:
+                if line.startswith('Mem:'):
+                    parts = line.split()
+                    if len(parts) >= 3:
+                        total_mb = int(parts[1])
+                        used_mb = int(parts[2])
+                        free_mb = int(parts[3]) if len(parts) > 3 else 0
+                        health_data['memory'] = {
+                            'total_mb': total_mb,
+                            'used_mb': used_mb,
+                            'free_mb': free_mb,
+                            'percent_used': round(used_mb / total_mb * 100, 1)
+                        }
+
+                        # Warn if memory is critically low (< 500MB free)
+                        if free_mb < 500:
+                            logger.warning(f"[HEALTH-CHECK] LOW MEMORY WARNING: Only {free_mb}MB free!")
+                            health_data['status'] = 'warning'
+                            health_data['warning'] = f'Low memory: {free_mb}MB free'
+
+        # Count Chrome processes
+        result = subprocess.run(
+            ['bash', '-c', 'ps aux | grep -c "[c]hrome"'],
+            capture_output=True,
+            text=True,
+            timeout=10
+        )
+        if result.returncode == 0:
+            chrome_count = int(result.stdout.strip())
+            health_data['chrome_processes'] = chrome_count
+
+            # Warn if too many Chrome processes (> 30)
+            if chrome_count > 30:
+                logger.warning(f"[HEALTH-CHECK] HIGH CHROME COUNT: {chrome_count} processes!")
+                health_data['status'] = 'warning'
+                health_data['warning'] = f'High Chrome count: {chrome_count}'
+
+    except Exception as e:
+        logger.error(f"[HEALTH-CHECK] Error collecting health data: {e}")
+        health_data['error'] = str(e)
+
+    logger.info(f"[HEALTH-CHECK] Health check complete: {health_data.get('status')}")
+    return health_data
+
+
 @shared_task(bind=True, max_retries=2, default_retry_delay=60, time_limit=300, soft_time_limit=280, on_failure=log_task_failure)
 def process_company_news_for_rag_task(self, company_id: int, limit: int = 20):
     """
