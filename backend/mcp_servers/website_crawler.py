@@ -486,6 +486,8 @@ def is_news_article_url(url: str) -> bool:
         'stockwatch.com', 'youtube.com', 'twitter.com', 'linkedin.com',
         'facebook.com', 'instagram.com', 'seekingalpha.com', 'fool.com',
         'investingnews.com', 'juniorminingnetwork.com', 'ceo.ca',
+        # Media commentary/interview sites
+        'caesarsreport.com', 'kereport.com', 'themarketmindset.ca',
     ]
     if any(site in url_lower for site in media_coverage_sites):
         return False
@@ -1526,9 +1528,10 @@ def _extract_news_from_element(element, source_url: str, base_url: str) -> Optio
             date_str = parse_date_standalone(date_elem.get_text(strip=True))
 
         # Strategy 2: Look for dedicated title element (div.title, div.news-title)
-        title_elem = element.find('div', class_='title')
+        # Use lambda for multi-class matching (e.g., class="column small-12 news-title")
+        title_elem = element.find('div', class_=lambda c: c and ('title' in c if isinstance(c, list) else c == 'title'))
         if not title_elem:
-            title_elem = element.find('div', class_='news-title')  # GoldMining, Troilus pattern
+            title_elem = element.find('div', class_=lambda c: c and ('news-title' in c if isinstance(c, list) else c == 'news-title'))
         if title_elem:
             title_link = title_elem.find('a', href=True)
             if title_link:

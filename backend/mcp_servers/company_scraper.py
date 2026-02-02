@@ -3281,6 +3281,23 @@ class CompanyDataScraper:
         if not news.get('title') or not news.get('publication_date'):
             return None
 
+        # BLOCKLIST: Filter out third-party media coverage sites
+        # These are NOT official press releases - they're external articles ABOUT the company
+        # Company websites sometimes link to these in "In the News" sections
+        media_coverage_sites = [
+            'mining.com', 'northernminer.com', 'kitco.com', 'proactiveinvestors.com',
+            'smallcappower.com', 'resourceworld.com', 'miningweekly.com',
+            'stockwatch.com', 'youtube.com', 'twitter.com', 'linkedin.com',
+            'facebook.com', 'instagram.com', 'seekingalpha.com', 'fool.com',
+            'investingnews.com', 'juniorminingnetwork.com', 'ceo.ca',
+            # Media commentary/interview sites
+            'caesarsreport.com', 'kereport.com', 'themarketmindset.ca',
+        ]
+        news_url = news.get('source_url', '').lower()
+        if any(site in news_url for site in media_coverage_sites):
+            logger.debug(f"Filtering out media coverage URL: {news_url}")
+            return None
+
         return news
 
     def _parse_date_text(self, text: str) -> Optional[str]:
