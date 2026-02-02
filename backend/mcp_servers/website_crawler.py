@@ -1361,7 +1361,27 @@ async def crawl_news_releases(url: str, months: int = 6, max_depth: int = 2, cus
     seen_titles = set()
     unique_news = []
     for news in html_news_sorted:
-        url_normalized = news['url'].split('?')[0].rstrip('/')
+        # URL normalization: preserve ID-like query params (content_id, id, article, etc.)
+        # This is critical for PHP sites like Aztec that use index.php?content_id=XXX
+        raw_url = news['url']
+        if '?' in raw_url:
+            base_url, query_string = raw_url.split('?', 1)
+            id_params = []
+            for param in query_string.split('&'):
+                if '=' in param:
+                    key, value = param.split('=', 1)
+                    key_lower = key.lower()
+                    # Keep params that look like content identifiers
+                    if any(id_key in key_lower for id_key in ['id', 'article', 'news', 'post', 'content', 'release']):
+                        id_params.append(f"{key}={value}")
+            # Rebuild URL with only ID params
+            if id_params:
+                url_normalized = f"{base_url.rstrip('/')}?{'&'.join(sorted(id_params))}"
+            else:
+                url_normalized = base_url.rstrip('/')
+        else:
+            url_normalized = raw_url.rstrip('/')
+
         # Normalize title for comparison (lowercase, remove extra spaces)
         title_normalized = re.sub(r'\s+', ' ', news.get('title', '').lower().strip())
         # Create title+date key to allow same title with different dates (recurring reports)
