@@ -2004,7 +2004,14 @@ async def crawl_html_news_pages(url: str, months: int = 6, custom_news_url: str 
                                 # Check if this looks like a valid WP posts response
                                 first_post = data[0]
                                 if 'title' in first_post and 'link' in first_post and 'date' in first_post:
+                                    # Spam filter keywords - skip posts with these in title
+                                    # (some WordPress sites have compromised databases)
+                                    spam_keywords = ['casino', 'poker', 'gambling', 'slot', 'bitcoin',
+                                                    'freispiele', 'giros', 'spins', 'ruleta', 'tragamonedas',
+                                                    'spielautomat', 'jackpot slot', 'betting', 'sportsbook']
+
                                     items_found = 0
+                                    spam_count = 0
                                     for post in data:
                                         try:
                                             # Extract title (may contain HTML entities)
@@ -2016,6 +2023,12 @@ async def crawl_html_news_pages(url: str, months: int = 6, custom_news_url: str 
                                             title = title.replace('&#8220;', '"').replace('&#8221;', '"')
 
                                             if not title or len(title) < 15:
+                                                continue
+
+                                            # Skip spam content
+                                            title_lower = title.lower()
+                                            if any(spam in title_lower for spam in spam_keywords):
+                                                spam_count += 1
                                                 continue
 
                                             # Parse date from ISO format (2026-01-27T14:05:41)
@@ -2041,6 +2054,8 @@ async def crawl_html_news_pages(url: str, months: int = 6, custom_news_url: str 
                                             logger.debug(f"Skipping malformed WordPress post: {e}")
                                             continue
 
+                                    if spam_count > 0:
+                                        print(f"[WORDPRESS] Filtered {spam_count} spam posts")
                                     print(f"[WORDPRESS] Found {items_found} news items from REST API")
         except Exception as e:
             logger.debug(f"WordPress REST API extraction failed: {e}")
@@ -2286,6 +2301,97 @@ async def crawl_html_news_pages(url: str, months: int = 6, custom_news_url: str 
                         print(f"[WIX-HTML] Found {items_found} news items from Wix HTML")
         except Exception as e:
             logger.debug(f"Wix HTML extraction failed: {e}")
+
+        # ============================================================
+        # SPECIAL CASE: Investors page with news-item divs (Bulgold pattern)
+        # Some sites have news on /investors/ page with custom structure:
+        # <div class="news-item col-md-12" data-year="2025">
+        #   <a class="news-item-base-cont" href="...">
+        #     <div class="news-item-date">
+        #       <div class="news-item-date-day">12</div>
+        #       <div class="news-item-date-month">Dec</div>
+        #       <div class="news-item-date-year">2025</div>
+        #     </div>
+        #     <div class="news-item-title">Title Here</div>
+        #   </a>
+        # </div>
+        # ============================================================
+        try:
+            investors_url = f"{base_url}/investors/"
+            print(f"[INVESTORS-PAGE] Checking investors page: {investors_url}")
+
+            inv_result = await crawler.arun(url=investors_url, config=crawler_config)
+            if inv_result.success:
+                inv_soup = BeautifulSoup(inv_result.html, 'html.parser')
+
+                # Look for news-item divs with data-year attribute
+                news_items = inv_soup.find_all('div', class_=lambda c: c and 'news-item' in c, attrs={'data-year': True})
+
+                if news_items:
+                    items_found = 0
+                    month_map = {'jan': '01', 'feb': '02', 'mar': '03', 'apr': '04', 'may': '05', 'jun': '06',
+                                'jul': '07', 'aug': '08', 'sep': '09', 'oct': '10', 'nov': '11', 'dec': '12'}
+
+                    for item in news_items:
+                        try:
+                            # Get link
+                            link = item.find('a', class_='news-item-base-cont')
+                            if not link:
+                                link = item.find('a', href=True)
+                            if not link:
+                                continue
+
+                            href = link.get('href', '')
+                            if not href:
+                                continue
+                            if href.startswith('/'):
+                                href = urljoin(base_url, href)
+
+                            # Skip PDF links
+                            if href.endswith('.pdf'):
+                                continue
+
+                            # Get title
+                            title_elem = item.find(class_='news-item-title')
+                            if not title_elem:
+                                continue
+                            title = title_elem.get_text(strip=True)
+                            if not title or len(title) < 10:
+                                continue
+
+                            # Get date from separate day/month/year elements
+                            day_elem = item.find(class_='news-item-date-day')
+                            month_elem = item.find(class_='news-item-date-month')
+                            year_elem = item.find(class_='news-item-date-year')
+
+                            date_str = None
+                            if day_elem and month_elem and year_elem:
+                                day = day_elem.get_text(strip=True).zfill(2)
+                                month_text = month_elem.get_text(strip=True).lower()[:3]
+                                year = year_elem.get_text(strip=True)
+                                month = month_map.get(month_text, '01')
+                                date_str = f"{year}-{month}-{day}"
+                            elif item.get('data-year'):
+                                # Fallback to data-year attribute
+                                date_str = f"{item.get('data-year')}-01-01"
+
+                            news = {
+                                'title': clean_news_title(title, href),
+                                'url': href,
+                                'date': date_str,
+                                'document_type': 'news_release',
+                                'year': date_str[:4] if date_str else None
+                            }
+                            if _add_news_item(news_by_url, news, cutoff_date, "INVESTORS-PAGE"):
+                                items_found += 1
+                        except Exception as e:
+                            logger.debug(f"Skipping malformed investors page item: {e}")
+                            continue
+
+                    if items_found > 0:
+                        print(f"[INVESTORS-PAGE] Found {items_found} news items from investors page")
+        except Exception as e:
+            logger.debug(f"Investors page extraction failed: {e}")
 
         # Streamlined news page patterns
         # IMPORTANT: Order matters! Year-based patterns should be early to capture
