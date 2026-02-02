@@ -1643,7 +1643,28 @@ def _add_news_item(news_by_url: Dict[str, Dict], news: Dict, cutoff_date: dateti
     """
     global _seen_slugs
 
-    url_norm = news['url'].split('?')[0].rstrip('/')
+    # URL normalization: preserve ID-like query params, strip tracking params
+    # PHP sites often use ?content_id=123, ?id=456, ?news_id=789 for unique content
+    url = news['url']
+    if '?' in url:
+        base_url, query_string = url.split('?', 1)
+        # Parse query params and keep ID-like ones
+        id_params = []
+        for param in query_string.split('&'):
+            if '=' in param:
+                key, value = param.split('=', 1)
+                key_lower = key.lower()
+                # Keep params that look like content identifiers
+                if any(id_key in key_lower for id_key in ['id', 'article', 'news', 'post', 'content', 'release']):
+                    id_params.append(f"{key}={value}")
+        # Rebuild URL with only ID params
+        if id_params:
+            url_norm = f"{base_url.rstrip('/')}?{'&'.join(sorted(id_params))}"
+        else:
+            url_norm = base_url.rstrip('/')
+    else:
+        url_norm = url.rstrip('/')
+
     slug = _extract_url_slug(news['url'])
 
     # Check date range first
