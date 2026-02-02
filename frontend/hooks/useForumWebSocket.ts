@@ -27,6 +27,7 @@ export interface TypingUser {
 interface WebSocketMessage {
   type: string;
   message?: ForumMessage;
+  message_id?: number;
   error?: string;
   messages?: ForumMessage[];
   online_users?: ForumUser[];
@@ -105,11 +106,9 @@ export function useForumWebSocket({ discussionId, token, onError }: UseForumWebS
             break;
 
           case 'message.deleted':
-            // Keep the message but mark it as deleted in the UI
+            // Remove the message from the UI (backend sends message_id, not message object)
             setMessages((prev) =>
-              prev.map((msg) =>
-                msg.id === data.message?.id ? { ...msg, is_deleted: true } : msg
-              )
+              prev.filter((msg) => msg.id !== data.message_id)
             );
             break;
 
