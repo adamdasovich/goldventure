@@ -2469,6 +2469,21 @@ class CompanyDataScraper:
                                                 if not title or len(title) < 15:
                                                     continue
 
+                                                # Filter out placeholder/Lorem ipsum content
+                                                # Many WordPress sites have demo posts that should be skipped
+                                                title_lower = title.lower()
+                                                placeholder_indicators = [
+                                                    'lorem ipsum', 'dolor sit amet', 'consectetur adipiscing',
+                                                    'fusce aliquam', 'aliquam erat', 'quisque semper',
+                                                    'nulla sodales', 'maecenas sit amet', 'mauris at orci',
+                                                    'praesent tempus', 'nam turpis', 'aliquam bibendum',
+                                                    'dictum posuere', 'glavrida', 'ullamcorper mattis',
+                                                    'dignissim tellus', 'commodo tellus'
+                                                ]
+                                                if any(indicator in title_lower for indicator in placeholder_indicators):
+                                                    logger.debug(f"Skipping placeholder WordPress post: {title[:50]}")
+                                                    continue
+
                                                 # Parse date from ISO format (2026-01-27T14:05:41)
                                                 date_raw = post.get('date', '')
                                                 date_str = None
@@ -2514,6 +2529,82 @@ class CompanyDataScraper:
                     # Only break if we found meaningful news items
                     if len(news_found) >= 3:
                         break
+
+            # Strategy 1.5: Simple heading+link pattern (Troy Minerals, many WordPress themes)
+            # Pattern: <h2><a href="/news/article-title/">News Title</a></h2>
+            # or: <h3><a href="/news/article-title/">News Title</a></h3>
+            # These sites don't use article/post containers, just headings with links
+            if not news_found or len(news_found) < 3:
+                # Look for headings containing links to news articles
+                for heading in soup.find_all(['h2', 'h3', 'h4']):
+                    link = heading.find('a', href=True)
+                    if not link:
+                        continue
+
+                    href = link.get('href', '')
+                    title = link.get_text(strip=True)
+
+                    # Skip if title too short or href doesn't look like news
+                    if not title or len(title) < 20:
+                        continue
+
+                    # Check if the URL looks like a news article
+                    href_lower = href.lower()
+                    is_news_url = any(p in href_lower for p in [
+                        '/news/', '/press/', '/release/', '/announcement/',
+                        '/news-release', '/press-release', '/media/'
+                    ])
+
+                    if not is_news_url:
+                        continue
+
+                    # Skip navigation/menu items
+                    skip_patterns = ['contact', 'about', 'team', 'investor', 'project', 'subscribe']
+                    if any(p in title.lower() for p in skip_patterns):
+                        continue
+
+                    # Try to find a date near this heading (parent or sibling elements)
+                    pub_date = None
+                    parent = heading.parent
+                    if parent:
+                        parent_text = parent.get_text(strip=True)
+                        # Look for date patterns
+                        date_patterns = [
+                            (r'(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{1,2}),?\s+(\d{4})', 'long'),
+                            (r'(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{1,2}),?\s+(\d{4})', 'short'),
+                        ]
+                        month_map_long = {
+                            'january': '01', 'february': '02', 'march': '03', 'april': '04',
+                            'may': '05', 'june': '06', 'july': '07', 'august': '08',
+                            'september': '09', 'october': '10', 'november': '11', 'december': '12'
+                        }
+                        month_map_short = {
+                            'jan': '01', 'feb': '02', 'mar': '03', 'apr': '04',
+                            'may': '05', 'jun': '06', 'jul': '07', 'aug': '08',
+                            'sep': '09', 'oct': '10', 'nov': '11', 'dec': '12'
+                        }
+                        for pattern, fmt in date_patterns:
+                            match = re.search(pattern, parent_text, re.IGNORECASE)
+                            if match:
+                                month_str = match.group(1).lower()
+                                if fmt == 'long':
+                                    month = month_map_long.get(month_str, '01')
+                                else:
+                                    month = month_map_short.get(month_str[:3], '01')
+                                day = match.group(2).zfill(2)
+                                year = match.group(3)
+                                pub_date = f"{year}-{month}-{day}"
+                                break
+
+                    news = {
+                        'title': title[:500],
+                        'publication_date': pub_date,
+                        'source_url': urljoin(url, href),
+                        'extracted_at': datetime.utcnow().isoformat(),
+                    }
+                    # Avoid duplicates
+                    if not any(n.get('source_url') == news['source_url'] for n in news_found):
+                        news_found.append(news)
 
             # Strategy 2: Handle grid-based news layouts (like Silver Spruce's uk-grid)
             # Look for grids containing date + title + VIEW/PDF links
