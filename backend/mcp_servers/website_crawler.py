@@ -966,12 +966,10 @@ class MiningDocumentCrawler:
             elif any(kw in combined_text for kw in ['financial', 'annual-report', 'quarterly', '/financial']):
                 doc_type = 'financial_statement'
 
-            # Try to extract FULL DATE - PRIORITIZE URL-based dates over HTML-extracted dates
-            # URL dates (like nr-20250815.pdf) are more reliable than HTML page scraping
-            full_date = None
+            # Try to extract FULL DATE
+            # Priority: 1) HTML-extracted date from page, 2) URL-based patterns
+            full_date = pdf.get('extracted_date')  # Date extracted from HTML in _extract_news_titles
             year = None
-            
-            # First try URL-based patterns (most reliable)
 
             # Month name to number mapping
             month_map = {
