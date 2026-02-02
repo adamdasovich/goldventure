@@ -466,13 +466,20 @@ class ForumConsumer(AsyncWebsocketConsumer):
         try:
             message = ForumMessage.objects.get(id=message_id, is_deleted=False)
 
-            # Check permissions
-            can_delete = (message.user == self.user) or self.user.user_type == 'admin'
+            # Refresh user from database to get current permissions
+            fresh_user = User.objects.get(id=self.user.id)
+
+            # Check permissions - user owns message OR is admin/superuser
+            can_delete = (
+                message.user_id == fresh_user.id or
+                fresh_user.user_type == 'admin' or
+                fresh_user.is_superuser
+            )
 
             if can_delete:
                 message.is_deleted = True
                 message.deleted_at = timezone.now()
-                message.deleted_by = self.user
+                message.deleted_by = fresh_user
                 message.save(update_fields=['is_deleted', 'deleted_at', 'deleted_by'])
 
                 # Update discussion message count
