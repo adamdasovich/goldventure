@@ -229,9 +229,10 @@ def parse_date_standalone(text: str) -> Optional[str]:
         return None
     text = text.strip()
 
-    # XX.XX.YYYY - Dot-separated dates are typically DD.MM.YYYY (European/international format)
-    # US sites rarely use dots; they prefer slashes (MM/DD/YYYY)
-    # Try DD.MM.YYYY first for dot-separated dates
+    # XX.XX.YYYY - Dot-separated dates
+    # Mining company websites are predominantly North American and use MM.DD.YYYY
+    # Even with dots (e.g., Aztec Minerals uses 01.07.2026 for January 7th)
+    # Prefer MM.DD.YYYY for ambiguous cases
     match = re.match(r'^(\d{1,2})\.(\d{1,2})\.(20\d{2}|\d{2})$', text)
     if match:
         first, second, year = match.groups()
@@ -242,14 +243,14 @@ def parse_date_standalone(text: str) -> Optional[str]:
         # If first > 12, it MUST be DD.MM.YYYY (e.g., 22.01.2026)
         if first_int > 12 and 1 <= second_int <= 12:
             return f"{year}-{second.zfill(2)}-{first.zfill(2)}"
-        # If second > 12, it MUST be MM.DD.YYYY (e.g., 01.22.2026 - rare with dots)
+        # If second > 12, it MUST be MM.DD.YYYY (e.g., 01.22.2026)
         elif second_int > 12 and 1 <= first_int <= 12:
             return f"{year}-{first.zfill(2)}-{second.zfill(2)}"
-        # Ambiguous (both <= 12): prefer DD.MM.YYYY for dot-separated dates (European default)
-        elif 1 <= second_int <= 12 and 1 <= first_int <= 31:
-            return f"{year}-{second.zfill(2)}-{first.zfill(2)}"
-        # Fallback to MM.DD.YYYY
-        return f"{year}-{first.zfill(2)}-{second.zfill(2)}"
+        # Ambiguous (both <= 12): prefer MM.DD.YYYY for North American mining sites
+        elif 1 <= first_int <= 12 and 1 <= second_int <= 31:
+            return f"{year}-{first.zfill(2)}-{second.zfill(2)}"
+        # Fallback to DD.MM.YYYY
+        return f"{year}-{second.zfill(2)}-{first.zfill(2)}"
 
     # Month DD, YYYY (1911 Gold: December 17, 2025)
     match = re.match(
