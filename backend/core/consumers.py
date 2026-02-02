@@ -469,12 +469,17 @@ class ForumConsumer(AsyncWebsocketConsumer):
             # Refresh user from database to get current permissions
             fresh_user = User.objects.get(id=self.user.id)
 
+            # Debug logging
+            logger.info(f"[DELETE_DEBUG] message_id={message_id}, message.user_id={message.user_id}")
+            logger.info(f"[DELETE_DEBUG] fresh_user.id={fresh_user.id}, user_type='{fresh_user.user_type}', is_superuser={fresh_user.is_superuser}")
+
             # Check permissions - user owns message OR is admin/superuser
             can_delete = (
                 message.user_id == fresh_user.id or
                 fresh_user.user_type == 'admin' or
                 fresh_user.is_superuser
             )
+            logger.info(f"[DELETE_DEBUG] can_delete={can_delete}")
 
             if can_delete:
                 message.is_deleted = True
@@ -493,6 +498,7 @@ class ForumConsumer(AsyncWebsocketConsumer):
                 return True
             return False
         except ForumMessage.DoesNotExist:
+            logger.info(f"[DELETE_DEBUG] Message {message_id} not found or already deleted")
             return False
 
     @database_sync_to_async
