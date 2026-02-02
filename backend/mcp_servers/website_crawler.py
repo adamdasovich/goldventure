@@ -2437,6 +2437,10 @@ async def crawl_html_news_pages(url: str, months: int = 6, custom_news_url: str 
             f'{url}/investors/news-releases/',  # Canada Nickel
             f'{url}/investor-relations/news-releases/',  # NEO Battery Materials
             f'{url}/investor-relations/press-releases/',  # IR press releases pattern
+            # News-and-media patterns (Bunker Hill Mining)
+            f'{url}/news-and-media/',
+            f'{url}/news-and-media/news-releases/',
+            f'{url}/news-and-media/press-releases/',
             f'{url}/news/press-releases/',
             f'{url}/news/{current_year}/',  # Garibaldi, Silver Tiger (year-based)
             f'{url}/news/{current_year - 1}/',  # Previous year - Silver Tiger has /news/2025/
