@@ -3571,6 +3571,68 @@ async def crawl_html_news_pages(url: str, months: int = 6, custom_news_url: str 
                         continue  # Skip malformed item, continue with next
 
                 # ============================================================
+                # STRATEGY 4i: ProcessWire CMS / Generic PDF List pattern (Viva Gold)
+                # Structure: <li> elements containing PDF links with dates in sibling text
+                # Example: <li><div><div>Jan 14, 2026</div></div><div><a href="...pdf">Title</a></div></li>
+                # Key: PDF links ARE the news items, not links to HTML pages
+                # ============================================================
+                for li in soup.select('li'):
+                    try:
+                        # Find PDF link in this list item
+                        pdf_link = li.select_one('a[href$=".pdf"], a[href*=".pdf"]')
+                        if not pdf_link:
+                            continue
+
+                        href = pdf_link.get('href', '')
+                        if not href or '.pdf' not in href.lower():
+                            continue
+
+                        # Skip if already found this URL
+                        url_norm = href.split('?')[0].rstrip('/')
+                        if any(url_norm in str(existing.get('url', '')) for existing in news_by_url.values()):
+                            continue
+
+                        # Get title from link text (should be descriptive, not "PDF" or "Download")
+                        title = pdf_link.get_text(strip=True)
+                        if not title or len(title) < 15 or title.lower() in ['pdf', 'download', 'view', 'view pdf']:
+                            # Try parent text minus any date patterns
+                            parent = pdf_link.find_parent(['div', 'td'])
+                            if parent:
+                                parent_text = parent.get_text(strip=True)
+                                # Remove date patterns from text
+                                title = re.sub(r'(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{1,2},?\s*\d{4}', '', parent_text, flags=re.IGNORECASE).strip()
+                            if not title or len(title) < 15:
+                                continue
+
+                        # Look for date in list item text
+                        li_text = li.get_text(strip=True)
+                        date_str = None
+                        date_pattern = r'(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+(\d{1,2}),?\s*(20\d{2})'
+                        date_match = re.search(date_pattern, li_text, re.IGNORECASE)
+                        if date_match:
+                            month_abbr = date_match.group(1)[:3].lower()
+                            day = date_match.group(2).zfill(2)
+                            year = date_match.group(3)
+                            month = MONTH_MAP.get(month_abbr, '01')
+                            date_str = f"{year}-{month}-{day}"
+
+                        # Build full URL
+                        if not href.startswith('http'):
+                            href = urljoin(news_url, href)
+
+                        news = {
+                            'title': clean_news_title(title, href),
+                            'url': href,
+                            'date': date_str,
+                            'document_type': 'news_release',
+                            'year': date_str[:4] if date_str else None
+                        }
+                        _add_news_item(news_by_url, news, cutoff_date, "PDF-LIST")
+                    except Exception as e:
+                        logger.debug(f"Skipping malformed PDF list item: {e}")
+                        continue
+
+                # ============================================================
                 # STRATEGY 5a: 55 North Mining - Homepage PDF news pattern
                 # News links to PDFs with date in span, title as text
                 # ============================================================
