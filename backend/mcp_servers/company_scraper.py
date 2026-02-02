@@ -2508,8 +2508,8 @@ class CompanyDataScraper:
                                                 if not title or len(title) < 15:
                                                     continue
 
-                                                # Filter out placeholder/Lorem ipsum content
-                                                # Many WordPress sites have demo posts that should be skipped
+                                                # Filter out placeholder/Lorem ipsum content AND spam
+                                                # Many WordPress sites have demo posts or compromised databases
                                                 title_lower = title.lower()
                                                 placeholder_indicators = [
                                                     'lorem ipsum', 'dolor sit amet', 'consectetur adipiscing',
@@ -2519,8 +2519,18 @@ class CompanyDataScraper:
                                                     'dictum posuere', 'glavrida', 'ullamcorper mattis',
                                                     'dignissim tellus', 'commodo tellus'
                                                 ]
+                                                # Spam keywords - some WordPress sites have compromised databases
+                                                spam_keywords = [
+                                                    'casino', 'poker', 'gambling', 'slot', 'bitcoin',
+                                                    'freispiele', 'giros', 'spins', 'ruleta', 'tragamonedas',
+                                                    'spielautomat', 'jackpot slot', 'betting', 'sportsbook',
+                                                    'deposit bonus', 'free spins', 'no deposit'
+                                                ]
                                                 if any(indicator in title_lower for indicator in placeholder_indicators):
                                                     logger.debug(f"Skipping placeholder WordPress post: {title[:50]}")
+                                                    continue
+                                                if any(spam in title_lower for spam in spam_keywords):
+                                                    logger.debug(f"Skipping spam WordPress post: {title[:50]}")
                                                     continue
 
                                                 # Parse date from ISO format (2026-01-27T14:05:41)
