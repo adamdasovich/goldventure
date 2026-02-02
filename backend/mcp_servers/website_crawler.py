@@ -1358,15 +1358,16 @@ async def crawl_news_releases(url: str, months: int = 6, max_depth: int = 2, cus
     # Deduplicate by URL AND title (same news can have multiple URLs)
     # Process dated items first so they're kept over undated duplicates
     seen_urls = set()
+    seen_content_ids = set()  # For PHP sites that use index.php?content_id=XXX
     seen_titles = set()
     unique_news = []
     for news in html_news_sorted:
         # URL normalization: preserve ID-like query params (content_id, id, article, etc.)
         # This is critical for PHP sites like Aztec that use index.php?content_id=XXX
         raw_url = news['url']
+        id_params = []
         if '?' in raw_url:
             base_url, query_string = raw_url.split('?', 1)
-            id_params = []
             for param in query_string.split('&'):
                 if '=' in param:
                     key, value = param.split('=', 1)
@@ -1381,6 +1382,17 @@ async def crawl_news_releases(url: str, months: int = 6, max_depth: int = 2, cus
                 url_normalized = base_url.rstrip('/')
         else:
             url_normalized = raw_url.rstrip('/')
+
+        # For PHP sites, create a content_id key that ignores path differences
+        # e.g., /news/index.php?content_id=289 and /news/news-display/index.php?content_id=289
+        # should be treated as the same article
+        content_id_key = None
+        if id_params and 'index.php' in raw_url.lower():
+            # Use just the ID params as a unique key, ignoring path
+            content_id_key = '&'.join(sorted(id_params))
+            if content_id_key in seen_content_ids:
+                continue
+            seen_content_ids.add(content_id_key)
 
         # Normalize title for comparison (lowercase, remove extra spaces)
         title_normalized = re.sub(r'\s+', ' ', news.get('title', '').lower().strip())
