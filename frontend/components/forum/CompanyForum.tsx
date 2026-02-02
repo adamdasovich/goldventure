@@ -247,6 +247,7 @@ export function CompanyForum({ companyId, companyName }: CompanyForumProps) {
                       key={message.id}
                       message={message}
                       currentUserId={currentUserId}
+                      isAdmin={user?.is_superuser || user?.user_type === 'admin'}
                       onEdit={editMessage}
                       onDelete={deleteMessage}
                       onReply={handleReply}
