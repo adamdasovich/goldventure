@@ -2336,14 +2336,20 @@ async def crawl_html_news_pages(url: str, months: int = 6, custom_news_url: str 
                 f'https://wp.{domain}/press-releases/',
             ])
 
+        # Determine timeout based on scrape depth
+        # For onboarding (months > 6), allow more time to find historical news
+        # For daily scrapes (months <= 6), use shorter timeouts
+        time_limit_with_news = 300 if months > 6 else 60  # 5 min for onboarding, 1 min for daily
+        time_limit_no_news = 300 if months > 6 else 90    # 5 min for onboarding, 90s for daily
+
         for news_url in news_page_patterns:
             # PRE-PATTERN TIME CHECK: Skip remaining patterns if we've exceeded time limits
             # This check runs BEFORE each URL fetch, so we don't waste time on slow URLs
             elapsed_so_far = (datetime.now() - scrape_start_time).total_seconds()
-            if elapsed_so_far > 60 and len(news_by_url) > 0:
+            if elapsed_so_far > time_limit_with_news and len(news_by_url) > 0:
                 print(f"[TIME-EXIT] {elapsed_so_far:.1f}s elapsed with {len(news_by_url)} items, skipping remaining patterns")
                 break
-            if elapsed_so_far > 90:
+            if elapsed_so_far > time_limit_no_news:
                 print(f"[TIME-EXIT] {elapsed_so_far:.1f}s elapsed, skipping remaining patterns")
                 break
 
@@ -4368,13 +4374,12 @@ async def crawl_html_news_pages(url: str, months: int = 6, custom_news_url: str 
                         break
 
                 # EARLY EXIT 2: Time-based limits to prevent long-running scrapes
+                # Uses same time limits as PRE-PATTERN check: 5 min for onboarding, 60-90s for daily
                 elapsed_seconds = (datetime.now() - scrape_start_time).total_seconds()
-                # If we found news, exit after 60 seconds (we have data, stop searching)
-                if elapsed_seconds > 60 and len(news_by_url) > 0:
+                if elapsed_seconds > time_limit_with_news and len(news_by_url) > 0:
                     print(f"[TIME-EXIT] Scrape running for {elapsed_seconds:.1f}s with {len(news_by_url)} items, stopping early")
                     break
-                # If no news found after 90 seconds, give up (probably won't find anything)
-                if elapsed_seconds > 90 and len(news_by_url) == 0:
+                if elapsed_seconds > time_limit_no_news and len(news_by_url) == 0:
                     print(f"[TIME-EXIT] Scrape running for {elapsed_seconds:.1f}s with no news found, giving up")
                     break
 
