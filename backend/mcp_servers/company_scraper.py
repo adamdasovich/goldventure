@@ -635,6 +635,45 @@ class CompanyDataScraper:
 
                 self.extracted_data['company']['name'] = title_text.strip()
 
+            # FALLBACK: If no company name extracted from title, try other sources
+            # Some sites (like ProcessWire CMS) may be missing the <title> tag
+            if not self.extracted_data['company'].get('name'):
+                # Try 1: og:site_name meta tag
+                og_site_name = soup.find('meta', attrs={'property': 'og:site_name'})
+                if og_site_name and og_site_name.get('content'):
+                    self.extracted_data['company']['name'] = og_site_name['content'].strip()
+
+                # Try 2: RSS feed title attribute
+                if not self.extracted_data['company'].get('name'):
+                    rss_link = soup.find('link', attrs={'type': 'application/rss+xml'})
+                    if rss_link and rss_link.get('title'):
+                        rss_title = rss_link['title']
+                        # Clean up "... RSS Feed" suffix
+                        rss_title = rss_title.replace(' RSS Feed', '').replace(' RSS', '').strip()
+                        if rss_title and len(rss_title) > 5:
+                            self.extracted_data['company']['name'] = rss_title
+
+                # Try 3: Logo alt text with company identifiers
+                if not self.extracted_data['company'].get('name'):
+                    company_suffixes = ['corp', 'corporation', 'inc', 'ltd', 'limited', 'resources', 'metals', 'mining']
+                    for img in soup.find_all('img', alt=True):
+                        alt_text = img.get('alt', '').strip()
+                        if alt_text and any(kw in alt_text.lower() for kw in company_suffixes):
+                            self.extracted_data['company']['name'] = alt_text
+                            break
+
+                # Try 4: H1 tag with company identifiers
+                if not self.extracted_data['company'].get('name'):
+                    for h1 in soup.find_all('h1'):
+                        h1_text = h1.get_text(strip=True)
+                        # Remove common prefixes like "Welcome to"
+                        for prefix in ['Welcome to ', 'Welcome To ']:
+                            if h1_text.startswith(prefix):
+                                h1_text = h1_text[len(prefix):]
+                        if h1_text and any(kw in h1_text.lower() for kw in company_suffixes):
+                            self.extracted_data['company']['name'] = h1_text
+                            break
+
             # Extract tagline/slogan (usually in hero section)
             hero_selectors = [
                 'h1', '.hero h1', '.hero-title', '.tagline', '.slogan',
