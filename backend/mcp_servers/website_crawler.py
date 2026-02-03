@@ -2450,6 +2450,10 @@ async def crawl_html_news_pages(url: str, months: int = 6, custom_news_url: str 
             # Year-based archive pages under news-releases (Aftermath Silver pattern)
             f'{url}/news-releases/{current_year}/',
             f'{url}/news-releases/{current_year - 1}/',
+            # Arizona Metals / Duda CMS pattern: /{year}-news-releases
+            f'{url}/{current_year}-news-releases',
+            f'{url}/{current_year - 1}-news-releases',
+            f'{url}/{current_year - 2}-news-releases',
             # Northern Dynasty pattern: /news/news-releases/YYYY/
             f'{url}/news/news-releases/{current_year}/',
             f'{url}/news/news-releases/{current_year - 1}/',
@@ -2698,6 +2702,79 @@ async def crawl_html_news_pages(url: str, months: int = 6, custom_news_url: str 
                         _add_news_item(news_by_url, news, cutoff_date, "POST-ITEM")
                     except Exception as e:
                         logger.debug(f"Skipping malformed post-item: {e}")
+                        continue
+
+                # ============================================================
+                # STRATEGY: Arizona Metals / Duda CMS postArticle pattern
+                # Structure: <div class="postArticle">
+                #   <div class="inner">
+                #     <div class="postTextContainer">
+                #       <div class="postText">
+                #         <div class="postTitle"><h3><a href="/slug">Title</a></h3></div>
+                #         <div class="postDescription">Contains date like "January 13, 2026"</div>
+                #       </div>
+                #     </div>
+                #   </div>
+                # </div>
+                # ============================================================
+                for post_article in soup.select('.postArticle, div.postArticle'):
+                    try:
+                        # Get title and URL from postTitle link
+                        title_elem = post_article.select_one('.postTitle a, .postTitle h3 a, h3 a')
+                        if not title_elem:
+                            continue
+
+                        title = title_elem.get_text(strip=True)
+                        href = title_elem.get('href', '')
+
+                        if not title or len(title) < 15 or not href:
+                            continue
+
+                        # Make URL absolute
+                        if href.startswith('/'):
+                            href = urljoin(base_url, href)
+
+                        # Extract date from text - look for patterns like "January 13, 2026"
+                        article_text = post_article.get_text()
+                        date_str = None
+
+                        # Try "Month DD, YYYY" pattern
+                        date_match = re.search(
+                            r'(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{1,2}),?\s+(\d{4})',
+                            article_text,
+                            re.IGNORECASE
+                        )
+                        if date_match:
+                            month_name = date_match.group(1).lower()[:3]
+                            day = date_match.group(2).zfill(2)
+                            year = date_match.group(3)
+                            month = MONTH_MAP.get(month_name, '01')
+                            date_str = f"{year}-{month}-{day}"
+
+                        # Fallback: try "DD Month YYYY" pattern
+                        if not date_str:
+                            date_match = re.search(
+                                r'(\d{1,2})\s+(January|February|March|April|May|June|July|August|September|October|November|December),?\s+(\d{4})',
+                                article_text,
+                                re.IGNORECASE
+                            )
+                            if date_match:
+                                day = date_match.group(1).zfill(2)
+                                month_name = date_match.group(2).lower()[:3]
+                                year = date_match.group(3)
+                                month = MONTH_MAP.get(month_name, '01')
+                                date_str = f"{year}-{month}-{day}"
+
+                        news = {
+                            'title': clean_news_title(title, href),
+                            'url': href,
+                            'date': date_str,
+                            'document_type': 'news_release',
+                            'year': date_str[:4] if date_str else None
+                        }
+                        _add_news_item(news_by_url, news, cutoff_date, "DUDA-CMS")
+                    except Exception as e:
+                        logger.debug(f"Skipping malformed postArticle: {e}")
                         continue
 
                 # ============================================================
