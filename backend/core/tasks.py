@@ -554,18 +554,22 @@ def scrape_company_news_task(self, company_id):
                 updated_count += 1
 
         # Auto-process news content into vector database for semantic search
-        # ONLY during onboarding (is_new_company=True) - skip during daily scrapes
-        # Daily scrapes were taking 500+ seconds per company due to URL fetching here
-        if created_count > 0 and is_new_company:
-            try:
-                from mcp_servers.news_content_processor import NewsContentProcessor
-                processor = NewsContentProcessor(company_id=company.id)
-                process_result = processor._process_company_news(company.name, limit=created_count + 5)
-                chunks_created = process_result.get('chunks_created', 0)
-                logger.info(f"  Processed {process_result.get('news_items_processed', 0)} news items into {chunks_created} searchable chunks")
-            except Exception as e:
-                logger.warning(f"  Warning: News content processing failed: {str(e)}")
-                # Don't fail the whole task if content processing fails
+        # DISABLED: ChromaDB Rust bindings are causing SIGSEGV crashes that kill the worker
+        # See: https://github.com/chroma-core/chroma/issues - tokio-runtime segfaults
+        # The crashes bypass Python exception handling and kill the entire Celery worker
+        # TODO: Re-enable when ChromaDB is updated or issue is resolved
+        # if created_count > 0 and is_new_company:
+        #     try:
+        #         from mcp_servers.news_content_processor import NewsContentProcessor
+        #         processor = NewsContentProcessor(company_id=company.id)
+        #         process_result = processor._process_company_news(company.name, limit=created_count + 5)
+        #         chunks_created = process_result.get('chunks_created', 0)
+        #         logger.info(f"  Processed {process_result.get('news_items_processed', 0)} news items into {chunks_created} searchable chunks")
+        #     except Exception as e:
+        #         logger.warning(f"  Warning: News content processing failed: {str(e)}")
+        #         # Don't fail the whole task if content processing fails
+        if created_count > 0:
+            logger.info(f"  Skipping ChromaDB processing (disabled due to SIGSEGV crashes)")
 
         return {
             'status': 'success',
