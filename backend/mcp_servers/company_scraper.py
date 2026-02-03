@@ -369,7 +369,12 @@ class CompanyDataScraper:
         if page_text is None:
             page_text = soup.get_text()
 
-        # Ticker patterns to look for
+        # Clean the text - remove zero-width spaces and other invisible characters
+        # that can break ticker pattern matching (e.g., North Peak uses TSXV:​NPR with &#8203;)
+        page_text = page_text.replace('\u200b', '').replace('\u200c', '').replace('\u200d', '')
+        page_text = page_text.replace('\ufeff', '').replace('\xa0', ' ')
+
+        # Ticker patterns to look for (using [\s\u200b]* to match spaces and zero-width chars)
         ticker_patterns = [
             # TSX Venture patterns: "TSX.V: NPR", "TSXV: NPR", "TSX-V: NPR"
             (r'\b(TSX[.\-\s]?V|TSXV)[:\s]*([A-Z]{2,5})\b', lambda m: (m.group(2).upper(), 'TSXV')),
