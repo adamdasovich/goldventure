@@ -353,6 +353,60 @@ class CompanyDataScraper:
 
         return matching_urls
 
+    def _extract_ticker_from_page(self, soup, page_text: str = None, page_name: str = "page"):
+        """
+        Extract ticker symbol and exchange from a page.
+
+        This is a simplified version of the ticker extraction logic that can be
+        called on any page (investor page, about page, etc.) when the ticker
+        wasn't found on the homepage.
+
+        Args:
+            soup: BeautifulSoup object of the page
+            page_text: Optional pre-extracted page text (saves re-extraction)
+            page_name: Name for logging (e.g., "investor page")
+        """
+        if page_text is None:
+            page_text = soup.get_text()
+
+        # Ticker patterns to look for
+        ticker_patterns = [
+            # TSX Venture patterns: "TSX.V: NPR", "TSXV: NPR", "TSX-V: NPR"
+            (r'\b(TSX[.\-\s]?V|TSXV)[:\s]*([A-Z]{2,5})\b', lambda m: (m.group(2).upper(), 'TSXV')),
+            # Ticker.V format: "NPR.V" (common format for TSXV)
+            (r'\b([A-Z]{2,5})\.(V)\b', lambda m: (m.group(1).upper(), 'TSXV')),
+            # TSX main patterns: "TSX: NPR"
+            (r'\b(TSX)(?![.\-]?V)[:\s]*([A-Z]{2,5})\b', lambda m: (m.group(2).upper(), 'TSX')),
+            # CSE patterns: "CSE: NPR"
+            (r'\b(CSE)[:\s]*([A-Z]{2,5})\b', lambda m: (m.group(2).upper(), 'CSE')),
+            # NEO patterns: "NEO: NPR"
+            (r'\b(NEO)[:\s]*([A-Z]{2,5})\b', lambda m: (m.group(2).upper(), 'NEO')),
+            # Reverse patterns: "NPR: TSXV" or "NPR: TSX.V"
+            (r'\b([A-Z]{2,5})[:\s]+(TSX[.\-\s]?V|TSXV)\b', lambda m: (m.group(1).upper(), 'TSXV')),
+            (r'\b([A-Z]{2,5})[:\s]+(TSX)(?![.\-]?V)\b', lambda m: (m.group(1).upper(), 'TSX')),
+            (r'\b([A-Z]{2,5})[:\s]+(CSE|NEO)\b', lambda m: (m.group(1).upper(), m.group(2).upper())),
+        ]
+
+        # Invalid tickers to skip
+        invalid_tickers = {'OTCQX', 'OTCQB', 'TSX', 'TSXV', 'CSE', 'NEO', 'NYSE', 'NASDAQ', 'ASX', 'AIM', 'OTC', 'US', 'GOLD'}
+
+        # Search page text for ticker patterns
+        for pattern, extractor in ticker_patterns:
+            match = re.search(pattern, page_text, re.IGNORECASE)
+            if match:
+                try:
+                    ticker, exchange = extractor(match)
+                    # Validate
+                    if ticker and len(ticker) >= 2 and len(ticker) <= 5 and ticker.upper() not in invalid_tickers:
+                        self.extracted_data['company']['ticker_symbol'] = ticker
+                        self.extracted_data['company']['exchange'] = exchange
+                        print(f"[TICKER] Found on {page_name}: {exchange}:{ticker}")
+                        return True
+                except (IndexError, AttributeError):
+                    continue
+
+        return False
+
     def _find_potential_project_urls(self) -> List[str]:
         """
         Find nav links that look like project pages even if they don't contain 'project' keyword.
@@ -1865,6 +1919,11 @@ class CompanyDataScraper:
             # Look for stock info
             page_text = soup.get_text()
 
+            # ENHANCED: Extract ticker if not found on homepage
+            # Many companies (like North Peak Resources) only show ticker info on investor pages
+            if not self.extracted_data['company'].get('ticker_symbol'):
+                self._extract_ticker_from_page(soup, page_text, "investor page")
+
             # Market cap
             market_cap_pattern = r'market\s+cap(?:italization)?[:\s]+\$?([\d,\.]+)\s*(million|billion|M|B)?'
             match = re.search(market_cap_pattern, page_text, re.IGNORECASE)
@@ -1998,8 +2057,15 @@ class CompanyDataScraper:
         except Exception as e:
             self.errors.append(f"Document sub-page error ({url}): {str(e)}")
 
-    def _classify_document(self, link, source_url: str) -> Optional[Dict]:
-        """Classify a document link by type."""
+    def _classify_document(self, link, source_url: str, page_context: str = None) -> Optional[Dict]:
+        """
+        Classify a document link by type.
+
+        Args:
+            link: BeautifulSoup link element
+            source_url: URL of the page where the link was found
+            page_context: Optional context hint (e.g., "investor" for investor pages)
+        """
         href = link.get('href', '')
         text = link.get_text(strip=True)
         combined = (text + ' ' + href).lower()
@@ -2027,6 +2093,20 @@ class CompanyDataScraper:
             doc['document_type'] = 'financial_report'
         else:
             doc['document_type'] = 'other'
+
+        # ENHANCED: Detect presentations by month-year pattern in filename
+        # Many companies name presentations like "NPR-December-2025.pdf" or "December 2025 Presentation"
+        # This is common on investor pages where the link text might just be "Prospect Mountain - December 2025"
+        if doc['document_type'] == 'other' and '.pdf' in href.lower():
+            # Look for month-year patterns: "December-2025", "Dec-2025", "December 2025"
+            month_year_pattern = r'(january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|oct|nov|dec)[\s\-_]*(20\d{2})'
+            if re.search(month_year_pattern, combined, re.IGNORECASE):
+                # PDFs with month-year naming on investor pages are typically presentations
+                # unless they contain financial report indicators
+                financial_indicators = ['financial', 'statement', 'quarterly', 'annual report', 'md&a', 'mda']
+                if not any(fi in combined for fi in financial_indicators):
+                    doc['document_type'] = 'presentation'
+                    print(f"[DOC] Detected presentation by month-year pattern: {href}")
 
         # Extract year
         year_match = re.search(r'(20\d{2})', combined)
@@ -2474,90 +2554,123 @@ class CompanyDataScraper:
                 from urllib.parse import urlparse
                 parsed = urlparse(url)
                 base_url = f"{parsed.scheme}://{parsed.netloc}"
-                wp_api_url = f"{base_url}/wp-json/wp/v2/posts?per_page=100"
-                print(f"[WORDPRESS] Checking WordPress REST API: {wp_api_url}")
 
+                # ENHANCED: Check multiple WordPress REST API endpoints
+                # Standard posts AND custom post types for press releases
+                # Many mining company sites (North Peak, etc.) use custom post types
+                wp_endpoints = [
+                    f"{base_url}/wp-json/wp/v2/press-release?per_page=100",  # North Peak, etc.
+                    f"{base_url}/wp-json/wp/v2/press-releases?per_page=100",  # Alternative naming
+                    f"{base_url}/wp-json/wp/v2/news-release?per_page=100",
+                    f"{base_url}/wp-json/wp/v2/news-releases?per_page=100",
+                    f"{base_url}/wp-json/wp/v2/news?per_page=100",
+                    f"{base_url}/wp-json/wp/v2/posts?per_page=100",  # Standard posts (last - often blog/media)
+                ]
+
+                wp_items_total = 0
                 async with aiohttp.ClientSession() as session:
-                    async with session.get(
-                        wp_api_url,
-                        headers={
-                            "Accept": "application/json",
-                            "User-Agent": "Mozilla/5.0 (compatible; GoldVenture/1.0)"
-                        },
-                        timeout=aiohttp.ClientTimeout(total=15)
-                    ) as response:
-                        if response.status == 200:
-                            content_type = response.headers.get('Content-Type', '')
-                            if 'application/json' in content_type:
+                    for wp_api_url in wp_endpoints:
+                        # Stop checking more endpoints if we already found press releases
+                        # (avoids mixing blog posts with press releases)
+                        if wp_items_total >= 10:
+                            break
+
+                        try:
+                            async with session.get(
+                                wp_api_url,
+                                headers={
+                                    "Accept": "application/json",
+                                    "User-Agent": "Mozilla/5.0 (compatible; GoldVenture/1.0)"
+                                },
+                                timeout=aiohttp.ClientTimeout(total=10)
+                            ) as response:
+                                if response.status != 200:
+                                    continue
+                                content_type = response.headers.get('Content-Type', '')
+                                if 'application/json' not in content_type:
+                                    continue
                                 data = await response.json()
-                                if isinstance(data, list) and len(data) > 0:
-                                    # Check if this looks like a valid WP posts response
-                                    first_post = data[0]
-                                    if 'title' in first_post and 'link' in first_post and 'date' in first_post:
-                                        wp_items_found = 0
-                                        for post in data:
-                                            try:
-                                                # Extract title (may contain HTML entities)
-                                                title_obj = post.get('title', {})
-                                                title = title_obj.get('rendered', '') if isinstance(title_obj, dict) else str(title_obj)
-                                                # Clean HTML entities
-                                                title = title.replace('&#8211;', '-').replace('&#8217;', "'")
-                                                title = title.replace('&ndash;', '-').replace('&amp;', '&')
-                                                title = title.replace('&#8220;', '"').replace('&#8221;', '"')
+                                if not isinstance(data, list) or len(data) == 0:
+                                    continue
+                                # Check if this looks like a valid WP posts response
+                                first_post = data[0]
+                                if 'title' not in first_post or 'link' not in first_post or 'date' not in first_post:
+                                    continue
 
-                                                if not title or len(title) < 15:
-                                                    continue
+                                wp_items_found = 0
+                                for post in data:
+                                    try:
+                                        # Extract title (may contain HTML entities)
+                                        title_obj = post.get('title', {})
+                                        title = title_obj.get('rendered', '') if isinstance(title_obj, dict) else str(title_obj)
+                                        # Clean HTML entities
+                                        title = title.replace('&#8211;', '-').replace('&#8217;', "'")
+                                        title = title.replace('&ndash;', '-').replace('&amp;', '&')
+                                        title = title.replace('&#8220;', '"').replace('&#8221;', '"')
 
-                                                # Filter out placeholder/Lorem ipsum content AND spam
-                                                # Many WordPress sites have demo posts or compromised databases
-                                                title_lower = title.lower()
-                                                placeholder_indicators = [
-                                                    'lorem ipsum', 'dolor sit amet', 'consectetur adipiscing',
-                                                    'fusce aliquam', 'aliquam erat', 'quisque semper',
-                                                    'nulla sodales', 'maecenas sit amet', 'mauris at orci',
-                                                    'praesent tempus', 'nam turpis', 'aliquam bibendum',
-                                                    'dictum posuere', 'glavrida', 'ullamcorper mattis',
-                                                    'dignissim tellus', 'commodo tellus'
-                                                ]
-                                                # Spam keywords - some WordPress sites have compromised databases
-                                                spam_keywords = [
-                                                    'casino', 'poker', 'gambling', 'slot', 'bitcoin',
-                                                    'freispiele', 'giros', 'spins', 'ruleta', 'tragamonedas',
-                                                    'spielautomat', 'jackpot slot', 'betting', 'sportsbook',
-                                                    'deposit bonus', 'free spins', 'no deposit'
-                                                ]
-                                                if any(indicator in title_lower for indicator in placeholder_indicators):
-                                                    logger.debug(f"Skipping placeholder WordPress post: {title[:50]}")
-                                                    continue
-                                                if any(spam in title_lower for spam in spam_keywords):
-                                                    logger.debug(f"Skipping spam WordPress post: {title[:50]}")
-                                                    continue
+                                        if not title or len(title) < 15:
+                                            continue
 
-                                                # Parse date from ISO format (2026-01-27T14:05:41)
-                                                date_raw = post.get('date', '')
-                                                date_str = None
-                                                if date_raw and len(date_raw) >= 10:
-                                                    date_str = date_raw[:10]  # Extract YYYY-MM-DD
+                                        # Filter out placeholder/Lorem ipsum content AND spam
+                                        # Many WordPress sites have demo posts or compromised databases
+                                        title_lower = title.lower()
+                                        placeholder_indicators = [
+                                            'lorem ipsum', 'dolor sit amet', 'consectetur adipiscing',
+                                            'fusce aliquam', 'aliquam erat', 'quisque semper',
+                                            'nulla sodales', 'maecenas sit amet', 'mauris at orci',
+                                            'praesent tempus', 'nam turpis', 'aliquam bibendum',
+                                            'dictum posuere', 'glavrida', 'ullamcorper mattis',
+                                            'dignissim tellus', 'commodo tellus'
+                                        ]
+                                        # Spam keywords - some WordPress sites have compromised databases
+                                        spam_keywords = [
+                                            'casino', 'poker', 'gambling', 'slot', 'bitcoin',
+                                            'freispiele', 'giros', 'spins', 'ruleta', 'tragamonedas',
+                                            'spielautomat', 'jackpot slot', 'betting', 'sportsbook',
+                                            'deposit bonus', 'free spins', 'no deposit'
+                                        ]
+                                        if any(indicator in title_lower for indicator in placeholder_indicators):
+                                            logger.debug(f"Skipping placeholder WordPress post: {title[:50]}")
+                                            continue
+                                        if any(spam in title_lower for spam in spam_keywords):
+                                            logger.debug(f"Skipping spam WordPress post: {title[:50]}")
+                                            continue
 
-                                                news_url = post.get('link', '')
-                                                if not news_url:
-                                                    continue
+                                        # Parse date from ISO format (2026-01-27T14:05:41)
+                                        date_raw = post.get('date', '')
+                                        date_str = None
+                                        if date_raw and len(date_raw) >= 10:
+                                            date_str = date_raw[:10]  # Extract YYYY-MM-DD
 
-                                                news = {
-                                                    'title': title[:500],
-                                                    'publication_date': date_str,
-                                                    'source_url': news_url,
-                                                    'extracted_at': datetime.utcnow().isoformat(),
-                                                }
-                                                # Avoid duplicates
-                                                if not any(n.get('source_url') == news_url for n in news_found):
-                                                    news_found.append(news)
-                                                    wp_items_found += 1
-                                            except Exception as e:
-                                                logger.debug(f"Skipping malformed WordPress post: {e}")
-                                                continue
+                                        news_url = post.get('link', '')
+                                        if not news_url:
+                                            continue
 
-                                        print(f"[WORDPRESS] Found {wp_items_found} news items from REST API")
+                                        news = {
+                                            'title': title[:500],
+                                            'publication_date': date_str,
+                                            'source_url': news_url,
+                                            'extracted_at': datetime.utcnow().isoformat(),
+                                        }
+                                        # Avoid duplicates
+                                        if not any(n.get('source_url') == news_url for n in news_found):
+                                            news_found.append(news)
+                                            wp_items_found += 1
+                                    except Exception as e:
+                                        logger.debug(f"Skipping malformed WordPress post: {e}")
+                                        continue
+
+                                if wp_items_found > 0:
+                                    print(f"[WORDPRESS] Found {wp_items_found} news items from {wp_api_url}")
+                                    wp_items_total += wp_items_found
+                        except aiohttp.ClientError:
+                            continue  # Endpoint doesn't exist or failed
+                        except Exception as e:
+                            logger.debug(f"WordPress endpoint check failed ({wp_api_url}): {e}")
+                            continue
+
+                if wp_items_total > 0:
+                    print(f"[WORDPRESS] Total: {wp_items_total} news items from REST API")
             except Exception as e:
                 logger.debug(f"WordPress REST API check failed: {e}")
 

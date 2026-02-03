@@ -1974,89 +1974,119 @@ async def crawl_html_news_pages(url: str, months: int = 6, custom_news_url: str 
             logger.debug(f"BrighterIR extraction failed: {e}")
 
         # ============================================================
-        # SPECIAL CASE: WordPress REST API (Silvercorp Metals, etc.)
+        # SPECIAL CASE: WordPress REST API (Silvercorp Metals, North Peak, etc.)
         # Many mining sites use WordPress with REST API enabled
         # News is available via /wp-json/wp/v2/posts endpoint
+        # ENHANCED: Also check custom post types like press-release (North Peak)
         # This is MUCH more reliable than HTML scraping for WP sites
         # that use JavaScript to render content (Beaver Builder, etc.)
         # ============================================================
         try:
             import aiohttp
 
-            # Try WordPress REST API endpoint
-            wp_api_url = f"{base_url}/wp-json/wp/v2/posts?per_page=100"
-            print(f"[WORDPRESS] Checking WordPress REST API: {wp_api_url}")
+            # Try WordPress REST API endpoints - custom post types first, standard posts last
+            wp_endpoints = [
+                f"{base_url}/wp-json/wp/v2/press-release?per_page=100",  # North Peak, etc.
+                f"{base_url}/wp-json/wp/v2/press-releases?per_page=100",  # Alternative naming
+                f"{base_url}/wp-json/wp/v2/news-release?per_page=100",
+                f"{base_url}/wp-json/wp/v2/news-releases?per_page=100",
+                f"{base_url}/wp-json/wp/v2/news?per_page=100",
+                f"{base_url}/wp-json/wp/v2/posts?per_page=100",  # Standard posts (last - often blog/media)
+            ]
 
+            wp_items_total = 0
             async with aiohttp.ClientSession() as session:
-                async with session.get(
-                    wp_api_url,
-                    headers={
-                        "Accept": "application/json",
-                        "User-Agent": "Mozilla/5.0 (compatible; NewsBot/1.0)"
-                    },
-                    timeout=aiohttp.ClientTimeout(total=15)
-                ) as response:
-                    if response.status == 200:
-                        content_type = response.headers.get('Content-Type', '')
-                        if 'application/json' in content_type:
+                for wp_api_url in wp_endpoints:
+                    # Stop checking more endpoints if we already found press releases
+                    # (avoids mixing blog posts with press releases)
+                    if wp_items_total >= 10:
+                        break
+
+                    try:
+                        async with session.get(
+                            wp_api_url,
+                            headers={
+                                "Accept": "application/json",
+                                "User-Agent": "Mozilla/5.0 (compatible; NewsBot/1.0)"
+                            },
+                            timeout=aiohttp.ClientTimeout(total=10)
+                        ) as response:
+                            if response.status != 200:
+                                continue
+                            content_type = response.headers.get('Content-Type', '')
+                            if 'application/json' not in content_type:
+                                continue
                             data = await response.json()
-                            if isinstance(data, list) and len(data) > 0:
-                                # Check if this looks like a valid WP posts response
-                                first_post = data[0]
-                                if 'title' in first_post and 'link' in first_post and 'date' in first_post:
-                                    # Spam filter keywords - skip posts with these in title
-                                    # (some WordPress sites have compromised databases)
-                                    spam_keywords = ['casino', 'poker', 'gambling', 'slot', 'bitcoin',
-                                                    'freispiele', 'giros', 'spins', 'ruleta', 'tragamonedas',
-                                                    'spielautomat', 'jackpot slot', 'betting', 'sportsbook']
+                            if not isinstance(data, list) or len(data) == 0:
+                                continue
+                            # Check if this looks like a valid WP posts response
+                            first_post = data[0]
+                            if 'title' not in first_post or 'link' not in first_post or 'date' not in first_post:
+                                continue
 
-                                    items_found = 0
-                                    spam_count = 0
-                                    for post in data:
-                                        try:
-                                            # Extract title (may contain HTML entities)
-                                            title_obj = post.get('title', {})
-                                            title = title_obj.get('rendered', '') if isinstance(title_obj, dict) else str(title_obj)
-                                            # Clean HTML entities
-                                            title = title.replace('&#8211;', '-').replace('&#8217;', "'")
-                                            title = title.replace('&ndash;', '-').replace('&amp;', '&')
-                                            title = title.replace('&#8220;', '"').replace('&#8221;', '"')
+                            # Spam filter keywords - skip posts with these in title
+                            # (some WordPress sites have compromised databases)
+                            spam_keywords = ['casino', 'poker', 'gambling', 'slot', 'bitcoin',
+                                            'freispiele', 'giros', 'spins', 'ruleta', 'tragamonedas',
+                                            'spielautomat', 'jackpot slot', 'betting', 'sportsbook']
 
-                                            if not title or len(title) < 15:
-                                                continue
+                            items_found = 0
+                            spam_count = 0
+                            for post in data:
+                                try:
+                                    # Extract title (may contain HTML entities)
+                                    title_obj = post.get('title', {})
+                                    title = title_obj.get('rendered', '') if isinstance(title_obj, dict) else str(title_obj)
+                                    # Clean HTML entities
+                                    title = title.replace('&#8211;', '-').replace('&#8217;', "'")
+                                    title = title.replace('&ndash;', '-').replace('&amp;', '&')
+                                    title = title.replace('&#8220;', '"').replace('&#8221;', '"')
 
-                                            # Skip spam content
-                                            title_lower = title.lower()
-                                            if any(spam in title_lower for spam in spam_keywords):
-                                                spam_count += 1
-                                                continue
+                                    if not title or len(title) < 15:
+                                        continue
 
-                                            # Parse date from ISO format (2026-01-27T14:05:41)
-                                            date_raw = post.get('date', '')
-                                            date_str = None
-                                            if date_raw and len(date_raw) >= 10:
-                                                date_str = date_raw[:10]  # Extract YYYY-MM-DD
+                                    # Skip spam content
+                                    title_lower = title.lower()
+                                    if any(spam in title_lower for spam in spam_keywords):
+                                        spam_count += 1
+                                        continue
 
-                                            news_url = post.get('link', '')
-                                            if not news_url:
-                                                continue
+                                    # Parse date from ISO format (2026-01-27T14:05:41)
+                                    date_raw = post.get('date', '')
+                                    date_str = None
+                                    if date_raw and len(date_raw) >= 10:
+                                        date_str = date_raw[:10]  # Extract YYYY-MM-DD
 
-                                            news = {
-                                                'title': clean_news_title(title, news_url),
-                                                'url': news_url,
-                                                'date': date_str,
-                                                'document_type': 'news_release',
-                                                'year': date_str[:4] if date_str else None
-                                            }
-                                            _add_news_item(news_by_url, news, cutoff_date, "WORDPRESS-API")
-                                            items_found += 1
-                                        except Exception as e:
-                                            logger.debug(f"Skipping malformed WordPress post: {e}")
-                                            continue
+                                    news_url = post.get('link', '')
+                                    if not news_url:
+                                        continue
 
-                                    if spam_count > 0:
-                                        print(f"[WORDPRESS] Filtered {spam_count} spam posts")
-                                    print(f"[WORDPRESS] Found {items_found} news items from REST API")
+                                    news = {
+                                        'title': clean_news_title(title, news_url),
+                                        'url': news_url,
+                                        'date': date_str,
+                                        'document_type': 'news_release',
+                                        'year': date_str[:4] if date_str else None
+                                    }
+                                    _add_news_item(news_by_url, news, cutoff_date, "WORDPRESS-API")
+                                    items_found += 1
+                                except Exception as e:
+                                    logger.debug(f"Skipping malformed WordPress post: {e}")
+                                    continue
+
+                            if items_found > 0:
+                                if spam_count > 0:
+                                    print(f"[WORDPRESS] Filtered {spam_count} spam posts")
+                                print(f"[WORDPRESS] Found {items_found} news items from {wp_api_url}")
+                                wp_items_total += items_found
+                    except aiohttp.ClientError:
+                        continue  # Endpoint doesn't exist or failed
+                    except Exception as e:
+                        logger.debug(f"WordPress endpoint check failed ({wp_api_url}): {e}")
+                        continue
+
+            if wp_items_total > 0:
+                print(f"[WORDPRESS] Total: {wp_items_total} news items from REST API")
         except Exception as e:
             logger.debug(f"WordPress REST API extraction failed: {e}")
 
@@ -3533,14 +3563,28 @@ async def crawl_html_news_pages(url: str, months: int = 6, custom_news_url: str 
                         continue
 
                 # ============================================================
-                # STRATEGY 4d.5: Elementor Toggle/Accordion pattern (Lahontan Gold)
-                # Structure: <div id="elementor-tab-content-XXXX" class="elementor-tab-content ...">
+                # STRATEGY 4d.5: Elementor Toggle/Accordion pattern (Lahontan Gold, Avalon)
+                # Structure: <div id="elementor-tab-content-XXXX" class="elementor-tab-content ..." data-tab="N">
                 #   <p>Date</p><p><a href="...">Title</a></p>
                 #   <p>Date</p><p><a href="...">Title</a></p>
                 # Alternating <p> tags with dates and links
+                # Year may be in tab title: <div class="elementor-tab-title" data-tab="N">2026</div>
+                # Date may be without year: "January 19" or "November 24th"
                 # ============================================================
                 for tab_content in soup.select('[id^="elementor-tab-content-"]'):
                     try:
+                        # Get year from associated tab title if available
+                        tab_year = None
+                        data_tab = tab_content.get('data-tab')
+                        if data_tab:
+                            # Find matching tab title by data-tab attribute
+                            tab_title = soup.select_one(f'.elementor-tab-title[data-tab="{data_tab}"]')
+                            if tab_title:
+                                title_text = tab_title.get_text(strip=True)
+                                year_match = re.match(r'^(20\d{2})$', title_text)
+                                if year_match:
+                                    tab_year = year_match.group(1)
+
                         # Get all <p> tags in this tab
                         p_tags = tab_content.find_all('p', recursive=False)
                         if len(p_tags) < 2:
@@ -3560,7 +3604,20 @@ async def crawl_html_news_pages(url: str, months: int = 6, custom_news_url: str 
                                     continue
 
                                 date_text = date_p.get_text(strip=True)
+
+                                # Try to parse with year first
                                 date_str = parse_date_standalone(date_text)
+
+                                # If no year in date text and we have tab_year, construct full date
+                                if not date_str and tab_year:
+                                    # Handle formats like "January 19", "November 24th", "Oct 9th"
+                                    # Remove ordinal suffixes (st, nd, rd, th)
+                                    clean_date = re.sub(r'(\d+)(st|nd|rd|th)', r'\1', date_text, flags=re.IGNORECASE)
+                                    # Try "Month DD, YYYY" format
+                                    date_str = parse_date_standalone(f"{clean_date}, {tab_year}")
+                                    if not date_str:
+                                        # Try "Month DD YYYY" format (no comma)
+                                        date_str = parse_date_standalone(f"{clean_date} {tab_year}")
 
                                 # Check if second p contains a link
                                 link = link_p.find('a')
