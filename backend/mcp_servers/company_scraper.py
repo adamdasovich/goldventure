@@ -1529,6 +1529,11 @@ class CompanyDataScraper:
             # Look for incorporation/founding info
             page_text = soup.get_text()
 
+            # ENHANCED: Extract ticker if not found on homepage
+            # Many companies (North Peak Resources) show ticker info on about/corporate pages
+            if not self.extracted_data['company'].get('ticker_symbol'):
+                self._extract_ticker_from_page(soup, page_text, "about page")
+
             # Founded/Incorporated year
             year_patterns = [
                 r'(?:founded|incorporated|established|formed)\s+(?:in\s+)?(\d{4})',
@@ -1553,6 +1558,19 @@ class CompanyDataScraper:
                     jurisdiction = match.group(1) if match.lastindex else match.group(0)
                     self.extracted_data['company']['jurisdiction'] = jurisdiction.strip()
                     break
+
+            # ENHANCED: Extract PDFs from about/corporate pages
+            # Some companies (North Peak) have presentations on their investor/corporate page
+            # which may be scraped as "about page" due to URL matching
+            for link in soup.find_all('a', href=True):
+                href = link.get('href', '')
+                if '.pdf' in href.lower():
+                    doc = self._classify_document(link, url)
+                    if doc:
+                        # Avoid duplicates
+                        existing_urls = [d.get('source_url') for d in self.extracted_data['documents']]
+                        if doc.get('source_url') not in existing_urls:
+                            self.extracted_data['documents'].append(doc)
 
             print(f"[OK] About page scraped: {url}")
 
