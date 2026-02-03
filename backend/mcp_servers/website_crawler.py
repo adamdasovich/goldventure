@@ -2631,6 +2631,76 @@ async def crawl_html_news_pages(url: str, months: int = 6, custom_news_url: str 
                     _add_news_item(news_by_url, news, cutoff_date, "G2")
 
                 # ============================================================
+                # STRATEGY: Electrum Discovery / post-item pattern
+                # Structure: <div class="post-item">
+                #   <div class="post-item__date">
+                #     <div class="post-item__day">22</div>
+                #     <div class="post-item__other-date">01, 2026</div>
+                #   </div>
+                #   <div class="post-item__content">
+                #     <h4 class="post-item__title"><a class="post-item__link" href="URL">Title</a></h4>
+                #     <div class="post-item__date-mobile">22 Jan, 2026</div>
+                #   </div>
+                # </div>
+                # ============================================================
+                for post_item in soup.select('.post-item, div.post-item'):
+                    try:
+                        # Get title and URL from post-item__title link
+                        title_link = post_item.select_one('.post-item__title a, h4.post-item__title a')
+                        if not title_link:
+                            continue
+
+                        title = title_link.get_text(strip=True)
+                        href = title_link.get('href', '')
+
+                        if not title or len(title) < 15 or not href:
+                            continue
+
+                        # Try to get date from post-item__date-mobile first (easier format: "22 Jan, 2026")
+                        date_str = None
+                        date_mobile = post_item.select_one('.post-item__date-mobile')
+                        if date_mobile:
+                            date_text = date_mobile.get_text(strip=True)
+                            # Parse "22 Jan, 2026" format
+                            date_match = re.match(r'(\d{1,2})\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*,?\s*(\d{4})', date_text, re.IGNORECASE)
+                            if date_match:
+                                day = date_match.group(1).zfill(2)
+                                month_abbr = date_match.group(2)[:3].lower()
+                                year = date_match.group(3)
+                                month = MONTH_MAP.get(month_abbr, '01')
+                                date_str = f"{year}-{month}-{day}"
+
+                        # Fallback: parse from post-item__day + post-item__other-date
+                        if not date_str:
+                            day_elem = post_item.select_one('.post-item__day')
+                            other_date_elem = post_item.select_one('.post-item__other-date')
+                            if day_elem and other_date_elem:
+                                day = day_elem.get_text(strip=True).zfill(2)
+                                other_text = other_date_elem.get_text(strip=True)  # "01, 2026"
+                                # Parse "MM, YYYY" format
+                                other_match = re.match(r'(\d{1,2}),?\s*(\d{4})', other_text)
+                                if other_match:
+                                    month = other_match.group(1).zfill(2)
+                                    year = other_match.group(2)
+                                    date_str = f"{year}-{month}-{day}"
+
+                        # Build full URL
+                        if not href.startswith('http'):
+                            href = urljoin(news_url, href)
+
+                        news = {
+                            'title': clean_news_title(title, href),
+                            'url': href,
+                            'date': date_str,
+                            'document_type': 'news_release',
+                            'year': date_str[:4] if date_str else None
+                        }
+                        _add_news_item(news_by_url, news, cutoff_date, "POST-ITEM")
+                    except Exception as e:
+                        logger.debug(f"Skipping malformed post-item: {e}")
+                        continue
+
+                # ============================================================
                 # STRATEGY: Osisko Development / list-item pattern
                 # Structure: <div class="list-item">
                 #   <div class="date"><div class="month">Jan</div><div class="day">28</div><div class="year">2026</div></div>
