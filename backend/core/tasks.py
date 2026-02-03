@@ -554,22 +554,36 @@ def scrape_company_news_task(self, company_id):
                 updated_count += 1
 
         # Auto-process news content into vector database for semantic search
-        # DISABLED: ChromaDB Rust bindings are causing SIGSEGV crashes that kill the worker
-        # See: https://github.com/chroma-core/chroma/issues - tokio-runtime segfaults
-        # The crashes bypass Python exception handling and kill the entire Celery worker
-        # TODO: Re-enable when ChromaDB is updated or issue is resolved
-        # if created_count > 0 and is_new_company:
-        #     try:
-        #         from mcp_servers.news_content_processor import NewsContentProcessor
-        #         processor = NewsContentProcessor(company_id=company.id)
-        #         process_result = processor._process_company_news(company.name, limit=created_count + 5)
-        #         chunks_created = process_result.get('chunks_created', 0)
-        #         logger.info(f"  Processed {process_result.get('news_items_processed', 0)} news items into {chunks_created} searchable chunks")
-        #     except Exception as e:
-        #         logger.warning(f"  Warning: News content processing failed: {str(e)}")
-        #         # Don't fail the whole task if content processing fails
-        if created_count > 0:
-            logger.info(f"  Skipping ChromaDB processing (disabled due to SIGSEGV crashes)")
+        # SIGSEGV-SAFE: Using subprocess isolation to protect against ChromaDB Rust binding crashes
+        # See: https://github.com/chroma-core/chroma/issues/4365 - tokio-runtime segfaults
+        # The subprocess isolation ensures SIGSEGV crashes don't kill the Celery worker
+        if created_count > 0 and is_new_company:
+            try:
+                from core.chromadb_isolated import process_company_news_isolated
+
+                logger.info(f"  Processing news into ChromaDB (subprocess-isolated)...")
+                process_result = process_company_news_isolated(
+                    company_name=company.name,
+                    company_id=company.id,
+                    limit=created_count + 5,
+                    timeout=120  # 2 minute timeout per company
+                )
+
+                if process_result.get('success'):
+                    inner_result = process_result.get('result', {})
+                    chunks_created = inner_result.get('chunks_created', 0)
+                    items_processed = inner_result.get('news_items_processed', 0)
+                    logger.info(f"  ChromaDB: Processed {items_processed} news items into {chunks_created} searchable chunks")
+                elif process_result.get('crash'):
+                    # Subprocess crashed (SIGSEGV) but we survived
+                    logger.warning(f"  ChromaDB: Subprocess crashed ({process_result.get('error', 'unknown')}), but worker survived")
+                elif process_result.get('timeout'):
+                    logger.warning(f"  ChromaDB: Processing timed out, skipping")
+                else:
+                    logger.warning(f"  ChromaDB: Processing failed: {process_result.get('error', 'unknown')}")
+            except Exception as e:
+                logger.warning(f"  Warning: News content processing failed: {str(e)}")
+                # Don't fail the whole task if content processing fails
 
         return {
             'status': 'success',
@@ -1750,6 +1764,8 @@ def process_company_news_for_rag_task(self, company_id: int, limit: int = 20):
     3. Generates embeddings using Voyage AI
     4. Stores chunks in PostgreSQL (NewsChunk) and ChromaDB
 
+    SIGSEGV-SAFE: Uses subprocess isolation to protect against ChromaDB Rust binding crashes.
+
     Args:
         company_id: ID of the Company to process news for
         limit: Maximum number of news items to process (default 20)
@@ -1758,7 +1774,7 @@ def process_company_news_for_rag_task(self, company_id: int, limit: int = 20):
         dict: Processing result with counts
     """
     from .models import Company, NewsChunk
-    from mcp_servers.news_content_processor import NewsContentProcessor
+    from core.chromadb_isolated import process_company_news_isolated
 
     logger.info(f"[RAG TASK] Starting news processing for company {company_id}...")
 
@@ -1776,19 +1792,40 @@ def process_company_news_for_rag_task(self, company_id: int, limit: int = 20):
                 'message': 'Company already has news chunks processed'
             }
 
-        # Process news
-        processor = NewsContentProcessor()
-        result = processor._process_company_news(company.name, limit=limit)
+        # Process news using subprocess isolation (protects against SIGSEGV crashes)
+        result = process_company_news_isolated(
+            company_name=company.name,
+            company_id=company.id,
+            limit=limit,
+            timeout=180  # 3 minute timeout
+        )
 
         if result.get('success'):
-            logger.info(f"[RAG TASK] Processed {result.get('news_items_processed', 0)} news items, "
-                  f"created {result.get('chunks_created', 0)} chunks for {company.name}")
+            inner_result = result.get('result', {})
+            logger.info(f"[RAG TASK] Processed {inner_result.get('news_items_processed', 0)} news items, "
+                  f"created {inner_result.get('chunks_created', 0)} chunks for {company.name}")
             return {
                 'status': 'success',
                 'company': company.name,
-                'news_items_processed': result.get('news_items_processed', 0),
-                'chunks_created': result.get('chunks_created', 0),
-                'errors': result.get('errors')
+                'news_items_processed': inner_result.get('news_items_processed', 0),
+                'chunks_created': inner_result.get('chunks_created', 0),
+                'errors': inner_result.get('errors')
+            }
+        elif result.get('crash'):
+            # Subprocess crashed (SIGSEGV) but we survived
+            logger.warning(f"[RAG TASK] ChromaDB subprocess crashed for {company.name}: {result.get('error')}")
+            return {
+                'status': 'crash',
+                'company': company.name,
+                'error': result.get('error', 'Subprocess crashed'),
+                'message': 'ChromaDB subprocess crashed (SIGSEGV), worker survived'
+            }
+        elif result.get('timeout'):
+            logger.warning(f"[RAG TASK] Processing timed out for {company.name}")
+            return {
+                'status': 'timeout',
+                'company': company.name,
+                'error': 'Processing timed out'
             }
         else:
             error_msg = result.get('error', 'Unknown error')
@@ -1830,102 +1867,46 @@ def store_company_profile_in_rag_task(self, company_id: int):
     Stores company overview, description, tagline, stock info, and project summaries
     in ChromaDB for semantic search.
 
+    SIGSEGV-SAFE: Uses subprocess isolation to protect against ChromaDB Rust binding crashes.
+
     Args:
         company_id: ID of the Company to store profile for
 
     Returns:
         dict: Storage result
     """
-    from .models import Company
-    import chromadb
-    from chromadb.config import Settings as ChromaSettings
-    from pathlib import Path
-    from django.conf import settings
-    from mcp_servers.embeddings import get_embedding_function
+    from core.chromadb_isolated import store_company_profile_isolated
 
-    logger.info(f"[RAG TASK] Storing profile for company {company_id}...")
+    logger.info(f"[RAG TASK] Storing profile for company {company_id} (subprocess-isolated)...")
 
     try:
-        company = Company.objects.get(id=company_id)
+        result = store_company_profile_isolated(company_id=company_id, timeout=120)
 
-        # Build company profile text
-        profile_parts = []
-
-        if company.description:
-            profile_parts.append(f"Company Overview: {company.name}\n{company.description}")
-
-        if company.tagline:
-            profile_parts.append(f"Tagline: {company.tagline}")
-
-        if company.ticker_symbol and company.exchange:
-            profile_parts.append(f"Stock: {company.ticker_symbol} on {company.exchange.upper()}")
-
-        # Projects summary
-        projects = company.projects.all()
-        if projects:
-            project_texts = []
-            for project in projects:
-                project_text = f"Project: {project.name}"
-                if project.description:
-                    project_text += f"\n{project.description}"
-                if project.country:
-                    project_text += f"\nLocation: {project.country}"
-                if project.primary_commodity:
-                    project_text += f"\nCommodity: {project.primary_commodity}"
-                project_texts.append(project_text)
-            profile_parts.append("Projects:\n" + "\n\n".join(project_texts))
-
-        if not profile_parts:
-            return {'status': 'skipped', 'message': 'No profile data to store'}
-
-        full_profile = "\n\n".join(profile_parts)
-
-        # Store in ChromaDB
-        chroma_path = Path(settings.BASE_DIR) / "chroma_db"
-        chroma_path.mkdir(exist_ok=True)
-
-        chroma_client = chromadb.PersistentClient(
-            path=str(chroma_path),
-            settings=ChromaSettings(anonymized_telemetry=False)
-        )
-
-        # Get embedding function
-        embedding_function = get_embedding_function()
-
-        collection = chroma_client.get_or_create_collection(
-            name="company_profiles",
-            metadata={"hnsw:space": "cosine"},
-            embedding_function=embedding_function
-        )
-
-        # Delete existing profile
-        try:
-            collection.delete(ids=[f"company_{company.id}_profile"])
-        except Exception:
-            pass  # Profile may not exist yet
-
-        # Add profile
-        collection.add(
-            ids=[f"company_{company.id}_profile"],
-            documents=[full_profile],
-            metadatas=[{
-                "company_id": company.id,
-                "company_name": company.name,
-                "ticker": company.ticker_symbol or "",
-                "exchange": company.exchange or "",
-                "type": "company_profile"
-            }]
-        )
-
-        logger.info(f"[RAG TASK] Stored {len(full_profile)} chars of profile for {company.name}")
-        return {
-            'status': 'success',
-            'company': company.name,
-            'chars_stored': len(full_profile)
-        }
-
-    except Company.DoesNotExist:
-        return {'status': 'error', 'error': f'Company {company_id} not found'}
+        if result.get('success'):
+            inner_result = result.get('result', {})
+            if inner_result.get('status') == 'skipped':
+                return inner_result
+            logger.info(f"[RAG TASK] Stored {inner_result.get('chars_stored', 0)} chars of profile for {inner_result.get('company', 'unknown')}")
+            return inner_result
+        elif result.get('crash'):
+            logger.warning(f"[RAG TASK] ChromaDB subprocess crashed for company {company_id}: {result.get('error')}")
+            return {
+                'status': 'crash',
+                'company_id': company_id,
+                'error': result.get('error', 'Subprocess crashed'),
+                'message': 'ChromaDB subprocess crashed (SIGSEGV), worker survived'
+            }
+        elif result.get('timeout'):
+            logger.warning(f"[RAG TASK] Profile storage timed out for company {company_id}")
+            return {
+                'status': 'timeout',
+                'company_id': company_id,
+                'error': 'Processing timed out'
+            }
+        else:
+            error_msg = result.get('error', 'Unknown error')
+            logger.error(f"[RAG TASK] Profile storage failed for company {company_id}: {error_msg}")
+            return {'status': 'error', 'error': error_msg}
 
     except Exception as e:
         logger.error(f"[RAG TASK] Error storing profile for {company_id}: {str(e)}")
