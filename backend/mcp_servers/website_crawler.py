@@ -3859,6 +3859,129 @@ async def crawl_html_news_pages(url: str, months: int = 6, custom_news_url: str 
                         continue  # Skip malformed item, continue with next
 
                 # ============================================================
+                # STRATEGY 5a-SQUARESPACE: Squarespace PDF-only news pages (BWR Exploration)
+                # Structure: Direct PDF links (often /s/*.pdf) where filename contains date+title
+                # Examples: /s/2025-12-31-BWR_News-Release_Final.pdf
+                #           /s/20250820_BWR_Comprehensive-News-Release_Final.pdf
+                #           /s/Press-release-BWR-Electro-Dec-27-2024.pdf
+                # Key: Extract date and title from the PDF filename itself
+                # ============================================================
+                squarespace_pdfs = soup.select('a[href*="/s/"][href$=".pdf"], a.sqs-button-element[href$=".pdf"], a.sqs-block-button-element[href$=".pdf"]')
+                if len(squarespace_pdfs) >= 3:  # At least 3 PDF links to consider this a PDF news page
+                    for pdf_link in squarespace_pdfs:
+                        try:
+                            href = pdf_link.get('href', '')
+                            if not href or '.pdf' not in href.lower():
+                                continue
+
+                            # Build full URL
+                            if not href.startswith('http'):
+                                href = urljoin(news_url, href)
+
+                            # Skip if already found
+                            url_norm = href.split('?')[0].rstrip('/')
+                            if any(url_norm in str(existing.get('url', '')) for existing in news_by_url.values()):
+                                continue
+
+                            # Extract filename for date/title parsing
+                            filename = href.split('/')[-1].replace('.pdf', '').replace('.PDF', '')
+
+                            # Try to extract date from filename - multiple patterns
+                            date_str = None
+                            title = None
+
+                            # Pattern 1: YYYY-MM-DD at start (e.g., 2025-12-31-BWR_News-Release)
+                            date_match = re.match(r'^(\d{4})-(\d{2})-(\d{2})[-_](.+)$', filename)
+                            if date_match:
+                                year, month, day = date_match.group(1), date_match.group(2), date_match.group(3)
+                                date_str = f"{year}-{month}-{day}"
+                                title = date_match.group(4)
+
+                            # Pattern 2: YYYYMMDD at start (e.g., 20250820_BWR_Comprehensive)
+                            if not date_str:
+                                date_match = re.match(r'^(\d{4})(\d{2})(\d{2})[-_](.+)$', filename)
+                                if date_match:
+                                    year, month, day = date_match.group(1), date_match.group(2), date_match.group(3)
+                                    date_str = f"{year}-{month}-{day}"
+                                    title = date_match.group(4)
+
+                            # Pattern 3: Month-DD-YYYY anywhere (e.g., Press-release-BWR-Feb-14-2025-FINAL)
+                            if not date_str:
+                                date_match = re.search(r'[-_](Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)[-_]?(\d{1,2})[-_]?(\d{4})', filename, re.IGNORECASE)
+                                if date_match:
+                                    month_abbr = date_match.group(1)[:3].lower()
+                                    day = date_match.group(2).zfill(2)
+                                    year = date_match.group(3)
+                                    month = MONTH_MAP.get(month_abbr, '01')
+                                    date_str = f"{year}-{month}-{day}"
+                                    # Title from parts before and after date (but not the "FINAL" etc after)
+                                    title = filename[:date_match.start()]
+
+                            # Pattern 3b: MM-DD-YYYY anywhere (e.g., BWR-News-Release-05-21-2024-Plans)
+                            if not date_str:
+                                date_match = re.search(r'[-_](\d{2})[-_](\d{2})[-_](\d{4})(?:[-_]|$)', filename)
+                                if date_match:
+                                    month, day, year = date_match.group(1), date_match.group(2), date_match.group(3)
+                                    # Validate month/day ranges
+                                    if 1 <= int(month) <= 12 and 1 <= int(day) <= 31:
+                                        date_str = f"{year}-{month}-{day}"
+                                        # Title from before the date, plus meaningful part after (but stop at common suffixes)
+                                        before = filename[:date_match.start()]
+                                        after = filename[date_match.end():].lstrip('-_')
+                                        # Include "after" if it's meaningful (like "Plans-to-Adjourn-AGM")
+                                        if after and not re.match(r'^(final|edited?|v\d+|\d+)$', after, re.IGNORECASE):
+                                            title = f"{before} {after}" if before else after
+                                        else:
+                                            title = before
+
+                            # Pattern 4: DDMONYYYY in filename (e.g., 27JAN2026-FINAL)
+                            if not date_str:
+                                date_match = re.search(r'(\d{1,2})(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)(\d{4})', filename, re.IGNORECASE)
+                                if date_match:
+                                    day = date_match.group(1).zfill(2)
+                                    month_abbr = date_match.group(2)[:3].lower()
+                                    year = date_match.group(3)
+                                    month = MONTH_MAP.get(month_abbr, '01')
+                                    date_str = f"{year}-{month}-{day}"
+                                    # Title from before the date
+                                    title = filename[:date_match.start()] if date_match.start() > 0 else filename[date_match.end():]
+
+                            # Pattern 5: YYYY-MM-DD elsewhere in filename
+                            if not date_str:
+                                date_match = re.search(r'(\d{4})[-_](\d{2})[-_](\d{2})', filename)
+                                if date_match:
+                                    year, month, day = date_match.group(1), date_match.group(2), date_match.group(3)
+                                    date_str = f"{year}-{month}-{day}"
+                                    # Title from remainder
+                                    title = filename[:date_match.start()] + filename[date_match.end():]
+
+                            # Clean up title from filename
+                            if not title:
+                                title = filename
+
+                            # Clean title: replace underscores/hyphens with spaces, remove common suffixes
+                            title = re.sub(r'[-_]+', ' ', title)
+                            title = re.sub(r'\b(final|FINAL|Final|edited?|v\d+)\b', '', title, flags=re.IGNORECASE)
+                            title = re.sub(r'\s+', ' ', title).strip()
+                            title = title.strip(' -_')
+
+                            # Skip if title is too short or generic
+                            if not title or len(title) < 10:
+                                continue
+
+                            news = {
+                                'title': clean_news_title(title, href),
+                                'url': href,
+                                'date': date_str,
+                                'document_type': 'news_release',
+                                'year': date_str[:4] if date_str else None
+                            }
+                            _add_news_item(news_by_url, news, cutoff_date, "SQUARESPACE-PDF")
+                        except Exception as e:
+                            logger.debug(f"Skipping malformed Squarespace PDF: {e}")
+                            continue
+
+                # ============================================================
                 # STRATEGY 5b-NEW: WP Posts Pro plugin (Centurion Minerals pattern)
                 # Uses: div.wpp_section with span[itemprop="datePublished"] and b[itemprop="name"] a
                 # ============================================================
