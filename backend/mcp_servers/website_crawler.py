@@ -2497,6 +2497,10 @@ async def crawl_html_news_pages(url: str, months: int = 6, custom_news_url: str 
             f'{url}/{current_year}-news-releases',
             f'{url}/{current_year - 1}-news-releases',
             f'{url}/{current_year - 2}-news-releases',
+            # Squarespace pattern: /press-releases-{year} (Volta Metals)
+            f'{url}/press-releases-{current_year}',
+            f'{url}/press-releases-{current_year - 1}',
+            f'{url}/press-releases-{current_year - 2}',
             # Northern Dynasty pattern: /news/news-releases/YYYY/
             f'{url}/news/news-releases/{current_year}/',
             f'{url}/news/news-releases/{current_year - 1}/',
@@ -2636,6 +2640,51 @@ async def crawl_html_news_pages(url: str, months: int = 6, custom_news_url: str 
                                         print(f"[INVESTI-API] Found {items_found} announcements from Investi API")
                 except Exception as e:
                     logger.debug(f"Investi API extraction failed: {e}")
+
+                # ============================================================
+                # STRATEGY: Squarespace press releases (Volta Metals pattern)
+                # Date in <span class="sqsrte-text-color--accent"><strong>Jan 26, 2026</strong></span>
+                # Title in next <p> element
+                # PDF links in /s/*.pdf pattern
+                # ============================================================
+                if 'squarespace' in result.html.lower():
+                    # Find all date spans with accent color
+                    date_spans = soup.select('span.sqsrte-text-color--accent strong')
+                    # Find all PDF links
+                    pdf_links = [a.get('href') for a in soup.find_all('a', href=True) if '/s/' in a.get('href', '') and '.pdf' in a.get('href', '').lower()]
+
+                    for i, date_span in enumerate(date_spans):
+                        try:
+                            date_text = date_span.get_text(strip=True)
+                            # Skip year-only labels like "2026"
+                            if date_text.isdigit() and len(date_text) == 4:
+                                continue
+                            date_str = parse_date_standalone(date_text)
+                            if not date_str:
+                                continue
+
+                            # Find the next paragraph for title
+                            parent_p = date_span.find_parent('p')
+                            if parent_p:
+                                next_p = parent_p.find_next_sibling('p')
+                                if next_p:
+                                    title = next_p.get_text(strip=True)
+                                    if title and len(title) > 15:
+                                        # Try to find matching PDF link
+                                        pdf_url = pdf_links[i] if i < len(pdf_links) else None
+                                        if pdf_url:
+                                            pdf_url = urljoin(news_url, pdf_url)
+                                            news = {
+                                                'title': clean_news_title(title, pdf_url),
+                                                'url': pdf_url,
+                                                'date': date_str,
+                                                'document_type': 'news_release',
+                                                'year': date_str[:4] if date_str else None
+                                            }
+                                            _add_news_item(news_by_url, news, cutoff_date, "SQUARESPACE")
+                        except Exception as e:
+                            logger.debug(f"Skipping Squarespace item: {e}")
+                            continue
 
                 # ============================================================
                 # STRATEGY 1: G2 Goldfields pattern - dates in <strong> tags
