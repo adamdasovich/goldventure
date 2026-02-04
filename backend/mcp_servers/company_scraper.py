@@ -1924,12 +1924,20 @@ class CompanyDataScraper:
 
             # Extract PDFs from iframe src (ProcessWire/Adnet sites use viewerjs)
             # Pattern: <iframe src="/viewerjs/#../path/to/file.pdf">
+            # The relative path after # is relative to the viewer path, not the page URL
             for iframe in soup.find_all('iframe', src=True):
                 src = iframe.get('src', '')
                 if '.pdf' in src.lower():
-                    # Extract PDF path (may be after # for viewerjs)
-                    pdf_path = src.split('#')[-1] if '#' in src else src
-                    pdf_url = urljoin(url, pdf_path)
+                    # Extract PDF path - handle ViewerJS fragment paths correctly
+                    if '#' in src:
+                        # ViewerJS pattern: /viewerjs/#../site/assets/file.pdf
+                        # The ../ is relative to /viewerjs/, not the current page
+                        viewer_path = src.split('#')[0]  # e.g., /viewerjs/
+                        pdf_path = src.split('#')[1]      # e.g., ../site/assets/file.pdf
+                        viewer_url = urljoin(url, viewer_path)  # Full viewer URL
+                        pdf_url = urljoin(viewer_url, pdf_path)  # Resolve relative path from viewer
+                    else:
+                        pdf_url = urljoin(url, src)
 
                     # Skip duplicates
                     if any(d.get('source_url') == pdf_url for d in self.extracted_data['documents']):
@@ -2104,12 +2112,20 @@ class CompanyDataScraper:
 
             # Extract PDFs from iframe src (ProcessWire/Adnet sites use viewerjs)
             # Pattern: <iframe src="/viewerjs/#../path/to/file.pdf">
+            # The relative path after # is relative to the viewer path, not the page URL
             for iframe in soup.find_all('iframe', src=True):
                 src = iframe.get('src', '')
                 if '.pdf' in src.lower():
-                    # Extract PDF path (may be after # for viewerjs)
-                    pdf_path = src.split('#')[-1] if '#' in src else src
-                    pdf_url = urljoin(url, pdf_path)
+                    # Extract PDF path - handle ViewerJS fragment paths correctly
+                    if '#' in src:
+                        # ViewerJS pattern: /viewerjs/#../site/assets/file.pdf
+                        # The ../ is relative to /viewerjs/, not the current page
+                        viewer_path = src.split('#')[0]  # e.g., /viewerjs/
+                        pdf_path = src.split('#')[1]      # e.g., ../site/assets/file.pdf
+                        viewer_url = urljoin(url, viewer_path)  # Full viewer URL
+                        pdf_url = urljoin(viewer_url, pdf_path)  # Resolve relative path from viewer
+                    else:
+                        pdf_url = urljoin(url, src)
 
                     # Skip duplicates
                     if any(d.get('source_url') == pdf_url for d in self.extracted_data['documents']):
