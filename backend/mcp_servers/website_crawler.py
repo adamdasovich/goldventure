@@ -3134,13 +3134,11 @@ async def crawl_html_news_pages(url: str, months: int = 6, custom_news_url: str 
                         continue  # Skip malformed item, continue with next
 
                 # ============================================================
-                # STRATEGY: Targa Exploration / div.post with month/day spans pattern
-                # Structure: <div class="post">
-                #   <div class="date"><span class="month">January</span><span class="day">15</span></div>
-                #   <h3>Title</h3>
-                #   <a href="...">Read More</a> or <a href="...pdf">PDF</a>
-                # </div>
-                # Key: Date has separate month/day spans (NO year), year must be inferred
+                # STRATEGY: div.post with month/day spans pattern
+                # Handles TWO formats:
+                # Format 1 (Targa): <span class="month">January</span><span class="day">15</span>
+                # Format 2 (T2 Metals): <span class="month">February 02</span><span class="day">2026</span>
+                # Key difference: Format 2 has day inside month span, year in day span
                 # ============================================================
                 for post in soup.select('div.post'):
                     try:
@@ -3161,21 +3159,36 @@ async def crawl_html_news_pages(url: str, months: int = 6, custom_news_url: str 
                             'september': '09', 'october': '10', 'november': '11', 'december': '12'
                         }
 
-                        month_num = month_map_full.get(month_text)
-                        if not month_num:
-                            # Try abbreviated month
-                            month_num = MONTH_MAP.get(month_text[:3], None)
+                        # Check if day_text is actually a year (T2 Metals format)
+                        # e.g., span.month="February 02", span.day="2026"
+                        if day_text.isdigit() and len(day_text) == 4 and int(day_text) >= 2020:
+                            # T2 Metals format: month span contains "Month DD", day span contains year
+                            year = int(day_text)
+                            # Parse month and day from month_text (e.g., "february 02")
+                            month_match = regex.match(r'([a-z]+)\s*(\d{1,2})', month_text)
+                            if month_match:
+                                month_name = month_match.group(1)
+                                day = month_match.group(2).zfill(2)
+                                month_num = month_map_full.get(month_name)
+                                if not month_num:
+                                    month_num = MONTH_MAP.get(month_name[:3], None)
+                            else:
+                                continue
+                        else:
+                            # Standard format: month span is just month, day span is just day
+                            month_num = month_map_full.get(month_text)
+                            if not month_num:
+                                # Try abbreviated month
+                                month_num = MONTH_MAP.get(month_text[:3], None)
+                            day = day_text.zfill(2)
+                            # Infer year: if the month is in the future, use previous year
+                            current_year = datetime.now().year
+                            current_month = datetime.now().month
+                            post_month = int(month_num) if month_num else 0
+                            year = current_year if post_month <= current_month else current_year - 1
 
                         if not month_num:
                             continue
-
-                        day = day_text.zfill(2)
-
-                        # Infer year: if the month is in the future, use previous year
-                        current_year = datetime.now().year
-                        current_month = datetime.now().month
-                        post_month = int(month_num)
-                        year = current_year if post_month <= current_month else current_year - 1
 
                         date_str = f"{year}-{month_num}-{day}"
 
