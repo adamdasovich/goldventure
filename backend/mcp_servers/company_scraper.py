@@ -2102,6 +2102,39 @@ class CompanyDataScraper:
                         self.extracted_data['documents'].append(doc)
                         docs_found += 1
 
+            # Extract PDFs from iframe src (ProcessWire/Adnet sites use viewerjs)
+            # Pattern: <iframe src="/viewerjs/#../path/to/file.pdf">
+            for iframe in soup.find_all('iframe', src=True):
+                src = iframe.get('src', '')
+                if '.pdf' in src.lower():
+                    # Extract PDF path (may be after # for viewerjs)
+                    pdf_path = src.split('#')[-1] if '#' in src else src
+                    pdf_url = urljoin(url, pdf_path)
+
+                    # Skip duplicates
+                    if any(d.get('source_url') == pdf_url for d in self.extracted_data['documents']):
+                        continue
+
+                    # Get title from filename
+                    filename = pdf_path.split('/')[-1].replace('.pdf', '').replace('_', ' ').replace('-', ' ')
+                    title = filename.title()
+
+                    # Use page_hint if available, otherwise classify based on URL/title
+                    doc_type = page_hint if page_hint else 'presentation'
+                    if not page_hint:
+                        combined_lower = (pdf_url + ' ' + title).lower()
+                        if 'presentation' in combined_lower or 'corporate' in combined_lower:
+                            doc_type = 'presentation'
+
+                    self.extracted_data['documents'].append({
+                        'source_url': pdf_url,
+                        'title': title[:500],
+                        'document_type': doc_type,
+                        'extracted_at': datetime.utcnow().isoformat(),
+                    })
+                    print(f"[DOC] Found iframe PDF on subpage: {title[:50]}")
+                    docs_found += 1
+
             if docs_found > 0:
                 print(f"[OK] Document sub-page scraped ({url}): {docs_found} documents found")
 

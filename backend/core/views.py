@@ -6845,6 +6845,17 @@ def _save_scraped_company_data(data: dict, source_url: str, update_existing: boo
     # Store processing jobs info for later use
     data['_processing_jobs_created'] = processing_jobs_created
 
+    # Set Company.presentation field from first presentation document
+    # This ensures the presentation URL is accessible via the Company model directly
+    presentation_doc = CompanyDocument.objects.filter(
+        company=company,
+        document_type='presentation'
+    ).order_by('-year', '-created_at').first()
+    if presentation_doc and presentation_doc.source_url and not company.presentation:
+        company.presentation = presentation_doc.source_url
+        company.save(update_fields=['presentation'])
+        logger.info(f"Set company.presentation from document: {presentation_doc.source_url}")
+
     # Save news with classification and document processing
     from datetime import datetime
     news_processing_jobs = []
