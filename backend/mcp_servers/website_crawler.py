@@ -313,6 +313,17 @@ def parse_date_standalone(text: str) -> Optional[str]:
         year = match.group(3)
         return f"{year}-{month}-{day}"
 
+    # DD Month YYYY (Cantex: 28 JANUARY 2026)
+    match = re.match(
+        r'^(\d{1,2})\s+(January|February|March|April|May|June|July|August|September|October|November|December)\s+(20\d{2})$',
+        text, re.IGNORECASE
+    )
+    if match:
+        day = match.group(1).zfill(2)
+        month = MONTH_MAP.get(match.group(2).lower()[:3], '01')
+        year = match.group(3)
+        return f"{year}-{month}-{day}"
+
     # Mon DD YYYY - no comma (Aston Bay: Nov 17 2025)
     match = re.match(
         r'^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{1,2})\s+(20\d{2})$',
