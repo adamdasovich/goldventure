@@ -2648,12 +2648,12 @@ async def crawl_html_news_pages(url: str, months: int = 6, custom_news_url: str 
                 # PDF links in /s/*.pdf pattern
                 # ============================================================
                 if 'squarespace' in result.html.lower():
-                    # Find all date spans with accent color
-                    date_spans = soup.select('span.sqsrte-text-color--accent strong')
-                    # Find all PDF links
+                    # Find all PDF links first
                     pdf_links = [a.get('href') for a in soup.find_all('a', href=True) if '/s/' in a.get('href', '') and '.pdf' in a.get('href', '').lower()]
+                    pdf_idx = 0
 
-                    for i, date_span in enumerate(date_spans):
+                    # Find all date spans with accent color
+                    for date_span in soup.select('span.sqsrte-text-color--accent strong'):
                         try:
                             date_text = date_span.get_text(strip=True)
                             # Skip year-only labels like "2026"
@@ -2670,8 +2670,9 @@ async def crawl_html_news_pages(url: str, months: int = 6, custom_news_url: str 
                                 if next_p:
                                     title = next_p.get_text(strip=True)
                                     if title and len(title) > 15:
-                                        # Try to find matching PDF link
-                                        pdf_url = pdf_links[i] if i < len(pdf_links) else None
+                                        # Get PDF link at current index
+                                        pdf_url = pdf_links[pdf_idx] if pdf_idx < len(pdf_links) else None
+                                        pdf_idx += 1
                                         if pdf_url:
                                             pdf_url = urljoin(news_url, pdf_url)
                                             news = {
