@@ -10,6 +10,7 @@ import requests
 from bs4 import BeautifulSoup
 from typing import Dict, List, Optional
 from datetime import datetime, date
+import decimal
 from decimal import Decimal
 from django.conf import settings
 from django.utils import timezone
@@ -54,8 +55,8 @@ class StockPriceScraper:
             cleaned = re.sub(r'[$,\s]', '', text.strip())
             if cleaned and cleaned != '-':
                 return Decimal(cleaned)
-        except Exception:
-            pass
+        except (ValueError, decimal.InvalidOperation) as e:
+            logger.debug(f"Failed to parse price '{text}': {e}")
         return None
 
     def _parse_volume(self, text: str) -> int:
@@ -68,8 +69,8 @@ class StockPriceScraper:
                 # Stockwatch shows volume in thousands
                 value = float(cleaned)
                 return int(value * 1000)  # Convert to actual shares
-        except Exception:
-            pass
+        except (ValueError, TypeError) as e:
+            logger.debug(f"Failed to parse volume '{text}': {e}")
         return 0
 
     def fetch_quote_stockwatch(self, ticker: str, exchange: str) -> Optional[Dict]:
