@@ -3841,6 +3841,101 @@ async def crawl_html_news_pages(url: str, months: int = 6, custom_news_url: str 
                         continue
 
                 # ============================================================
+                # STRATEGY 4d.6: Divi Toggle/Accordion pattern (Cantex)
+                # Structure: <div class="et_pb_toggle ...">
+                #   <h5 class="et_pb_toggle_title">2026</h5>
+                #   <div class="et_pb_toggle_content">
+                #     <p><strong>28 JANUARY 2026</strong>Title text – <a href="PDF">Read More</a></p>
+                #   </div>
+                # </div>
+                # Date is in <strong>, title is text after date, link is "Read More" to PDF
+                # ============================================================
+                for toggle in soup.select('.et_pb_toggle'):
+                    try:
+                        # Get year from toggle title (h5.et_pb_toggle_title)
+                        toggle_year = None
+                        title_el = toggle.select_one('.et_pb_toggle_title')
+                        if title_el:
+                            title_text = title_el.get_text(strip=True)
+                            year_match = re.match(r'^(20\d{2})$', title_text)
+                            if year_match:
+                                toggle_year = year_match.group(1)
+
+                        # Get content div
+                        content_div = toggle.select_one('.et_pb_toggle_content')
+                        if not content_div:
+                            continue
+
+                        # Process each <p> element
+                        for p_tag in content_div.find_all('p'):
+                            try:
+                                # Get the strong element containing date
+                                strong_el = p_tag.find('strong')
+                                if not strong_el:
+                                    continue
+
+                                date_text = strong_el.get_text(strip=True)
+                                # Parse date (format: "28 JANUARY 2026" or "15 AUGUST 2025")
+                                date_str = parse_date_standalone(date_text)
+
+                                # If no year in date, try adding toggle_year
+                                if not date_str and toggle_year:
+                                    date_str = parse_date_standalone(f"{date_text} {toggle_year}")
+
+                                # Get the link (usually "Read More")
+                                link = p_tag.find('a', href=True)
+                                if not link:
+                                    continue
+
+                                href = link.get('href', '')
+                                if not href:
+                                    continue
+
+                                # Make URL absolute
+                                if not href.startswith('http'):
+                                    href = urljoin(news_url, href)
+
+                                # Extract title: text after <strong> but before the link
+                                # Full p text minus date and "Read More" link text
+                                full_text = p_tag.get_text(strip=True)
+                                link_text = link.get_text(strip=True)
+
+                                # Remove date from beginning and link text from end
+                                title = full_text
+                                if date_text and title.startswith(date_text):
+                                    title = title[len(date_text):].strip()
+                                if link_text and title.endswith(link_text):
+                                    title = title[:-len(link_text)].strip()
+
+                                # Clean up separators like " – " or " - "
+                                title = re.sub(r'\s*[–—-]\s*$', '', title).strip()
+
+                                if not title or len(title) < 10:
+                                    continue
+
+                                # Allow same-domain PDFs (press releases)
+                                href_domain = urlparse(href).netloc.replace('www.', '')
+                                source_domain = urlparse(news_url).netloc.replace('www.', '')
+                                is_same_domain_pdf = href.lower().endswith('.pdf') and href_domain == source_domain
+
+                                if not is_same_domain_pdf and not is_valid_news_url(href):
+                                    continue
+
+                                news = {
+                                    'title': clean_news_title(title, href),
+                                    'url': href,
+                                    'date': date_str,
+                                    'document_type': 'news_release',
+                                    'year': date_str[:4] if date_str else toggle_year
+                                }
+                                _add_news_item(news_by_url, news, cutoff_date, "DIVI-TOGGLE")
+                            except Exception:
+                                continue
+                    except Exception as e:
+                        logger.debug(f"Skipping malformed divi-toggle item: {e}")
+                        continue
+
+                # ============================================================
                 # STRATEGY 4d: Ultimate Elements Grid pattern (CanAlaska)
                 # Structure: <div class="uc_post_title"><a><div class="ue_p_title">TITLE</div></a></div>
                 #            <div class="ue-meta-data"><div class="ue-grid-item-meta-data">DATE</div></div>
