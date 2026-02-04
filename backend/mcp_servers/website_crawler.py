@@ -2446,10 +2446,26 @@ async def crawl_html_news_pages(url: str, months: int = 6, custom_news_url: str 
         if custom_news_url:
             custom_news_url = custom_news_url.rstrip('/')
             news_page_patterns.append(custom_news_url)
-            # Also add year-based variants of the custom URL
-            news_page_patterns.append(f'{custom_news_url}/{current_year}/')
-            news_page_patterns.append(f'{custom_news_url}/{current_year - 1}/')
-            print(f"[CUSTOM-URL] Using custom news URL: {custom_news_url}")
+
+            # Detect year pattern in URL (e.g., /press-releases-2026 or /news/2026)
+            # and create variants for other years automatically
+            year_pattern_match = regex.search(r'[-/](\d{4})$', custom_news_url)
+            if year_pattern_match:
+                # URL ends with a year pattern - create variants for other years
+                url_year = int(year_pattern_match.group(1))
+                base_url = custom_news_url[:year_pattern_match.start()]
+                separator = year_pattern_match.group(0)[0]  # '-' or '/'
+
+                # Add current year and previous years (skip if already in URL)
+                for year in [current_year, current_year - 1, current_year - 2]:
+                    if year != url_year:
+                        news_page_patterns.append(f'{base_url}{separator}{year}')
+                print(f"[CUSTOM-URL] Using custom news URL with year variants: {custom_news_url} (base: {base_url})")
+            else:
+                # No year pattern detected - add standard year path variants
+                news_page_patterns.append(f'{custom_news_url}/{current_year}/')
+                news_page_patterns.append(f'{custom_news_url}/{current_year - 1}/')
+                print(f"[CUSTOM-URL] Using custom news URL: {custom_news_url}")
 
         # Standard patterns follow
         news_page_patterns.extend([
