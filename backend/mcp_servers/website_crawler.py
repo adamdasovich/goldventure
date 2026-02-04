@@ -1560,6 +1560,15 @@ def _extract_news_from_element(element, source_url: str, base_url: str) -> Optio
         if date_elem:
             date_str = parse_date_standalone(date_elem.get_text(strip=True))
 
+        # Strategy 1b: T2 Metals pattern - separate month/day spans
+        # <span class="month">February 02</span><span class="day">2026</span>
+        if not date_str:
+            month_span = element.find('span', class_='month')
+            day_span = element.find('span', class_='day')
+            if month_span and day_span:
+                date_text = f"{month_span.get_text(strip=True)} {day_span.get_text(strip=True)}"
+                date_str = parse_date_standalone(date_text)
+
         # Strategy 2: Look for dedicated title element (div.title, div.news-title)
         # Use lambda for multi-class matching (e.g., class="column small-12 news-title")
         title_elem = element.find('div', class_=lambda c: c and ('title' in c if isinstance(c, list) else c == 'title'))
@@ -1613,11 +1622,15 @@ def _extract_news_from_element(element, source_url: str, base_url: str) -> Optio
             elem_text = element.get_text(strip=True)
             date_str, _ = parse_date_comprehensive(elem_text[:100])
 
-        # Get link URL if we don't have one
+        # Get link URL if we don't have one - check read-more links (T2 Metals pattern)
         if not link_url:
-            first_link = element.find('a', href=True)
-            if first_link:
-                link_url = first_link.get('href', '')
+            read_more_link = element.find('a', class_='read-more')
+            if read_more_link:
+                link_url = read_more_link.get('href', '')
+            else:
+                first_link = element.find('a', href=True)
+                if first_link:
+                    link_url = first_link.get('href', '')
 
         # Validate
         if not title or len(title) < 10:
@@ -4787,7 +4800,7 @@ async def crawl_html_news_pages(url: str, months: int = 6, custom_news_url: str 
                 # STRATEGY 5: Structured news-item elements with date/title divs
                 # Handles: Laurion (.news-item .date), 1911 Gold, Troilus (<a class='news-item'>), etc.
                 # ============================================================
-                for selector in ['.news-item', '.news_item', '.press-release', '.news-release', 'article.post', 'article', 'a.news-item']:
+                for selector in ['.news-item', '.news_item', '.press-release', '.news-release', 'article.post', 'div.post', 'article', 'a.news-item']:
                     for item in soup.select(selector)[:50]:
                         news = _extract_news_from_element(item, news_url, url)
                         if news:
