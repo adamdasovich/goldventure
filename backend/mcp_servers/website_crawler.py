@@ -663,7 +663,7 @@ class MiningDocumentCrawler:
             result = await crawler.arun(url=url, config=crawler_config)
 
             if not result.success:
-                print(f"[!] Failed to crawl: {url}")
+                logger.warning(f"[!] Failed to crawl: {url}")
                 return
 
             # Parse HTML
@@ -694,13 +694,13 @@ class MiningDocumentCrawler:
                     # Safely print with Unicode handling
                     try:
                         if link_text:
-                            print(f"[PDF] Found: {link_text[:60]}...")
+                            logger.info(f"[PDF] Found: {link_text[:60]}...")
                         else:
                             # Show URL filename if no link text
                             filename = full_url.split('/')[-1].split('?')[0]
-                            print(f"[PDF] Found: {filename}")
+                            logger.info(f"[PDF] Found: {filename}")
                     except UnicodeEncodeError:
-                        print(f"[PDF] Found PDF document")
+                        logger.info(f"[PDF] Found PDF document")
 
                 # If it's an internal link and we haven't hit depth limit, crawl it
                 elif current_depth < max_depth:
@@ -718,7 +718,7 @@ class MiningDocumentCrawler:
                             )
 
         except Exception as e:
-            print(f"[ERROR] Crawling {url}: {str(e)}")
+            logger.error(f"[ERROR] Crawling {url}: {str(e)}")
 
     def _is_internal_link(self, base_url: str, link_url: str) -> bool:
         """Check if a link is internal (same domain)"""
@@ -911,13 +911,13 @@ class MiningDocumentCrawler:
                         if title and (not current_text or is_filename):
                             pdf_info['link_text'] = title
                             try:
-                                print(f"[TITLE] Updated: {current_text} -> {title[:60]}...")
+                                logger.info(f"[TITLE] Updated: {current_text} -> {title[:60]}...")
                             except UnicodeEncodeError:
-                                print(f"[TITLE] Updated title")
+                                logger.info(f"[TITLE] Updated title")
                         # Store extracted date if found
                         if extracted_date and not pdf_info.get('extracted_date'):
                             pdf_info['extracted_date'] = extracted_date
-                            print(f"[DATE] Extracted: {extracted_date}")
+                            logger.info(f"[DATE] Extracted: {extracted_date}")
                         found = True
                         break
 
@@ -930,13 +930,13 @@ class MiningDocumentCrawler:
                     }
                     if extracted_date:
                         pdf_entry['extracted_date'] = extracted_date
-                        print(f"[DATE] Extracted: {extracted_date}")
+                        logger.info(f"[DATE] Extracted: {extracted_date}")
                     self.pdf_urls.append(pdf_entry)
                     try:
                         if title:
-                            print(f"[TITLE] Found: {title[:60]}...")
+                            logger.info(f"[TITLE] Found: {title[:60]}...")
                     except UnicodeEncodeError:
-                        print(f"[TITLE] Found title")
+                        logger.info(f"[TITLE] Found title")
 
     def _process_discovered_pdfs(self, keywords: List[str]) -> List[Dict]:
         """
@@ -977,7 +977,7 @@ class MiningDocumentCrawler:
 
         # Use deduplicated list
         deduped_pdfs = list(seen_urls.values())
-        print(f"\n[DEDUP] Reduced {len(self.pdf_urls)} PDFs to {len(deduped_pdfs)} unique URLs\n")
+        logger.debug(f"[DEDUP] Reduced {len(self.pdf_urls)} PDFs to {len(deduped_pdfs)} unique URLs")
 
         documents = []
 
@@ -1247,7 +1247,7 @@ async def crawl_technical_documents(url: str) -> List[Dict]:
                                 if '/project' in path.lower():
                                     project_pages.append(path.rstrip('/'))
         except Exception as e:
-            print(f"[TECH-DOCS] Error scanning {url}: {e}")
+            logger.warning(f"[TECH-DOCS] Error scanning {url}: {e}")
 
         # Add technical document sub-paths under each discovered project page
         for project_path in project_pages:
@@ -1269,7 +1269,7 @@ async def crawl_technical_documents(url: str) -> List[Dict]:
                 if not result.success:
                     continue
 
-                print(f"[TECH-DOCS] Scanning: {tech_url}")
+                logger.info(f"[TECH-DOCS] Scanning: {tech_url}")
                 soup = BeautifulSoup(result.html, 'html.parser')
 
                 # Find all PDF links
@@ -1315,7 +1315,7 @@ async def crawl_technical_documents(url: str) -> List[Dict]:
                         'document_type': doc_type,
                         'source': 'technical_documents_page'
                     })
-                    print(f"[TECH-DOCS] Found: {title[:60]}... ({doc_type})")
+                    logger.info(f"[TECH-DOCS] Found: {title[:60]}... ({doc_type})")
 
             except Exception as e:
                 continue
@@ -1341,7 +1341,7 @@ async def crawl_company_website(url: str, max_depth: int = 2) -> List[Dict]:
     try:
         tech_docs = await crawl_technical_documents(url)
         if tech_docs:
-            print(f"[CRAWL] Found {len(tech_docs)} additional technical documents")
+            logger.info(f"[CRAWL] Found {len(tech_docs)} additional technical documents")
             # Merge and deduplicate by URL
             seen_urls = {d['url'].split('?')[0].rstrip('/') for d in documents}
             for doc in tech_docs:
@@ -1350,7 +1350,7 @@ async def crawl_company_website(url: str, max_depth: int = 2) -> List[Dict]:
                     documents.append(doc)
                     seen_urls.add(url_norm)
     except Exception as e:
-        print(f"[CRAWL] Technical documents crawl error: {e}")
+        logger.warning(f"[CRAWL] Technical documents crawl error: {e}")
 
     return documents
 
@@ -1573,7 +1573,7 @@ async def _extract_date_from_article_page(crawler, article_url: str, crawler_con
 
     except Exception as e:
         # Silently fail and return None
-        print(f"[DATE EXTRACT ERROR] {article_url}: {str(e)}")
+        logger.warning(f"[DATE EXTRACT ERROR] {article_url}: {str(e)}")
         return None
 
 
@@ -1772,14 +1772,14 @@ def _add_news_item(news_by_url: Dict[str, Dict], news: Dict, cutoff_date: dateti
     # If URL not seen yet, add it
     if url_norm not in news_by_url:
         news_by_url[url_norm] = news
-        print(f"[{source}] {news['title'][:50]}... | {news.get('date', 'no date')}")
+        logger.info(f"[{source}] {news['title'][:50]}... | {news.get('date', 'no date')}")
         return True
 
     # URL already exists - update if new item has date and existing doesn't
     existing = news_by_url[url_norm]
     if news.get('date') and not existing.get('date'):
         news_by_url[url_norm] = news
-        print(f"[{source}] UPDATED with date: {news['title'][:50]}... | {news.get('date')}")
+        logger.info(f"[{source}] UPDATED with date: {news['title'][:50]}... | {news.get('date')}")
         return True
 
     return False
@@ -1866,7 +1866,7 @@ async def crawl_html_news_pages(url: str, months: int = 6, custom_news_url: str 
                 if not year_select:
                     continue
 
-                print(f"[ASPX] Found Evergreen CMS page: {aspx_url}")
+                logger.info(f"[ASPX] Found Evergreen CMS page: {aspx_url}")
 
                 # Get available years from the dropdown
                 years = [opt.get('value') for opt in year_select.select('option') if opt.get('value')]
@@ -1935,7 +1935,7 @@ async def crawl_html_news_pages(url: str, months: int = 6, custom_news_url: str 
                                 logger.debug(f"Skipping malformed ASPX news item: {e}")
                                 continue  # Skip malformed item, continue with next
 
-                        print(f"[ASPX] Processed year {year}")
+                        logger.info(f"[ASPX] Processed year {year}")
                     except Exception as e:
                         logger.debug(f"Skipping malformed news item: {e}")
                         continue  # Skip malformed item, continue with next
@@ -1972,7 +1972,7 @@ async def crawl_html_news_pages(url: str, months: int = 6, custom_news_url: str 
                     match = regex.search(r'polaris\.brighterir\.com/public/([^/]+)/news', result.html)
                     if match:
                         brighter_slug = match.group(1)
-                        print(f"[BRIGHTERIR] Found BrighterIR widget: {brighter_slug}")
+                        logger.info(f"[BRIGHTERIR] Found BrighterIR widget: {brighter_slug}")
                         break
                 except Exception:
                     continue
@@ -2027,7 +2027,7 @@ async def crawl_html_news_pages(url: str, months: int = 6, custom_news_url: str 
                                     logger.debug(f"Skipping malformed BrighterIR item: {e}")
                                     continue
 
-                            print(f"[BRIGHTERIR] Found {items_found} news items from API")
+                            logger.info(f"[BRIGHTERIR] Found {items_found} news items from API")
         except Exception as e:
             logger.debug(f"BrighterIR extraction failed: {e}")
 
@@ -2134,8 +2134,8 @@ async def crawl_html_news_pages(url: str, months: int = 6, custom_news_url: str 
 
                             if items_found > 0:
                                 if spam_count > 0:
-                                    print(f"[WORDPRESS] Filtered {spam_count} spam posts")
-                                print(f"[WORDPRESS] Found {items_found} news items from {wp_api_url}")
+                                    logger.info(f"[WORDPRESS] Filtered {spam_count} spam posts")
+                                logger.info(f"[WORDPRESS] Found {items_found} news items from {wp_api_url}")
                                 wp_items_total += items_found
                     except aiohttp.ClientError:
                         continue  # Endpoint doesn't exist or failed
@@ -2144,7 +2144,7 @@ async def crawl_html_news_pages(url: str, months: int = 6, custom_news_url: str 
                         continue
 
             if wp_items_total > 0:
-                print(f"[WORDPRESS] Total: {wp_items_total} news items from REST API")
+                logger.info(f"[WORDPRESS] Total: {wp_items_total} news items from REST API")
         except Exception as e:
             logger.debug(f"WordPress REST API extraction failed: {e}")
 
@@ -2158,7 +2158,7 @@ async def crawl_html_news_pages(url: str, months: int = 6, custom_news_url: str 
 
             # Try Strapi API endpoint
             strapi_api_url = f"{base_url}/api/news"
-            print(f"[STRAPI] Checking Strapi CMS API: {strapi_api_url}")
+            logger.info(f"[STRAPI] Checking Strapi CMS API: {strapi_api_url}")
 
             async with aiohttp.ClientSession() as session:
                 async with session.get(
@@ -2211,7 +2211,7 @@ async def crawl_html_news_pages(url: str, months: int = 6, custom_news_url: str 
                                             logger.debug(f"Skipping malformed Strapi item: {e}")
                                             continue
 
-                                    print(f"[STRAPI] Found {items_found} news items from Strapi API")
+                                    logger.info(f"[STRAPI] Found {items_found} news items from Strapi API")
         except Exception as e:
             logger.debug(f"Strapi CMS API extraction failed: {e}")
 
@@ -2227,7 +2227,7 @@ async def crawl_html_news_pages(url: str, months: int = 6, custom_news_url: str 
 
             # Try Wix RSS feed endpoint
             wix_rss_url = f"{base_url}/blog-feed.xml"
-            print(f"[WIX-RSS] Checking Wix RSS feed: {wix_rss_url}")
+            logger.info(f"[WIX-RSS] Checking Wix RSS feed: {wix_rss_url}")
 
             async with aiohttp.ClientSession() as session:
                 async with session.get(
@@ -2296,7 +2296,7 @@ async def crawl_html_news_pages(url: str, months: int = 6, custom_news_url: str 
                                         logger.debug(f"Skipping malformed Wix RSS item: {e}")
                                         continue
 
-                                print(f"[WIX-RSS] Found {items_found} news items from RSS feed")
+                                logger.info(f"[WIX-RSS] Found {items_found} news items from RSS feed")
         except Exception as e:
             logger.debug(f"Wix RSS feed extraction failed: {e}")
 
@@ -2307,7 +2307,7 @@ async def crawl_html_news_pages(url: str, months: int = 6, custom_news_url: str 
         # ============================================================
         try:
             wix_news_url = f"{base_url}/news"
-            print(f"[WIX-HTML] Checking Wix news page: {wix_news_url}")
+            logger.info(f"[WIX-HTML] Checking Wix news page: {wix_news_url}")
 
             wix_result = await crawler.arun(url=wix_news_url, config=crawler_config)
             if wix_result.success:
@@ -2386,7 +2386,7 @@ async def crawl_html_news_pages(url: str, months: int = 6, custom_news_url: str 
                             continue
 
                     if items_found > 0:
-                        print(f"[WIX-HTML] Found {items_found} news items from Wix HTML")
+                        logger.info(f"[WIX-HTML] Found {items_found} news items from Wix HTML")
         except Exception as e:
             logger.debug(f"Wix HTML extraction failed: {e}")
 
@@ -2406,7 +2406,7 @@ async def crawl_html_news_pages(url: str, months: int = 6, custom_news_url: str 
         # ============================================================
         try:
             investors_url = f"{base_url}/investors/"
-            print(f"[INVESTORS-PAGE] Checking investors page: {investors_url}")
+            logger.info(f"[INVESTORS-PAGE] Checking investors page: {investors_url}")
 
             inv_result = await crawler.arun(url=investors_url, config=crawler_config)
             if inv_result.success:
@@ -2477,7 +2477,7 @@ async def crawl_html_news_pages(url: str, months: int = 6, custom_news_url: str 
                             continue
 
                     if items_found > 0:
-                        print(f"[INVESTORS-PAGE] Found {items_found} news items from investors page")
+                        logger.info(f"[INVESTORS-PAGE] Found {items_found} news items from investors page")
         except Exception as e:
             logger.debug(f"Investors page extraction failed: {e}")
 
@@ -2509,12 +2509,12 @@ async def crawl_html_news_pages(url: str, months: int = 6, custom_news_url: str 
                     for year in [current_year, current_year - 1, current_year - 2]:
                         if year != url_year:
                             news_page_patterns.append(f'{base_url}{separator}{year}')
-                    print(f"[CUSTOM-URL] Using custom news URL with year variants: {custom_news_url} (base: {base_url})")
+                    logger.info(f"[CUSTOM-URL] Using custom news URL with year variants: {custom_news_url} (base: {base_url})")
                 else:
                     # No year pattern detected - add standard year path variants
                     news_page_patterns.append(f'{custom_news_url}/{current_year}/')
                     news_page_patterns.append(f'{custom_news_url}/{current_year - 1}/')
-                    print(f"[CUSTOM-URL] Using custom news URL: {custom_news_url}")
+                    logger.info(f"[CUSTOM-URL] Using custom news URL: {custom_news_url}")
 
         # Standard patterns follow
         news_page_patterns.extend([
@@ -2605,10 +2605,10 @@ async def crawl_html_news_pages(url: str, months: int = 6, custom_news_url: str 
             # This check runs BEFORE each URL fetch, so we don't waste time on slow URLs
             elapsed_so_far = (datetime.now() - scrape_start_time).total_seconds()
             if elapsed_so_far > time_limit_with_news and len(news_by_url) > 0:
-                print(f"[TIME-EXIT] {elapsed_so_far:.1f}s elapsed with {len(news_by_url)} items, skipping remaining patterns")
+                logger.info(f"[TIME-EXIT] {elapsed_so_far:.1f}s elapsed with {len(news_by_url)} items, skipping remaining patterns")
                 break
             if elapsed_so_far > time_limit_no_news:
-                print(f"[TIME-EXIT] {elapsed_so_far:.1f}s elapsed, skipping remaining patterns")
+                logger.info(f"[TIME-EXIT] {elapsed_so_far:.1f}s elapsed, skipping remaining patterns")
                 break
 
             try:
@@ -2617,7 +2617,7 @@ async def crawl_html_news_pages(url: str, months: int = 6, custom_news_url: str 
                     continue
 
                 soup = BeautifulSoup(result.html, 'html.parser')
-                print(f"[SCAN] {news_url}")
+                logger.info(f"[SCAN] {news_url}")
 
                 # ============================================================
                 # SPECIAL CASE: Investi Widget (Australian ASX announcements)
@@ -2628,7 +2628,7 @@ async def crawl_html_news_pages(url: str, months: int = 6, custom_news_url: str 
                     investi_div = soup.find('div', id='investi-announcements')
 
                     if investi_script or investi_div:
-                        print(f"[INVESTI] Detected Investi widget on page")
+                        logger.info(f"[INVESTI] Detected Investi widget on page")
 
                         # Extract API key from script URL
                         api_key = None
@@ -2657,7 +2657,7 @@ async def crawl_html_news_pages(url: str, months: int = 6, custom_news_url: str 
                                 ticker = ticker_match.group(1).upper()
 
                         if api_key and ticker:
-                            print(f"[INVESTI] Found API key and ticker: {ticker}")
+                            logger.info(f"[INVESTI] Found API key and ticker: {ticker}")
 
                             # Call Investi API directly
                             investi_api_url = f"https://api.investi.com.au/api/announcements?ticker={ticker}&limit=50&apiKey={api_key}"
@@ -2702,7 +2702,7 @@ async def crawl_html_news_pages(url: str, months: int = 6, custom_news_url: str 
                                                 logger.debug(f"Skipping malformed Investi announcement: {e}")
                                                 continue
 
-                                        print(f"[INVESTI-API] Found {items_found} announcements from Investi API")
+                                        logger.info(f"[INVESTI-API] Found {items_found} announcements from Investi API")
                 except Exception as e:
                     logger.debug(f"Investi API extraction failed: {e}")
 
@@ -4759,7 +4759,7 @@ async def crawl_html_news_pages(url: str, months: int = 6, custom_news_url: str 
                 # ============================================================
                 news_grid_rows = soup.select('.news-section, .news-row')
                 if '/news' in news_url and news_grid_rows:
-                    print(f"[NEWS-GRID-DEBUG] Found {len(news_grid_rows)} news-section rows on {news_url}")
+                    logger.debug(f"[NEWS-GRID-DEBUG] Found {len(news_grid_rows)} news-section rows on {news_url}")
                 for news_row in news_grid_rows:
                     try:
                         # Find all column divs
@@ -5054,17 +5054,17 @@ async def crawl_html_news_pages(url: str, months: int = 6, custom_news_url: str 
                                       if n.get('date') and
                                       datetime.strptime(n['date'], '%Y-%m-%d') > datetime.now() - timedelta(days=30))
                     if recent_count >= 3:
-                        print(f"[EARLY-EXIT] Found {recent_count} recent news items, stopping URL pattern search")
+                        logger.info(f"[EARLY-EXIT] Found {recent_count} recent news items, stopping URL pattern search")
                         break
 
                 # EARLY EXIT 2: Time-based limits to prevent long-running scrapes
                 # Uses same time limits as PRE-PATTERN check: 5 min for onboarding, 60-90s for daily
                 elapsed_seconds = (datetime.now() - scrape_start_time).total_seconds()
                 if elapsed_seconds > time_limit_with_news and len(news_by_url) > 0:
-                    print(f"[TIME-EXIT] Scrape running for {elapsed_seconds:.1f}s with {len(news_by_url)} items, stopping early")
+                    logger.info(f"[TIME-EXIT] Scrape running for {elapsed_seconds:.1f}s with {len(news_by_url)} items, stopping early")
                     break
                 if elapsed_seconds > time_limit_no_news and len(news_by_url) == 0:
-                    print(f"[TIME-EXIT] Scrape running for {elapsed_seconds:.1f}s with no news found, giving up")
+                    logger.info(f"[TIME-EXIT] Scrape running for {elapsed_seconds:.1f}s with no news found, giving up")
                     break
 
             except Exception as e:
@@ -5104,7 +5104,7 @@ async def crawl_html_news_pages(url: str, months: int = 6, custom_news_url: str 
 
     deduped_news = list(seen_titles.values())
     if len(deduped_news) < len(news_by_url):
-        print(f"[DEDUP] Removed {len(news_by_url) - len(deduped_news)} duplicate news items by title+date")
+        logger.debug(f"[DEDUP] Removed {len(news_by_url) - len(deduped_news)} duplicate news items by title+date")
 
     # Tertiary deduplication by URL slug (catch same news with different URL paths)
     # e.g., /news/20260112-article vs /news/2026/20260112-article vs /press-releases/20260112-article
@@ -5129,6 +5129,6 @@ async def crawl_html_news_pages(url: str, months: int = 6, custom_news_url: str 
 
     final_news = list(seen_slugs_final.values())
     if len(final_news) < len(deduped_news):
-        print(f"[DEDUP] Removed {len(deduped_news) - len(final_news)} duplicate news items by URL slug")
+        logger.debug(f"[DEDUP] Removed {len(deduped_news) - len(final_news)} duplicate news items by URL slug")
 
     return final_news

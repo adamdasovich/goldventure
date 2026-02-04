@@ -98,7 +98,7 @@ class CompanyDataScraper:
         remaining = self._time_remaining()
         if remaining < 30:  # Less than 30 seconds remaining
             elapsed = (datetime.now() - self.scrape_start_time).total_seconds()
-            print(f"[TIME-LIMIT] {elapsed:.0f}s elapsed, skipping {section_name or 'remaining sections'} (need 30s buffer)")
+            logger.info(f"[TIME-LIMIT] {elapsed:.0f}s elapsed, skipping {section_name or 'remaining sections'} (need 30s buffer)")
             return False
         return True
 
@@ -159,7 +159,7 @@ class CompanyDataScraper:
         async with AsyncWebCrawler(config=browser_config) as crawler:
             # 1. Scrape homepage first (gets basic info, nav structure) - ALWAYS do this
             if 'homepage' in sections:
-                print(f"[SCRAPE] Scraping homepage: {self.base_url}")
+                logger.info(f"[SCRAPE] Scraping homepage: {self.base_url}")
                 await self._scrape_homepage(crawler, crawler_config)
 
             # 2. Find and scrape About/Corporate section
@@ -168,7 +168,7 @@ class CompanyDataScraper:
                 for url in about_urls[:2]:  # Limit to 2 about pages
                     if not self._should_continue_scraping('about pages'):
                         break
-                    print(f"[SCRAPE] Scraping about page: {url}")
+                    logger.info(f"[SCRAPE] Scraping about page: {url}")
                     await self._scrape_about_page(crawler, crawler_config, url)
 
             # 3. Find and scrape Team/Management section
@@ -177,7 +177,7 @@ class CompanyDataScraper:
                 for url in team_urls[:3]:  # Limit to 3 team pages
                     if not self._should_continue_scraping('team pages'):
                         break
-                    print(f"[SCRAPE] Scraping team page: {url}")
+                    logger.info(f"[SCRAPE] Scraping team page: {url}")
                     await self._scrape_team_page(crawler, crawler_config, url)
 
             # 4. Find and scrape Investors section
@@ -190,7 +190,7 @@ class CompanyDataScraper:
                 for url in investor_urls[:5]:
                     if not self._should_continue_scraping('investor pages'):
                         break
-                    print(f"[SCRAPE] Scraping investor page: {url}")
+                    logger.info(f"[SCRAPE] Scraping investor page: {url}")
                     await self._scrape_investor_page(crawler, crawler_config, url)
 
             # 5. Find and scrape Projects section
@@ -199,7 +199,7 @@ class CompanyDataScraper:
                 for url in project_urls[:3]:
                     if not self._should_continue_scraping('project pages'):
                         break
-                    print(f"[SCRAPE] Scraping projects page: {url}")
+                    logger.info(f"[SCRAPE] Scraping projects page: {url}")
                     await self._scrape_projects_page(crawler, crawler_config, url)
 
                 # ENHANCED: Also look for potential project pages in nav_links
@@ -209,7 +209,7 @@ class CompanyDataScraper:
                         if not self._should_continue_scraping('potential project pages'):
                             break
                         if url not in self.visited_urls:
-                            print(f"[SCRAPE] Scraping potential project page: {url}")
+                            logger.info(f"[SCRAPE] Scraping potential project page: {url}")
                             await self._scrape_projects_page(crawler, crawler_config, url)
 
                 # ENHANCED: Scrape project pages found in navigation dropdown menus
@@ -219,7 +219,7 @@ class CompanyDataScraper:
                         if not self._should_continue_scraping('nav dropdown project pages'):
                             break
                         if url not in self.visited_urls:
-                            print(f"[SCRAPE] Scraping nav dropdown project page: {url}")
+                            logger.info(f"[SCRAPE] Scraping nav dropdown project page: {url}")
                             await self._scrape_projects_page(crawler, crawler_config, url)
 
                 # After scraping listing pages, visit individual project detail pages
@@ -236,7 +236,7 @@ class CompanyDataScraper:
                     for url in detail_urls_to_visit[:10]:
                         if not self._should_continue_scraping('project detail pages'):
                             break
-                        print(f"[SCRAPE] Scraping project detail page: {url}")
+                        logger.info(f"[SCRAPE] Scraping project detail page: {url}")
                         await self._scrape_projects_page(crawler, crawler_config, url)
 
             # 6. Find and scrape News section
@@ -245,14 +245,14 @@ class CompanyDataScraper:
                 for url in news_urls[:20]:  # Allow more patterns for year-based archives
                     if not self._should_continue_scraping('news pages'):
                         break
-                    print(f"[SCRAPE] Scraping news page: {url}")
+                    logger.info(f"[SCRAPE] Scraping news page: {url}")
                     await self._scrape_news_page(crawler, crawler_config, url)
 
             # 7. Find and scrape Contact section (lowest priority - skip if short on time)
             if 'contact' in sections and self._should_continue_scraping('contact'):
                 contact_urls = self._find_section_urls(['contact', 'connect'])
                 for url in contact_urls[:1]:
-                    print(f"[SCRAPE] Scraping contact page: {url}")
+                    logger.info(f"[SCRAPE] Scraping contact page: {url}")
                     await self._scrape_contact_page(crawler, crawler_config, url)
 
         # Post-process and deduplicate
@@ -405,7 +405,7 @@ class CompanyDataScraper:
                     if ticker and len(ticker) >= 2 and len(ticker) <= 5 and ticker.upper() not in invalid_tickers:
                         self.extracted_data['company']['ticker_symbol'] = ticker
                         self.extracted_data['company']['exchange'] = exchange
-                        print(f"[TICKER] Found on {page_name}: {exchange}:{ticker}")
+                        logger.info(f"[TICKER] Found on {page_name}: {exchange}:{ticker}")
                         return True
                 except (IndexError, AttributeError):
                     continue
@@ -479,7 +479,7 @@ class CompanyDataScraper:
                 full_url = urljoin(self.base_url, url)
                 if full_url not in potential_urls:
                     potential_urls.append(full_url)
-                    print(f"[DISCOVER] Potential project page: {text} -> {full_url}")
+                    logger.debug(f"[DISCOVER] Potential project page: {text} -> {full_url}")
 
         return potential_urls
 
@@ -548,7 +548,7 @@ class CompanyDataScraper:
                 if not is_project_parent:
                     continue
 
-                print(f"[NAV-DROPDOWN] Found projects dropdown menu: '{parent_link.get_text(strip=True)}'")
+                logger.debug(f"[NAV-DROPDOWN] Found projects dropdown menu: '{parent_link.get_text(strip=True)}'")
 
                 # Extract child links from the dropdown
                 if nested_ul:
@@ -570,7 +570,7 @@ class CompanyDataScraper:
 
                             if full_url not in project_urls and self._is_internal_link(href):
                                 project_urls.append(full_url)
-                                print(f"[NAV-DROPDOWN] Found project: '{text}' -> {full_url}")
+                                logger.debug(f"[NAV-DROPDOWN] Found project: '{text}' -> {full_url}")
 
         return project_urls
 
@@ -588,7 +588,7 @@ class CompanyDataScraper:
                 error_msg = str(crawl_error).lower()
                 # If navigation error, wait and retry with longer delay
                 if 'navigating' in error_msg or 'content' in error_msg:
-                    print(f"[CLOUDFLARE] Page navigation detected, waiting and retrying...")
+                    logger.warning(f"[CLOUDFLARE] Page navigation detected, waiting and retrying...")
                     await asyncio.sleep(8)  # Wait 8 seconds for Cloudflare to complete
                     from crawl4ai import CrawlerRunConfig
                     retry_config = CrawlerRunConfig(
@@ -612,7 +612,7 @@ class CompanyDataScraper:
             title = soup.find('title')
             title_text = title.get_text(strip=True) if title else ""
             if any(indicator in title_text.lower() for indicator in cloudflare_indicators):
-                print(f"[CLOUDFLARE] Detected challenge page in title, retrying with longer wait...")
+                logger.warning(f"[CLOUDFLARE] Detected challenge page in title, retrying with longer wait...")
                 # Wait and retry with longer delay
                 await asyncio.sleep(8)  # Wait 8 seconds for Cloudflare to complete
                 from crawl4ai import CrawlerRunConfig
@@ -785,12 +785,12 @@ class CompanyDataScraper:
                                     if item.get('@type') in ['WebSite', 'Organization', 'Corporation']:
                                         if item.get('description'):
                                             desc_content = item['description']
-                                            print(f"[DESC] Found description in JSON-LD ({item.get('@type')})")
+                                            logger.debug(f"[DESC] Found description in JSON-LD ({item.get('@type')})")
                                             break
                         # Direct schema object
                         elif isinstance(schema_data, dict) and schema_data.get('description'):
                             desc_content = schema_data['description']
-                            print(f"[DESC] Found description in JSON-LD")
+                            logger.debug(f"[DESC] Found description in JSON-LD")
 
                         if desc_content:
                             break
@@ -897,7 +897,7 @@ class CompanyDataScraper:
                             # Accept if it has multiple company indicators and few bio indicators
                             if company_count >= 2 and bio_count == 0:
                                 homepage_desc = p_text
-                                print(f"[DESC] Found description from main content scan")
+                                logger.debug(f"[DESC] Found description from main content scan")
                                 break
 
             # Use homepage description if it's better than meta description
@@ -922,7 +922,7 @@ class CompanyDataScraper:
                     if exchange_code in exchange_map and len(ticker_code) >= 2 and len(ticker_code) <= 5:
                         self.extracted_data['company']['ticker_symbol'] = ticker_code
                         self.extracted_data['company']['exchange'] = exchange_map[exchange_code]
-                        print(f"[TICKER] Found TradingView widget: {exchange_code}:{ticker_code}")
+                        logger.info(f"[TICKER] Found TradingView widget: {exchange_code}:{ticker_code}")
                         # Don't continue searching - TradingView is authoritative
                         break
 
@@ -1000,7 +1000,7 @@ class CompanyDataScraper:
                                 if qmod_data:
                                     ticker_text += " " + qmod_data
                     except Exception as e:
-                        print(f"[WARN] Failed to fetch iframe: {iframe_src}: {e}")
+                        logger.warning(f"[WARN] Failed to fetch iframe: {iframe_src}: {e}")
 
             # Helper function to normalize exchange names
             def normalize_exchange(ex):
@@ -1087,7 +1087,7 @@ class CompanyDataScraper:
                         self.extracted_data['company']['ticker_symbol'] = ticker
                         self.extracted_data['company']['exchange'] = exchange
                         ticker_found = True
-                        print(f"[TICKER] Found Canadian exchange in ticker elements: {exchange}:{ticker}")
+                        logger.info(f"[TICKER] Found Canadian exchange in ticker elements: {exchange}:{ticker}")
                         break
 
             # Priority 2: Look for OTC tickers in targeted ticker elements
@@ -1100,7 +1100,7 @@ class CompanyDataScraper:
                             self.extracted_data['company']['ticker_symbol'] = ticker
                             self.extracted_data['company']['exchange'] = exchange
                             ticker_found = True
-                            print(f"[TICKER] Found OTC in ticker elements: {exchange}:{ticker}")
+                            logger.info(f"[TICKER] Found OTC in ticker elements: {exchange}:{ticker}")
                             break
 
             # Priority 3: Look for Canadian exchange tickers in full page text
@@ -1116,7 +1116,7 @@ class CompanyDataScraper:
                             self.extracted_data['company']['ticker_symbol'] = ticker
                             self.extracted_data['company']['exchange'] = exchange
                             ticker_found = True
-                            print(f"[TICKER] Found Canadian exchange in page text: {exchange}:{ticker}")
+                            logger.info(f"[TICKER] Found Canadian exchange in page text: {exchange}:{ticker}")
                             break
 
             # Priority 4: Other patterns (reverse patterns, parenthetical) in full page
@@ -1130,11 +1130,11 @@ class CompanyDataScraper:
                             self.extracted_data['company']['ticker_symbol'] = ticker
                             self.extracted_data['company']['exchange'] = exchange
                             ticker_found = True
-                            print(f"[TICKER] Found via reverse pattern: {exchange}:{ticker}")
+                            logger.info(f"[TICKER] Found via reverse pattern: {exchange}:{ticker}")
                             break
 
             if not ticker_found:
-                print(f"[TICKER] No ticker found on page")
+                logger.info(f"[TICKER] No ticker found on page")
 
             # Extract navigation links for later use
             nav_links = []
@@ -1151,7 +1151,7 @@ class CompanyDataScraper:
             dropdown_project_urls = self._extract_nav_dropdown_projects(soup)
             if dropdown_project_urls:
                 self.extracted_data['_nav_dropdown_projects'] = dropdown_project_urls
-                print(f"[NAV-DROPDOWN] Found {len(dropdown_project_urls)} project URLs from dropdown menus")
+                logger.debug(f"[NAV-DROPDOWN] Found {len(dropdown_project_urls)} project URLs from dropdown menus")
 
             # Extract social media links
             self._extract_social_media(soup)
@@ -1209,11 +1209,11 @@ class CompanyDataScraper:
                     if not any(p.get('name', '').lower() == project['name'].lower() for p in self.extracted_data['projects']):
                         self.extracted_data['projects'].append(project)
 
-            print(f"[OK] Homepage scraped: {self.extracted_data['company'].get('name', 'Unknown')}")
+            logger.info(f"[OK] Homepage scraped: {self.extracted_data['company'].get('name', 'Unknown')}")
 
         except Exception as e:
             self.errors.append(f"Homepage scraping error: {str(e)}")
-            print(f"[ERROR] Homepage: {str(e)}")
+            logger.error(f"[ERROR] Homepage: {str(e)}")
 
     async def _scrape_about_page(self, crawler, config, url: str):
         """Scrape about/corporate page for company details."""
@@ -1254,10 +1254,10 @@ class CompanyDataScraper:
                         'extracted_at': datetime.utcnow().isoformat(),
                     }
                     self.extracted_data['documents'].append(doc)
-                    print(f"[OK] Direct PDF detected at {url}: {title} ({doc_type})")
+                    logger.info(f"[OK] Direct PDF detected at {url}: {title} ({doc_type})")
                     return
             except Exception as pdf_check_error:
-                print(f"[DEBUG] PDF check failed for {url}: {pdf_check_error}")
+                logger.debug(f"[DEBUG] PDF check failed for {url}: {pdf_check_error}")
 
             result = await crawler.arun(url=url, config=config)
             if not result.success:
@@ -1572,7 +1572,7 @@ class CompanyDataScraper:
                         if doc.get('source_url') not in existing_urls:
                             self.extracted_data['documents'].append(doc)
 
-            print(f"[OK] About page scraped: {url}")
+            logger.info(f"[OK] About page scraped: {url}")
 
         except Exception as e:
             self.errors.append(f"About page error ({url}): {str(e)}")
@@ -1662,7 +1662,7 @@ class CompanyDataScraper:
                     person['role_type'] = role_type
                 self.extracted_data['people'].append(person)
 
-            print(f"[OK] Team page scraped: {len(members_found)} people found")
+            logger.info(f"[OK] Team page scraped: {len(members_found)} people found")
 
         except Exception as e:
             self.errors.append(f"Team page error ({url}): {str(e)}")
@@ -1956,7 +1956,7 @@ class CompanyDataScraper:
                         'document_type': doc_type,
                         'extracted_at': datetime.utcnow().isoformat(),
                     })
-                    print(f"[DOC] Found iframe PDF: {title[:50]}")
+                    logger.debug(f"[DOC] Found iframe PDF: {title[:50]}")
 
             # Find and follow sub-pages for presentations, fact sheets, and reports
             sub_page_keywords = [
@@ -2004,7 +2004,7 @@ class CompanyDataScraper:
                     value *= 1_000_000
                 self.extracted_data['company']['shares_outstanding'] = int(value)
 
-            print(f"[OK] Investor page scraped: {len(self.extracted_data['documents'])} documents found")
+            logger.info(f"[OK] Investor page scraped: {len(self.extracted_data['documents'])} documents found")
 
         except Exception as e:
             self.errors.append(f"Investor page error ({url}): {str(e)}")
@@ -2073,11 +2073,11 @@ class CompanyDataScraper:
                         'extracted_at': datetime.utcnow().isoformat(),
                     }
                     self.extracted_data['documents'].append(doc)
-                    print(f"[OK] Direct PDF detected at {final_url}: {title} ({doc_type})")
+                    logger.info(f"[OK] Direct PDF detected at {final_url}: {title} ({doc_type})")
                     return
             except Exception as pdf_check_error:
                 # PDF check failed, continue with regular scraping
-                print(f"[DEBUG] PDF check failed for {url}: {pdf_check_error}")
+                logger.debug(f"[DEBUG] PDF check failed for {url}: {pdf_check_error}")
 
             result = await crawler.arun(url=url, config=config)
             if not result.success:
@@ -2148,11 +2148,11 @@ class CompanyDataScraper:
                         'document_type': doc_type,
                         'extracted_at': datetime.utcnow().isoformat(),
                     })
-                    print(f"[DOC] Found iframe PDF on subpage: {title[:50]}")
+                    logger.debug(f"[DOC] Found iframe PDF on subpage: {title[:50]}")
                     docs_found += 1
 
             if docs_found > 0:
-                print(f"[OK] Document sub-page scraped ({url}): {docs_found} documents found")
+                logger.info(f"[OK] Document sub-page scraped ({url}): {docs_found} documents found")
 
         except Exception as e:
             self.errors.append(f"Document sub-page error ({url}): {str(e)}")
@@ -2206,7 +2206,7 @@ class CompanyDataScraper:
                 financial_indicators = ['financial', 'statement', 'quarterly', 'annual report', 'md&a', 'mda']
                 if not any(fi in combined for fi in financial_indicators):
                     doc['document_type'] = 'presentation'
-                    print(f"[DOC] Detected presentation by month-year pattern: {href}")
+                    logger.debug(f"[DOC] Detected presentation by month-year pattern: {href}")
 
         # Extract year
         year_match = re.search(r'(20\d{2})', combined)
@@ -2527,7 +2527,7 @@ class CompanyDataScraper:
             # Add found projects
             self.extracted_data['projects'].extend(projects_found)
 
-            print(f"[OK] Projects page scraped: {len(projects_found)} projects found")
+            logger.info(f"[OK] Projects page scraped: {len(projects_found)} projects found")
 
         except Exception as e:
             self.errors.append(f"Projects page error ({url}): {str(e)}")
@@ -2761,7 +2761,7 @@ class CompanyDataScraper:
                                         continue
 
                                 if wp_items_found > 0:
-                                    print(f"[WORDPRESS] Found {wp_items_found} news items from {wp_api_url}")
+                                    logger.info(f"[WORDPRESS] Found {wp_items_found} news items from {wp_api_url}")
                                     wp_items_total += wp_items_found
                         except aiohttp.ClientError:
                             continue  # Endpoint doesn't exist or failed
@@ -2770,7 +2770,7 @@ class CompanyDataScraper:
                             continue
 
                 if wp_items_total > 0:
-                    print(f"[WORDPRESS] Total: {wp_items_total} news items from REST API")
+                    logger.info(f"[WORDPRESS] Total: {wp_items_total} news items from REST API")
             except Exception as e:
                 logger.debug(f"WordPress REST API check failed: {e}")
 
@@ -3401,7 +3401,7 @@ class CompanyDataScraper:
             # Add found news to extracted data - allow more items per page since we want comprehensive coverage
             self.extracted_data['news'].extend(news_found[:100])  # Limit to 100 items per page
 
-            print(f"[OK] News page scraped: {len(news_found)} items found")
+            logger.info(f"[OK] News page scraped: {len(news_found)} items found")
 
         except Exception as e:
             self.errors.append(f"News page error ({url}): {str(e)}")
@@ -3696,7 +3696,7 @@ class CompanyDataScraper:
             # Extract social media
             self._extract_social_media(soup)
 
-            print(f"[OK] Contact page scraped")
+            logger.info(f"[OK] Contact page scraped")
 
         except Exception as e:
             self.errors.append(f"Contact page error ({url}): {str(e)}")
@@ -3829,7 +3829,7 @@ class CompanyDataScraper:
                 doc['year'] = year
 
             self.extracted_data['documents'].append(doc)
-            print(f"[HOMEPAGE-DOC] Found {doc_type}: {title} -> {full_url}")
+            logger.debug(f"[HOMEPAGE-DOC] Found {doc_type}: {title} -> {full_url}")
 
     def _is_internal_link(self, href: str) -> bool:
         """Check if link is internal."""
@@ -4146,28 +4146,28 @@ async def scrape_company_website(url: str, sections: List[str] = None) -> Dict[s
 if __name__ == "__main__":
     async def test():
         result = await scrape_company_website("https://www.1911gold.com")
-        print("\n" + "=" * 60)
-        print("EXTRACTED DATA")
-        print("=" * 60)
+        logger.debug("\n" + "=" * 60)
+        logger.debug("EXTRACTED DATA")
+        logger.debug("=" * 60)
 
         company = result['data']['company']
-        print(f"\nCompany: {company.get('name')}")
-        print(f"Ticker: {company.get('ticker_symbol')} ({company.get('exchange')})")
-        print(f"Description: {company.get('description', '')[:200]}...")
+        logger.debug(f"\nCompany: {company.get('name')}")
+        logger.debug(f"Ticker: {company.get('ticker_symbol')} ({company.get('exchange')})")
+        logger.debug(f"Description: {company.get('description', '')[:200]}...")
 
-        print(f"\nPeople found: {len(result['data']['people'])}")
+        logger.debug(f"\nPeople found: {len(result['data']['people'])}")
         for p in result['data']['people'][:5]:
-            print(f"  - {p.get('full_name')}: {p.get('title')}")
+            logger.debug(f"  - {p.get('full_name')}: {p.get('title')}")
 
-        print(f"\nDocuments found: {len(result['data']['documents'])}")
+        logger.debug(f"\nDocuments found: {len(result['data']['documents'])}")
         for d in result['data']['documents'][:5]:
-            print(f"  - [{d.get('document_type')}] {d.get('title')}")
+            logger.debug(f"  - [{d.get('document_type')}] {d.get('title')}")
 
-        print(f"\nNews items: {len(result['data']['news'])}")
+        logger.debug(f"\nNews items: {len(result['data']['news'])}")
 
         if result['errors']:
-            print(f"\nErrors: {len(result['errors'])}")
+            logger.debug(f"\nErrors: {len(result['errors'])}")
             for e in result['errors']:
-                print(f"  - {e}")
+                logger.debug(f"  - {e}")
 
     asyncio.run(test())

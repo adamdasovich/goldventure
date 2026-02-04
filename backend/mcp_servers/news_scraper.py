@@ -4,6 +4,7 @@ Uses Crawl4AI to scrape articles from configured news sources like The Northern 
 """
 
 import asyncio
+import logging
 import re
 import sys
 from urllib.parse import urljoin, urlparse
@@ -11,6 +12,8 @@ from datetime import datetime, timedelta
 from typing import List, Dict, Optional
 from crawl4ai import AsyncWebCrawler, BrowserConfig, CrawlerRunConfig
 from bs4 import BeautifulSoup
+
+logger = logging.getLogger(__name__)
 
 # Fix Windows console encoding for Unicode characters
 if sys.platform == 'win32':
@@ -121,7 +124,7 @@ class MiningNewsScraper:
                         for selector in config['article_selectors']:
                             article_containers.extend(soup.select(selector))
 
-                    print(f"[{source_name}] Found {len(article_containers)} potential articles on {page_url}")
+                    logger.info(f"[{source_name}] Found {len(article_containers)} potential articles on {page_url}")
 
                     for container in article_containers[:max_articles]:
                         article = self._extract_article(container, page_url, source_name, config)
@@ -130,30 +133,30 @@ class MiningNewsScraper:
                             if not any(a['url'] == article['url'] for a in self.articles):
                                 self.articles.append(article)
                                 try:
-                                    print(f"  [+] {article['title'][:60]}...")
+                                    logger.debug(f"  [+] {article['title'][:60]}...")
                                 except UnicodeEncodeError:
-                                    print(f"  [+] Found article")
+                                    logger.debug(f"  [+] Found article")
 
                     # If we found articles, don't try other pages
                     if self.articles:
                         break
 
                 except Exception as e:
-                    print(f"[{source_name}] Error scraping {page_url}: {str(e)}")
+                    logger.info(f"[{source_name}] Error scraping {page_url}: {str(e)}")
                     continue
 
             # Second pass: fetch dates from article detail pages for articles missing dates
             articles_missing_dates = [a for a in self.articles if not a.get('published_at')]
             if articles_missing_dates:
-                print(f"\n[{source_name}] Fetching dates from {len(articles_missing_dates)} article pages...")
+                logger.info(f"[{source_name}] Fetching dates from {len(articles_missing_dates)} article pages...")
                 for article in articles_missing_dates:
                     try:
                         date_str = await self._fetch_article_date(article['url'], config)
                         if date_str:
                             article['published_at'] = date_str
-                            print(f"  [DATE] {article['title'][:40]}... -> {date_str}")
+                            logger.info(f"  [DATE] {article['title'][:40]}... -> {date_str}")
                     except Exception as e:
-                        print(f"  [WARN] Could not fetch date for {article['url']}: {str(e)}")
+                        logger.warning(f"  [WARN] Could not fetch date for {article['url']}: {str(e)}")
 
         return self.articles
 
@@ -206,7 +209,7 @@ class MiningNewsScraper:
                     return date_str
 
         except Exception as e:
-            print(f"    [DEBUG] Error fetching article date: {str(e)}")
+            logger.debug(f"    [DEBUG] Error fetching article date: {str(e)}")
 
         return None
 
@@ -424,9 +427,9 @@ async def scrape_all_sources(sources: List[Dict]) -> Dict:
             continue
 
         try:
-            print(f"\n{'='*60}")
-            print(f"Scraping: {source['name']} ({source['url']})")
-            print(f"{'='*60}")
+            logger.debug(f"\n{'='*60}")
+            logger.debug(f"Scraping: {source['name']} ({source['url']})")
+            logger.debug(f"{'='*60}")
 
             articles = await scraper.scrape_source(
                 source_url=source['url'],
@@ -437,11 +440,11 @@ async def scrape_all_sources(sources: List[Dict]) -> Dict:
             all_articles.extend(articles)
             sources_processed += 1
 
-            print(f"[{source['name']}] Found {len(articles)} articles")
+            logger.info(f"[{source['name']}] Found {len(articles)} articles")
 
         except Exception as e:
             error_msg = f"Failed to scrape {source['name']}: {str(e)}"
-            print(f"[ERROR] {error_msg}")
+            logger.error(f"[ERROR] {error_msg}")
             errors.append(error_msg)
 
     return {
@@ -636,8 +639,8 @@ if __name__ == '__main__':
             {'name': 'Mining.com', 'url': 'https://mining.com/', 'is_active': True},
         ]
         results = await scrape_all_sources(test_sources)
-        print(f"\nTotal articles found: {results['articles_found']}")
+        logger.debug(f"\nTotal articles found: {results['articles_found']}")
         for article in results['articles'][:5]:
-            print(f"  - {article['title'][:60]}...")
+            logger.debug(f"  - {article['title'][:60]}...")
 
     asyncio.run(test())
