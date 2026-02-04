@@ -2864,42 +2864,60 @@ async def crawl_html_news_pages(url: str, months: int = 6, custom_news_url: str 
 
                 # ============================================================
                 # STRATEGY: Arizona Metals / Duda CMS postArticle pattern
+                # Two variations:
+                # 1. Arizona Metals: Title in link text, date in postDescription
+                # 2. Arras Minerals: Date in link text, title in postDescription
                 # Structure: <div class="postArticle">
-                #   <div class="inner">
-                #     <div class="postTextContainer">
-                #       <div class="postText">
-                #         <div class="postTitle"><h3><a href="/slug">Title</a></h3></div>
-                #         <div class="postDescription">Contains date like "January 13, 2026"</div>
-                #       </div>
-                #     </div>
-                #   </div>
+                #   <div class="postTitle"><h3><a href="/slug">Title OR Date</a></h3></div>
+                #   <div class="postDescription">Date OR Title</div>
                 # </div>
                 # ============================================================
                 for post_article in soup.select('.postArticle, div.postArticle'):
                     try:
-                        # Get title and URL from postTitle link
+                        # Get link element
                         title_elem = post_article.select_one('.postTitle a, .postTitle h3 a, h3 a')
                         if not title_elem:
                             continue
 
-                        title = title_elem.get_text(strip=True)
+                        link_text = title_elem.get_text(strip=True)
                         href = title_elem.get('href', '')
 
-                        if not title or len(title) < 15 or not href:
+                        if not link_text or not href:
                             continue
 
                         # Make URL absolute
                         if href.startswith('/'):
                             href = urljoin(base_url, href)
 
-                        # Extract date from text - look for patterns like "January 13, 2026"
-                        article_text = post_article.get_text()
-                        date_str = None
+                        # Check if link text looks like a date (Arras Minerals pattern)
+                        # Dates look like "January 22, 2026" or "December 16, 2025"
+                        link_is_date = bool(re.match(
+                            r'^(January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},?\s+\d{4}$',
+                            link_text,
+                            re.IGNORECASE
+                        ))
 
-                        # Try "Month DD, YYYY" pattern
+                        if link_is_date:
+                            # Arras Minerals pattern: link text is date, title is in postDescription
+                            desc_elem = post_article.select_one('.postDescription')
+                            if desc_elem:
+                                title = desc_elem.get_text(strip=True)
+                            else:
+                                title = f"News Release - {link_text}"  # Fallback
+                            date_text = link_text
+                        else:
+                            # Arizona Metals pattern: link text is title, date elsewhere
+                            title = link_text
+                            date_text = post_article.get_text()
+
+                        if not title or len(title) < 15:
+                            continue
+
+                        # Extract date from text - look for patterns like "January 13, 2026"
+                        date_str = None
                         date_match = re.search(
                             r'(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{1,2}),?\s+(\d{4})',
-                            article_text,
+                            date_text,
                             re.IGNORECASE
                         )
                         if date_match:
@@ -2913,7 +2931,7 @@ async def crawl_html_news_pages(url: str, months: int = 6, custom_news_url: str 
                         if not date_str:
                             date_match = re.search(
                                 r'(\d{1,2})\s+(January|February|March|April|May|June|July|August|September|October|November|December),?\s+(\d{4})',
-                                article_text,
+                                date_text,
                                 re.IGNORECASE
                             )
                             if date_match:
