@@ -1922,6 +1922,72 @@ class CompanyDataScraper:
                     if doc:
                         self.extracted_data['documents'].append(doc)
 
+            # ENHANCED: Extract PDFs from iframe src attributes (ProcessWire/Adnet sites)
+            # Some sites embed PDFs via viewerjs: <iframe src="/viewerjs/#../path/to/file.pdf">
+            for iframe in soup.find_all('iframe', src=True):
+                iframe_src = iframe.get('src', '')
+                if '.pdf' in iframe_src.lower():
+                    # Extract the actual PDF path (may be after # for viewerjs)
+                    if '#' in iframe_src:
+                        pdf_path = iframe_src.split('#')[-1]
+                    else:
+                        pdf_path = iframe_src
+
+                    # Handle relative paths like "../site/assets/files/..."
+                    if pdf_path.startswith('..'):
+                        # Resolve relative to current URL
+                        pdf_url = urljoin(url, pdf_path)
+                    else:
+                        pdf_url = urljoin(url, pdf_path)
+
+                    # Skip if already have this document
+                    existing_urls = [d.get('source_url') for d in self.extracted_data['documents']]
+                    if pdf_url in existing_urls:
+                        continue
+
+                    # Get title from nearby text (sibling or parent elements)
+                    title = None
+                    parent = iframe.parent
+                    if parent:
+                        # Look for sibling text after the iframe
+                        for sib in parent.find_next_siblings(limit=2):
+                            sib_text = sib.get_text(strip=True)
+                            if sib_text and len(sib_text) > 5 and len(sib_text) < 200:
+                                title = sib_text
+                                break
+                        # Or look for text in parent
+                        if not title:
+                            parent_text = parent.get_text(strip=True)
+                            # Remove common noise
+                            parent_text = re.sub(r'Loading\s*\.{0,3}', '', parent_text).strip()
+                            if parent_text and len(parent_text) > 5 and len(parent_text) < 200:
+                                title = parent_text
+
+                    if not title:
+                        # Extract title from filename
+                        filename = pdf_path.split('/')[-1].replace('.pdf', '').replace('_', ' ').replace('-', ' ')
+                        title = filename.title()
+
+                    # Classify document type
+                    combined = (title + ' ' + pdf_url).lower()
+                    if 'presentation' in combined or 'corporate' in combined:
+                        doc_type = 'presentation'
+                    elif 'fact' in combined and 'sheet' in combined:
+                        doc_type = 'fact_sheet'
+                    elif any(kw in combined for kw in ['financial', 'statement', 'annual', 'quarterly']):
+                        doc_type = 'financial_report'
+                    else:
+                        doc_type = 'presentation'  # Default for iframe PDFs on investor pages
+
+                    doc = {
+                        'source_url': pdf_url,
+                        'title': title[:500] if title else 'Embedded Document',
+                        'document_type': doc_type,
+                        'extracted_at': datetime.utcnow().isoformat(),
+                    }
+                    self.extracted_data['documents'].append(doc)
+                    print(f"[DOC] Found iframe PDF: {doc_type} - {title[:50] if title else pdf_url}")
+
             # Find and follow sub-pages for presentations, fact sheets, and reports
             sub_page_keywords = [
                 'presentation', 'corp-presentation', 'corporate-presentation',
@@ -2790,6 +2856,99 @@ class CompanyDataScraper:
                     # Avoid duplicates
                     if not any(n.get('source_url') == news['source_url'] for n in news_found):
                         news_found.append(news)
+
+            # Strategy 1.7: ProcessWire/Tailwind flex-wrap news layout (Prospector Metals, Adnet sites)
+            # Pattern: <div class="flex flex-wrap">
+            #            <div>Jan 26, 2026</div>
+            #            <div>News Title Here</div>
+            #            <div><a href="/news/slug/">View</a></div>
+            #          </div>
+            if not news_found or len(news_found) < 3:
+                # Look for flex containers that might contain news items
+                flex_containers = soup.find_all('div', class_=lambda c: c and 'flex' in c and 'flex-wrap' in c)
+                for container in flex_containers[:100]:  # Check many potential containers
+                    container_text = container.get_text(strip=True)
+
+                    # Skip navigation/menu items
+                    if len(container_text) < 30 or len(container_text) > 500:
+                        continue
+
+                    # Look for a date pattern in this container
+                    date_patterns = [
+                        (r'(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{1,2}),?\s+(\d{4})', 'short'),
+                        (r'(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{1,2}),?\s+(\d{4})', 'long'),
+                    ]
+                    month_map = {
+                        'jan': '01', 'feb': '02', 'mar': '03', 'apr': '04',
+                        'may': '05', 'jun': '06', 'jul': '07', 'aug': '08',
+                        'sep': '09', 'oct': '10', 'nov': '11', 'dec': '12',
+                        'january': '01', 'february': '02', 'march': '03', 'april': '04',
+                        'june': '06', 'july': '07', 'august': '08',
+                        'september': '09', 'october': '10', 'november': '11', 'december': '12'
+                    }
+
+                    pub_date = None
+                    for pattern, fmt in date_patterns:
+                        match = re.search(pattern, container_text, re.IGNORECASE)
+                        if match:
+                            month_str = match.group(1).lower()
+                            month = month_map.get(month_str[:3], '01')
+                            day = match.group(2).zfill(2)
+                            year = match.group(3)
+                            pub_date = f"{year}-{month}-{day}"
+                            break
+
+                    if not pub_date:
+                        continue
+
+                    # Find the news link in this container
+                    news_link = None
+                    for link in container.find_all('a', href=True):
+                        href = link.get('href', '')
+                        if '/news/' in href.lower() and not href.endswith(('/news/', '/news')):
+                            news_link = urljoin(url, href)
+                            break
+
+                    if not news_link:
+                        continue
+
+                    # Already have this URL?
+                    if any(n.get('source_url') == news_link for n in news_found):
+                        continue
+
+                    # Find the title - look for the longest text that isn't the date
+                    title = None
+                    child_divs = container.find_all('div', recursive=True)
+                    for div in child_divs:
+                        # Skip divs with links (usually the action column)
+                        if div.find('a'):
+                            continue
+                        div_text = div.get_text(strip=True)
+                        # Skip short text and dates
+                        if len(div_text) < 20:
+                            continue
+                        if re.match(r'^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)', div_text):
+                            continue
+                        # This looks like a title
+                        if not title or len(div_text) > len(title):
+                            title = div_text
+
+                    if not title:
+                        # Try getting title from the container text minus date
+                        title = re.sub(r'(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2},?\s+\d{4}', '', container_text, flags=re.IGNORECASE).strip()
+                        title = re.sub(r'\s+View\s+NR\s*$', '', title, flags=re.IGNORECASE).strip()
+
+                    if title and len(title) > 15:
+                        news = {
+                            'title': title[:500],
+                            'publication_date': pub_date,
+                            'source_url': news_link,
+                            'extracted_at': datetime.utcnow().isoformat(),
+                        }
+                        news_found.append(news)
+
+                if news_found:
+                    print(f"[NEWS] Found {len(news_found)} items using flex-wrap strategy")
 
             # Strategy 2: Handle grid-based news layouts (like Silver Spruce's uk-grid)
             # Look for grids containing date + title + VIEW/PDF links
