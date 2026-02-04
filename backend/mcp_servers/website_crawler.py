@@ -4663,6 +4663,74 @@ async def crawl_html_news_pages(url: str, months: int = 6, custom_news_url: str 
                         continue  # Skip malformed item, continue with next
 
                 # ============================================================
+                # STRATEGY 5c-FLEX: Tailwind flex-wrap layout (ProcessWire/Adnet sites)
+                # Pattern: <div class="flex flex-wrap">
+                #            <div>Jan 26, 2026</div>
+                #            <div>News Title Here</div>
+                #            <div><a href="/news/slug/"><icon/></a></div>
+                #          </div>
+                # Used by: Prospector Metals, other Adnet-built sites
+                # ============================================================
+                if '/news' in news_url:
+                    flex_containers = soup.find_all('div', class_=lambda c: c and 'flex-wrap' in str(c))
+                    for container in flex_containers[:100]:
+                        try:
+                            container_text = container.get_text(strip=True)
+                            if len(container_text) < 30 or len(container_text) > 500:
+                                continue
+
+                            # Look for date pattern in container
+                            date_match = re.search(r'(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{1,2}),?\s+(\d{4})', container_text, re.IGNORECASE)
+                            if not date_match:
+                                continue
+
+                            month_map = {'jan': '01', 'feb': '02', 'mar': '03', 'apr': '04', 'may': '05', 'jun': '06',
+                                        'jul': '07', 'aug': '08', 'sep': '09', 'oct': '10', 'nov': '11', 'dec': '12'}
+                            month = month_map.get(date_match.group(1).lower()[:3], '01')
+                            day = date_match.group(2).zfill(2)
+                            year = date_match.group(3)
+                            date_str = f"{year}-{month}-{day}"
+
+                            # Find news link in container
+                            news_link = None
+                            for link in container.find_all('a', href=True):
+                                href = link.get('href', '')
+                                if '/news/' in href and not href.rstrip('/').endswith('/news'):
+                                    news_link = urljoin(news_url, href)
+                                    break
+
+                            if not news_link or news_link in news_by_url:
+                                continue
+
+                            # Extract title - look for longest text that isn't the date
+                            title = None
+                            for child in container.find_all(['div', 'span', 'p'], recursive=True):
+                                if child.find('a'):  # Skip divs containing links
+                                    continue
+                                child_text = child.get_text(strip=True)
+                                if len(child_text) < 20:
+                                    continue
+                                if re.match(r'^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)', child_text):
+                                    continue
+                                if not title or len(child_text) > len(title):
+                                    title = child_text
+
+                            if not title or len(title) < 15:
+                                continue
+
+                            news = {
+                                'title': clean_news_title(title, news_link),
+                                'url': news_link,
+                                'date': date_str,
+                                'document_type': 'news_release',
+                                'year': year
+                            }
+                            _add_news_item(news_by_url, news, cutoff_date, "FLEX-WRAP")
+                        except Exception as e:
+                            logger.debug(f"Skipping flex-wrap news item: {e}")
+                            continue
+
+                # ============================================================
                 # STRATEGY 5d: Freegold Ventures - a.latest with h3 date
                 # Links with "latest" class containing h3 date (Mon DD format)
                 # <a class="latest" href="..."><h3>Jan 15</h3>Title</a>

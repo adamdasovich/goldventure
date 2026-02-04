@@ -1922,6 +1922,34 @@ class CompanyDataScraper:
                     if doc:
                         self.extracted_data['documents'].append(doc)
 
+            # Extract PDFs from iframe src (ProcessWire/Adnet sites use viewerjs)
+            # Pattern: <iframe src="/viewerjs/#../path/to/file.pdf">
+            for iframe in soup.find_all('iframe', src=True):
+                src = iframe.get('src', '')
+                if '.pdf' in src.lower():
+                    # Extract PDF path (may be after # for viewerjs)
+                    pdf_path = src.split('#')[-1] if '#' in src else src
+                    pdf_url = urljoin(url, pdf_path)
+
+                    # Skip duplicates
+                    if any(d.get('source_url') == pdf_url for d in self.extracted_data['documents']):
+                        continue
+
+                    # Get title from filename
+                    filename = pdf_path.split('/')[-1].replace('.pdf', '').replace('_', ' ').replace('-', ' ')
+                    title = filename.title()
+
+                    # Classify - iframes on investor pages are usually presentations
+                    doc_type = 'presentation' if 'presentation' in pdf_url.lower() or 'corporate' in pdf_url.lower() else 'presentation'
+
+                    self.extracted_data['documents'].append({
+                        'source_url': pdf_url,
+                        'title': title[:500],
+                        'document_type': doc_type,
+                        'extracted_at': datetime.utcnow().isoformat(),
+                    })
+                    print(f"[DOC] Found iframe PDF: {title[:50]}")
+
             # Find and follow sub-pages for presentations, fact sheets, and reports
             sub_page_keywords = [
                 'presentation', 'corp-presentation', 'corporate-presentation',
