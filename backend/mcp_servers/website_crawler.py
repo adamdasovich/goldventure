@@ -4664,22 +4664,25 @@ async def crawl_html_news_pages(url: str, months: int = 6, custom_news_url: str 
 
                 # ============================================================
                 # STRATEGY 5c-FLEX: Tailwind flex-wrap layout (ProcessWire/Adnet sites)
-                # Pattern: <div class="flex flex-wrap">
-                #            <div>Jan 26, 2026</div>
-                #            <div>News Title Here</div>
-                #            <div><a href="/news/slug/"><icon/></a></div>
+                # Pattern: <div class="flex flex-wrap -mx-*">
+                #            <div class="w-1/5">date div</div>
+                #            <div class="w-3/4">title text</div>
+                #            <div class="w-1/5"><a href="/news/..."></a></div>
                 #          </div>
                 # Used by: Prospector Metals, other Adnet-built sites
                 # ============================================================
                 if '/news' in news_url:
-                    flex_containers = soup.find_all('div', class_=lambda c: c and 'flex-wrap' in str(c))
+                    # Find flex-wrap containers with negative margins (layout containers)
+                    flex_containers = soup.find_all('div', class_=lambda c: c and 'flex-wrap' in str(c) and '-mx-' in str(c))
                     for container in flex_containers[:100]:
                         try:
-                            container_text = container.get_text(strip=True)
-                            if len(container_text) < 30 or len(container_text) > 500:
+                            # Look at DIRECT children only (the width-based columns)
+                            direct_children = container.find_all('div', recursive=False)
+                            if len(direct_children) < 2:
                                 continue
 
-                            # Look for date pattern in container
+                            # Extract date from container text
+                            container_text = container.get_text(strip=True)
                             date_match = re.search(r'(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{1,2}),?\s+(\d{4})', container_text, re.IGNORECASE)
                             if not date_match:
                                 continue
@@ -4702,18 +4705,21 @@ async def crawl_html_news_pages(url: str, months: int = 6, custom_news_url: str 
                             if not news_link or news_link in news_by_url:
                                 continue
 
-                            # Extract title - look for longest text that isn't the date
+                            # Extract title from direct children with width classes (w-3/4, w-3/5, etc.)
                             title = None
-                            for child in container.find_all(['div', 'span', 'p'], recursive=True):
-                                if child.find('a'):  # Skip divs containing links
+                            for child in direct_children:
+                                child_class = ' '.join(child.get('class', []))
+                                # Skip link containers and narrow width columns
+                                if child.find('a', href=True):
                                     continue
-                                child_text = child.get_text(strip=True)
-                                if len(child_text) < 20:
-                                    continue
-                                if re.match(r'^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)', child_text):
-                                    continue
-                                if not title or len(child_text) > len(title):
-                                    title = child_text
+                                # Look for wider columns (w-3/4, w-3/5, w-2/3, etc.)
+                                if 'w-3/' in child_class or 'w-2/3' in child_class or 'w-full' in child_class:
+                                    child_text = child.get_text(strip=True)
+                                    # Skip if text is just a date
+                                    if re.match(r'^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d', child_text):
+                                        continue
+                                    if len(child_text) > 15 and (not title or len(child_text) > len(title)):
+                                        title = child_text
 
                             if not title or len(title) < 15:
                                 continue
