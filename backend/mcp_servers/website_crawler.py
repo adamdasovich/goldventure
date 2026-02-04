@@ -7,6 +7,7 @@ Updated: Comprehensive date parsing, external news wire support, title cleaning
 
 import asyncio
 import logging
+import ipaddress
 from urllib.parse import urljoin, urlparse
 from typing import List, Dict, Set, Optional, Tuple
 import re
@@ -16,6 +17,44 @@ from crawl4ai import AsyncWebCrawler, BrowserConfig, CrawlerRunConfig
 from bs4 import BeautifulSoup
 
 logger = logging.getLogger(__name__)
+
+
+def is_safe_url(url: str) -> bool:
+    """
+    Validate URL is safe to fetch (prevent SSRF attacks).
+    Blocks internal IPs, localhost, and cloud metadata endpoints.
+    """
+    try:
+        parsed = urlparse(url)
+
+        # Only allow http/https
+        if parsed.scheme not in ('http', 'https'):
+            return False
+
+        hostname = parsed.hostname
+        if not hostname:
+            return False
+
+        # Block localhost variants
+        if hostname in ('localhost', '127.0.0.1', '0.0.0.0', '::1'):
+            return False
+
+        # Block common cloud metadata endpoints
+        if hostname in ('169.254.169.254', 'metadata.google.internal'):
+            return False
+
+        # Try to parse as IP address and check for private/reserved ranges
+        try:
+            ip = ipaddress.ip_address(hostname)
+            if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved:
+                return False
+        except ValueError:
+            # Not an IP address, likely a domain name - that's fine
+            pass
+
+        return True
+    except Exception:
+        return False
 
 # Fix Windows console encoding for Unicode characters
 if sys.platform == 'win32':
@@ -1801,6 +1840,12 @@ async def crawl_html_news_pages(url: str, months: int = 6, custom_news_url: str 
         # Use the base domain (scheme + netloc) not the full URL which might include paths
         # ============================================================
         base_url = f"{parsed_url.scheme}://{parsed_url.netloc}"
+
+        # SSRF protection: Validate base URL before making any requests
+        if not is_safe_url(base_url):
+            logger.warning(f"[SSRF] Blocked unsafe URL: {base_url}")
+            return list(news_by_url.values())
+
         aspx_news_urls = [
             f'{base_url}/news/default.aspx',
             f'{base_url}/news/news.aspx',
@@ -2445,27 +2490,31 @@ async def crawl_html_news_pages(url: str, months: int = 6, custom_news_url: str 
         # This handles sites with non-standard paths like /en/puma-news/
         if custom_news_url:
             custom_news_url = custom_news_url.rstrip('/')
-            news_page_patterns.append(custom_news_url)
-
-            # Detect year pattern in URL (e.g., /press-releases-2026 or /news/2026)
-            # and create variants for other years automatically
-            year_pattern_match = regex.search(r'[-/](\d{4})$', custom_news_url)
-            if year_pattern_match:
-                # URL ends with a year pattern - create variants for other years
-                url_year = int(year_pattern_match.group(1))
-                base_url = custom_news_url[:year_pattern_match.start()]
-                separator = year_pattern_match.group(0)[0]  # '-' or '/'
-
-                # Add current year and previous years (skip if already in URL)
-                for year in [current_year, current_year - 1, current_year - 2]:
-                    if year != url_year:
-                        news_page_patterns.append(f'{base_url}{separator}{year}')
-                print(f"[CUSTOM-URL] Using custom news URL with year variants: {custom_news_url} (base: {base_url})")
+            # SSRF protection: Validate custom URL
+            if not is_safe_url(custom_news_url):
+                logger.warning(f"[SSRF] Blocked unsafe custom URL: {custom_news_url}")
             else:
-                # No year pattern detected - add standard year path variants
-                news_page_patterns.append(f'{custom_news_url}/{current_year}/')
-                news_page_patterns.append(f'{custom_news_url}/{current_year - 1}/')
-                print(f"[CUSTOM-URL] Using custom news URL: {custom_news_url}")
+                news_page_patterns.append(custom_news_url)
+
+                # Detect year pattern in URL (e.g., /press-releases-2026 or /news/2026)
+                # and create variants for other years automatically
+                year_pattern_match = regex.search(r'[-/](\d{4})$', custom_news_url)
+                if year_pattern_match:
+                    # URL ends with a year pattern - create variants for other years
+                    url_year = int(year_pattern_match.group(1))
+                    base_url = custom_news_url[:year_pattern_match.start()]
+                    separator = year_pattern_match.group(0)[0]  # '-' or '/'
+
+                    # Add current year and previous years (skip if already in URL)
+                    for year in [current_year, current_year - 1, current_year - 2]:
+                        if year != url_year:
+                            news_page_patterns.append(f'{base_url}{separator}{year}')
+                    print(f"[CUSTOM-URL] Using custom news URL with year variants: {custom_news_url} (base: {base_url})")
+                else:
+                    # No year pattern detected - add standard year path variants
+                    news_page_patterns.append(f'{custom_news_url}/{current_year}/')
+                    news_page_patterns.append(f'{custom_news_url}/{current_year - 1}/')
+                    print(f"[CUSTOM-URL] Using custom news URL: {custom_news_url}")
 
         # Standard patterns follow
         news_page_patterns.extend([
