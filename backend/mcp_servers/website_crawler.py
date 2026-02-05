@@ -2409,6 +2409,70 @@ async def crawl_html_news_pages(url: str, months: int = 6, custom_news_url: str 
 
                     if items_found > 0:
                         logger.info(f"[WIX-HTML] Found {items_found} news items from Wix HTML")
+
+                    # ============================================================
+                    # WIX-BUTTON: Wix sites with wixui-button "Read More" links
+                    # Pattern: <a class="wixui-button" href="external-url"> preceded by
+                    #   wixui-rich-text divs with title (h2/h3) and date text
+                    # Each news item: [icon] → title div → date div → button div
+                    # Used by: Frontier Lithium (mailchi.mp/newswire.ca links)
+                    # ============================================================
+                    wix_btn_items = 0
+                    wix_date_re = re.compile(
+                        r'^(January|February|March|April|May|June|July|August|September|October|November|December)'
+                        r'\s+\d{1,2},?\s*\d{4}$',
+                        re.IGNORECASE
+                    )
+                    for btn_a in wix_soup.select('a.wixui-button[href]'):
+                        try:
+                            href = btn_a.get('href', '').strip()
+                            if not href or not href.startswith('http'):
+                                continue
+                            if not is_valid_news_url(href):
+                                continue
+
+                            # Walk backwards through preceding elements to find title and date
+                            btn_container = btn_a.parent
+                            title_text = None
+                            date_text = None
+
+                            for prev_el in btn_container.find_all_previous():
+                                if prev_el.name == 'div' and 'wixui-rich-text' in ' '.join(prev_el.get('class', [])):
+                                    el_text = prev_el.get_text(strip=True)
+                                    if not el_text:
+                                        continue
+                                    if wix_date_re.match(el_text) and not date_text:
+                                        date_text = el_text
+                                    elif len(el_text) > 15 and not title_text:
+                                        has_heading = prev_el.find(['h2', 'h3', 'h4'])
+                                        if has_heading or (el_text.isupper() and len(el_text) > 20):
+                                            title_text = el_text
+                                    if title_text and date_text:
+                                        break
+                                # Stop at previous button boundary
+                                if prev_el.name == 'a' and 'wixui-button' in ' '.join(prev_el.get('class', [])):
+                                    break
+
+                            if not title_text or len(title_text) < 10:
+                                continue
+
+                            date_str = parse_date_standalone(date_text) if date_text else None
+
+                            news = {
+                                'title': clean_news_title(title_text, href),
+                                'url': href,
+                                'date': date_str,
+                                'document_type': 'news_release',
+                                'year': date_str[:4] if date_str else None
+                            }
+                            if _add_news_item(news_by_url, news, cutoff_date, "WIX-BUTTON"):
+                                wix_btn_items += 1
+                        except Exception:
+                            continue
+
+                    if wix_btn_items > 0:
+                        logger.info(f"[WIX-BUTTON] Found {wix_btn_items} news items from Wix buttons")
+
         except Exception as e:
             logger.debug(f"Wix HTML extraction failed: {e}")
 
