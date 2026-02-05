@@ -4092,15 +4092,30 @@ async def crawl_html_news_pages(url: str, months: int = 6, custom_news_url: str 
                         continue
 
                 # ============================================================
-                # STRATEGY 4d.7: Joomla Category List table (Firefox Gold)
+                # STRATEGY 4d.7: Joomla Category List table (Firefox Gold, Homeland Uranium)
                 # Structure: <table class="com-content-category__table ...">
                 #   <tr class="cat-list-row0">
                 #     <th class="list-title"><a href="...">Title</a></th>
                 #     <td class="list-date small">20 Jan, 2026</td>
                 #   </tr>
                 # </table>
+                # Date format detection: Some Joomla sites use DD.MM.YYYY (European)
+                # which is ambiguous when both day/month <= 12. Detect format by
+                # checking if ANY date on the page has first number > 12 (must be DD).
                 # ============================================================
-                for cat_row in soup.select('tr[class^="cat-list-row"]'):
+                joomla_cat_rows = soup.select('tr[class^="cat-list-row"]')
+                if joomla_cat_rows:
+                    # Detect DD.MM.YYYY vs MM.DD.YYYY from unambiguous dates
+                    joomla_is_dmy = False
+                    for _cr in joomla_cat_rows:
+                        _dc = _cr.select_one('.list-date')
+                        if _dc:
+                            _dm = re.match(r'^(\d{1,2})\.(\d{1,2})\.\d{2,4}$', _dc.get_text(strip=True))
+                            if _dm and int(_dm.group(1)) > 12:
+                                joomla_is_dmy = True
+                                break
+
+                for cat_row in joomla_cat_rows:
                     try:
                         # Get title from .list-title link
                         title_cell = cat_row.select_one('.list-title')
@@ -4125,7 +4140,19 @@ async def crawl_html_news_pages(url: str, months: int = 6, custom_news_url: str 
                         date_cell = cat_row.select_one('.list-date')
                         date_str = None
                         if date_cell:
-                            date_str = parse_date_standalone(date_cell.get_text(strip=True))
+                            date_text = date_cell.get_text(strip=True)
+                            # If DD.MM.YYYY format detected, parse directly
+                            if joomla_is_dmy:
+                                dmy_match = re.match(r'^(\d{1,2})\.(\d{1,2})\.(20\d{2}|\d{2})$', date_text)
+                                if dmy_match:
+                                    day, month, year = dmy_match.groups()
+                                    if len(year) == 2:
+                                        year = f"20{year}"
+                                    date_str = f"{year}-{month.zfill(2)}-{day.zfill(2)}"
+                                else:
+                                    date_str = parse_date_standalone(date_text)
+                            else:
+                                date_str = parse_date_standalone(date_text)
 
                         news = {
                             'title': clean_news_title(title, href),
