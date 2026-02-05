@@ -2473,6 +2473,73 @@ async def crawl_html_news_pages(url: str, months: int = 6, custom_news_url: str 
                     if wix_btn_items > 0:
                         logger.info(f"[WIX-BUTTON] Found {wix_btn_items} news items from Wix buttons")
 
+                    # ============================================================
+                    # WIX-RICHTEXT: Wix sites with paired wixui-rich-text__text links
+                    # Pattern: Each news item has TWO <a class="wixui-rich-text__text">
+                    #   links with the SAME href - one containing date (in <h2>),
+                    #   one containing title (in <p>)
+                    # Links go to internal pages (/YYMMDD-pr) or PDFs (/_files/ugd/...)
+                    # Used by: Greenheart Gold
+                    # ============================================================
+                    wix_rt_items = 0
+                    wix_rt_date_re = re.compile(r'^\d{2}/\d{2}/\d{4}$')
+
+                    # Group wixui-rich-text__text links by href
+                    wix_rt_by_href = {}
+                    for a_tag in wix_soup.find_all('a', href=True):
+                        classes = ' '.join(a_tag.get('class', []))
+                        if 'wixui-rich-text__text' not in classes:
+                            continue
+                        href = a_tag.get('href', '').strip()
+                        if href.startswith('/'):
+                            href = urljoin(base_url, href)
+                        # Only internal links on same domain
+                        if not href.startswith(base_url):
+                            continue
+                        # Skip homepage, nav pages, and mailto
+                        path = href.replace(base_url, '').strip('/')
+                        if not path or path in ('news', 'projects', 'about', 'investors', 'contact', 'legal'):
+                            continue
+                        if not is_valid_news_url(href):
+                            continue
+                        text = a_tag.get_text(strip=True)
+                        if text:
+                            wix_rt_by_href.setdefault(href, []).append(text)
+
+                    for href, texts in wix_rt_by_href.items():
+                        if len(texts) < 2:
+                            continue
+                        date_text = None
+                        title_text = None
+                        for t in texts:
+                            if wix_rt_date_re.match(t) and not date_text:
+                                date_text = t
+                            elif len(t) > 15 and not title_text:
+                                title_text = t
+
+                        if not title_text or not date_text:
+                            continue
+
+                        # Parse MM/DD/YYYY date directly (North American Wix sites)
+                        try:
+                            parts = date_text.split('/')
+                            date_str = f"{parts[2]}-{parts[0]}-{parts[1]}"
+                        except (IndexError, ValueError):
+                            date_str = parse_date_standalone(date_text)
+
+                        news = {
+                            'title': clean_news_title(title_text, href),
+                            'url': href,
+                            'date': date_str,
+                            'document_type': 'news_release',
+                            'year': date_str[:4] if date_str else None
+                        }
+                        if _add_news_item(news_by_url, news, cutoff_date, "WIX-RICHTEXT"):
+                            wix_rt_items += 1
+
+                    if wix_rt_items > 0:
+                        logger.info(f"[WIX-RICHTEXT] Found {wix_rt_items} news items from Wix rich text links")
+
         except Exception as e:
             logger.debug(f"Wix HTML extraction failed: {e}")
 
