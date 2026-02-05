@@ -268,6 +268,10 @@ def parse_date_standalone(text: str) -> Optional[str]:
         return None
     text = text.strip()
 
+    # Strip ordinal suffixes from day numbers (1st, 2nd, 3rd, 4th, 22nd, etc.)
+    # e.g., "January 22nd, 2026" → "January 22, 2026"
+    text = re.sub(r'(\d)(st|nd|rd|th)\b', r'\1', text)
+
     # XX.XX.YYYY - Dot-separated dates
     # Mining company websites are predominantly North American and use MM.DD.YYYY
     # Even with dots (e.g., Aztec Minerals uses 01.07.2026 for January 7th)
