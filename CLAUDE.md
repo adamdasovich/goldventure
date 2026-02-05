@@ -336,6 +336,15 @@ python -c "from core.tasks import scrape_all_companies_news_task; scrape_all_com
 
 ## Recent Changes (Keep Updated)
 
+### 2026-02-05 - New Extraction Strategies (Batch 3)
+- **DIVI-TOGGLE** strategy for Cantex Mine Development (ID 321) - Divi WordPress toggles with year headers and PDF links
+- **JOOMLA-CATLIST** strategy for Firefox Gold (ID 326) - Joomla category list tables with `.cat-list-row` rows
+- **WIX-BUTTON** strategy for Frontier Lithium (ID 332) - Wix sites with `wixui-button` "Read More" links to external URLs (mailchi.mp, newswire.ca)
+- Added `DD MONTH YYYY` date format (e.g., "28 JANUARY 2026") to `parse_date_standalone()`
+- Added `DD Mon, YYYY` date format (e.g., "20 Jan, 2026") to `parse_date_standalone()`
+- Added `/news/news-YYYY` URL patterns for Firefox Gold
+- Fixed DUDA-CMS strategy for Arras Minerals (ID 317) - empty titles
+
 ### 2026-01-27 - Fifth Comprehensive Audit (Code Quality)
 **Full codebase audit with code quality improvements.**
 
@@ -640,3 +649,4 @@ When making changes, check for:
 | 2026-02-04 | Prospector Metals (ID 305) had 0 news and no presentation | THREE issues: (1) FLEX-WRAP strategy in `website_crawler.py` wasn't targeting Tailwind layout containers. (2) `_scrape_document_subpage()` didn't extract iframe PDFs. (3) **ViewerJS URL resolution bug**: iframe src `/viewerjs/#../site/assets/file.pdf` was resolved as `urljoin(page_url, "../site/...")` which incorrectly gave `/investors/site/...` instead of `/site/...`. The `../` is relative to `/viewerjs/`, not the page URL. Fix: First resolve viewer path, then resolve PDF path relative to viewer: `urljoin(urljoin(page_url, "/viewerjs/"), "../site/...")`. LESSON: When parsing fragment URLs like `/viewer/#../path`, the relative path is relative to the viewer's directory, not the current page. |
 | 2026-02-04 | T2 Metals (ID 311) had dates parsed incorrectly (2026-02-2026) | DIV-POST-MONTHDAY strategy expected `span.month=January`, `span.day=15` but T2 Metals uses `span.month=February 02`, `span.day=2026` (month+day in month span, year in day span). Fix: Detect when day_text is 4-digit year and parse month+day from month_text instead. LESSON: Same HTML element class names can contain different data formats across sites - detect format before parsing. |
 | 2026-02-04 | Volta Metals (ID 313) custom_news_url year pattern not future-proof | Company `news_url` field stored as `press-releases-2026` (hardcoded year). Old code just added `/2027/` path variant which creates wrong URL `press-releases-2026/2027/`. Fix: Detect year pattern at end of URL (regex `[-/](\d{4})$`), extract base URL and separator, then generate proper variants (`press-releases-2027`, `press-releases-2025`, etc.). LESSON: When storing year-based URLs in database, make the code smart enough to detect year patterns and generate variants - don't rely on appending year paths. |
+| 2026-02-05 | Frontier Lithium (ID 332) had 0 news items | Wix-based site with news linking to external URLs (mailchi.mp, newswire.ca) via `wixui-button` "Read More" links. Existing WIX-HTML strategy only looked for internal `/news/slug` patterns. Fix: Added WIX-BUTTON strategy that finds `<a class="wixui-button">` elements and walks backwards through preceding `wixui-rich-text` divs to find title (h2/h3) and date. Uses `is_valid_news_url()` which correctly blocks listing pages like `money.tmx.com/en/quote/FL/news`. LESSON: Wix sites can have multiple news layout patterns - some use internal blog links, others use external "Read More" buttons to mailchi.mp or newswire.ca. |
