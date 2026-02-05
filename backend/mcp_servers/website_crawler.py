@@ -324,6 +324,17 @@ def parse_date_standalone(text: str) -> Optional[str]:
         year = match.group(3)
         return f"{year}-{month}-{day}"
 
+    # DD Mon, YYYY (Firefox Gold: 20 Jan, 2026)
+    match = re.match(
+        r'^(\d{1,2})\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec),?\s+(20\d{2})$',
+        text, re.IGNORECASE
+    )
+    if match:
+        day = match.group(1).zfill(2)
+        month = MONTH_MAP.get(match.group(2).lower(), '01')
+        year = match.group(3)
+        return f"{year}-{month}-{day}"
+
     # Mon DD YYYY - no comma (Aston Bay: Nov 17 2025)
     match = re.match(
         r'^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{1,2})\s+(20\d{2})$',
@@ -2564,6 +2575,9 @@ async def crawl_html_news_pages(url: str, months: int = 6, custom_news_url: str 
             f'{url}/news/{current_year}/',  # Garibaldi, Silver Tiger (year-based)
             f'{url}/news/{current_year - 1}/',  # Previous year - Silver Tiger has /news/2025/
             f'{url}/news/{current_year - 2}/',  # Two years ago
+            f'{url}/news/news-{current_year}',  # Firefox Gold: /news/news-2026
+            f'{url}/news/news-{current_year - 1}',
+            f'{url}/news/news-{current_year - 2}',
             f'{url}/news-{current_year}/',  # ATEX Resources (year-suffix pattern)
             f'{url}/news-{current_year - 1}/',  # ATEX Resources (previous year)
             # Year-based archive pages under news-releases (Aftermath Silver pattern)
@@ -3944,6 +3958,54 @@ async def crawl_html_news_pages(url: str, months: int = 6, custom_news_url: str 
                                 continue
                     except Exception as e:
                         logger.debug(f"Skipping malformed divi-toggle item: {e}")
+                        continue
+
+                # ============================================================
+                # STRATEGY 4d.7: Joomla Category List table (Firefox Gold)
+                # Structure: <table class="com-content-category__table ...">
+                #   <tr class="cat-list-row0">
+                #     <th class="list-title"><a href="...">Title</a></th>
+                #     <td class="list-date small">20 Jan, 2026</td>
+                #   </tr>
+                # </table>
+                # ============================================================
+                for cat_row in soup.select('tr[class^="cat-list-row"]'):
+                    try:
+                        # Get title from .list-title link
+                        title_cell = cat_row.select_one('.list-title')
+                        if not title_cell:
+                            continue
+                        link = title_cell.find('a', href=True)
+                        if not link:
+                            continue
+
+                        href = link.get('href', '')
+                        title = link.get_text(strip=True)
+                        if not href or not title or len(title) < 10:
+                            continue
+
+                        if not href.startswith('http'):
+                            href = urljoin(news_url, href)
+
+                        if not is_valid_news_url(href):
+                            continue
+
+                        # Get date from .list-date
+                        date_cell = cat_row.select_one('.list-date')
+                        date_str = None
+                        if date_cell:
+                            date_str = parse_date_standalone(date_cell.get_text(strip=True))
+
+                        news = {
+                            'title': clean_news_title(title, href),
+                            'url': href,
+                            'date': date_str,
+                            'document_type': 'news_release',
+                            'year': date_str[:4] if date_str else None
+                        }
+                        _add_news_item(news_by_url, news, cutoff_date, "JOOMLA-CATLIST")
+                    except Exception as e:
+                        logger.debug(f"Skipping malformed joomla cat-list item: {e}")
                         continue
 
                 # ============================================================
