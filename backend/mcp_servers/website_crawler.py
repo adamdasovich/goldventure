@@ -4171,6 +4171,57 @@ async def crawl_html_news_pages(url: str, months: int = 6, custom_news_url: str 
                         continue
 
                 # ============================================================
+                # STRATEGY 4d.8: Super RSS Reader Pro plugin (Metals Group)
+                # WordPress plugin that pulls RSS feeds and renders as tabbed grid
+                # Structure: <div class="srr-item">
+                #   <div class="srr-title"><a href="..." title="Full Title">Title</a></div>
+                #   <div class="srr-meta"><time class="srr-date">3 February 2026</time></div>
+                # </div>
+                # ============================================================
+                srr_items = soup.select('div.srr-item')
+                if srr_items:
+                    srr_count = 0
+                    for srr_item in srr_items:
+                        try:
+                            title_div = srr_item.select_one('div.srr-title a')
+                            if not title_div:
+                                continue
+
+                            href = title_div.get('href', '')
+                            # Prefer title attribute (untruncated) over text content
+                            title = title_div.get('title', '') or title_div.get_text(strip=True)
+                            if not href or not title or len(title) < 10:
+                                continue
+
+                            if not href.startswith('http'):
+                                href = urljoin(news_url, href)
+
+                            if not is_valid_news_url(href):
+                                continue
+
+                            # Get date from time.srr-date
+                            date_str = None
+                            time_el = srr_item.select_one('time.srr-date')
+                            if time_el:
+                                date_str = parse_date_standalone(time_el.get_text(strip=True))
+
+                            news = {
+                                'title': clean_news_title(title, href),
+                                'url': href,
+                                'date': date_str,
+                                'document_type': 'news_release',
+                                'year': date_str[:4] if date_str else None
+                            }
+                            if _add_news_item(news_by_url, news, cutoff_date, "SRR"):
+                                srr_count += 1
+                        except Exception as e:
+                            logger.debug(f"Skipping malformed SRR item: {e}")
+                            continue
+
+                    if srr_count > 0:
+                        logger.info(f"[SRR] Found {srr_count} news items from Super RSS Reader")
+
+                # ============================================================
                 # STRATEGY 4d: Ultimate Elements Grid pattern (CanAlaska)
                 # Structure: <div class="uc_post_title"><a><div class="ue_p_title">TITLE</div></a></div>
                 #            <div class="ue-meta-data"><div class="ue-grid-item-meta-data">DATE</div></div>
