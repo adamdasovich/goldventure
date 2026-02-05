@@ -390,6 +390,10 @@ class CompanyDataScraper:
             (r'\b([A-Z]{2,5})[:\s]+(TSX[.\-\s]?V|TSXV)\b', lambda m: (m.group(1).upper(), 'TSXV')),
             (r'\b([A-Z]{2,5})[:\s]+(TSX)(?![.\-]?V)\b', lambda m: (m.group(1).upper(), 'TSX')),
             (r'\b([A-Z]{2,5})[:\s]+(CSE|NEO)\b', lambda m: (m.group(1).upper(), m.group(2).upper())),
+            # TICKER (EXCHANGE) format: "GDP (TSX-V):" or "GDP (TSXV)"
+            (r'\b([A-Z]{2,5})\s*\((TSX[.\-\s]?V|TSXV)\)', lambda m: (m.group(1).upper(), 'TSXV')),
+            (r'\b([A-Z]{2,5})\s*\((TSX)\)', lambda m: (m.group(1).upper(), 'TSX')),
+            (r'\b([A-Z]{2,5})\s*\((CSE|NEO)\)', lambda m: (m.group(1).upper(), m.group(2).upper())),
         ]
 
         # Invalid tickers to skip
@@ -950,6 +954,10 @@ class CompanyDataScraper:
                 r'\((TSX[.\-\s]?V|TSXV)[:\s]*([A-Z]{2,5})\)',
                 r'\((TSX)[:\s]*([A-Z]{2,5})\)',
                 r'\((CSE)[:\s]*([A-Z]{2,5})\)',
+                # TICKER (EXCHANGE) format: "GDP (TSX-V):" or "GDP (TSXV)"
+                r'\b([A-Z]{2,5})\s*\((TSX[.\-\s]?V|TSXV)\)',
+                r'\b([A-Z]{2,5})\s*\((TSX)\)',
+                r'\b([A-Z]{2,5})\s*\((CSE|NEO)\)',
             ]
 
             # First, try to find ticker in specific stock ticker elements (often JS-rendered)
@@ -1984,7 +1992,7 @@ class CompanyDataScraper:
                 self._extract_ticker_from_page(soup, page_text, "investor page")
 
             # Market cap
-            market_cap_pattern = r'market\s+cap(?:italization)?[:\s]+\$?([\d,\.]+)\s*(million|billion|M|B)?'
+            market_cap_pattern = r'market\s+cap(?:italization)?[:\s]+\$?([\d,\.]+)\s*(million|billion|M(?![a-zA-Z])|B(?![a-zA-Z]))?'
             match = re.search(market_cap_pattern, page_text, re.IGNORECASE)
             if match:
                 value = float(match.group(1).replace(',', ''))
@@ -1996,7 +2004,7 @@ class CompanyDataScraper:
                 self.extracted_data['company']['market_cap_usd'] = value
 
             # Shares outstanding
-            shares_pattern = r'shares\s+outstanding[:\s]+([\d,\.]+)\s*(million|M)?'
+            shares_pattern = r'shares\s+outstanding[:\s]+([\d,\.]+)\s*(million|M(?![a-zA-Z]))?'
             match = re.search(shares_pattern, page_text, re.IGNORECASE)
             if match:
                 value = float(match.group(1).replace(',', ''))
