@@ -68,8 +68,22 @@ class CompanySerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Company
-        fields = '__all__'
-        read_only_fields = ['id', 'created_at', 'updated_at']
+        fields = [
+            'id', 'name', 'legal_name', 'ticker_symbol', 'exchange', 'status',
+            'incorporation_date', 'jurisdiction', 'website', 'news_url',
+            'headquarters_city', 'headquarters_country',
+            'ceo_name', 'cfo_name', 'ir_contact_name', 'ir_contact_email', 'ir_contact_phone',
+            'market_cap_usd', 'shares_outstanding', 'current_price',
+            'description', 'logo_url', 'is_active',
+            'tagline', 'logo_file', 'data_completeness_score',
+            'general_email', 'media_email', 'general_phone',
+            'linkedin_url', 'twitter_url', 'facebook_url', 'youtube_url',
+            'street_address', 'postal_code',
+            'approval_status', 'company_size', 'industry', 'contact_email',
+            'brief_description', 'is_user_submitted',
+            'created_at', 'updated_at', 'project_count',
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at', 'data_completeness_score']
         extra_kwargs = {
             'status': {'required': False},  # Make status optional for user submissions
         }
@@ -86,7 +100,15 @@ class ProjectSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Project
-        fields = '__all__'
+        fields = [
+            'id', 'company', 'company_name', 'company_ticker',
+            'name', 'project_stage', 'primary_commodity',
+            'country', 'province_state', 'latitude', 'longitude',
+            'description', 'ownership_percentage',
+            'acquisition_date', 'last_drill_program',
+            'is_flagship', 'is_active',
+            'created_at', 'updated_at', 'resource_count',
+        ]
         read_only_fields = ['id', 'created_at', 'updated_at']
 
     def get_resource_count(self, obj):
@@ -99,7 +121,15 @@ class ResourceEstimateSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = ResourceEstimate
-        fields = '__all__'
+        fields = [
+            'id', 'project', 'project_name',
+            'category', 'standard',
+            'tonnes', 'gold_grade_gpt', 'gold_ounces',
+            'silver_grade_gpt', 'silver_ounces', 'copper_grade_pct',
+            'report_date', 'cutoff_grade', 'effective_date',
+            'qualified_person', 'report_url',
+            'created_at', 'updated_at',
+        ]
         read_only_fields = ['id', 'created_at', 'updated_at']
 
 
@@ -109,7 +139,16 @@ class EconomicStudySerializer(serializers.ModelSerializer):
 
     class Meta:
         model = EconomicStudy
-        fields = '__all__'
+        fields = [
+            'id', 'project', 'project_name',
+            'study_type', 'release_date',
+            'npv_5_usd', 'irr_percent', 'payback_years',
+            'annual_production_oz', 'mine_life_years',
+            'aisc_per_oz', 'initial_capex_usd',
+            'gold_price_assumption', 'exchange_rate_assumption',
+            'report_url', 'qualified_person', 'notes',
+            'created_at', 'updated_at',
+        ]
         read_only_fields = ['id', 'created_at', 'updated_at']
 
 
@@ -119,8 +158,18 @@ class FinancingSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Financing
-        fields = '__all__'
-        read_only_fields = ['id', 'created_at', 'updated_at']
+        fields = [
+            'id', 'company', 'company_name',
+            'financing_type', 'status',
+            'announced_date', 'closing_date',
+            'amount_raised_usd', 'price_per_share', 'shares_issued',
+            'has_warrants', 'warrant_strike_price', 'warrant_expiry_date',
+            'use_of_proceeds', 'lead_agent',
+            'press_release_url', 'notes',
+            'is_closed', 'closed_at',
+            'created_at', 'updated_at',
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at', 'closed_at']
 
 
 class InvestorSerializer(serializers.ModelSerializer):
@@ -128,7 +177,16 @@ class InvestorSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Investor
-        fields = '__all__'
+        fields = [
+            'id', 'investor_type',
+            'first_name', 'last_name', 'company_name',
+            'email', 'phone', 'linkedin_url',
+            'city', 'country',
+            'focus_regions', 'focus_commodities', 'preferred_project_stages',
+            'typical_check_size_min_usd', 'typical_check_size_max_usd',
+            'relationship_strength', 'notes', 'tags',
+            'user', 'created_at', 'updated_at',
+        ]
         read_only_fields = ['id', 'created_at', 'updated_at']
 
 
@@ -139,8 +197,14 @@ class MarketDataSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = MarketData
-        fields = '__all__'
-        read_only_fields = ['id', 'created_at', 'updated_at']
+        fields = [
+            'id', 'company', 'company_name', 'ticker',
+            'date', 'open_price', 'high_price', 'low_price', 'close_price',
+            'volume', 'change_amount', 'change_percent',
+            'currency', 'source', 'market_cap_usd',
+            'created_at',
+        ]
+        read_only_fields = ['id', 'created_at']
 
 
 class NewsReleaseSerializer(serializers.ModelSerializer):
@@ -149,7 +213,13 @@ class NewsReleaseSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = NewsRelease
-        fields = '__all__'
+        fields = [
+            'id', 'company', 'company_name', 'project',
+            'title', 'release_type', 'release_date',
+            'summary', 'full_text', 'url',
+            'is_material',
+            'created_at', 'updated_at',
+        ]
         read_only_fields = ['id', 'created_at', 'updated_at']
 
 
@@ -159,7 +229,13 @@ class DocumentSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Document
-        fields = '__all__'
+        fields = [
+            'id', 'company', 'company_name', 'project',
+            'title', 'document_type', 'document_date',
+            'file_url', 'file_size_mb',
+            'description', 'is_public',
+            'created_at', 'updated_at',
+        ]
         read_only_fields = ['id', 'created_at', 'updated_at']
 
 
@@ -174,8 +250,26 @@ class CompanyDetailSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Company
-        fields = '__all__'
-        read_only_fields = ['id', 'created_at', 'updated_at']
+        fields = [
+            'id', 'name', 'legal_name', 'ticker_symbol', 'exchange', 'status',
+            'incorporation_date', 'jurisdiction', 'website', 'news_url',
+            'headquarters_city', 'headquarters_country',
+            'ceo_name', 'cfo_name', 'ir_contact_name', 'ir_contact_email', 'ir_contact_phone',
+            'market_cap_usd', 'shares_outstanding', 'current_price',
+            'description', 'logo_url', 'is_active',
+            'tagline', 'logo_file', 'data_completeness_score',
+            'general_email', 'media_email', 'general_phone',
+            'linkedin_url', 'twitter_url', 'facebook_url', 'youtube_url',
+            'street_address', 'postal_code',
+            'approval_status', 'company_size', 'industry', 'contact_email',
+            'brief_description', 'is_user_submitted',
+            'created_at', 'updated_at',
+            # Nested serializers
+            'projects', 'financings',
+            # Method fields
+            'presentation_url', 'fact_sheet_url', 'technical_report_url',
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at', 'data_completeness_score']
 
     def get_presentation_url(self, obj):
         """Get the latest corporate presentation URL"""
@@ -207,7 +301,17 @@ class ProjectDetailSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Project
-        fields = '__all__'
+        fields = [
+            'id', 'company',
+            'name', 'project_stage', 'primary_commodity',
+            'country', 'province_state', 'latitude', 'longitude',
+            'description', 'ownership_percentage',
+            'acquisition_date', 'last_drill_program',
+            'is_flagship', 'is_active',
+            'created_at', 'updated_at',
+            # Nested serializers
+            'resources', 'economic_studies',
+        ]
         read_only_fields = ['id', 'created_at', 'updated_at']
 
 
@@ -303,7 +407,20 @@ class SpeakerEventDetailSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = SpeakerEvent
-        fields = '__all__'
+        fields = [
+            'id', 'company', 'created_by',
+            'title', 'description', 'topic', 'agenda',
+            'scheduled_start', 'scheduled_end', 'timezone', 'duration_minutes',
+            'format', 'max_participants',
+            'status', 'actual_start', 'actual_end',
+            'stream_url', 'is_recorded', 'recording_url', 'transcript_url',
+            'registered_count', 'attended_count', 'questions_count',
+            'created_at', 'updated_at',
+            # Nested serializers
+            'speakers', 'registrations', 'questions',
+            # Method fields
+            'is_registered', 'can_register', 'user_registration',
+        ]
         read_only_fields = ['id', 'created_by', 'registered_count', 'attended_count',
                             'questions_count', 'created_at', 'updated_at']
 
@@ -521,7 +638,21 @@ class SubscriptionAgreementDetailSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = SubscriptionAgreement
-        fields = '__all__'
+        fields = [
+            'id', 'investor', 'financing', 'company',
+            'num_shares', 'price_per_share', 'total_investment_amount', 'currency',
+            'includes_warrants', 'warrant_shares', 'warrant_strike_price', 'warrant_expiry_date',
+            'status', 'agreement_pdf_url', 'docusign_envelope_id',
+            'investor_signed_at', 'investor_ip_address',
+            'company_accepted_at', 'company_accepted_by',
+            'payment_instructions_sent_at', 'payment_received_at', 'payment_reference',
+            'shares_issued', 'shares_issued_at', 'drs_statement_sent_at', 'certificate_number',
+            'accreditation_verified', 'kyc_completed', 'aml_check_completed',
+            'notes', 'rejection_reason',
+            'created_at', 'updated_at',
+            # Nested serializers
+            'transactions', 'payment_instruction', 'drs_documents',
+        ]
         read_only_fields = ['id', 'created_at', 'updated_at']
 
     def get_transactions(self, obj):
@@ -761,7 +892,38 @@ class PropertyListingDetailSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = PropertyListing
-        fields = '__all__'
+        fields = [
+            'id', 'prospector', 'slug',
+            # Basic information
+            'title', 'summary', 'description', 'property_type', 'property_type_display',
+            # Location
+            'country', 'country_display', 'province_state', 'region_district', 'nearest_town',
+            'coordinates_lat', 'coordinates_lng', 'access_description', 'access_type', 'access_type_display',
+            # Claim details
+            'claim_numbers', 'total_claims', 'total_hectares', 'total_acres',
+            'mineral_rights_type', 'mineral_rights_type_display',
+            'surface_rights_included', 'claim_status', 'claim_expiry_date', 'annual_holding_cost',
+            # Minerals & geology
+            'primary_mineral', 'primary_mineral_display', 'secondary_minerals',
+            'deposit_type', 'deposit_type_display', 'geological_setting', 'mineralization_style',
+            # Exploration status
+            'exploration_stage', 'exploration_stage_display', 'work_completed',
+            'historical_production', 'assay_highlights', 'resource_estimate', 'has_43_101_report',
+            # Transaction terms
+            'listing_type', 'listing_type_display', 'asking_price', 'price_currency',
+            'price_negotiable', 'minimum_offer', 'option_terms', 'joint_venture_terms',
+            'lease_terms', 'nsr_royalty', 'includes_equipment', 'equipment_description', 'additional_terms',
+            # Status & visibility
+            'status', 'status_display', 'is_featured', 'featured_until',
+            # Engagement metrics
+            'views_count', 'inquiries_count', 'watchlist_count',
+            # Timestamps
+            'created_at', 'updated_at', 'published_at', 'expires_at',
+            # Nested serializers
+            'media',
+            # Method fields
+            'is_watchlisted', 'is_owner',
+        ]
         read_only_fields = ['id', 'slug', 'prospector', 'views_count', 'inquiries_count',
                           'watchlist_count', 'created_at', 'updated_at', 'published_at']
 
@@ -1399,12 +1561,10 @@ class InvestmentInterestCreateSerializer(serializers.ModelSerializer):
         validated_data['investment_amount'] = validated_data['shares_requested'] * financing.price_per_share
 
         # Track IP address and user agent
+        # SECURITY: Use get_client_ip() to prevent X-Forwarded-For spoofing
         if request:
-            x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
-            if x_forwarded_for:
-                validated_data['ip_address'] = x_forwarded_for.split(',')[0]
-            else:
-                validated_data['ip_address'] = request.META.get('REMOTE_ADDR')
+            from core.security_utils import get_client_ip
+            validated_data['ip_address'] = get_client_ip(request)
             validated_data['user_agent'] = request.META.get('HTTP_USER_AGENT', '')
 
         interest = InvestmentInterest.objects.create(**validated_data)

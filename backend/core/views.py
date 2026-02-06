@@ -2751,12 +2751,9 @@ class ProspectorProfileViewSet(viewsets.ModelViewSet):
         serializer = ProspectorCommissionAgreementCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        # Get client IP
-        x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
-        if x_forwarded_for:
-            ip_address = x_forwarded_for.split(',')[0].strip()
-        else:
-            ip_address = request.META.get('REMOTE_ADDR', '0.0.0.0')
+        # Get client IP - use secure function to prevent X-Forwarded-For spoofing
+        from core.security_utils import get_client_ip
+        ip_address = get_client_ip(request)
 
         # Create agreement record
         agreement = ProspectorCommissionAgreement.objects.create(
