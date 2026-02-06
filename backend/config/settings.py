@@ -97,7 +97,8 @@ AUTH_USER_MODEL = 'core.User'
 # Password validation
 AUTH_PASSWORD_VALIDATORS = [
     {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'},
-    {'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator'},
+    # SECURITY: Require minimum 12 characters (NIST 800-63B recommendation)
+    {'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator', 'OPTIONS': {'min_length': 12}},
     {'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator'},
     {'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator'},
 ]
@@ -150,9 +151,14 @@ from datetime import timedelta
 
 SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(hours=1),  # Reduced from 24h for security
-    'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
+    # SECURITY: Reduced from 7 days to 3 days to limit window if token is stolen
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=3),
     'ROTATE_REFRESH_TOKENS': True,
     'BLACKLIST_AFTER_ROTATION': True,  # Invalidate old refresh tokens
+    # Additional security settings
+    'UPDATE_LAST_LOGIN': True,  # Track login times
+    'ALGORITHM': 'HS256',
+    'AUTH_HEADER_TYPES': ('Bearer',),
 }
 
 # CORS Settings
