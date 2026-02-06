@@ -1329,7 +1329,8 @@ class SpeakerEventConsumer(AsyncWebsocketConsumer):
             await self.send_error("Invalid JSON")
         except Exception as e:
             logger.error(f"Error in receive: {str(e)}")
-            await self.send_error(str(e))
+            # SECURITY: Don't expose internal error details to clients
+            await self.send_error("An error occurred processing your request")
 
     # Message Handlers
     async def handle_question_submit(self, data):

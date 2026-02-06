@@ -3,10 +3,13 @@ Email Notification Utilities
 Sends email alerts for important system events like NI 43-101 discoveries and new financings
 """
 
+import logging
 from django.core.mail import send_mail
 from django.conf import settings
 from django.template.loader import render_to_string
 from django.utils.html import strip_tags
+
+logger = logging.getLogger(__name__)
 
 
 def send_ni43101_discovery_notification(document, company):
@@ -78,10 +81,10 @@ Automated Document Discovery System
             html_message=html_message,
             fail_silently=False,
         )
-        print(f"✉️  Sent NI 43-101 discovery notification for {company.name}")
+        logger.info(f"Sent NI 43-101 discovery notification for {company.name}")
         return True
     except Exception as e:
-        print(f"❌ Failed to send NI 43-101 notification: {str(e)}")
+        logger.error(f"Failed to send NI 43-101 notification: {str(e)}")
         return False
 
 
@@ -174,10 +177,10 @@ Automated Financing Detection System
             html_message=html_message,
             fail_silently=False,
         )
-        print(f"✉️  Sent financing flag notification for {company.name}")
+        logger.info(f"Sent financing flag notification for {company.name}")
         return True
     except Exception as e:
-        print(f"❌ Failed to send financing flag notification: {str(e)}")
+        logger.error(f"Failed to send financing flag notification: {str(e)}")
         return False
 
 
@@ -297,8 +300,8 @@ Junior Mining Intelligence Platform
             html_message=html_message,
             fail_silently=False,
         )
-        print(f"✉️  Sent financing notification for {company.name} - ${financing.amount_raised_usd:,.0f}")
+        logger.info(f"Sent financing notification for {company.name} - ${financing.amount_raised_usd:,.0f}")
         return True
     except Exception as e:
-        print(f"❌ Failed to send financing notification: {str(e)}")
+        logger.error(f"Failed to send financing notification: {str(e)}")
         return False

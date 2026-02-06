@@ -8,8 +8,11 @@ handling edge cases that rule-based systems miss.
 import os
 import json
 import asyncio
+import logging
 import anthropic
 from typing import Dict, List, Optional
+
+logger = logging.getLogger(__name__)
 
 
 def get_claude_client():
@@ -98,7 +101,7 @@ Respond with ONLY the JSON array, no explanation:"""
         return [p for p in projects if p.get('name', '').lower() in valid_names_lower]
 
     except Exception as e:
-        print(f"[CLAUDE VALIDATOR] Error validating projects: {e}")
+        logger.info(f"[CLAUDE VALIDATOR] Error validating projects: {e}")
         return _basic_project_filter(projects)
 
 
@@ -193,7 +196,7 @@ Respond with ONLY the JSON array:"""
         return [item for i, item in enumerate(news_items[:50]) if i in valid_indices]
 
     except Exception as e:
-        print(f"[CLAUDE VALIDATOR] Error validating news: {e}")
+        logger.info(f"[CLAUDE VALIDATOR] Error validating news: {e}")
         return _basic_news_filter(news_items)
 
 
@@ -250,7 +253,7 @@ Respond with ONLY "valid" or "invalid":"""
         return None
 
     except Exception as e:
-        print(f"[CLAUDE VALIDATOR] Error validating description: {e}")
+        logger.info(f"[CLAUDE VALIDATOR] Error validating description: {e}")
         return _basic_description_filter(description)
 
 
@@ -272,14 +275,14 @@ def validate_scraped_data(data: Dict, url: str) -> Dict:
     if original_projects:
         validated_projects = validate_projects_with_claude(original_projects, company_name)
         data['projects'] = validated_projects
-        print(f"[CLAUDE VALIDATOR] Projects: {len(original_projects)} -> {len(validated_projects)}")
+        logger.info(f"[CLAUDE VALIDATOR] Projects: {len(original_projects)} -> {len(validated_projects)}")
 
     # Validate news
     original_news = data.get('news', [])
     if original_news:
         validated_news = validate_news_with_claude(original_news, company_name)
         data['news'] = validated_news
-        print(f"[CLAUDE VALIDATOR] News: {len(original_news)} -> {len(validated_news)}")
+        logger.info(f"[CLAUDE VALIDATOR] News: {len(original_news)} -> {len(validated_news)}")
 
     # Validate description
     description = data.get('company', {}).get('description')
@@ -289,7 +292,7 @@ def validate_scraped_data(data: Dict, url: str) -> Dict:
             data['company']['description'] = validated_description
         else:
             data['company']['description'] = ''
-            print(f"[CLAUDE VALIDATOR] Description marked as invalid")
+            logger.info(f"[CLAUDE VALIDATOR] Description marked as invalid")
 
     return data
 
@@ -525,7 +528,7 @@ async def _fetch_page_with_playwright(url: str) -> Optional[str]:
                 is_challenge = any(ind in title_text or ind in body_text for ind in challenge_indicators)
 
                 if is_challenge:
-                    print(f"[VERIFICATION] Bot challenge detected for {url}, retrying with longer wait...")
+                    logger.info(f"[VERIFICATION] Bot challenge detected for {url}, retrying with longer wait...")
                     await asyncio.sleep(8)  # Wait for challenge to process
 
                     # Retry with longer delay
@@ -544,7 +547,7 @@ async def _fetch_page_with_playwright(url: str) -> Optional[str]:
 
                         # If still showing challenge, give up
                         if any(ind in title_text for ind in challenge_indicators):
-                            print(f"[VERIFICATION] Could not bypass bot protection for {url}")
+                            logger.info(f"[VERIFICATION] Could not bypass bot protection for {url}")
                             return None
 
                 # Extract content
@@ -553,7 +556,7 @@ async def _fetch_page_with_playwright(url: str) -> Optional[str]:
                 return soup.get_text(separator=' ', strip=True)[:3000]
 
     except Exception as e:
-        print(f"[VERIFICATION] Playwright fetch failed for {url}: {e}")
+        logger.info(f"[VERIFICATION] Playwright fetch failed for {url}: {e}")
 
     return None
 
@@ -586,7 +589,7 @@ def _fetch_pages_with_playwright(base_url: str) -> tuple:
             content = await _fetch_page_with_playwright(projects_url)
             if content and len(content) > 100:
                 projects_content = content
-                print(f"[VERIFICATION] Found projects page at: {projects_url}")
+                logger.info(f"[VERIFICATION] Found projects page at: {projects_url}")
                 break
 
         return homepage_content, projects_content
@@ -607,7 +610,7 @@ def _fetch_pages_with_playwright(base_url: str) -> tuple:
         # No event loop exists, create one
         return asyncio.run(_fetch_all())
     except Exception as e:
-        print(f"[VERIFICATION] Playwright wrapper failed: {e}")
+        logger.info(f"[VERIFICATION] Playwright wrapper failed: {e}")
         return None, None
 
 
@@ -637,7 +640,7 @@ def _extract_tradingview_ticker(website_url: str) -> tuple:
                 result = await crawler.arun(url=website_url, config=config)
                 return result.html if result else None
         except Exception as e:
-            print(f"[VERIFICATION] Playwright fetch failed for TradingView: {e}")
+            logger.info(f"[VERIFICATION] Playwright fetch failed for TradingView: {e}")
             return None
 
     # Get raw HTML using Playwright (httpx gets blocked by captchas)
@@ -653,7 +656,7 @@ def _extract_tradingview_ticker(website_url: str) -> tuple:
     except RuntimeError:
         raw_html = asyncio.run(_fetch_raw_html())
     except Exception as e:
-        print(f"[VERIFICATION] TradingView extraction exception: {e}")
+        logger.info(f"[VERIFICATION] TradingView extraction exception: {e}")
         return None, None
 
     if not raw_html:
@@ -675,7 +678,7 @@ def _extract_tradingview_ticker(website_url: str) -> tuple:
             exchange_code = exchange_code.upper()
             ticker_code = ticker_code.upper()
             if exchange_code in exchange_map and 2 <= len(ticker_code) <= 5:
-                print(f"[VERIFICATION] Found TradingView ticker (JSON): {exchange_code}:{ticker_code}")
+                logger.info(f"[VERIFICATION] Found TradingView ticker (JSON): {exchange_code}:{ticker_code}")
                 return ticker_code, exchange_map[exchange_code]
 
     # Pattern 2: URL-encoded format - %22symbol%22%3A%22EXCHANGE%3ATICKER%22
@@ -687,7 +690,7 @@ def _extract_tradingview_ticker(website_url: str) -> tuple:
             exchange_code = exchange_code.upper()
             ticker_code = ticker_code.upper()
             if exchange_code in exchange_map and 2 <= len(ticker_code) <= 5:
-                print(f"[VERIFICATION] Found TradingView ticker (encoded): {exchange_code}:{ticker_code}")
+                logger.info(f"[VERIFICATION] Found TradingView ticker (encoded): {exchange_code}:{ticker_code}")
                 return ticker_code, exchange_map[exchange_code]
 
     return None, None
@@ -737,24 +740,24 @@ def verify_onboarded_company(company_id: int) -> Dict:
     extracted_exchange = None
 
     if company.website:
-        print(f"[VERIFICATION] Fetching pages with Playwright for {company.website}...")
+        logger.info(f"[VERIFICATION] Fetching pages with Playwright for {company.website}...")
         website_content, projects_content = _fetch_pages_with_playwright(company.website)
 
         if website_content:
-            print(f"[VERIFICATION] Homepage content fetched: {len(website_content)} chars")
+            logger.info(f"[VERIFICATION] Homepage content fetched: {len(website_content)} chars")
         else:
-            print(f"[VERIFICATION] Warning: Could not fetch homepage")
+            logger.info(f"[VERIFICATION] Warning: Could not fetch homepage")
 
         if projects_content:
-            print(f"[VERIFICATION] Projects page content fetched: {len(projects_content)} chars")
+            logger.info(f"[VERIFICATION] Projects page content fetched: {len(projects_content)} chars")
         else:
-            print(f"[VERIFICATION] Warning: No projects page found")
+            logger.info(f"[VERIFICATION] Warning: No projects page found")
 
         # Try to extract ticker from TradingView widget (if ticker is missing)
         if not current_data['ticker']:
             extracted_ticker, extracted_exchange = _extract_tradingview_ticker(company.website)
             if extracted_ticker:
-                print(f"[VERIFICATION] Found TradingView ticker: {extracted_exchange}:{extracted_ticker}")
+                logger.info(f"[VERIFICATION] Found TradingView ticker: {extracted_exchange}:{extracted_ticker}")
 
     # Use Claude to verify
     client = get_claude_client()
@@ -844,7 +847,7 @@ IMPORTANT: If saved projects count is 0 but you find projects on the website, pu
             try:
                 verification = json.loads(json_str)
             except json.JSONDecodeError as e:
-                print(f"[VERIFICATION] JSON parse error: {e}")
+                logger.info(f"[VERIFICATION] JSON parse error: {e}")
                 verification = {'status': 'error', 'message': f'JSON parse error: {e}'}
         else:
             verification = {'status': 'error', 'message': 'Could not find JSON in Claude response'}
@@ -859,32 +862,35 @@ IMPORTANT: If saved projects count is 0 but you find projects on the website, pu
                 company.exchange = extracted_exchange
                 company.save(update_fields=['ticker_symbol', 'exchange'])
                 fixes_applied.append(f'Added ticker from TradingView: {extracted_exchange}:{extracted_ticker}')
-                print(f"[VERIFICATION] Auto-fixed: Ticker {extracted_exchange}:{extracted_ticker} for {company.name}")
+                logger.info(f"[VERIFICATION] Auto-fixed: Ticker {extracted_exchange}:{extracted_ticker} for {company.name}")
             else:
                 company.save(update_fields=['ticker_symbol'])
                 fixes_applied.append(f'Added ticker from TradingView: {extracted_ticker}')
-                print(f"[VERIFICATION] Auto-fixed: Ticker {extracted_ticker} for {company.name}")
+                logger.info(f"[VERIFICATION] Auto-fixed: Ticker {extracted_ticker} for {company.name}")
 
         # Fix missing description
         if verification.get('suggested_description') and not current_data['description']:
             company.description = verification['suggested_description'][:1000]
             company.save(update_fields=['description'])
             fixes_applied.append('Added missing description')
-            print(f"[VERIFICATION] Auto-fixed: Added description for {company.name}")
+            logger.info(f"[VERIFICATION] Auto-fixed: Added description for {company.name}")
 
-        # Add missing projects
+        # Add missing projects (use get_or_create to prevent TOCTOU race condition)
         missing_projects = verification.get('missing_projects', [])
         for project_name in missing_projects[:5]:  # Limit to 5 auto-adds
             if project_name and len(project_name) > 2:
-                # Check if project already exists
-                if not Project.objects.filter(company=company, name__iexact=project_name).exists():
-                    Project.objects.create(
-                        company=company,
-                        name=project_name,
-                        project_stage='exploration',
-                    )
+                # Use get_or_create to avoid race condition between exists() and create()
+                project, created = Project.objects.get_or_create(
+                    company=company,
+                    name__iexact=project_name,
+                    defaults={
+                        'name': project_name,
+                        'project_stage': 'exploration',
+                    }
+                )
+                if created:
                     fixes_applied.append(f'Added project: {project_name}')
-                    print(f"[VERIFICATION] Auto-fixed: Added project '{project_name}' for {company.name}")
+                    logger.info(f"[VERIFICATION] Auto-fixed: Added project '{project_name}' for {company.name}")
 
         # Fix ticker if suggested and different (only if not already fixed by TradingView extraction)
         suggested_ticker = verification.get('suggested_ticker')
@@ -893,7 +899,7 @@ IMPORTANT: If saved projects count is 0 but you find projects on the website, pu
             company.ticker_symbol = suggested_ticker
             company.save(update_fields=['ticker_symbol'])
             fixes_applied.append(f'Fixed ticker: {old_ticker} -> {suggested_ticker}')
-            print(f"[VERIFICATION] Auto-fixed: Ticker {old_ticker} -> {suggested_ticker} for {company.name}")
+            logger.info(f"[VERIFICATION] Auto-fixed: Ticker {old_ticker} -> {suggested_ticker} for {company.name}")
 
         # Trigger news scrape if no news captured
         if current_data['news_count'] == 0:
@@ -901,16 +907,16 @@ IMPORTANT: If saved projects count is 0 but you find projects on the website, pu
                 from core.tasks import scrape_company_news_task
                 scrape_company_news_task.delay(company.id)
                 fixes_applied.append('Triggered news scrape (0 news items found)')
-                print(f"[VERIFICATION] Auto-triggered news scrape for {company.name} (0 news)")
+                logger.info(f"[VERIFICATION] Auto-triggered news scrape for {company.name} (0 news)")
             except Exception as e:
-                print(f"[VERIFICATION] Could not trigger news scrape: {e}")
+                logger.info(f"[VERIFICATION] Could not trigger news scrape: {e}")
 
         # Clean up duplicate news items (e.g., same news with different URL paths)
         if current_data['news_count'] > 0:
             cleanup_result = cleanup_duplicate_news(company_id)
             if cleanup_result.get('removed', 0) > 0:
                 fixes_applied.append(f"Removed {cleanup_result['removed']} duplicate news items")
-                print(f"[VERIFICATION] Cleaned up {cleanup_result['removed']} duplicate news for {company.name}")
+                logger.info(f"[VERIFICATION] Cleaned up {cleanup_result['removed']} duplicate news for {company.name}")
 
         verification['fixes_applied'] = fixes_applied
         verification['company_id'] = company_id
@@ -922,7 +928,7 @@ IMPORTANT: If saved projects count is 0 but you find projects on the website, pu
         return verification
 
     except Exception as e:
-        print(f"[VERIFICATION] Error: {e}")
+        logger.info(f"[VERIFICATION] Error: {e}")
         import traceback
         traceback.print_exc()
         return {'status': 'error', 'message': str(e), 'company_id': company_id}
@@ -993,13 +999,13 @@ def _log_verification_result(company, verification: Dict):
         )
     except Exception as e:
         # Model might not exist yet, just log to console
-        print(f"[VERIFICATION] Result for {company.name}: {verification.get('status')} (score: {verification.get('overall_score', 0)})")
+        logger.info(f"[VERIFICATION] Result for {company.name}: {verification.get('status')} (score: {verification.get('overall_score', 0)})")
         if verification.get('issues'):
             for issue in verification['issues']:
-                print(f"  - [{issue.get('severity', 'info')}] {issue.get('field')}: {issue.get('message')}")
+                logger.info(f"  - [{issue.get('severity', 'info')}] {issue.get('field')}: {issue.get('message')}")
         if verification.get('fixes_applied'):
             for fix in verification['fixes_applied']:
-                print(f"  - [FIXED] {fix}")
+                logger.info(f"  - [FIXED] {fix}")
 
 
 def _extract_url_slug(url: str) -> str:
@@ -1074,7 +1080,7 @@ def cleanup_duplicate_news(company_id: int) -> Dict:
     # Delete duplicates
     if to_delete:
         deleted_count = NewsRelease.objects.filter(id__in=to_delete).delete()[0]
-        print(f"[CLEANUP] Removed {deleted_count} duplicate news items for {company.name}")
+        logger.info(f"[CLEANUP] Removed {deleted_count} duplicate news items for {company.name}")
         return {
             'status': 'cleaned',
             'company_id': company_id,

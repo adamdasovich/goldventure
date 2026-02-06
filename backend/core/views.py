@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 from .constants import CacheTTL, Timeouts, TruncationLimits, QueryLimits
 
 from rest_framework.decorators import api_view, permission_classes, action
-from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework.permissions import IsAuthenticated, AllowAny, IsAuthenticatedOrReadOnly
 from rest_framework.response import Response
 from rest_framework.pagination import PageNumberPagination
 from django.db.models import Q
@@ -271,11 +271,12 @@ def metals_prices(request):
                     })
 
         except Exception as e:
+            logger.warning(f"Failed to fetch price for {info['name']}: {str(e)}")
             results.append({
                 'metal': info['name'],
                 'symbol': info['symbol'],
                 'price': None,
-                'error': str(e)
+                'error': 'Price temporarily unavailable'
             })
 
     response_data = {
@@ -373,8 +374,9 @@ def metal_historical(request, symbol):
             )
 
     except Exception as e:
+        logger.error(f"metal_historical error for symbol {symbol}: {str(e)}")
         return Response(
-            {'error': str(e)},
+            {'error': 'Failed to retrieve historical data. Please try again later.'},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 
@@ -868,8 +870,10 @@ def claude_chat(request):
         return Response(result)
 
     except Exception as e:
+        # SECURITY: Log full error but return generic message (don't leak API errors)
+        logger.error(f"Claude chat error for user {request.user.id}: {str(e)}")
         return Response(
-            {'error': str(e)},
+            {'error': 'An error occurred processing your request. Please try again.'},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 
@@ -965,12 +969,13 @@ Be concise but thorough. Cite data sources and dates when relevant."""
 
     except Company.DoesNotExist:
         return Response(
-            {'error': f'Company with id {company_id} not found'},
+            {'error': 'Company not found'},
             status=status.HTTP_404_NOT_FOUND
         )
     except Exception as e:
+        logger.error(f"company_chat error for company {company_id}: {str(e)}")
         return Response(
-            {'error': str(e)},
+            {'error': 'An error occurred processing your request. Please try again.'},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 
@@ -1032,8 +1037,9 @@ def available_tools(request):
         return Response(result)
 
     except Exception as e:
+        logger.error(f"available_tools error: {str(e)}")
         return Response(
-            {'error': str(e)},
+            {'error': 'Failed to retrieve available tools. Please try again later.'},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 
@@ -1102,8 +1108,9 @@ def scrape_company_news(request, company_id):
         }, status=status.HTTP_202_ACCEPTED)
 
     except Exception as e:
+        logger.error(f"scrape_company_news error for company {company_id}: {str(e)}")
         return Response(
-            {'error': str(e)},
+            {'error': 'Failed to start news scraping. Please try again later.'},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 
@@ -1142,9 +1149,11 @@ def check_scrape_status(request, task_id):
             'result': task_result.result
         }
     elif task_result.state == 'FAILURE':
+        # SECURITY: Log the actual error but don't expose internal details
+        logger.error(f"Task {task_id} failed: {str(task_result.info)}")
         response = {
             'state': task_result.state,
-            'error': str(task_result.info)
+            'error': 'Task processing failed. Please try again later.'
         }
     else:
         response = {
@@ -1498,7 +1507,7 @@ class CompanyViewSet(viewsets.ModelViewSet):
         except Exception as e:
             logger.exception(f"Error creating company: {str(e)}")
             return Response({
-                'error': f'Failed to create company: {str(e)}'
+                'error': 'Failed to create company. Please try again later.'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
         return Response({
@@ -2124,17 +2133,32 @@ class EventQuestionViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'])
     def upvote(self, request, pk=None):
-        """Upvote a question"""
+        """Upvote a question - prevents duplicate votes from same user"""
         question = self.get_object()
-        question.upvotes += 1
-        question.save(update_fields=['upvotes'])
 
-        # Update event questions count
-        event = question.event
-        event.questions_count = event.questions.count()
-        event.save(update_fields=['questions_count'])
+        # SECURITY: Use QuestionUpvote model to prevent duplicate votes
+        from core.models import QuestionUpvote
+        upvote, created = QuestionUpvote.objects.get_or_create(
+            question=question,
+            user=request.user
+        )
 
-        return Response({'message': 'Question upvoted', 'upvotes': question.upvotes})
+        if created:
+            # Recalculate upvote count from the model (more accurate than incrementing)
+            question.upvotes = question.upvotes_set.count() if hasattr(question, 'upvotes_set') else QuestionUpvote.objects.filter(question=question).count()
+            question.save(update_fields=['upvotes'])
+
+            # Update event questions count
+            event = question.event
+            event.questions_count = event.questions.count()
+            event.save(update_fields=['questions_count'])
+
+            return Response({'message': 'Question upvoted', 'upvotes': question.upvotes})
+        else:
+            return Response(
+                {'message': 'You have already upvoted this question', 'upvotes': question.upvotes},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
 
 class EventReactionViewSet(viewsets.ModelViewSet):
@@ -2283,8 +2307,9 @@ def register_user(request):
         }, status=status.HTTP_201_CREATED)
 
     except Exception as e:
+        logger.error(f"register_user error: {str(e)}")
         return Response(
-            {'error': str(e)},
+            {'error': 'Registration failed. Please try again later.'},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 
@@ -3114,7 +3139,8 @@ class PropertyMediaViewSet(viewsets.ModelViewSet):
 
             return Response(PropertyMediaSerializer(media).data, status=status.HTTP_201_CREATED)
         except Exception as e:
-            return Response({'error': f'Failed to save file: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            logger.error(f"Failed to save property media file: {str(e)}")
+            return Response({'error': 'Failed to save file. Please try again later.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     def perform_destroy(self, instance):
         # Only allow owner to delete
@@ -3204,7 +3230,7 @@ class PropertyInquiryViewSet(viewsets.ModelViewSet):
         except Exception as e:
             logger.error(f"Error creating inquiry: {str(e)}", exc_info=True)
             return Response(
-                {'error': f'Failed to create inquiry: {str(e)}'},
+                {'error': 'Failed to create inquiry. Please try again later.'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
@@ -4247,8 +4273,9 @@ class CompanyResourceViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_201_CREATED
             )
         except Exception as e:
+            logger.error(f"Company resource file upload failed: {str(e)}")
             return Response(
-                {'error': f'File upload failed: {str(e)}'},
+                {'error': 'File upload failed. Please try again later.'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
@@ -4644,8 +4671,10 @@ def create_checkout_session(request):
             'session_id': session.id
         })
     except Exception as e:
+        # SECURITY: Log full error but return generic message to prevent info leakage
+        logger.error(f"Checkout session creation failed for user {request.user.id}: {str(e)}")
         return Response(
-            {'error': f'Failed to create checkout session: {str(e)}'},
+            {'error': 'Failed to create checkout session. Please try again later.'},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 
@@ -4701,8 +4730,10 @@ def create_billing_portal(request):
             'portal_url': session.url
         })
     except Exception as e:
+        # SECURITY: Log full error but return generic message
+        logger.error(f"Billing portal creation failed for user {request.user.id}: {str(e)}")
         return Response(
-            {'error': f'Failed to create billing portal: {str(e)}'},
+            {'error': 'Failed to access billing portal. Please try again later.'},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 
@@ -4765,8 +4796,10 @@ def cancel_subscription(request):
             'status': subscription.status
         })
     except Exception as e:
+        # SECURITY: Log full error but return generic message
+        logger.error(f"Subscription cancellation failed for user {request.user.id}: {str(e)}")
         return Response(
-            {'error': f'Failed to cancel subscription: {str(e)}'},
+            {'error': 'Failed to cancel subscription. Please try again later.'},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 
@@ -4820,8 +4853,10 @@ def reactivate_subscription(request):
             'status': subscription.status
         })
     except Exception as e:
+        # SECURITY: Log full error but return generic message
+        logger.error(f"Subscription reactivation failed for user {request.user.id}: {str(e)}")
         return Response(
-            {'error': f'Failed to reactivate subscription: {str(e)}'},
+            {'error': 'Failed to reactivate subscription. Please try again later.'},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 
@@ -4857,8 +4892,10 @@ def stripe_webhook(request):
             status=status.HTTP_400_BAD_REQUEST
         )
     except Exception as e:
+        # SECURITY: Log full error but return generic message (don't reveal webhook secrets)
+        logger.error(f"Stripe webhook verification failed: {str(e)}")
         return Response(
-            {'error': f'Webhook verification failed: {str(e)}'},
+            {'error': 'Webhook verification failed'},
             status=status.HTTP_400_BAD_REQUEST
         )
 
@@ -5766,8 +5803,9 @@ def store_checkout(request):
         return Response(checkout_data)
 
     except Exception as e:
+        logger.error(f"store_checkout error for user {request.user.id}: {str(e)}")
         return Response(
-            {'error': str(e)},
+            {'error': 'Failed to create checkout session. Please try again later.'},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 
@@ -5814,10 +5852,8 @@ def store_webhook(request):
         result = StoreStripeService.process_webhook(event)
         return Response(result)
     except Exception as e:
-        import logging
-        logger = logging.getLogger(__name__)
         logger.error(f"Store webhook error: {str(e)}")
-        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return Response({'error': 'Webhook processing failed'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 # ============================================================================
@@ -6222,7 +6258,7 @@ def scrape_company_preview(request):
     except Exception as e:
         logger.error(f"[PREVIEW] Failed to create ScrapingJob: {e}")
         return Response(
-            {'error': f'Failed to create job: {str(e)}'},
+            {'error': 'Failed to create scraping job. Please try again later.'},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 
@@ -6233,13 +6269,12 @@ def scrape_company_preview(request):
     except Exception as e:
         # If task queueing fails (e.g., Redis down), mark job as failed
         job.status = 'failed'
-        job.error_messages = [f'Failed to queue task: {str(e)}']
+        job.error_messages = ['Failed to queue task - task queue unavailable']
         job.completed_at = timezone.now()
         job.save()
         logger.error(f"[PREVIEW] Failed to queue task for job {job.id}: {e}")
         return Response({
             'error': 'Failed to queue scraping task. Task queue may be unavailable.',
-            'details': str(e),
             'job_id': job.id,
         }, status=status.HTTP_503_SERVICE_UNAVAILABLE)
 
@@ -6306,13 +6341,12 @@ def scrape_company_save(request):
     except Exception as e:
         # If task queueing fails (e.g., Redis down), mark job as failed
         job.status = 'failed'
-        job.error_messages = [f'Failed to queue task: {str(e)}']
+        job.error_messages = ['Failed to queue task - task queue unavailable']
         job.completed_at = timezone.now()
         job.save()
         logger.error(f"[ONBOARD] Failed to queue task for job {job.id}: {e}")
         return Response({
             'error': 'Failed to queue scraping task. Task queue may be unavailable.',
-            'details': str(e),
             'job_id': job.id,
         }, status=status.HTTP_503_SERVICE_UNAVAILABLE)
 
@@ -7253,6 +7287,7 @@ def retry_failed_discovery(request, discovery_id):
             })
 
     except Exception as e:
+        logger.error(f"retry_failed_discovery error for discovery {discovery_id}: {str(e)}")
         job.status = 'failed'
         job.completed_at = timezone.now()
         job.error_messages = [str(e)]
@@ -7263,7 +7298,7 @@ def retry_failed_discovery(request, discovery_id):
         discovery.save()
 
         return Response(
-            {'error': str(e)},
+            {'error': 'Failed to retry discovery. Please try again later.'},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 
@@ -7391,8 +7426,9 @@ class GlossaryTermSubmissionViewSet(viewsets.ModelViewSet):
                 'term': approved_term.term
             }, status=status.HTTP_200_OK)
         except Exception as e:
+            logger.error(f"GlossaryTermSubmission approve error for submission {pk}: {str(e)}")
             return Response(
-                {'error': str(e)},
+                {'error': 'Failed to approve submission. Please try again later.'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
@@ -7417,8 +7453,9 @@ class GlossaryTermSubmissionViewSet(viewsets.ModelViewSet):
                 'reason': rejection_reason
             }, status=status.HTTP_200_OK)
         except Exception as e:
+            logger.error(f"GlossaryTermSubmission reject error for submission {pk}: {str(e)}")
             return Response(
-                {'error': str(e)},
+                {'error': 'Failed to reject submission. Please try again later.'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
@@ -7542,8 +7579,9 @@ class NewsReleaseFlagViewSet(viewsets.ReadOnlyModelViewSet):
             }, status=status.HTTP_201_CREATED)
 
         except Exception as e:
+            logger.error(f"Error creating financing from flag: {str(e)}")
             return Response(
-                {'error': f'Error creating financing: {str(e)}'},
+                {'error': 'Failed to create financing. Please try again later.'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
@@ -7576,8 +7614,9 @@ class NewsReleaseFlagViewSet(viewsets.ReadOnlyModelViewSet):
             }, status=status.HTTP_200_OK)
 
         except Exception as e:
+            logger.error(f"Error dismissing flag {flag.id}: {str(e)}")
             return Response(
-                {'error': f'Error dismissing flag: {str(e)}'},
+                {'error': 'Failed to dismiss flag. Please try again later.'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
@@ -7613,8 +7652,9 @@ class NewsReleaseFlagViewSet(viewsets.ReadOnlyModelViewSet):
             }, status=status.HTTP_200_OK)
 
         except Exception as e:
+            logger.error(f"Error marking flag {flag.id} as reviewed: {str(e)}")
             return Response(
-                {'error': f'Error marking flag as reviewed: {str(e)}'},
+                {'error': 'Failed to mark flag as reviewed. Please try again later.'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
@@ -7670,8 +7710,9 @@ class NewsReleaseFlagViewSet(viewsets.ReadOnlyModelViewSet):
             }, status=status.HTTP_200_OK)
 
         except Exception as e:
+            logger.error(f"Error closing financing for flag {flag.id}: {str(e)}")
             return Response(
-                {'error': f'Error closing financing: {str(e)}'},
+                {'error': 'Failed to close financing. Please try again later.'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
@@ -7982,7 +8023,8 @@ def create_closed_financing(request):
         }, status=status.HTTP_201_CREATED)
 
     except Exception as e:
-        return Response({'error': f'Error creating financing: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        logger.error(f"Error creating closed financing: {str(e)}")
+        return Response({'error': 'Failed to create financing. Please try again later.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 @api_view(['PUT', 'PATCH'])
@@ -8097,7 +8139,8 @@ def update_closed_financing(request, financing_id):
         }, status=status.HTTP_200_OK)
 
     except Exception as e:
-        return Response({'error': f'Error updating financing: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        logger.error(f"Error updating financing {financing_id}: {str(e)}")
+        return Response({'error': 'Failed to update financing. Please try again later.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 # ============================================================================
@@ -8256,7 +8299,8 @@ def document_processing_summary(request):
             chroma_stats['news_chunks_collection'] = rag.news_collection.count()
         except Exception as e:
             # ChromaDB may not be available
-            chroma_stats['error'] = str(e)
+            logger.warning(f"ChromaDB stats unavailable: {str(e)}")
+            chroma_stats['error'] = 'ChromaDB unavailable'
 
         # Total documents and chunks
         total_documents = documents_with_chunks.count()
@@ -8299,7 +8343,8 @@ def document_processing_summary(request):
         })
 
     except Exception as e:
+        logger.error(f"Error generating document processing summary: {str(e)}")
         return Response(
-            {'error': f'Error generating summary: {str(e)}'},
+            {'error': 'Failed to generate summary. Please try again later.'},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )

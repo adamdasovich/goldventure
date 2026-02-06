@@ -24,6 +24,7 @@ Usage:
 
 from django.core.management.base import BaseCommand, CommandError
 from core.models import Company, DocumentProcessingJob, Document
+from core.security_utils import is_safe_document_url
 from mcp_servers.website_crawler import crawl_company_website
 from datetime import datetime
 import asyncio
@@ -227,13 +228,19 @@ class Command(BaseCommand):
                 if existing_job:
                     continue
 
+            # SECURITY: Validate URL before fetching (SSRF prevention)
+            is_safe, reason = is_safe_document_url(doc['url'])
+            if not is_safe:
+                self.stdout.write(self.style.WARNING(f"    Skipping unsafe URL ({reason}): {doc['url'][:60]}..."))
+                continue
+
             # Validate URL is accessible before creating job
             try:
                 response = requests.head(doc['url'], timeout=10, allow_redirects=True)
                 if response.status_code >= 400:
                     self.stdout.write(self.style.WARNING(f"    Skipping broken link ({response.status_code}): {doc['url'][:60]}..."))
                     continue
-            except requests.RequestException as e:
+            except requests.RequestException:
                 self.stdout.write(self.style.WARNING(f"    Skipping unreachable URL: {doc['url'][:60]}..."))
                 continue
 

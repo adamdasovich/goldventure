@@ -4,6 +4,7 @@ Processes NI 43-101 technical reports and other mining documents using Claude's 
 Automatically extracts resource estimates, economics, and project details
 """
 
+import logging
 import requests
 import base64
 import anthropic
@@ -15,6 +16,8 @@ from django.conf import settings
 from core.models import Company, Project, Document, ResourceEstimate, EconomicStudy
 from core.security_utils import is_safe_document_url, validate_redirect_url
 from django.db.models import Q
+
+logger = logging.getLogger(__name__)
 
 # Maximum file size for PDF downloads (100 MB)
 MAX_PDF_SIZE_BYTES = 100 * 1024 * 1024
@@ -290,7 +293,8 @@ class DocumentProcessorServer(BaseMCPServer):
             try:
                 pdf_base64 = self._fetch_pdf_as_base64(document_url)
             except Exception as e:
-                return {"error": str(e)}
+                logger.error(f"Failed to fetch PDF from {document_url}: {str(e)}")
+                return {"error": "Failed to fetch document. Please verify the URL is accessible."}
 
             # Comprehensive extraction prompt
             prompt = """Analyze this NI 43-101 technical report and extract ALL key data in JSON format.
@@ -444,7 +448,8 @@ Return ONLY valid JSON. Use null for missing values. Be precise with numbers."""
             }
 
         except Exception as e:
-            return {"error": f"Processing failed: {str(e)}"}
+            logger.error(f"NI 43-101 processing failed for {document_url}: {str(e)}")
+            return {"error": "Document processing failed. Please try again later."}
 
     def _extract_resources(self, document_url: str) -> Dict:
         """Extract only resource estimates from document"""
@@ -484,7 +489,8 @@ Be precise with numbers. Include all resource categories found."""
             }
 
         except Exception as e:
-            return {"error": f"Resource extraction failed: {str(e)}"}
+            logger.error(f"Resource extraction failed for {document_url}: {str(e)}")
+            return {"error": "Resource extraction failed. Please try again later."}
 
     def _extract_economics(self, document_url: str) -> Dict:
         """Extract economic study data from document"""
@@ -537,7 +543,8 @@ Use null for missing values. Be precise."""
             }
 
         except Exception as e:
-            return {"error": f"Economics extraction failed: {str(e)}"}
+            logger.error(f"Economics extraction failed for {document_url}: {str(e)}")
+            return {"error": "Economics extraction failed. Please try again later."}
 
     def _list_documents(self, company_name: str = None, document_type: str = None) -> Dict:
         """List uploaded documents"""
@@ -573,7 +580,8 @@ Use null for missing values. Be precise."""
             }
 
         except Exception as e:
-            return {"error": str(e)}
+            logger.error(f"Error listing documents: {str(e)}")
+            return {"error": "Failed to list documents. Please try again later."}
 
     def _summarize_document(self, document_url: str, focus: str = "all") -> Dict:
         """Generate comprehensive summary of document"""
@@ -627,4 +635,5 @@ Be concise but thorough. Focus on facts and numbers."""
             }
 
         except Exception as e:
-            return {"error": f"Summarization failed: {str(e)}"}
+            logger.error(f"Document summarization failed for {document_url}: {str(e)}")
+            return {"error": "Document summarization failed. Please try again later."}
