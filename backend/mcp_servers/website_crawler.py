@@ -488,7 +488,7 @@ def is_valid_news_url(url):
     if not url:
         return False
     url_lower = url.lower().rstrip('/')
-    if url_lower.endswith('/news') or url_lower.endswith('/press-releases') or url_lower.endswith('/news-releases') or url_lower.endswith('/media'):
+    if url_lower.endswith('/news') or url_lower.endswith('/press-releases') or url_lower.endswith('/press-release') or url_lower.endswith('/press') or url_lower.endswith('/news-releases') or url_lower.endswith('/media'):
         return False
     if re.search(r'/news/\d{4}$', url_lower) or re.search(r'/\d{4}/news$', url_lower):
         return False
@@ -524,7 +524,7 @@ def is_news_article_url(url: str) -> bool:
     # Skip base news listing pages (these are navigation pages, not articles)
     # Strip trailing slash for consistent matching
     url_stripped = url_lower.rstrip('/')
-    if url_stripped.endswith(('/news', '/press-releases', '/news-releases', '/media')):
+    if url_stripped.endswith(('/news', '/press-releases', '/press-release', '/press', '/news-releases', '/media')):
         return False
     # Skip year-based news listing pages like /news/2026 or /news/2026/
     if re.search(r'/news/\d{4}$', url_stripped):
@@ -534,7 +534,7 @@ def is_news_article_url(url: str) -> bool:
         return False
 
     # Internal news patterns (company's own news page)
-    internal = ['/news/', '/press-release', '/news-release', '/nr-', '/nr_', '/announcement']
+    internal = ['/news/', '/press-release', '/press/', '/news-release', '/nr-', '/nr_', '/announcement']
     if any(p in url_lower for p in internal):
         return True
 
@@ -2650,6 +2650,8 @@ async def crawl_html_news_pages(url: str, months: int = 6, custom_news_url: str 
             f'{url}/news-releases/?post_year={current_year - 2}',
             f'{url}/news-releases/?post_year={current_year - 3}',
             f'{url}/press-releases/',
+            f'{url}/press-release/',  # Morien Resources - singular form
+            f'{url}/press/',  # Morien Resources - article listing under /press/
             f'{url}/pressreleases/',  # Northern Shield - no hyphen variant
             # WordPress category patterns (New Age Metals, many WP sites)
             f'{url}/category/press/',
