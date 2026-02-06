@@ -3,7 +3,10 @@ Alpha Vantage MCP Server
 Fetches real-time market data from Alpha Vantage API and caches it in the database
 """
 
+import logging
 import requests
+
+logger = logging.getLogger(__name__)
 from typing import Dict, List, Any
 from datetime import datetime, date
 from decimal import Decimal
@@ -181,7 +184,7 @@ class AlphaVantageServer(BaseMCPServer):
                     cached = True
                 except Exception as e:
                     # Log error but don't fail the request
-                    print(f"Error caching data: {str(e)}")
+                    logger.error(f"Error caching data: {str(e)}")
 
             return {
                 "ticker": symbol,
@@ -332,7 +335,7 @@ class AlphaVantageServer(BaseMCPServer):
 
                     except Exception as e:
                         # Log error but continue processing
-                        print(f"Error caching date {date_str}: {str(e)}")
+                        logger.error(f"Error caching date {date_str}: {str(e)}")
                         continue
 
             # Format response with summary

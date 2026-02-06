@@ -291,7 +291,7 @@ class NewsContentProcessor(BaseMCPServer):
             return text if len(text) > 100 else None
 
         except Exception as e:
-            print(f"Error fetching {url}: {e}")
+            logger.error(f"Error fetching {url}: {e}")
             return None
 
     def _sanitize_text(self, text: str) -> str:
