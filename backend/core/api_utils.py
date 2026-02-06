@@ -29,3 +29,27 @@ def is_stripe_configured():
     """
     key = get_stripe_api_key()
     return key and (key.startswith('sk_test_') or key.startswith('sk_live_'))
+
+
+def extract_url_slug(url: str) -> str:
+    """
+    Extract the meaningful slug from a news URL.
+
+    Handles various URL patterns:
+      /news/20260112-max-resource-enters... -> 20260112-max-resource-enters...
+      /news/2026/20260112-max-resource... -> 20260112-max-resource...
+      /press-releases/2026/01/some-news -> some-news
+
+    Args:
+        url: The URL to extract slug from
+
+    Returns:
+        Lowercase slug string
+    """
+    clean_url = url.split('?')[0].rstrip('/')
+    parts = clean_url.split('/')
+    slug = parts[-1] if parts else ''
+    # If slug looks like a year (e.g., '2026'), try the second-to-last
+    if slug.isdigit() and len(slug) == 4 and len(parts) > 1:
+        slug = parts[-2]
+    return slug.lower()
