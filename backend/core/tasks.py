@@ -392,7 +392,7 @@ def scrape_company_news_task(self, company_id):
         asyncio.set_event_loop(loop)
 
         try:
-            news_releases = loop.run_until_complete(
+            news_releases, successful_url = loop.run_until_complete(
                 crawl_news_releases(
                     url=company.website,
                     months=NEWS_SCRAPE_MONTHS_ONBOARDING,  # Use constant for consistency
@@ -402,6 +402,12 @@ def scrape_company_news_task(self, company_id):
             )
         finally:
             loop.close()
+
+        # Cache the successful URL for future scrapes (major performance optimization)
+        if successful_url and successful_url != company.last_working_news_url:
+            company.last_working_news_url = successful_url
+            company.save(update_fields=['last_working_news_url'])
+            logger.info(f"  [ONBOARDING] Cached successful URL: {successful_url}")
 
         # Process and save news releases
         created_count = 0
