@@ -145,9 +145,9 @@ def parse_date_comprehensive(text: str) -> Tuple[Optional[str], str]:
             text = match.group(4).strip()
             return date_str, text
 
-    # Pattern 5: Abbreviated month (Jan 26 2023 or Jan262023)
+    # Pattern 5: Abbreviated month (Jan 26 2023 or Jan262023 or Dec. 17, 2025)
     match = re.match(
-        r'^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s*(\d{1,2})\s*,?\s*(20\d{2})\s*[-–]?\s*(.*)$',
+        r'^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\.?\s*(\d{1,2})\s*,?\s*(20\d{2})\s*[-–]?\s*(.*)$',
         text, re.IGNORECASE
     )
     if match:
@@ -176,9 +176,9 @@ def parse_date_comprehensive(text: str) -> Tuple[Optional[str], str]:
             date_str = f"{year}-{month}-{day}"
             return date_str, original_text
 
-    # Pattern 8: Month DD, YYYY anywhere
+    # Pattern 8: Month DD, YYYY anywhere (including abbreviated with period like "Dec. 17, 2025")
     match = re.search(
-        r'(January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{1,2}),?\s*(20\d{2})',
+        r'(January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\.?\s+(\d{1,2}),?\s*(20\d{2})',
         text, re.IGNORECASE
     )
     if match:
@@ -316,6 +316,17 @@ def parse_date_standalone(text: str) -> Optional[str]:
     # Mon DD, YYYY - with comma (55 North Mining: Jul 7, 2025)
     match = re.match(
         r'^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{1,2}),\s*(20\d{2})$',
+        text, re.IGNORECASE
+    )
+    if match:
+        month = MONTH_MAP.get(match.group(1).lower(), '01')
+        day = match.group(2).zfill(2)
+        year = match.group(3)
+        return f"{year}-{month}-{day}"
+
+    # Mon. DD, YYYY - abbreviated month with period (Morien Resources: Dec. 17, 2025)
+    match = re.match(
+        r'^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\.\s*(\d{1,2}),?\s*(20\d{2})$',
         text, re.IGNORECASE
     )
     if match:
