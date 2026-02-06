@@ -852,13 +852,14 @@ def scrape_single_company_news_task(self, company_id: int):
         asyncio.set_event_loop(loop)
 
         try:
-            news_releases = loop.run_until_complete(
+            news_releases, successful_url = loop.run_until_complete(
                 asyncio.wait_for(
                     crawl_news_releases(
                         url=company.website,
                         months=NEWS_SCRAPE_MONTHS_DAILY,
                         max_depth=2,
-                        custom_news_url=company.news_url if company.news_url else None
+                        custom_news_url=company.news_url if company.news_url else None,
+                        cached_news_url=company.last_working_news_url if company.last_working_news_url else None
                     ),
                     timeout=ASYNC_SCRAPE_TIMEOUT
                 )
@@ -868,6 +869,12 @@ def scrape_single_company_news_task(self, company_id: int):
             return {'company_id': company_id, 'company_name': company.name, 'status': 'timeout', 'created': 0, 'updated': 0}
         finally:
             loop.close()
+
+        # Cache the successful URL for future scrapes (major performance optimization)
+        if successful_url and successful_url != company.last_working_news_url:
+            company.last_working_news_url = successful_url
+            company.save(update_fields=['last_working_news_url'])
+            logger.info(f"   {company.name}: Cached successful URL: {successful_url}")
 
         # Process and save news releases
         created_count = 0
@@ -1002,8 +1009,9 @@ def scrape_all_companies_news_task(self):
     logger.info(f"Acquired batch lock (key: {LOCK_KEY}, task: {self.request.id})")
 
     # Delay between each company scrape (seconds)
-    # This prevents overwhelming target websites and getting IP-blocked
-    SCRAPE_DELAY_SECONDS = 30
+    # Reduced from 30s to 10s since each task hits DIFFERENT domains (no IP blocking risk)
+    # Combined with URL caching optimization, this cuts total scrape time significantly
+    SCRAPE_DELAY_SECONDS = 10
 
     try:
         # Get all companies with websites

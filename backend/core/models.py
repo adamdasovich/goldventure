@@ -85,6 +85,7 @@ class Company(models.Model):
     jurisdiction = models.CharField(max_length=100, blank=True)
     website = models.URLField(blank=True)
     news_url = models.URLField(blank=True, default='', help_text="Custom news page URL if different from standard patterns")
+    last_working_news_url = models.URLField(blank=True, default='', help_text="Auto-cached: URL pattern that last successfully found news")
     headquarters_city = models.CharField(max_length=100, blank=True)
     headquarters_country = models.CharField(max_length=100, blank=True)
 

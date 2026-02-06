@@ -1344,7 +1344,7 @@ async def crawl_company_website(url: str, max_depth: int = 2) -> List[Dict]:
     return documents
 
 
-async def crawl_news_releases(url: str, months: int = 6, max_depth: int = 2, custom_news_url: str = None) -> List[Dict]:
+async def crawl_news_releases(url: str, months: int = 6, max_depth: int = 2, custom_news_url: str = None, cached_news_url: str = None) -> tuple:
     """
     Crawl a company website for NEWS RELEASES.
     OPTIMIZED: Only uses HTML news extraction for speed.
@@ -1355,12 +1355,13 @@ async def crawl_news_releases(url: str, months: int = 6, max_depth: int = 2, cus
         months: Number of months to look back (default 6)
         max_depth: How deep to crawl (default 2) - unused, kept for API compatibility
         custom_news_url: Optional custom news page URL for sites with non-standard patterns
+        cached_news_url: Optional previously successful URL to try first (auto-cached)
 
     Returns:
-        List of news release documents with dates, sorted by newest first
+        Tuple of (List of news releases, successful_url or None)
     """
     # Use optimized HTML-only extraction (much faster than recursive PDF crawl)
-    html_news = await crawl_html_news_pages(url, months=months, custom_news_url=custom_news_url)
+    html_news, successful_url = await crawl_html_news_pages(url, months=months, custom_news_url=custom_news_url, cached_news_url=cached_news_url)
 
     # IMPORTANT: Sort by date FIRST (items with dates come before items without)
     # This ensures that when we deduplicate by title, we keep the version WITH the date
@@ -1443,7 +1444,7 @@ async def crawl_news_releases(url: str, months: int = 6, max_depth: int = 2, cus
     with_dates = sorted([n for n in unique_news if n.get('date')], key=lambda x: x['date'], reverse=True)
     without_dates = [n for n in unique_news if not n.get('date')]
 
-    return with_dates + without_dates
+    return with_dates + without_dates, successful_url
 
 
 async def _extract_date_from_article_page(crawler, article_url: str, crawler_config) -> str:
@@ -1755,7 +1756,7 @@ def _add_news_item(news_by_url: Dict[str, Dict], news: Dict, cutoff_date: dateti
     return False
 
 
-async def crawl_html_news_pages(url: str, months: int = 6, custom_news_url: str = None) -> List[Dict]:
+async def crawl_html_news_pages(url: str, months: int = 6, custom_news_url: str = None, cached_news_url: str = None) -> tuple:
     """
     Crawl HTML news pages from a company website.
     Supports: external news wires, multiple date formats, various HTML layouts.
@@ -1765,14 +1766,16 @@ async def crawl_html_news_pages(url: str, months: int = 6, custom_news_url: str 
         months: Number of months to look back
         custom_news_url: Optional custom news page URL for sites with non-standard patterns
                         (e.g., /en/puma-news/ instead of /en/news/)
+        cached_news_url: Optional previously successful URL to try first (auto-cached)
 
     Returns:
-        List of news release dictionaries with title, url, date
+        Tuple of (List of news releases, successful_url or None)
     """
     global _seen_slugs
     _seen_slugs = {}  # Reset slug tracker for new crawl session
 
     news_by_url: Dict[str, Dict] = {}  # Map URL -> news item (prefer items with dates)
+    successful_news_url = None  # Track which URL pattern found news
     cutoff_date = datetime.now() - timedelta(days=months * 30)
 
     browser_config = BrowserConfig(
@@ -1814,7 +1817,7 @@ async def crawl_html_news_pages(url: str, months: int = 6, custom_news_url: str 
         # SSRF protection: Validate base URL before making any requests
         if not is_safe_url(base_url):
             logger.warning(f"[SSRF] Blocked unsafe URL: {base_url}")
-            return list(news_by_url.values())
+            return list(news_by_url.values()), None
 
         aspx_news_urls = [
             f'{base_url}/news/default.aspx',
@@ -2617,6 +2620,17 @@ async def crawl_html_news_pages(url: str, months: int = 6, custom_news_url: str 
                     news_page_patterns.append(f'{custom_news_url}/{current_year - 1}/')
                     logger.info(f"[CUSTOM-URL] Using custom news URL: {custom_news_url}")
 
+        # If a cached news URL is provided (auto-detected from previous scrapes),
+        # add it early (after custom_news_url but before standard patterns)
+        # This dramatically speeds up daily scrapes by trying the known working URL first
+        if cached_news_url and cached_news_url.strip():
+            cached_news_url = cached_news_url.rstrip('/')
+            if not is_safe_url(cached_news_url):
+                logger.warning(f"[SSRF] Blocked unsafe cached URL: {cached_news_url}")
+            else:
+                news_page_patterns.append(cached_news_url)
+                logger.info(f"[CACHED-URL] Trying previously successful URL first: {cached_news_url}")
+
         # Standard patterns follow
         news_page_patterns.extend([
             f'{url}/news/',
@@ -2714,6 +2728,9 @@ async def crawl_html_news_pages(url: str, months: int = 6, custom_news_url: str 
             if elapsed_so_far > time_limit_no_news:
                 logger.info(f"[TIME-EXIT] {elapsed_so_far:.1f}s elapsed, skipping remaining patterns")
                 break
+
+            # Track news count before this URL to detect if it finds news
+            news_count_before = len(news_by_url)
 
             try:
                 result = await crawler.arun(url=news_url, config=crawler_config)
@@ -5387,6 +5404,13 @@ async def crawl_html_news_pages(url: str, months: int = 6, custom_news_url: str 
                     _add_news_item(news_by_url, news, cutoff_date, "ELEMENTOR")
 
                 # ============================================================
+                # TRACK SUCCESSFUL URL - for caching to speed up future scrapes
+                # ============================================================
+                if not successful_news_url and len(news_by_url) > news_count_before:
+                    successful_news_url = news_url
+                    logger.info(f"[CACHE] URL found news, marking for cache: {news_url}")
+
+                # ============================================================
                 # EARLY EXIT CHECKS - prevent scrapes from running 2+ hours
                 # ============================================================
 
@@ -5474,4 +5498,4 @@ async def crawl_html_news_pages(url: str, months: int = 6, custom_news_url: str 
     if len(final_news) < len(deduped_news):
         logger.debug(f"[DEDUP] Removed {len(deduped_news) - len(final_news)} duplicate news items by URL slug")
 
-    return final_news
+    return final_news, successful_news_url
