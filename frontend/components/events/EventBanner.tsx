@@ -84,7 +84,6 @@ export function EventBanner({ companyId }: EventBannerProps) {
 
       // First, check for any LIVE events for this company
       const liveUrl = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api'}/events/?company=${companyId}&status=live`;
-      console.log('Fetching live events from:', liveUrl);
 
       const liveResponse = await fetch(liveUrl, { headers });
       if (liveResponse.ok) {
@@ -93,7 +92,6 @@ export function EventBanner({ companyId }: EventBannerProps) {
 
         // If there's a live event, show it (priority over scheduled)
         if (liveEvents.length > 0) {
-          console.log('Found live event:', liveEvents[0]);
           setEvent(liveEvents[0]);
           setLoading(false);
           return;
@@ -102,18 +100,14 @@ export function EventBanner({ companyId }: EventBannerProps) {
 
       // If no live events, fetch scheduled events
       const url = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api'}/events/?company=${companyId}&status=scheduled`;
-      console.log('Fetching scheduled events from:', url);
 
       const response = await fetch(url, { headers });
-      console.log('Event fetch response status:', response.status);
 
       if (!response.ok) throw new Error('Failed to fetch event');
       const data = await response.json();
-      console.log('Event data received:', data);
 
       // Handle paginated response
       const events = data.results || data;
-      console.log('Events array:', events);
 
       // Get the next upcoming event
       if (events.length > 0) {
@@ -124,10 +118,7 @@ export function EventBanner({ companyId }: EventBannerProps) {
             new Date(a.scheduled_start).getTime() - new Date(b.scheduled_start).getTime()
           )[0];
 
-        console.log('Selected upcoming event:', upcomingEvent);
         setEvent(upcomingEvent || null);
-      } else {
-        console.log('No events found');
       }
     } catch (err) {
       console.error('Failed to load event:', err);
@@ -138,23 +129,16 @@ export function EventBanner({ companyId }: EventBannerProps) {
 
   const handleRegister = async () => {
     if (!event) {
-      console.log('No event found');
       return;
     }
 
-    console.log('Register clicked for event:', event.id);
-    console.log('User:', user);
-    console.log('Access token:', accessToken ? 'Present' : 'Missing');
-
     // Check if user is logged in
     if (!user || !accessToken) {
-      console.log('User not logged in, showing login modal');
       setShowLogin(true);
       return;
     }
 
     setRegistering(true);
-    console.log('Sending registration request...');
     try {
       const response = await fetch(
         `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api'}/events/${event.id}/register/`,
@@ -167,20 +151,15 @@ export function EventBanner({ companyId }: EventBannerProps) {
         }
       );
 
-      console.log('Response status:', response.status);
       const data = await response.json();
-      console.log('Response data:', data);
 
       if (response.ok) {
-        console.log('Registration successful!');
         // Refresh event data
         await fetchUpcomingEvent();
       } else {
-        console.error('Registration failed:', data);
         alert(`Failed to register: ${data.error || 'Unknown error'}`);
       }
     } catch (err) {
-      console.error('Failed to register:', err);
       alert('Failed to register for event. Please try again.');
     } finally {
       setRegistering(false);

@@ -388,11 +388,17 @@ class ForumConsumer(AsyncWebsocketConsumer):
         Check if user has access to this discussion.
 
         Rules:
-        - Public discussions: Any authenticated user
-        - Private discussions: Company employees only
+        - Active discussions: Any authenticated user
+        - Archived discussions: Only superusers
+        - Inactive discussions: No access
         """
-        # For now, allow all authenticated users
-        # TODO: Implement company-specific access control
+        if not discussion.is_active:
+            return False
+
+        if discussion.is_archived and not self.user.is_superuser:
+            return False
+
+        # All authenticated users can access active discussions
         return True
 
     @database_sync_to_async
@@ -917,9 +923,34 @@ class SessionConsumer(AsyncWebsocketConsumer):
 
     @database_sync_to_async
     def check_session_access(self, session: GuestSpeakerSession) -> bool:
-        """Check if user can access this session."""
-        # For now, allow all authenticated users
-        # TODO: Implement access control based on session settings
+        """
+        Check if user can access this session.
+
+        Rules:
+        - Cancelled sessions: No access (except superusers)
+        - Scheduled/live sessions: Any authenticated user
+        - Ended sessions: Any authenticated user (for viewing archives)
+        - Max participants: Respect limit if set (for live sessions)
+        """
+        if session.status == 'cancelled' and not self.user.is_superuser:
+            return False
+
+        # Check max participants for live sessions
+        if session.status == 'live' and session.max_participants:
+            current_participants = session.total_participants
+            if current_participants >= session.max_participants:
+                # Allow moderators and speakers even if at capacity
+                from core.models import SessionModerator, SessionSpeaker
+                is_moderator = SessionModerator.objects.filter(
+                    session=session, user=self.user
+                ).exists()
+                is_speaker = SessionSpeaker.objects.filter(
+                    session=session, user=self.user
+                ).exists()
+                if not (is_moderator or is_speaker or self.user.is_superuser):
+                    return False
+
+        # All authenticated users can access active sessions
         return True
 
     @database_sync_to_async

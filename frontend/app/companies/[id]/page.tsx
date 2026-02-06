@@ -142,7 +142,6 @@ export default function CompanyDetailPage() {
 
       // Superusers and staff have access to all companies
       if (user?.is_superuser || user?.is_staff) {
-        console.log('User is superuser/staff, granting access');
         setIsCompanyRep(true);
         setCanEditCompany(true);
         return;
@@ -150,13 +149,10 @@ export default function CompanyDetailPage() {
 
       // Check if user is a representative for this specific company
       const companyIdNum = parseInt(companyId);
-      console.log('Checking company rep status:', { userCompanyId: user?.company_id, pageCompanyId: companyIdNum, match: user?.company_id === companyIdNum });
 
       if (user?.company_id === companyIdNum) {
-        console.log('User is company rep for this company - setting isCompanyRep to TRUE');
         setIsCompanyRep(true);
         setCanEditCompany(true);
-        console.log('isCompanyRep state update called');
         return;
       }
 

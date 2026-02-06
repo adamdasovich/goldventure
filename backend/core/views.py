@@ -301,7 +301,10 @@ def metal_historical(request, symbol):
     days: number of days of historical data (default: 30, max: 365)
     """
 
-    days = int(request.query_params.get('days', 30))
+    try:
+        days = int(request.query_params.get('days', 30))
+    except (ValueError, TypeError):
+        return Response({'error': 'Invalid days parameter'}, status=status.HTTP_400_BAD_REQUEST)
     days = min(days, 365)  # Max 1 year
 
     # Check cache
@@ -1040,10 +1043,11 @@ def available_tools(request):
 # ============================================================================
 
 @api_view(['POST'])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 def scrape_company_news(request, company_id):
     """
     Scrape and classify company news releases from their website.
+    Requires authentication to prevent DoS via repeated scraping.
 
     POST /api/companies/<company_id>/scrape-news/
 
@@ -1241,7 +1245,7 @@ def company_news_releases(request, company_id):
 class CompanyViewSet(viewsets.ModelViewSet):
     """API endpoint for companies"""
     queryset = Company.objects.all()
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticatedOrReadOnly]  # Allow reads, require auth for writes
     pagination_class = FlexiblePagePagination
 
     def get_serializer_class(self):
@@ -1518,8 +1522,11 @@ class CompanyViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_403_FORBIDDEN
             )
 
-        page = int(request.query_params.get('page', 1))
-        limit = min(int(request.query_params.get('limit', 20)), 100)
+        try:
+            page = int(request.query_params.get('page', 1))
+            limit = min(int(request.query_params.get('limit', 20)), 100)
+        except (ValueError, TypeError):
+            return Response({'error': 'Invalid pagination parameters'}, status=status.HTTP_400_BAD_REQUEST)
 
         queryset = Company.objects.filter(
             approval_status='pending_approval'
@@ -1773,12 +1780,6 @@ class FinancingViewSet(viewsets.ModelViewSet):
     """
     serializer_class = FinancingSerializer
 
-    def get_permissions(self):
-        """Allow read for anyone, require auth for write operations"""
-        if self.action in ['list', 'retrieve']:
-            return [AllowAny()]
-        return [IsAuthenticated()]
-
     def get_queryset(self):
         """Filter financings by company if company query param is provided"""
         # Note: is_deleted field requires migration 0041 to be applied
@@ -1802,9 +1803,15 @@ class FinancingViewSet(viewsets.ModelViewSet):
         if not company_id:
             return Response({'error': 'Company ID is required'}, status=status.HTTP_400_BAD_REQUEST)
 
+        # Validate company_id is numeric
+        try:
+            company_id_int = int(company_id)
+        except (ValueError, TypeError):
+            return Response({'error': 'Invalid company ID format'}, status=status.HTTP_400_BAD_REQUEST)
+
         # Check if user has permission (superuser, staff, or company rep)
         if not user.is_superuser and not user.is_staff:
-            if not hasattr(user, 'company_id') or user.company_id != int(company_id):
+            if not hasattr(user, 'company_id') or user.company_id != company_id_int:
                 return Response(
                     {'error': 'You do not have permission to create financings for this company'},
                     status=status.HTTP_403_FORBIDDEN
@@ -3122,7 +3129,7 @@ class PropertyMediaViewSet(viewsets.ModelViewSet):
             if file_path.startswith('/media/'):
                 file_path = file_path[7:]  # Remove /media/ prefix
             default_storage.delete(file_path)
-        except Exception:
+        except (FileNotFoundError, OSError, IOError):
             pass  # File might not exist, continue with deletion
 
         instance.delete()
@@ -3717,9 +3724,12 @@ def news_articles_list(request):
     """
     from django.utils import timezone
 
-    limit = min(int(request.query_params.get('limit', 10)), 50)
-    offset = int(request.query_params.get('offset', 0))
-    days = int(request.query_params.get('days', 7))
+    try:
+        limit = min(int(request.query_params.get('limit', 10)), 50)
+        offset = int(request.query_params.get('offset', 0))
+        days = int(request.query_params.get('days', 7))
+    except (ValueError, TypeError):
+        return Response({'error': 'Invalid query parameters'}, status=status.HTTP_400_BAD_REQUEST)
     source_id = request.query_params.get('source')
 
     # Filter to visible articles from last N days (or with no published date - treated as recent)
@@ -5350,14 +5360,20 @@ class StoreProductViewSet(viewsets.ReadOnlyModelViewSet):
         if badge:
             queryset = queryset.filter(badges__contains=[badge])
 
-        # Price range
+        # Price range (with safe conversion)
         min_price = self.request.query_params.get('min_price')
         if min_price:
-            queryset = queryset.filter(price_cents__gte=int(float(min_price) * 100))
+            try:
+                queryset = queryset.filter(price_cents__gte=int(float(min_price) * 100))
+            except (ValueError, TypeError):
+                pass  # Ignore invalid price filter
 
         max_price = self.request.query_params.get('max_price')
         if max_price:
-            queryset = queryset.filter(price_cents__lte=int(float(max_price) * 100))
+            try:
+                queryset = queryset.filter(price_cents__lte=int(float(max_price) * 100))
+            except (ValueError, TypeError):
+                pass  # Ignore invalid price filter
 
         # Sorting
         sort = self.request.query_params.get('sort', '-created_at')

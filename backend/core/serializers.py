@@ -124,7 +124,7 @@ class MarketDataSerializer(serializers.ModelSerializer):
     class Meta:
         model = MarketData
         fields = '__all__'
-        read_only_fields = ['id', 'created_at']
+        read_only_fields = ['id', 'created_at', 'updated_at']
 
 
 class NewsReleaseSerializer(serializers.ModelSerializer):
@@ -159,6 +159,7 @@ class CompanyDetailSerializer(serializers.ModelSerializer):
     class Meta:
         model = Company
         fields = '__all__'
+        read_only_fields = ['id', 'created_at', 'updated_at']
 
     def get_presentation_url(self, obj):
         """Get the latest corporate presentation URL"""
@@ -191,6 +192,7 @@ class ProjectDetailSerializer(serializers.ModelSerializer):
     class Meta:
         model = Project
         fields = '__all__'
+        read_only_fields = ['id', 'created_at', 'updated_at']
 
 
 # Guest Speaker Event Serializers

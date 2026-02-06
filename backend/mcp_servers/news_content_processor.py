@@ -21,6 +21,7 @@ from django.db import transaction
 from core.models import (
     Company, NewsRelease, NewsArticle, CompanyNews, NewsChunk
 )
+from core.security_utils import is_safe_url, validate_redirect_url
 from .base import BaseMCPServer
 from .embeddings import get_embedding_function
 
@@ -213,6 +214,11 @@ class NewsContentProcessor(BaseMCPServer):
     def _fetch_content_from_url(self, url: str) -> Optional[str]:
         """Fetch and extract text content from a URL"""
         try:
+            # SECURITY: Validate URL before fetching (SSRF prevention)
+            is_safe, reason = is_safe_url(url, resolve_dns=True)
+            if not is_safe:
+                return None  # Silently skip unsafe URLs
+
             # Skip PDF URLs for now - they need special processing
             if url.lower().endswith('.pdf'):
                 return None
@@ -224,7 +230,26 @@ class NewsContentProcessor(BaseMCPServer):
                 'Accept-Encoding': 'gzip, deflate',
                 'Connection': 'keep-alive',
             }
-            response = requests.get(url, headers=headers, timeout=15, allow_redirects=True)
+
+            # Disable automatic redirects to validate each redirect
+            response = requests.get(url, headers=headers, timeout=15, allow_redirects=False)
+
+            # Handle redirects manually with validation
+            redirect_count = 0
+            max_redirects = 5
+            while response.is_redirect and redirect_count < max_redirects:
+                redirect_url = response.headers.get('Location')
+                if not redirect_url:
+                    break
+
+                # SECURITY: Validate redirect destination
+                is_safe, reason = validate_redirect_url(url, redirect_url)
+                if not is_safe:
+                    return None  # Block unsafe redirects
+
+                response = requests.get(redirect_url, headers=headers, timeout=15, allow_redirects=False)
+                redirect_count += 1
+
             response.raise_for_status()
 
             # Check Content-Type to avoid processing binary files
