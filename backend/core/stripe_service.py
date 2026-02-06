@@ -14,16 +14,9 @@ from django.conf import settings
 from django.utils import timezone
 from datetime import datetime, timedelta
 import logging
+from .api_utils import get_stripe_api_key
 
 logger = logging.getLogger(__name__)
-
-# Configure Stripe - set dynamically to ensure settings are loaded
-def _get_stripe_api_key():
-    """Get the Stripe API key, ensuring Django settings are loaded."""
-    key = getattr(settings, 'STRIPE_SECRET_KEY', None)
-    if key:
-        stripe.api_key = key
-    return key
 
 # Pricing configuration
 SUBSCRIPTION_PRICE_CENTS = 5000  # $50.00 (limited time promotional rate)
@@ -36,7 +29,7 @@ class StripeService:
     @staticmethod
     def is_configured():
         """Check if Stripe is properly configured with valid API keys"""
-        key = _get_stripe_api_key()
+        key = get_stripe_api_key()
         if not key:
             return False
         # Validate key format - must start with sk_test_ or sk_live_
@@ -67,7 +60,7 @@ class StripeService:
         Returns:
             Stripe Customer object
         """
-        _get_stripe_api_key()  # Ensure API key is set
+        get_stripe_api_key()  # Ensure API key is set
         try:
             customer = stripe.Customer.create(
                 name=company.name,
@@ -98,7 +91,7 @@ class StripeService:
         Returns:
             Price ID string
         """
-        _get_stripe_api_key()  # Ensure API key is set
+        get_stripe_api_key()  # Ensure API key is set
         price_id = getattr(settings, 'STRIPE_PRICE_ID', None)
         if price_id:
             return price_id
@@ -142,7 +135,7 @@ class StripeService:
         Returns:
             Stripe Subscription object
         """
-        _get_stripe_api_key()  # Ensure API key is set
+        get_stripe_api_key()  # Ensure API key is set
         if not price_id:
             price_id = StripeService.get_or_create_price()
 
@@ -175,7 +168,7 @@ class StripeService:
         Returns:
             Stripe Subscription object
         """
-        _get_stripe_api_key()  # Ensure API key is set
+        get_stripe_api_key()  # Ensure API key is set
         try:
             if at_period_end:
                 subscription = stripe.Subscription.modify(
@@ -201,7 +194,7 @@ class StripeService:
         Returns:
             Stripe Subscription object
         """
-        _get_stripe_api_key()  # Ensure API key is set
+        get_stripe_api_key()  # Ensure API key is set
         try:
             subscription = stripe.Subscription.modify(
                 subscription_id,
@@ -224,7 +217,7 @@ class StripeService:
         Returns:
             Stripe Subscription object
         """
-        _get_stripe_api_key()  # Ensure API key is set
+        get_stripe_api_key()  # Ensure API key is set
         try:
             return stripe.Subscription.retrieve(subscription_id)
         except stripe.error.StripeError as e:
@@ -246,7 +239,7 @@ class StripeService:
         Returns:
             Stripe Checkout Session object
         """
-        _get_stripe_api_key()  # Ensure API key is set
+        get_stripe_api_key()  # Ensure API key is set
         from .models import CompanySubscription
 
         if not price_id:
@@ -307,7 +300,7 @@ class StripeService:
         Returns:
             Stripe BillingPortal Session object
         """
-        _get_stripe_api_key()  # Ensure API key is set
+        get_stripe_api_key()  # Ensure API key is set
         try:
             session = stripe.billing_portal.Session.create(
                 customer=customer_id,
