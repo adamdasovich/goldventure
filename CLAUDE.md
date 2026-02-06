@@ -611,18 +611,26 @@ When Claude makes a mistake and gets corrected, add it here:
 ## Security Considerations
 
 ### Authentication & Authorization
-- JWT tokens expire in 1 hour (access) and 7 days (refresh)
+- JWT tokens expire in 1 hour (access) and 3 days (refresh)
+- Password minimum length: 12 characters (NIST 800-63B)
 - Rate limiting: 100 req/hr anonymous, 1000 req/hr authenticated
 - ViewSets use `get_permissions()` pattern: read=AllowAny, write=IsAuthenticated
 - WebSocket auth checks `is_active` on user after token decode
+- WebSocket origins: Production domains only (no localhost in defaults)
 
 ### Known Security Patterns
 | Pattern | Location | Purpose |
 |---------|----------|---------|
+| `security_utils.py` | core/ | Centralized SSRF/URL validation |
+| `is_safe_url()` | security_utils.py | DNS rebinding protection |
+| `validate_redirect_url()` | security_utils.py | Redirect validation |
 | `get_or_create` | tasks.py | Prevent TOCTOU race conditions |
-| URL validation | admin.py, company_scraper.py | Prevent SSRF attacks |
+| `retry_backoff=True` | tasks.py | Exponential backoff with jitter |
+| URL validation | admin.py, company_scraper.py, news_content_processor.py | Prevent SSRF attacks |
 | Specific exceptions | All files | Prevent silent error swallowing |
 | Rate limiting | settings.py | Prevent brute force/DoS |
+| `read_only_fields` | serializers.py | Prevent id/timestamp tampering |
+| Int validation | views.py | Prevent ValueError on query params |
 
 ### Security Audit Checklist
 When making changes, check for:
