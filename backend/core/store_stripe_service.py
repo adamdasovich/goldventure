@@ -17,16 +17,9 @@ from django.conf import settings
 from django.utils import timezone
 from datetime import timedelta
 from typing import Optional, Dict, Any
+from .api_utils import get_stripe_api_key, is_stripe_configured
 
 logger = logging.getLogger(__name__)
-
-
-def _get_stripe_api_key():
-    """Get the Stripe API key, ensuring Django settings are loaded."""
-    key = getattr(settings, 'STRIPE_SECRET_KEY', None)
-    if key:
-        stripe.api_key = key
-    return key
 
 
 class StoreStripeService:
@@ -35,8 +28,7 @@ class StoreStripeService:
     @staticmethod
     def is_configured():
         """Check if Stripe is properly configured"""
-        key = _get_stripe_api_key()
-        return key and (key.startswith('sk_test_') or key.startswith('sk_live_'))
+        return is_stripe_configured()
 
     @staticmethod
     def create_checkout_session(
@@ -60,7 +52,7 @@ class StoreStripeService:
         if not StoreStripeService.is_configured():
             raise ValueError("Stripe is not configured")
 
-        _get_stripe_api_key()
+        get_stripe_api_key()
 
         # Build line items from cart
         line_items = []

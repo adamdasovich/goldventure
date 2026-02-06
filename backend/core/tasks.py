@@ -7,7 +7,6 @@ import logging
 import traceback
 from celery import shared_task
 from django.utils import timezone
-from django.db import transaction
 from datetime import datetime
 from .models import DocumentProcessingJob, Company, NewsRelease, Document
 from mcp_servers.document_processor_hybrid import HybridDocumentProcessor
