@@ -180,7 +180,8 @@ class StoreStripeService:
 
         except stripe.error.StripeError as e:
             logger.error(f"Stripe error creating checkout: {str(e)}")
-            raise ValueError(f"Payment error: {str(e)}")
+            # SECURITY: Don't expose Stripe error details to users
+            raise ValueError("Payment processing failed. Please try again later.")
 
     @staticmethod
     def process_webhook(event) -> Dict[str, Any]:
@@ -222,7 +223,8 @@ class StoreStripeService:
                 user = User.objects.get(id=user_id) if user_id else None
             except (StoreCart.DoesNotExist, User.DoesNotExist) as e:
                 logger.error(f"Cart or user not found: {str(e)}")
-                return {'success': False, 'error': str(e)}
+                # SECURITY: Don't expose internal error details
+                return {'success': False, 'error': 'Cart or user not found'}
 
             # Extract amounts from session
             amount_total = data.amount_total or 0

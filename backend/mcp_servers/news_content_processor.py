@@ -6,8 +6,11 @@ Stores chunks in both PostgreSQL (NewsChunk) and ChromaDB for embedding-based re
 Uses Voyage AI for fast embeddings when available, falls back to local model.
 """
 
+import logging
 import asyncio
 import requests
+
+logger = logging.getLogger(__name__)
 from typing import Dict, List, Optional
 from datetime import datetime
 from bs4 import BeautifulSoup
@@ -504,7 +507,8 @@ class NewsContentProcessor(BaseMCPServer):
             }
 
         except Exception as e:
-            return {"error": f"Processing failed: {str(e)}"}
+            logger.error(f"News processing failed: {str(e)}")
+            return {"error": "News processing failed. Please try again later."}
 
     def _search_news_content(
         self,
@@ -562,7 +566,8 @@ class NewsContentProcessor(BaseMCPServer):
             }
 
         except Exception as e:
-            return {"error": f"Search failed: {str(e)}", "found": False}
+            logger.error(f"News search failed: {str(e)}")
+            return {"error": "News search failed. Please try again later.", "found": False}
 
     def _get_news_context(self, question: str, company_name: str = None) -> Dict:
         """Get formatted context from news for answering questions"""
@@ -597,7 +602,8 @@ class NewsContentProcessor(BaseMCPServer):
             }
 
         except Exception as e:
-            return {"success": False, "error": str(e), "context": ""}
+            logger.error(f"News context retrieval failed: {str(e)}")
+            return {"success": False, "error": "Failed to retrieve news context.", "context": ""}
 
 
 # Utility function for batch processing

@@ -492,4 +492,5 @@ def process_subscription_webhook(event):
 
     except Exception as e:
         logger.error(f"Error processing webhook {event_type}: {str(e)}")
-        return {'success': False, 'error': str(e), 'event_type': event_type}
+        # SECURITY: Don't expose internal error details in response
+        return {'success': False, 'error': 'Webhook processing failed', 'event_type': event_type}

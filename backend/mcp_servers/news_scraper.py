@@ -13,6 +13,9 @@ from typing import List, Dict, Optional
 from crawl4ai import AsyncWebCrawler, BrowserConfig, CrawlerRunConfig
 from bs4 import BeautifulSoup
 
+# SECURITY: Import URL validation for SSRF prevention
+from core.security_utils import is_safe_url
+
 logger = logging.getLogger(__name__)
 
 # Fix Windows console encoding for Unicode characters
@@ -83,6 +86,12 @@ class MiningNewsScraper:
         Returns:
             List of article dictionaries
         """
+        # SECURITY: Validate source URL to prevent SSRF attacks
+        is_safe, reason = is_safe_url(source_url, resolve_dns=True)
+        if not is_safe:
+            logger.warning(f"[{source_name}] Blocked unsafe URL: {reason}")
+            return []
+
         self.articles = []
         config = self._get_site_config(source_url)
 
@@ -163,6 +172,12 @@ class MiningNewsScraper:
     async def _fetch_article_date(self, article_url: str, config: Dict) -> Optional[str]:
         """Fetch the publication date from an article's detail page"""
         if not self.crawler:
+            return None
+
+        # SECURITY: Validate article URL to prevent SSRF attacks
+        is_safe, reason = is_safe_url(article_url, resolve_dns=True)
+        if not is_safe:
+            logger.warning(f"Blocked unsafe article URL: {reason}")
             return None
 
         try:

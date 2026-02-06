@@ -49,8 +49,15 @@ def process_company_news_isolated(company_name: str, company_id: int, limit: int
         - error: str (if failed)
         - crash: bool (if subprocess crashed with SIGSEGV)
     """
-    # Python code to execute in subprocess
-    subprocess_code = f'''
+    # SECURITY: Validate inputs to prevent injection
+    if not isinstance(company_id, int) or company_id <= 0:
+        return {'success': False, 'error': 'Invalid company_id'}
+    if not isinstance(limit, int) or limit <= 0 or limit > 1000:
+        return {'success': False, 'error': 'Invalid limit'}
+
+    # SECURITY: Pass parameters via environment variables to avoid code injection
+    # The subprocess fetches the company name from the database using the validated company_id
+    subprocess_code = '''
 import os
 import sys
 import json
@@ -63,25 +70,40 @@ django.setup()
 
 try:
     from mcp_servers.news_content_processor import NewsContentProcessor
+    from core.models import Company
 
-    processor = NewsContentProcessor(company_id={company_id})
-    result = processor._process_company_news("{company_name.replace('"', '\\"')}", limit={limit})
+    # Get parameters from environment (safer than f-string interpolation)
+    company_id = int(os.environ.get('CHROMA_COMPANY_ID'))
+    limit = int(os.environ.get('CHROMA_LIMIT', 25))
+
+    # Fetch company name from database (prevents injection via company_name parameter)
+    company = Company.objects.get(id=company_id)
+    company_name = company.name
+
+    processor = NewsContentProcessor(company_id=company_id)
+    result = processor._process_company_news(company_name, limit=limit)
 
     # Output JSON result to stdout
-    print("CHROMADB_RESULT:" + json.dumps({{"success": True, "result": result}}))
+    print("CHROMADB_RESULT:" + json.dumps({"success": True, "result": result}))
 except Exception as e:
-    print("CHROMADB_RESULT:" + json.dumps({{"success": False, "error": str(e), "error_type": type(e).__name__}}))
+    print("CHROMADB_RESULT:" + json.dumps({"success": False, "error": str(e), "error_type": type(e).__name__}))
 '''
 
     try:
-        # Run Python subprocess
+        # Run Python subprocess with parameters passed via environment variables
+        subprocess_env = {
+            **os.environ,
+            'DJANGO_SETTINGS_MODULE': 'config.settings',
+            'CHROMA_COMPANY_ID': str(company_id),
+            'CHROMA_LIMIT': str(limit),
+        }
         result = subprocess.run(
             [sys.executable, '-c', subprocess_code],
             cwd=str(BACKEND_DIR),
             capture_output=True,
             text=True,
             timeout=timeout,
-            env={**os.environ, 'DJANGO_SETTINGS_MODULE': 'config.settings'}
+            env=subprocess_env
         )
 
         # Check for crashes (non-zero exit code)
@@ -110,7 +132,14 @@ except Exception as e:
         stdout = result.stdout
         if 'CHROMADB_RESULT:' in stdout:
             result_line = stdout.split('CHROMADB_RESULT:')[1].split('\n')[0]
-            return json.loads(result_line)
+            try:
+                return json.loads(result_line)
+            except json.JSONDecodeError as e:
+                logger.error(f"Failed to parse ChromaDB result JSON for {company_name}: {e}")
+                return {
+                    'success': False,
+                    'error': 'Failed to parse subprocess result'
+                }
         else:
             return {
                 'success': False,
@@ -129,7 +158,7 @@ except Exception as e:
         logger.error(f"Error running ChromaDB subprocess for {company_name}: {e}")
         return {
             'success': False,
-            'error': str(e)
+            'error': 'ChromaDB processing failed. Please try again later.'
         }
 
 
@@ -288,7 +317,14 @@ except Exception as e:
         stdout = result.stdout
         if 'CHROMADB_RESULT:' in stdout:
             result_line = stdout.split('CHROMADB_RESULT:')[1].split('\n')[0]
-            return json.loads(result_line)
+            try:
+                return json.loads(result_line)
+            except json.JSONDecodeError as e:
+                logger.error(f"Failed to parse ChromaDB profile result JSON for company {company_id}: {e}")
+                return {
+                    'success': False,
+                    'error': 'Failed to parse subprocess result'
+                }
         else:
             return {
                 'success': False,
@@ -307,7 +343,7 @@ except Exception as e:
         logger.error(f"Error running ChromaDB profile subprocess for company {company_id}: {e}")
         return {
             'success': False,
-            'error': str(e)
+            'error': 'ChromaDB profile storage failed. Please try again later.'
         }
 
 

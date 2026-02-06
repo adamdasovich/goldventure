@@ -31,15 +31,31 @@ from .models import (
 
 
 class UserSerializer(serializers.ModelSerializer):
-    """Serializer for User model"""
+    """Serializer for User model - public version without admin fields"""
+    full_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = User
+        # SECURITY: Do not expose is_staff/is_superuser to prevent admin enumeration
+        fields = ['id', 'username', 'email', 'first_name', 'last_name', 'full_name',
+                  'user_type', 'company', 'phone', 'linkedin_url', 'created_at']
+        read_only_fields = ['id', 'created_at', 'full_name']
+
+    def get_full_name(self, obj):
+        """Get user's full name"""
+        return obj.get_full_name() if hasattr(obj, 'get_full_name') else f"{obj.first_name} {obj.last_name}".strip() or obj.username
+
+
+class AdminUserSerializer(serializers.ModelSerializer):
+    """Serializer for User model - admin version with all fields"""
     full_name = serializers.SerializerMethodField()
 
     class Meta:
         model = User
         fields = ['id', 'username', 'email', 'first_name', 'last_name', 'full_name',
                   'user_type', 'company', 'phone', 'linkedin_url', 'created_at',
-                  'is_staff', 'is_superuser']
-        read_only_fields = ['id', 'created_at', 'full_name', 'is_staff', 'is_superuser']
+                  'is_staff', 'is_superuser', 'is_active', 'last_login']
+        read_only_fields = ['id', 'created_at', 'full_name', 'last_login']
 
     def get_full_name(self, obj):
         """Get user's full name"""

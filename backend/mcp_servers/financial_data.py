@@ -3,6 +3,7 @@ Financial Data MCP Server
 Provides tools for querying market data, financings, and investor information
 """
 
+import logging
 from typing import Dict, List, Any
 from .base import BaseMCPServer
 from django.db.models import Sum, Avg, Max, Min, Q, F, Count
@@ -10,6 +11,8 @@ from django.db.models.functions import TruncDate
 from core.models import Company, Financing, Investor, MarketData, StockPrice
 from datetime import datetime, timedelta
 from decimal import Decimal
+
+logger = logging.getLogger(__name__)
 
 
 class FinancialDataServer(BaseMCPServer):
@@ -249,7 +252,8 @@ class FinancialDataServer(BaseMCPServer):
             return result
 
         except Exception as e:
-            return {"error": str(e)}
+            logger.error(f"Financial data error: {str(e)}")
+            return {"error": "Failed to retrieve financial data. Please try again."}
 
     def _list_financings(self, company_name: str = None, financing_type: str = None,
                         min_amount: float = None, recent_only: bool = False) -> Dict:
@@ -305,7 +309,8 @@ class FinancialDataServer(BaseMCPServer):
             return result
 
         except Exception as e:
-            return {"error": str(e)}
+            logger.error(f"Financial data error: {str(e)}")
+            return {"error": "Failed to retrieve financial data. Please try again."}
 
     def _get_company_financings(self, company_name: str) -> Dict:
         """Get complete financing history for a company"""
@@ -366,7 +371,8 @@ class FinancialDataServer(BaseMCPServer):
             }
 
         except Exception as e:
-            return {"error": str(e)}
+            logger.error(f"Financial data error: {str(e)}")
+            return {"error": "Failed to retrieve financial data. Please try again."}
 
     def _list_investors(self, investor_type: str = None, min_ownership: float = None) -> Dict:
         """List investors with optional filters"""
@@ -396,7 +402,8 @@ class FinancialDataServer(BaseMCPServer):
             }
 
         except Exception as e:
-            return {"error": str(e)}
+            logger.error(f"Financial data error: {str(e)}")
+            return {"error": "Failed to retrieve financial data. Please try again."}
 
     def _compare_market_caps(self, sort_by: str = "market_cap") -> Dict:
         """Compare market capitalizations across companies"""
@@ -439,7 +446,8 @@ class FinancialDataServer(BaseMCPServer):
             }
 
         except Exception as e:
-            return {"error": str(e)}
+            logger.error(f"Financial data error: {str(e)}")
+            return {"error": "Failed to retrieve financial data. Please try again."}
 
     def _financing_analytics(self, period_months: int = 12) -> Dict:
         """Get financing analytics and trends"""
@@ -512,4 +520,5 @@ class FinancialDataServer(BaseMCPServer):
             }
 
         except Exception as e:
-            return {"error": str(e)}
+            logger.error(f"Financial data error: {str(e)}")
+            return {"error": "Failed to retrieve financial data. Please try again."}
