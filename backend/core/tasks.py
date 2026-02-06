@@ -366,7 +366,7 @@ def process_single_job(job: DocumentProcessingJob):
         logger.exception(f"Job {job.id} failed with exception: {str(e)}")
 
 
-@shared_task(bind=True, max_retries=3, time_limit=1800, soft_time_limit=1740, on_failure=log_task_failure)
+@shared_task(bind=True, max_retries=3, retry_backoff=True, retry_backoff_max=600, retry_jitter=True, time_limit=1800, soft_time_limit=1740, on_failure=log_task_failure)
 def scrape_company_news_task(self, company_id):
     """
     Background task to scrape news releases for a company.
@@ -446,28 +446,19 @@ def scrape_company_news_task(self, company_id):
                 continue  # Skip entries without valid dates
 
             # Create or update news release (using URL as unique identifier)
-            # First check if record exists - don't overwrite existing dates
-            existing = NewsRelease.objects.filter(company=company, url=url).first()
-            if existing:
-                # Only update title if needed, preserve existing date
-                if existing.title != title:
-                    existing.title = title
-                    existing.save(update_fields=['title', 'updated_at'])
-                obj = existing
-                created = False
-            else:
-                # Create new record
-                obj = NewsRelease.objects.create(
-                    company=company,
-                    url=url,
-                    title=title,
-                    release_type=release_type,
-                    release_date=release_date,
-                    summary='',
-                    is_material=is_financial,
-                    full_text=''
-                )
-                created = True
+            # SECURITY: Use update_or_create to prevent TOCTOU race condition
+            obj, created = NewsRelease.objects.update_or_create(
+                company=company,
+                url=url,
+                defaults={
+                    'title': title,
+                    'release_type': release_type,
+                    'release_date': release_date,
+                    'summary': '',
+                    'is_material': is_financial,
+                    'full_text': ''
+                }
+            )
 
             # Also create/update CompanyNews record (used by frontend API)
             from core.models import CompanyNews
@@ -602,8 +593,8 @@ def scrape_company_news_task(self, company_id):
         }
 
     except Exception as e:
-        # Retry on failure
-        self.retry(exc=e, countdown=60)  # Retry after 60 seconds
+        # Retry on failure with exponential backoff (handled by retry_backoff=True)
+        self.retry(exc=e)
 
         return {
             'status': 'error',
@@ -612,7 +603,7 @@ def scrape_company_news_task(self, company_id):
         }
 
 
-@shared_task(bind=True, max_retries=3, time_limit=300, soft_time_limit=280, on_failure=log_task_failure)
+@shared_task(bind=True, max_retries=3, retry_backoff=True, retry_backoff_max=600, retry_jitter=True, time_limit=300, soft_time_limit=280, on_failure=log_task_failure)
 def scrape_metals_prices_task(self):
     """
     Scheduled task to scrape precious metals prices from Kitco.
@@ -636,7 +627,7 @@ def scrape_metals_prices_task(self):
 
     except Exception as e:
         logger.error(f"Error in metals scraping task: {str(e)}")
-        self.retry(exc=e, countdown=300)  # Retry after 5 minutes
+        self.retry(exc=e)  # Retry with exponential backoff
 
         return {
             'success': False,
@@ -644,7 +635,7 @@ def scrape_metals_prices_task(self):
         }
 
 
-@shared_task(bind=True, max_retries=3, time_limit=600, soft_time_limit=580, on_failure=log_task_failure)
+@shared_task(bind=True, max_retries=3, retry_backoff=True, retry_backoff_max=600, retry_jitter=True, time_limit=600, soft_time_limit=580, on_failure=log_task_failure)
 def fetch_stock_prices_task(self):
     """
     Scheduled task to fetch and store daily stock prices for all companies.
@@ -676,7 +667,7 @@ def fetch_stock_prices_task(self):
 
     except Exception as e:
         logger.error(f"Error in stock price fetching task: {str(e)}")
-        self.retry(exc=e, countdown=300)  # Retry after 5 minutes
+        self.retry(exc=e)  # Retry with exponential backoff
 
         return {
             'success': False,
@@ -841,7 +832,7 @@ def auto_discover_and_process_documents_task(self, company_ids=None, document_ty
 ASYNC_SCRAPE_TIMEOUT = 300  # 5 minutes - enforced inside event loop
 
 
-@shared_task(bind=True, max_retries=2, default_retry_delay=60, time_limit=600, soft_time_limit=580, on_failure=log_task_failure)
+@shared_task(bind=True, max_retries=2, retry_backoff=True, retry_backoff_max=300, retry_jitter=True, time_limit=600, soft_time_limit=580, on_failure=log_task_failure)
 def scrape_single_company_news_task(self, company_id: int):
     """
     Background task to scrape news releases for a SINGLE company.
@@ -903,28 +894,19 @@ def scrape_single_company_news_task(self, company_id: int):
                 continue  # Skip entries without valid dates
 
             # Create or update news release
-            # First check if record exists - don't overwrite existing dates
-            existing = NewsRelease.objects.filter(company=company, url=url).first()
-            if existing:
-                # Only update title if needed, preserve existing date
-                if existing.title != title:
-                    existing.title = title
-                    existing.save(update_fields=['title', 'updated_at'])
-                obj = existing
-                created = False
-            else:
-                # Create new record
-                obj = NewsRelease.objects.create(
-                    company=company,
-                    url=url,
-                    title=title,
-                    release_type=release_type,
-                    release_date=release_date,
-                    summary='',
-                    is_material=False,
-                    full_text=''
-                )
-                created = True
+            # SECURITY: Use update_or_create to prevent TOCTOU race condition
+            obj, created = NewsRelease.objects.update_or_create(
+                company=company,
+                url=url,
+                defaults={
+                    'title': title,
+                    'release_type': release_type,
+                    'release_date': release_date,
+                    'summary': '',
+                    'is_material': False,
+                    'full_text': ''
+                }
+            )
 
             if created:
                 created_count += 1
@@ -1070,7 +1052,7 @@ def scrape_all_companies_news_task(self):
         }
 
 
-@shared_task(bind=True, max_retries=3, default_retry_delay=300, time_limit=600, soft_time_limit=580, on_failure=log_task_failure)
+@shared_task(bind=True, max_retries=3, retry_backoff=True, retry_backoff_max=600, retry_jitter=True, time_limit=600, soft_time_limit=580, on_failure=log_task_failure)
 def scrape_mining_news_task(self):
     """
     Background task to scrape mining news from configured sources.
@@ -1116,7 +1098,7 @@ def scrape_mining_news_task(self):
             }
 
 
-@shared_task(bind=True, max_retries=3, default_retry_delay=60, time_limit=1200, soft_time_limit=1140, acks_late=True, on_failure=log_task_failure)
+@shared_task(bind=True, max_retries=3, retry_backoff=True, retry_backoff_max=300, retry_jitter=True, time_limit=1200, soft_time_limit=1140, acks_late=True, on_failure=log_task_failure)
 def scrape_company_website_task(self, job_id: int, sections: list = None):
     """
     Background task to scrape a company website using Crawl4AI.
@@ -1246,7 +1228,7 @@ def scrape_company_website_task(self, job_id: int, sections: list = None):
             }
 
 
-@shared_task(bind=True, max_retries=3, default_retry_delay=60, time_limit=1200, soft_time_limit=1140, acks_late=True, on_failure=log_task_failure)
+@shared_task(bind=True, max_retries=3, retry_backoff=True, retry_backoff_max=300, retry_jitter=True, time_limit=1200, soft_time_limit=1140, acks_late=True, on_failure=log_task_failure)
 def scrape_and_save_company_task(self, job_id: int, update_existing: bool = False, user_id: int = None):
     """
     Background task to scrape a company website AND save to database.
@@ -1753,7 +1735,7 @@ def celery_worker_health_check_task(self):
     return health_data
 
 
-@shared_task(bind=True, max_retries=2, default_retry_delay=60, time_limit=300, soft_time_limit=280, on_failure=log_task_failure)
+@shared_task(bind=True, max_retries=2, retry_backoff=True, retry_backoff_max=300, retry_jitter=True, time_limit=300, soft_time_limit=280, on_failure=log_task_failure)
 def process_company_news_for_rag_task(self, company_id: int, limit: int = 20):
     """
     Background Celery task to process a company's news into the RAG knowledge base.

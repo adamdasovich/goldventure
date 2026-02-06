@@ -13,7 +13,11 @@ from decimal import Decimal
 from .base import BaseMCPServer
 from django.conf import settings
 from core.models import Company, Project, Document, ResourceEstimate, EconomicStudy
+from core.security_utils import is_safe_document_url, validate_redirect_url
 from django.db.models import Q
+
+# Maximum file size for PDF downloads (100 MB)
+MAX_PDF_SIZE_BYTES = 100 * 1024 * 1024
 
 
 class DocumentProcessorServer(BaseMCPServer):
@@ -164,12 +168,78 @@ class DocumentProcessorServer(BaseMCPServer):
     # =============================================================================
 
     def _fetch_pdf_as_base64(self, url: str) -> str:
-        """Fetch PDF from URL and convert to base64"""
+        """Fetch PDF from URL and convert to base64.
+
+        Security features:
+        - URL validation to prevent SSRF attacks
+        - Redirect validation to prevent SSRF via redirects
+        - File size limits to prevent memory exhaustion
+        - Content-Type validation to ensure PDF content
+        """
+        # SECURITY: Validate URL before fetching (SSRF prevention)
+        is_safe, reason = is_safe_document_url(url)
+        if not is_safe:
+            raise Exception(f"URL blocked for security: {reason}")
+
         try:
-            response = requests.get(url, timeout=30)
+            # Use streaming to check size before downloading entire file
+            # Disable automatic redirects to validate each redirect
+            response = requests.get(
+                url,
+                timeout=60,
+                allow_redirects=False,
+                stream=True,
+                headers={'User-Agent': 'GoldVenture-DocumentProcessor/1.0'}
+            )
+
+            # Handle redirects manually with validation
+            redirect_count = 0
+            max_redirects = 5
+            while response.is_redirect and redirect_count < max_redirects:
+                redirect_url = response.headers.get('Location')
+                if not redirect_url:
+                    break
+
+                # SECURITY: Validate redirect destination
+                is_safe, reason = validate_redirect_url(url, redirect_url)
+                if not is_safe:
+                    raise Exception(f"Redirect blocked for security: {reason}")
+
+                response = requests.get(
+                    redirect_url,
+                    timeout=60,
+                    allow_redirects=False,
+                    stream=True,
+                    headers={'User-Agent': 'GoldVenture-DocumentProcessor/1.0'}
+                )
+                redirect_count += 1
+
             response.raise_for_status()
-            return base64.standard_b64encode(response.content).decode('utf-8')
-        except Exception as e:
+
+            # SECURITY: Check Content-Length header if available
+            content_length = response.headers.get('Content-Length')
+            if content_length and int(content_length) > MAX_PDF_SIZE_BYTES:
+                raise Exception(f"PDF too large: {int(content_length)} bytes (max {MAX_PDF_SIZE_BYTES})")
+
+            # SECURITY: Validate Content-Type
+            content_type = response.headers.get('Content-Type', '').lower()
+            if content_type and 'pdf' not in content_type and 'octet-stream' not in content_type:
+                # Allow octet-stream as some servers don't set proper PDF content type
+                raise Exception(f"Invalid content type: {content_type} (expected PDF)")
+
+            # Download with size limit
+            chunks = []
+            total_size = 0
+            for chunk in response.iter_content(chunk_size=8192):
+                total_size += len(chunk)
+                if total_size > MAX_PDF_SIZE_BYTES:
+                    raise Exception(f"PDF exceeds size limit during download: {total_size} bytes")
+                chunks.append(chunk)
+
+            content = b''.join(chunks)
+            return base64.standard_b64encode(content).decode('utf-8')
+
+        except requests.exceptions.RequestException as e:
             raise Exception(f"Failed to fetch PDF: {str(e)}")
 
     def _analyze_pdf_with_claude(self, pdf_base64: str, prompt: str, max_tokens: int = 4000) -> str:

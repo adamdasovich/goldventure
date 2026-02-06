@@ -24,9 +24,11 @@ import requests
 import subprocess
 import fcntl
 import atexit
+import re
+import ipaddress
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, Tuple
 
 # Django setup (must be before Django imports)
 sys.path.insert(0, '/var/www/goldventure/backend')
@@ -52,6 +54,56 @@ logger = logging.getLogger(__name__)
 # Lock file for single instance enforcement
 LOCK_FILE = '/var/run/gpu_orchestrator.lock'
 _lock_fd = None
+
+
+def validate_ip_for_ssh(ip_str: str) -> Tuple[bool, str]:
+    """
+    Validate an IP address before using it in SSH commands.
+    Prevents command injection via malicious IP strings.
+
+    Args:
+        ip_str: IP address to validate
+
+    Returns:
+        Tuple of (is_valid, reason)
+    """
+    if not ip_str:
+        return False, "Empty IP address"
+
+    # Must be a valid IPv4 address format (strict regex)
+    ip_pattern = re.compile(r'^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$')
+    match = ip_pattern.match(ip_str)
+
+    if not match:
+        return False, f"Invalid IP format (must be IPv4): {ip_str}"
+
+    # Each octet must be 0-255
+    for octet in match.groups():
+        if int(octet) > 255:
+            return False, f"Invalid IP octet value: {octet}"
+
+    # Must not contain any shell metacharacters (defense in depth)
+    dangerous_chars = set(';|&$`\'"\\<>(){}[]!#')
+    if any(c in ip_str for c in dangerous_chars):
+        return False, f"IP contains dangerous characters: {ip_str}"
+
+    # Validate it's a public IP (not internal)
+    try:
+        ip = ipaddress.ip_address(ip_str)
+        if ip.is_private:
+            return False, f"Private IP not allowed: {ip_str}"
+        if ip.is_loopback:
+            return False, f"Loopback IP not allowed: {ip_str}"
+        if ip.is_link_local:
+            return False, f"Link-local IP not allowed: {ip_str}"
+        if ip.is_reserved:
+            return False, f"Reserved IP not allowed: {ip_str}"
+        if ip.is_multicast:
+            return False, f"Multicast IP not allowed: {ip_str}"
+    except ValueError as e:
+        return False, f"Invalid IP address: {e}"
+
+    return True, "Valid public IP"
 
 
 def acquire_lock():
@@ -279,8 +331,17 @@ class GPUOrchestrator:
         return False
 
     def _add_ip_to_pg_hba(self, ip: str) -> None:
-        """Add GPU droplet IP to pg_hba.conf for database access"""
+        """Add GPU droplet IP to pg_hba.conf for database access.
+
+        SECURITY: Validates IP before writing to PostgreSQL config.
+        """
         try:
+            # SECURITY: Validate IP before writing to config file
+            is_valid, reason = validate_ip_for_ssh(ip)
+            if not is_valid:
+                logger.error(f"Cannot add IP to pg_hba.conf - validation failed: {reason}")
+                return
+
             pg_hba_entry = f"host goldventure goldventure {ip}/32 md5"
 
             # Check if IP already in pg_hba.conf
@@ -294,21 +355,32 @@ class GPUOrchestrator:
                 f.write(f"\n{pg_hba_entry}\n")
 
             # Reload PostgreSQL
-            subprocess.run(['systemctl', 'reload', 'postgresql'], timeout=10)
+            subprocess.run(['systemctl', 'reload', 'postgresql'], timeout=10, check=True)
             logger.info(f"Added {ip} to pg_hba.conf and reloaded PostgreSQL")
 
-        except Exception as e:
-            logger.error(f"Failed to add IP to pg_hba.conf: {e}")
+        except subprocess.CalledProcessError as e:
+            logger.error(f"Failed to reload PostgreSQL: {e}")
+        except IOError as e:
+            logger.error(f"Failed to modify pg_hba.conf: {e}")
 
     def check_gpu_worker_health(self) -> bool:
-        """Check if GPU worker is running and healthy"""
+        """Check if GPU worker is running and healthy.
+
+        SECURITY: Validates IP before using in SSH command.
+        """
         if not self.gpu_droplet_ip:
+            return False
+
+        # SECURITY: Validate IP before using in SSH command
+        is_valid, reason = validate_ip_for_ssh(self.gpu_droplet_ip)
+        if not is_valid:
+            logger.error(f"Cannot SSH to GPU droplet - IP validation failed: {reason}")
             return False
 
         try:
             # SSH to check worker status - use longer timeout and be more lenient
             result = subprocess.run(
-                ['ssh', '-o', 'StrictHostKeyChecking=no', '-o', 'ConnectTimeout=15',
+                ['ssh', '-o', 'StrictHostKeyChecking=accept-new', '-o', 'ConnectTimeout=15',
                  '-o', 'ServerAliveInterval=5',
                  f'root@{self.gpu_droplet_ip}', 'pgrep -f gpu_worker.py'],
                 capture_output=True,
@@ -320,13 +392,22 @@ class GPUOrchestrator:
             # Don't restart unnecessarily - just log and return True to avoid restart loops
             logger.warning("Health check SSH timeout - assuming worker is running")
             return True
-        except Exception as e:
+        except subprocess.SubprocessError as e:
             logger.warning(f"Could not check GPU worker health: {e}")
             return False
 
     def start_gpu_worker(self) -> bool:
-        """Start the GPU worker process on the droplet"""
+        """Start the GPU worker process on the droplet.
+
+        SECURITY: Validates IP before using in SSH/SCP commands.
+        """
         if not self.gpu_droplet_ip:
+            return False
+
+        # SECURITY: Validate IP before using in SSH/SCP commands
+        is_valid, reason = validate_ip_for_ssh(self.gpu_droplet_ip)
+        if not is_valid:
+            logger.error(f"Cannot start GPU worker - IP validation failed: {reason}")
             return False
 
         logger.info("Starting GPU worker...")
@@ -334,7 +415,7 @@ class GPUOrchestrator:
         try:
             # First check if worker is already running - don't restart if it is
             check_result = subprocess.run(
-                ['ssh', '-o', 'StrictHostKeyChecking=no', '-o', 'ConnectTimeout=10',
+                ['ssh', '-o', 'StrictHostKeyChecking=accept-new', '-o', 'ConnectTimeout=10',
                  f'root@{self.gpu_droplet_ip}', 'pgrep -f "python gpu_worker.py"'],
                 capture_output=True,
                 timeout=20
@@ -345,23 +426,25 @@ class GPUOrchestrator:
 
             # Copy worker script
             subprocess.run(
-                ['scp', '-o', 'StrictHostKeyChecking=no',
+                ['scp', '-o', 'StrictHostKeyChecking=accept-new',
                  '/var/www/goldventure/backend/gpu_worker.py',
                  f'root@{self.gpu_droplet_ip}:/opt/goldventure/'],
-                timeout=60
+                timeout=60,
+                check=True
             )
 
             # Copy website crawler for scraping jobs
             subprocess.run(
-                ['scp', '-o', 'StrictHostKeyChecking=no',
+                ['scp', '-o', 'StrictHostKeyChecking=accept-new',
                  '/var/www/goldventure/backend/mcp_servers/website_crawler.py',
                  f'root@{self.gpu_droplet_ip}:/opt/goldventure/'],
-                timeout=60
+                timeout=60,
+                check=True
             )
 
             # Start worker in background - use 'bash -c' because 'source' is bash-only
             subprocess.run(
-                ['ssh', '-o', 'StrictHostKeyChecking=no', '-o', 'ConnectTimeout=10',
+                ['ssh', '-o', 'StrictHostKeyChecking=accept-new', '-o', 'ConnectTimeout=10',
                  f'root@{self.gpu_droplet_ip}',
                  'bash -c "cd /opt/goldventure && source venv/bin/activate && nohup python gpu_worker.py > /var/log/gpu_worker.log 2>&1 &"'],
                 timeout=60
@@ -375,7 +458,7 @@ class GPUOrchestrator:
             logger.warning("SSH timeout during worker start - checking if worker is running")
             try:
                 check = subprocess.run(
-                    ['ssh', '-o', 'StrictHostKeyChecking=no', '-o', 'ConnectTimeout=10',
+                    ['ssh', '-o', 'StrictHostKeyChecking=accept-new', '-o', 'ConnectTimeout=10',
                      f'root@{self.gpu_droplet_ip}', 'pgrep -f "python gpu_worker.py"'],
                     capture_output=True,
                     timeout=20
@@ -388,7 +471,10 @@ class GPUOrchestrator:
             logger.error("Worker start failed with timeout")
             return False
 
-        except Exception as e:
+        except subprocess.CalledProcessError as e:
+            logger.error(f"Failed to start GPU worker (command failed): {e}")
+            return False
+        except subprocess.SubprocessError as e:
             logger.error(f"Failed to start GPU worker: {e}")
             return False
 
@@ -508,10 +594,13 @@ touch /opt/goldventure/.ready
 '''
 
     # Main server's external IP for GPU workers to connect back
-    MAIN_SERVER_IP = "137.184.168.166"
+    # Use environment variable with fallback to current production IP
+    MAIN_SERVER_IP = os.environ.get('MAIN_SERVER_IP', '137.184.168.166')
 
     def _wait_for_cloud_init(self, timeout: int = 600) -> bool:
         """Wait for cloud-init to complete by checking for .ready file.
+
+        SECURITY: Validates IP before using in SSH command.
 
         Args:
             timeout: Maximum seconds to wait (default 10 minutes)
@@ -522,13 +611,19 @@ touch /opt/goldventure/.ready
         if not self.gpu_droplet_ip:
             return False
 
+        # SECURITY: Validate IP before using in SSH command
+        is_valid, reason = validate_ip_for_ssh(self.gpu_droplet_ip)
+        if not is_valid:
+            logger.error(f"Cannot wait for cloud-init - IP validation failed: {reason}")
+            return False
+
         start_time = time.time()
         check_interval = 15  # Check every 15 seconds
 
         while time.time() - start_time < timeout:
             try:
                 result = subprocess.run(
-                    ['ssh', '-o', 'StrictHostKeyChecking=no', '-o', 'ConnectTimeout=10',
+                    ['ssh', '-o', 'StrictHostKeyChecking=accept-new', '-o', 'ConnectTimeout=10',
                      f'root@{self.gpu_droplet_ip}',
                      'test -f /opt/goldventure/.ready && echo READY || echo WAITING'],
                     capture_output=True,
@@ -548,7 +643,7 @@ touch /opt/goldventure/.ready
             except subprocess.TimeoutExpired:
                 logger.warning("SSH timeout while checking cloud-init status")
                 time.sleep(check_interval)
-            except Exception as e:
+            except subprocess.SubprocessError as e:
                 logger.warning(f"Error checking cloud-init status: {e}")
                 time.sleep(check_interval)
 

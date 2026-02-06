@@ -30,6 +30,8 @@ import tempfile
 import hashlib
 import signal
 import re
+import socket
+import ipaddress
 from datetime import datetime
 from pathlib import Path
 from typing import Optional, List, Dict, Any, Tuple
@@ -76,10 +78,59 @@ ALLOWED_URL_DOMAINS = [
 MAX_FILE_SIZE_BYTES = 500 * 1024 * 1024
 
 
-def is_url_allowed(url: str) -> Tuple[bool, str]:
-    """Check if URL is from an allowed domain.
+def is_private_ip(ip_str: str) -> bool:
+    """Check if an IP address is private/internal (IPv4 or IPv6)."""
+    try:
+        ip = ipaddress.ip_address(ip_str)
+        return (
+            ip.is_private or
+            ip.is_loopback or
+            ip.is_link_local or
+            ip.is_reserved or
+            ip.is_multicast or
+            ip.is_unspecified
+        )
+    except ValueError:
+        return True  # Invalid IP - treat as unsafe
 
-    Returns (is_allowed, reason) tuple.
+
+def resolve_hostname(hostname: str) -> Optional[str]:
+    """Resolve hostname to IP address for DNS rebinding protection."""
+    try:
+        results = socket.getaddrinfo(hostname, None, socket.AF_UNSPEC, socket.SOCK_STREAM)
+        if results:
+            return results[0][4][0]
+    except socket.gaierror:
+        pass
+    return None
+
+
+# Cloud metadata endpoints that must be blocked
+CLOUD_METADATA_HOSTS = frozenset([
+    '169.254.169.254',  # AWS, Azure, DigitalOcean, Oracle
+    'metadata.google.internal',
+    'metadata.goog',
+    'instance-data.ec2.internal',
+    '100.100.100.200',  # Alibaba Cloud
+])
+
+
+def is_url_allowed(url: str, resolve_dns: bool = True) -> Tuple[bool, str]:
+    """Check if URL is safe to fetch (comprehensive SSRF prevention).
+
+    Security checks:
+    1. Valid scheme (http/https only)
+    2. Hostname not in blocked list (localhost, metadata endpoints)
+    3. IP address not private (all RFC1918 ranges, IPv6 link-local, etc.)
+    4. DNS resolution check to prevent DNS rebinding attacks
+    5. Domain allowlist for explicit approval
+
+    Args:
+        url: The URL to validate
+        resolve_dns: If True, resolve DNS and verify IP is public
+
+    Returns:
+        Tuple of (is_allowed, reason)
     """
     try:
         parsed = urlparse(url)
@@ -88,25 +139,57 @@ def is_url_allowed(url: str) -> Tuple[bool, str]:
         if not hostname:
             return False, "Invalid URL: no hostname"
 
-        # Block internal/metadata URLs (SSRF prevention)
-        if hostname in ['localhost', '127.0.0.1', '0.0.0.0']:
+        hostname_lower = hostname.lower()
+
+        # Must be http or https
+        if parsed.scheme not in ('http', 'https'):
+            return False, f"Invalid scheme: {parsed.scheme}"
+
+        # Block localhost variations
+        localhost_hosts = {'localhost', 'localhost.localdomain', '127.0.0.1', '::1', '0.0.0.0', '0'}
+        if hostname_lower in localhost_hosts:
             return False, "Blocked: localhost access"
 
-        if hostname.startswith('169.254.'):  # AWS metadata
-            return False, "Blocked: metadata service access"
+        # Block cloud metadata endpoints
+        if hostname_lower in CLOUD_METADATA_HOSTS:
+            return False, "Blocked: cloud metadata access"
 
-        if hostname.startswith('10.') or hostname.startswith('192.168.'):
-            return False, "Blocked: private network access"
+        # Check if hostname is an IP address
+        try:
+            if is_private_ip(hostname):
+                return False, f"Blocked: private IP address {hostname}"
+        except ValueError:
+            pass  # Not an IP, continue with hostname validation
 
-        # Check against allowlist
+        # Block encoded IP addresses (hex, octal, decimal)
+        # e.g., 0x7f.0.0.1, 017700000001, 2130706433
+        hex_pattern = re.compile(r'^0x[0-9a-f]+', re.IGNORECASE)
+        octal_pattern = re.compile(r'^0[0-7]+$')
+        decimal_pattern = re.compile(r'^\d{10,}$')
+        if (hex_pattern.match(hostname_lower) or
+            octal_pattern.match(hostname_lower) or
+            decimal_pattern.match(hostname_lower)):
+            return False, f"Blocked: encoded IP address {hostname}"
+
+        # DNS resolution to prevent DNS rebinding attacks
+        if resolve_dns:
+            resolved_ip = resolve_hostname(hostname)
+            if resolved_ip:
+                if is_private_ip(resolved_ip):
+                    return False, f"Blocked: hostname resolves to private IP: {hostname} -> {resolved_ip}"
+                if resolved_ip in CLOUD_METADATA_HOSTS:
+                    return False, f"Blocked: hostname resolves to metadata IP: {hostname} -> {resolved_ip}"
+
+        # Check against explicit allowlist
         for allowed_domain in ALLOWED_URL_DOMAINS:
-            if hostname == allowed_domain or hostname.endswith('.' + allowed_domain):
+            if hostname_lower == allowed_domain or hostname_lower.endswith('.' + allowed_domain):
                 return True, f"Allowed: {allowed_domain}"
 
-        # Allow any HTTPS URL to a .com/.ca/.gov domain with PDF in path
+        # Allow any HTTPS URL to a .com/.ca/.gov/.io/.net/.org domain with PDF in path
         # This allows company websites we haven't explicitly listed
+        allowed_tlds = ('.com', '.ca', '.gov', '.io', '.net', '.org', '.co', '.au', '.uk')
         if parsed.scheme == 'https':
-            if hostname.endswith(('.com', '.ca', '.gov', '.io')):
+            if any(hostname_lower.endswith(tld) for tld in allowed_tlds):
                 if '.pdf' in parsed.path.lower():
                     return True, f"Allowed: HTTPS PDF from {hostname}"
 

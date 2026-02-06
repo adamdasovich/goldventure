@@ -4,6 +4,8 @@ from django.utils.html import format_html
 from django.urls import path
 from django.shortcuts import render, redirect
 from django.contrib import messages
+from django.http import HttpResponseForbidden
+from .security_utils import is_safe_document_url
 from .models import (
     User, Company, Project, ResourceEstimate, EconomicStudy,
     Financing, Investor, InvestorPosition, MarketData, CommodityPrice,
@@ -181,12 +183,28 @@ class DocumentProcessingJobAdmin(admin.ModelAdmin):
         return custom_urls + urls
 
     def batch_add_view(self, request):
-        """View for adding multiple URLs at once"""
-        from urllib.parse import urlparse
+        """View for adding multiple URLs at once.
+
+        Security features:
+        - Explicit permission check (has_add_permission)
+        - SSRF protection via is_safe_document_url
+        - Rate limiting (max 100 URLs per batch)
+        """
+        # SECURITY: Explicit permission check
+        if not self.has_add_permission(request):
+            return HttpResponseForbidden("You don't have permission to add documents.")
+
+        # Maximum URLs per batch to prevent abuse
+        MAX_BATCH_SIZE = 100
 
         if request.method == 'POST':
             urls_text = request.POST.get('urls', '')
             urls = [url.strip() for url in urls_text.split('\n') if url.strip()]
+
+            # SECURITY: Limit batch size
+            if len(urls) > MAX_BATCH_SIZE:
+                messages.error(request, f'Too many URLs. Maximum {MAX_BATCH_SIZE} per batch.')
+                return redirect('.')
 
             company_name = request.POST.get('company_name', '').strip()
             project_name = request.POST.get('project_name', '').strip()
@@ -194,18 +212,13 @@ class DocumentProcessingJobAdmin(admin.ModelAdmin):
 
             created_count = 0
             skipped_count = 0
+            ssrf_blocked = 0
+
             for url in urls:
-                # Validate URL format before creating job
-                try:
-                    parsed = urlparse(url)
-                    if not parsed.scheme or parsed.scheme not in ('http', 'https'):
-                        skipped_count += 1
-                        continue
-                    if not parsed.netloc:
-                        skipped_count += 1
-                        continue
-                except (ValueError, TypeError):
-                    skipped_count += 1
+                # SECURITY: Validate URL with SSRF protection
+                is_safe, reason = is_safe_document_url(url)
+                if not is_safe:
+                    ssrf_blocked += 1
                     continue
 
                 DocumentProcessingJob.objects.create(
@@ -218,21 +231,28 @@ class DocumentProcessingJobAdmin(admin.ModelAdmin):
                 created_count += 1
 
             msg = f'Created {created_count} processing jobs.'
-            if skipped_count > 0:
-                msg += f' Skipped {skipped_count} invalid URLs.'
-            msg += ' Click "Process Queue" to start processing.'
+            if ssrf_blocked > 0:
+                msg += f' Blocked {ssrf_blocked} URLs for security reasons.'
+            msg += ' Jobs will be processed automatically by the GPU Orchestrator.'
             messages.success(request, msg)
             return redirect('..')
 
         context = {
             'title': 'Batch Add Document URLs',
             'opts': self.model._meta,
-            'has_permission': True,
+            'has_permission': self.has_add_permission(request),
         }
         return render(request, 'admin/core/documentprocessingjob/batch_add.html', context)
 
     def process_queue_view(self, request):
-        """Show GPU processing status - manual CPU processing disabled"""
+        """Show GPU processing status - manual CPU processing disabled.
+
+        Security: Explicit permission check required.
+        """
+        # SECURITY: Explicit permission check
+        if not self.has_change_permission(request):
+            return HttpResponseForbidden("You don't have permission to manage the processing queue.")
+
         pending_jobs = DocumentProcessingJob.objects.filter(status='pending').count()
 
         if request.method == 'POST':
@@ -249,7 +269,7 @@ class DocumentProcessingJobAdmin(admin.ModelAdmin):
             'title': 'Process Document Queue',
             'pending_jobs': pending_jobs,
             'opts': self.model._meta,
-            'has_permission': True,
+            'has_permission': self.has_change_permission(request),
         }
         return render(request, 'admin/core/documentprocessingjob/process_queue.html', context)
 
@@ -455,48 +475,77 @@ class AccreditedInvestorQualificationAdmin(admin.ModelAdmin):
 
 @admin.register(SubscriptionAgreement)
 class SubscriptionAgreementAdmin(admin.ModelAdmin):
-    """Admin interface for subscription agreements"""
+    """Admin interface for subscription agreements.
+
+    SECURITY: IP addresses are masked for GDPR compliance (PII).
+    Only superusers can see full IP addresses.
+    """
     list_display = [
         'investor', 'company', 'financing', 'total_investment_amount',
         'num_shares', 'status', 'investor_signed_at', 'shares_issued'
     ]
     list_filter = ['status', 'company', 'accreditation_verified', 'kyc_completed', 'shares_issued']
     search_fields = ['investor__username', 'company__name', 'docusign_envelope_id']
-    readonly_fields = ['created_at', 'updated_at']
+    readonly_fields = ['created_at', 'updated_at', 'masked_ip_address']
 
-    fieldsets = (
-        ('Parties', {
-            'fields': ('investor', 'financing', 'company')
-        }),
-        ('Investment Details', {
-            'fields': ('num_shares', 'price_per_share', 'total_investment_amount', 'currency')
-        }),
-        ('Warrants', {
-            'fields': ('includes_warrants', 'warrant_shares', 'warrant_strike_price', 'warrant_expiry_date'),
-            'classes': ('collapse',)
-        }),
-        ('Agreement Status', {
-            'fields': ('status', 'agreement_pdf_url', 'docusign_envelope_id')
-        }),
-        ('Signatures', {
-            'fields': ('investor_signed_at', 'investor_ip_address', 'company_accepted_at', 'company_accepted_by')
-        }),
-        ('Payment', {
-            'fields': ('payment_instructions_sent_at', 'payment_received_at', 'payment_reference')
-        }),
-        ('Share Issuance', {
-            'fields': ('shares_issued', 'shares_issued_at', 'drs_statement_sent_at', 'certificate_number')
-        }),
-        ('Compliance', {
-            'fields': ('accreditation_verified', 'kyc_completed', 'aml_check_completed')
-        }),
-        ('Notes', {
-            'fields': ('notes', 'rejection_reason')
-        }),
-        ('Audit', {
-            'fields': ('created_at', 'updated_at')
-        }),
-    )
+    def get_fieldsets(self, request, obj=None):
+        """Show masked IP to regular admins, full IP to superusers only."""
+        base_fieldsets = [
+            ('Parties', {
+                'fields': ('investor', 'financing', 'company')
+            }),
+            ('Investment Details', {
+                'fields': ('num_shares', 'price_per_share', 'total_investment_amount', 'currency')
+            }),
+            ('Warrants', {
+                'fields': ('includes_warrants', 'warrant_shares', 'warrant_strike_price', 'warrant_expiry_date'),
+                'classes': ('collapse',)
+            }),
+            ('Agreement Status', {
+                'fields': ('status', 'agreement_pdf_url', 'docusign_envelope_id')
+            }),
+            ('Payment', {
+                'fields': ('payment_instructions_sent_at', 'payment_received_at', 'payment_reference')
+            }),
+            ('Share Issuance', {
+                'fields': ('shares_issued', 'shares_issued_at', 'drs_statement_sent_at', 'certificate_number')
+            }),
+            ('Compliance', {
+                'fields': ('accreditation_verified', 'kyc_completed', 'aml_check_completed')
+            }),
+            ('Notes', {
+                'fields': ('notes', 'rejection_reason')
+            }),
+            ('Audit', {
+                'fields': ('created_at', 'updated_at')
+            }),
+        ]
+
+        # SECURITY: Show masked or full IP based on user privilege
+        if request.user.is_superuser:
+            signatures_fieldset = ('Signatures', {
+                'fields': ('investor_signed_at', 'investor_ip_address', 'company_accepted_at', 'company_accepted_by')
+            })
+        else:
+            signatures_fieldset = ('Signatures', {
+                'fields': ('investor_signed_at', 'masked_ip_address', 'company_accepted_at', 'company_accepted_by')
+            })
+
+        # Insert signatures after Agreement Status
+        return base_fieldsets[:4] + [signatures_fieldset] + base_fieldsets[4:]
+
+    def masked_ip_address(self, obj):
+        """Display masked IP address for GDPR compliance."""
+        if obj.investor_ip_address:
+            parts = obj.investor_ip_address.split('.')
+            if len(parts) == 4:
+                # IPv4: show first two octets, mask last two
+                return f"{parts[0]}.{parts[1]}.xxx.xxx"
+            elif ':' in obj.investor_ip_address:
+                # IPv6: show first segment, mask rest
+                return obj.investor_ip_address.split(':')[0] + ':xxxx:...'
+        return '-'
+    masked_ip_address.short_description = 'Investor IP (Masked)'
 
 
 @admin.register(InvestmentTransaction)
@@ -522,30 +571,71 @@ class FinancingAggregateAdmin(admin.ModelAdmin):
 
 @admin.register(PaymentInstruction)
 class PaymentInstructionAdmin(admin.ModelAdmin):
-    """Admin interface for payment instructions"""
+    """Admin interface for payment instructions.
+
+    SECURITY: Sensitive banking fields are masked to prevent unauthorized access.
+    Only superusers can see full account details.
+    """
     list_display = ['subscription_agreement', 'company', 'payment_method', 'sent_to_investor_at', 'viewed_by_investor_at']
     list_filter = ['payment_method', 'company']
     search_fields = ['reference_code', 'bank_name']
-    readonly_fields = ['created_at', 'updated_at']
+    readonly_fields = ['created_at', 'updated_at', 'masked_account_number', 'masked_routing_number', 'masked_swift_code']
 
-    fieldsets = (
-        ('Agreement & Company', {
-            'fields': ('subscription_agreement', 'company', 'payment_method')
-        }),
-        ('Banking Details', {
-            'fields': ('bank_name', 'bank_account_name', 'bank_account_number', 'routing_number', 'swift_code'),
-            'description': 'These details should be encrypted in production'
-        }),
-        ('Instructions', {
-            'fields': ('reference_code', 'special_instructions')
-        }),
-        ('Tracking', {
-            'fields': ('sent_to_investor_at', 'viewed_by_investor_at')
-        }),
-        ('Audit', {
-            'fields': ('created_at', 'updated_at')
-        }),
-    )
+    def get_fieldsets(self, request, obj=None):
+        """Show masked banking fields to regular admins, full details to superusers only."""
+        base_fieldsets = [
+            ('Agreement & Company', {
+                'fields': ('subscription_agreement', 'company', 'payment_method')
+            }),
+            ('Instructions', {
+                'fields': ('reference_code', 'special_instructions')
+            }),
+            ('Tracking', {
+                'fields': ('sent_to_investor_at', 'viewed_by_investor_at')
+            }),
+            ('Audit', {
+                'fields': ('created_at', 'updated_at')
+            }),
+        ]
+
+        if request.user.is_superuser:
+            # Superusers see full banking details
+            banking_fieldset = ('Banking Details (Full Access)', {
+                'fields': ('bank_name', 'bank_account_name', 'bank_account_number', 'routing_number', 'swift_code'),
+                'description': 'SECURITY: Full banking details visible only to superusers.'
+            })
+        else:
+            # Regular admins see masked banking details
+            banking_fieldset = ('Banking Details (Masked)', {
+                'fields': ('bank_name', 'bank_account_name', 'masked_account_number', 'masked_routing_number', 'masked_swift_code'),
+                'description': 'Banking details are masked for security. Contact a superuser for full access.'
+            })
+
+        return [base_fieldsets[0], banking_fieldset] + base_fieldsets[1:]
+
+    def masked_account_number(self, obj):
+        """Display masked bank account number."""
+        if obj.bank_account_number:
+            visible_chars = min(4, len(obj.bank_account_number))
+            return '*' * (len(obj.bank_account_number) - visible_chars) + obj.bank_account_number[-visible_chars:]
+        return '-'
+    masked_account_number.short_description = 'Account Number'
+
+    def masked_routing_number(self, obj):
+        """Display masked routing number."""
+        if obj.routing_number:
+            visible_chars = min(3, len(obj.routing_number))
+            return '*' * (len(obj.routing_number) - visible_chars) + obj.routing_number[-visible_chars:]
+        return '-'
+    masked_routing_number.short_description = 'Routing Number'
+
+    def masked_swift_code(self, obj):
+        """Display masked SWIFT code."""
+        if obj.swift_code:
+            # SWIFT codes are typically 8-11 chars, show first 4 (bank code)
+            return obj.swift_code[:4] + '*' * (len(obj.swift_code) - 4)
+        return '-'
+    masked_swift_code.short_description = 'SWIFT Code'
 
 
 @admin.register(DRSDocument)
