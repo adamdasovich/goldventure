@@ -626,11 +626,12 @@ class CompanyDataScraper:
                     company_suffixes = ['corp', 'corporation', 'inc', 'incorporated', 'ltd', 'limited',
                                        'llc', 'lp', 'co.', 'company', 'plc', 'resources', 'metals',
                                        'mining', 'exploration', 'minerals', 'gold', 'silver', 'copper',
-                                       'nickel', 'energy', 'ventures']
+                                       'nickel', 'energy', 'ventures', 'capital', 'holdings', 'group']
                     # Tagline indicators (words that suggest this is NOT the company name)
                     tagline_indicators = ['unlocking', 'discovering', 'exploring', 'developing',
                                          'focused on', 'leading', 'premier', 'innovative',
-                                         'potential', 'opportunity', 'future']
+                                         'potential', 'opportunity', 'future', 'investment in',
+                                         'investing in', 'committed to']
 
                     # Score each part - higher score = more likely to be company name
                     best_part = None
