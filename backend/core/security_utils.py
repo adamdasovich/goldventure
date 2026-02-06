@@ -448,6 +448,79 @@ def calculate_backoff(attempt: int, base_delay: int = 60, max_delay: int = 3600)
 
 
 # =============================================================================
+# REQUEST IP EXTRACTION (X-Forwarded-For Handling)
+# =============================================================================
+
+def get_client_ip(request) -> str:
+    """
+    Safely extract the client IP address from a Django request.
+
+    SECURITY: X-Forwarded-For can be spoofed by attackers. This function:
+    1. Only trusts X-Forwarded-For if TRUSTED_PROXY_IPS is configured in settings
+    2. Validates the direct connection is from a trusted proxy before using XFF
+    3. Falls back to REMOTE_ADDR (the actual TCP connection IP) otherwise
+
+    For production behind a load balancer:
+    1. Configure TRUSTED_PROXY_IPS in settings.py with your LB/proxy IPs
+    2. Configure your proxy to strip any client-provided X-Forwarded-For
+
+    Args:
+        request: Django HttpRequest object
+
+    Returns:
+        Client IP address as string
+    """
+    from django.conf import settings
+
+    # Get the direct connection IP (cannot be spoofed at application layer)
+    remote_addr = request.META.get('REMOTE_ADDR', '')
+
+    # Check if we have trusted proxies configured
+    trusted_proxies = getattr(settings, 'TRUSTED_PROXY_IPS', None)
+
+    if not trusted_proxies:
+        # No trusted proxies configured - always use REMOTE_ADDR
+        # This is the safest default
+        return remote_addr
+
+    # Convert to set for O(1) lookup
+    if isinstance(trusted_proxies, (list, tuple)):
+        trusted_proxies = set(trusted_proxies)
+
+    # Only trust X-Forwarded-For if request came from a trusted proxy
+    if remote_addr in trusted_proxies:
+        x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR', '')
+        if x_forwarded_for:
+            # X-Forwarded-For format: "client, proxy1, proxy2"
+            # The leftmost IP is the original client (if proxies are trusted)
+            client_ip = x_forwarded_for.split(',')[0].strip()
+            # Basic validation - ensure it looks like an IP
+            if client_ip and _is_valid_ip_format(client_ip):
+                return client_ip
+
+    # Fall back to direct connection IP
+    return remote_addr
+
+
+def _is_valid_ip_format(ip_str: str) -> bool:
+    """
+    Quick validation that a string looks like a valid IP address.
+    Used to prevent injection via malformed X-Forwarded-For values.
+
+    Args:
+        ip_str: String to validate
+
+    Returns:
+        True if string is a valid IPv4 or IPv6 address format
+    """
+    try:
+        ipaddress.ip_address(ip_str)
+        return True
+    except ValueError:
+        return False
+
+
+# =============================================================================
 # CONSTANTS FOR EXTERNAL USE
 # =============================================================================
 
@@ -457,6 +530,7 @@ __all__ = [
     'is_private_ip',
     'is_valid_public_ip',
     'validate_ip_for_ssh',
+    'get_client_ip',
 
     # URL validation
     'is_safe_url',

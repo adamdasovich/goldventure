@@ -1761,9 +1761,10 @@ class SubscriptionAgreement(models.Model):
     ]
 
     # Parties
-    investor = models.ForeignKey(User, on_delete=models.CASCADE, related_name='subscription_agreements')
-    financing = models.ForeignKey(Financing, on_delete=models.CASCADE, related_name='subscription_agreements')
-    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name='subscription_agreements')
+    # SECURITY: Use PROTECT for financial records - they must never be auto-deleted
+    investor = models.ForeignKey(User, on_delete=models.PROTECT, related_name='subscription_agreements')
+    financing = models.ForeignKey(Financing, on_delete=models.PROTECT, related_name='subscription_agreements')
+    company = models.ForeignKey(Company, on_delete=models.PROTECT, related_name='subscription_agreements')
 
     # Investment Details
     num_shares = models.BigIntegerField()
@@ -1820,6 +1821,17 @@ class SubscriptionAgreement(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    # Soft delete fields (financial records should never be hard deleted)
+    is_deleted = models.BooleanField(default=False, db_index=True)
+    deleted_at = models.DateTimeField(null=True, blank=True)
+    deleted_by = models.ForeignKey(
+        'User',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='deleted_subscription_agreements'
+    )
+
     class Meta:
         db_table = 'subscription_agreements'
         ordering = ['-created_at']
@@ -1829,10 +1841,26 @@ class SubscriptionAgreement(models.Model):
             models.Index(fields=['company', '-created_at']),
             models.Index(fields=['status', '-created_at']),
             models.Index(fields=['docusign_envelope_id']),
+            models.Index(fields=['is_deleted']),
         ]
 
     def __str__(self):
         return f"{self.investor.username} - {self.company.name} - ${self.total_investment_amount:,.2f}"
+
+    def soft_delete(self, user=None):
+        """Soft delete this subscription agreement record."""
+        self.is_deleted = True
+        self.deleted_at = timezone.now()
+        if user:
+            self.deleted_by = user
+        self.save(update_fields=['is_deleted', 'deleted_at', 'deleted_by'])
+
+    def restore(self):
+        """Restore a soft-deleted subscription agreement record."""
+        self.is_deleted = False
+        self.deleted_at = None
+        self.deleted_by = None
+        self.save(update_fields=['is_deleted', 'deleted_at', 'deleted_by'])
 
 
 class InvestmentTransaction(models.Model):
@@ -1847,13 +1875,14 @@ class InvestmentTransaction(models.Model):
         ('refunded', 'Refunded'),
     ]
 
+    # SECURITY: Use PROTECT for financial records - they must never be auto-deleted
     subscription_agreement = models.ForeignKey(
         SubscriptionAgreement,
-        on_delete=models.CASCADE,
+        on_delete=models.PROTECT,
         related_name='transactions'
     )
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='investment_transactions')
-    financing = models.ForeignKey(Financing, on_delete=models.CASCADE, related_name='investment_transactions')
+    user = models.ForeignKey(User, on_delete=models.PROTECT, related_name='investment_transactions')
+    financing = models.ForeignKey(Financing, on_delete=models.PROTECT, related_name='investment_transactions')
 
     # Transaction Details
     amount = models.DecimalField(max_digits=15, decimal_places=2)
@@ -1874,6 +1903,17 @@ class InvestmentTransaction(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     completed_at = models.DateTimeField(null=True, blank=True)
 
+    # Soft delete fields (financial records should never be hard deleted)
+    is_deleted = models.BooleanField(default=False, db_index=True)
+    deleted_at = models.DateTimeField(null=True, blank=True)
+    deleted_by = models.ForeignKey(
+        'User',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='deleted_investment_transactions'
+    )
+
     class Meta:
         db_table = 'investment_transactions'
         ordering = ['-created_at']
@@ -1881,15 +1921,32 @@ class InvestmentTransaction(models.Model):
             models.Index(fields=['user', 'status']),
             models.Index(fields=['financing', 'status']),
             models.Index(fields=['status', '-created_at']),
+            models.Index(fields=['is_deleted']),
         ]
 
     def __str__(self):
         return f"{self.user.username} - {self.financing.company.name} - ${self.amount:,.2f}"
 
+    def soft_delete(self, user=None):
+        """Soft delete this investment transaction record."""
+        self.is_deleted = True
+        self.deleted_at = timezone.now()
+        if user:
+            self.deleted_by = user
+        self.save(update_fields=['is_deleted', 'deleted_at', 'deleted_by'])
+
+    def restore(self):
+        """Restore a soft-deleted investment transaction record."""
+        self.is_deleted = False
+        self.deleted_at = None
+        self.deleted_by = None
+        self.save(update_fields=['is_deleted', 'deleted_at', 'deleted_by'])
+
 
 class FinancingAggregate(models.Model):
     """Aggregate investment data for financing rounds"""
-    financing = models.OneToOneField(Financing, on_delete=models.CASCADE, related_name='aggregate_data')
+    # SECURITY: Use PROTECT for financial records - they must never be auto-deleted
+    financing = models.OneToOneField(Financing, on_delete=models.PROTECT, related_name='aggregate_data')
 
     # Subscription Metrics
     total_subscriptions = models.IntegerField(default=0)
@@ -1931,12 +1988,13 @@ class PaymentInstruction(models.Model):
         ('crypto', 'Cryptocurrency'),
     ]
 
+    # SECURITY: Use PROTECT for financial records - they must never be auto-deleted
     subscription_agreement = models.OneToOneField(
         SubscriptionAgreement,
-        on_delete=models.CASCADE,
+        on_delete=models.PROTECT,
         related_name='payment_instruction'
     )
-    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name='payment_instructions')
+    company = models.ForeignKey(Company, on_delete=models.PROTECT, related_name='payment_instructions')
 
     # Payment Method
     payment_method = models.CharField(max_length=20, choices=PAYMENT_METHOD)
@@ -1960,11 +2018,40 @@ class PaymentInstruction(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    # Soft delete fields (financial records should never be hard deleted)
+    is_deleted = models.BooleanField(default=False, db_index=True)
+    deleted_at = models.DateTimeField(null=True, blank=True)
+    deleted_by = models.ForeignKey(
+        'User',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='deleted_payment_instructions'
+    )
+
     class Meta:
         db_table = 'payment_instructions'
+        indexes = [
+            models.Index(fields=['is_deleted']),
+        ]
 
     def __str__(self):
         return f"{self.subscription_agreement.investor.username} - {self.get_payment_method_display()}"
+
+    def soft_delete(self, user=None):
+        """Soft delete this payment instruction record."""
+        self.is_deleted = True
+        self.deleted_at = timezone.now()
+        if user:
+            self.deleted_by = user
+        self.save(update_fields=['is_deleted', 'deleted_at', 'deleted_by'])
+
+    def restore(self):
+        """Restore a soft-deleted payment instruction record."""
+        self.is_deleted = False
+        self.deleted_at = None
+        self.deleted_by = None
+        self.save(update_fields=['is_deleted', 'deleted_at', 'deleted_by'])
 
 
 class DRSDocument(models.Model):
@@ -1983,15 +2070,16 @@ class DRSDocument(models.Model):
         ('failed', 'Failed'),
     ]
 
+    # SECURITY: Use PROTECT for financial records - they must never be auto-deleted
     subscription_agreement = models.ForeignKey(
         SubscriptionAgreement,
-        on_delete=models.CASCADE,
+        on_delete=models.PROTECT,
         related_name='drs_documents',
         null=True,
         blank=True
     )
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='drs_documents')
-    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name='drs_documents')
+    user = models.ForeignKey(User, on_delete=models.PROTECT, related_name='drs_documents')
+    company = models.ForeignKey(Company, on_delete=models.PROTECT, related_name='drs_documents')
 
     # Document Details
     document_type = models.CharField(max_length=20, choices=DOCUMENT_TYPE)
@@ -2013,6 +2101,17 @@ class DRSDocument(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    # Soft delete fields (financial records should never be hard deleted)
+    is_deleted = models.BooleanField(default=False, db_index=True)
+    deleted_at = models.DateTimeField(null=True, blank=True)
+    deleted_by = models.ForeignKey(
+        'User',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='deleted_drs_documents'
+    )
+
     class Meta:
         db_table = 'drs_documents'
         ordering = ['-created_at']
@@ -2020,10 +2119,26 @@ class DRSDocument(models.Model):
             models.Index(fields=['user', 'document_type']),
             models.Index(fields=['subscription_agreement', '-created_at']),
             models.Index(fields=['delivery_status', '-created_at']),
+            models.Index(fields=['is_deleted']),
         ]
 
     def __str__(self):
         return f"{self.user.username} - {self.get_document_type_display()} - {self.company.name}"
+
+    def soft_delete(self, user=None):
+        """Soft delete this DRS document record."""
+        self.is_deleted = True
+        self.deleted_at = timezone.now()
+        if user:
+            self.deleted_by = user
+        self.save(update_fields=['is_deleted', 'deleted_at', 'deleted_by'])
+
+    def restore(self):
+        """Restore a soft-deleted DRS document record."""
+        self.is_deleted = False
+        self.deleted_at = None
+        self.deleted_by = None
+        self.save(update_fields=['is_deleted', 'deleted_at', 'deleted_by'])
 
 
 # ============================================================================
@@ -3193,9 +3308,10 @@ class InvestmentInterest(models.Model):
     ]
 
     # Core relationships
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='investment_interests')
-    financing = models.ForeignKey(Financing, on_delete=models.CASCADE, related_name='investment_interests')
-    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name='investment_interests')
+    # SECURITY: Use PROTECT for financial records - they must never be auto-deleted
+    user = models.ForeignKey(User, on_delete=models.PROTECT, related_name='investment_interests')
+    financing = models.ForeignKey(Financing, on_delete=models.PROTECT, related_name='investment_interests')
+    company = models.ForeignKey(Company, on_delete=models.PROTECT, related_name='investment_interests')
 
     # Accreditation
     is_accredited_investor = models.BooleanField(
@@ -3266,6 +3382,17 @@ class InvestmentInterest(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    # Soft delete fields (financial records should never be hard deleted)
+    is_deleted = models.BooleanField(default=False, db_index=True)
+    deleted_at = models.DateTimeField(null=True, blank=True)
+    deleted_by = models.ForeignKey(
+        'User',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='deleted_investment_interests'
+    )
+
     class Meta:
         db_table = 'investment_interests'
         ordering = ['-created_at']
@@ -3275,6 +3402,7 @@ class InvestmentInterest(models.Model):
             models.Index(fields=['company', '-created_at']),
             models.Index(fields=['status', '-created_at']),
             models.Index(fields=['is_accredited_investor']),
+            models.Index(fields=['is_deleted']),
         ]
         # Prevent duplicate interests from same user for same financing
         constraints = [
@@ -3293,6 +3421,21 @@ class InvestmentInterest(models.Model):
             self.investment_amount = self.shares_requested * self.price_per_share
         super().save(*args, **kwargs)
 
+    def soft_delete(self, user=None):
+        """Soft delete this investment interest record."""
+        self.is_deleted = True
+        self.deleted_at = timezone.now()
+        if user:
+            self.deleted_by = user
+        self.save(update_fields=['is_deleted', 'deleted_at', 'deleted_by'])
+
+    def restore(self):
+        """Restore a soft-deleted investment interest record."""
+        self.is_deleted = False
+        self.deleted_at = None
+        self.deleted_by = None
+        self.save(update_fields=['is_deleted', 'deleted_at', 'deleted_by'])
+
 
 class InvestmentInterestAggregate(models.Model):
     """
@@ -3300,9 +3443,10 @@ class InvestmentInterestAggregate(models.Model):
     This is the PUBLIC-FACING data shown on company pages.
     Contains NO personally identifiable information.
     """
+    # SECURITY: Use PROTECT for financial records - they must never be auto-deleted
     financing = models.OneToOneField(
         Financing,
-        on_delete=models.CASCADE,
+        on_delete=models.PROTECT,
         related_name='interest_aggregate'
     )
 
