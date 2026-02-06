@@ -11,6 +11,7 @@ import asyncio
 import logging
 import anthropic
 from typing import Dict, List, Optional
+from core.api_utils import extract_url_slug
 
 logger = logging.getLogger(__name__)
 
@@ -1008,16 +1009,6 @@ def _log_verification_result(company, verification: Dict):
                 logger.info(f"  - [FIXED] {fix}")
 
 
-def _extract_url_slug(url: str) -> str:
-    """Extract the meaningful slug from a news URL."""
-    clean_url = url.split('?')[0].rstrip('/')
-    parts = clean_url.split('/')
-    slug = parts[-1] if parts else ''
-    if slug.isdigit() and len(slug) == 4 and len(parts) > 1:
-        slug = parts[-2]
-    return slug.lower()
-
-
 def cleanup_duplicate_news(company_id: int) -> Dict:
     """
     Detect and remove duplicate news items for a company.
@@ -1043,7 +1034,7 @@ def cleanup_duplicate_news(company_id: int) -> Dict:
     # Track duplicates by slug
     slug_to_news = {}  # Map slug -> list of news items
     for news in news_items:
-        slug = _extract_url_slug(news.url)
+        slug = extract_url_slug(news.url)
         if slug and len(slug) > 10:  # Only meaningful slugs
             if slug not in slug_to_news:
                 slug_to_news[slug] = []

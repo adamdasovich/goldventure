@@ -17,117 +17,8 @@ from decimal import Decimal
 from pathlib import Path
 import tempfile
 import json
-import ipaddress
-import socket
 import re
 from urllib.parse import urlparse
-
-
-# Cloud metadata endpoints that must be blocked
-CLOUD_METADATA_HOSTS = frozenset([
-    '169.254.169.254',  # AWS, Azure, DigitalOcean, Oracle
-    'metadata.google.internal',
-    'metadata.goog',
-    'instance-data.ec2.internal',
-    '100.100.100.200',  # Alibaba Cloud
-])
-
-
-def _resolve_hostname(hostname: str) -> str:
-    """Resolve hostname to IP address for DNS rebinding protection."""
-    try:
-        results = socket.getaddrinfo(hostname, None, socket.AF_UNSPEC, socket.SOCK_STREAM)
-        if results:
-            return results[0][4][0]
-    except socket.gaierror:
-        pass
-    return None
-
-
-def _is_private_ip(ip_str: str) -> bool:
-    """Check if an IP address is private/internal."""
-    try:
-        ip = ipaddress.ip_address(ip_str)
-        return (
-            ip.is_private or
-            ip.is_loopback or
-            ip.is_link_local or
-            ip.is_reserved or
-            ip.is_multicast or
-            ip.is_unspecified
-        )
-    except ValueError:
-        return True  # Invalid IP - treat as unsafe
-
-
-def is_safe_url(url: str, resolve_dns: bool = True) -> bool:
-    """
-    Validate URL is safe to fetch (prevent SSRF attacks).
-
-    Security features:
-    - Blocks internal IPs (all RFC1918 ranges, IPv6 link-local, etc.)
-    - Blocks cloud metadata endpoints (AWS, GCP, Azure, DO, Alibaba)
-    - DNS rebinding protection via resolve_dns (checks resolved IP)
-    - Blocks encoded IP addresses (hex, octal, decimal)
-
-    Args:
-        url: The URL to validate
-        resolve_dns: If True, resolve DNS and verify IP is public (prevents DNS rebinding)
-
-    Returns:
-        True if URL is safe, False otherwise
-    """
-    try:
-        parsed = urlparse(url)
-
-        # Only allow http/https
-        if parsed.scheme not in ('http', 'https'):
-            return False
-
-        hostname = parsed.hostname
-        if not hostname:
-            return False
-
-        hostname_lower = hostname.lower()
-
-        # Block localhost variants
-        if hostname_lower in ('localhost', 'localhost.localdomain', '127.0.0.1', '0.0.0.0', '::1', '0'):
-            return False
-
-        # Block cloud metadata endpoints
-        if hostname_lower in CLOUD_METADATA_HOSTS:
-            return False
-
-        # Block encoded IP addresses (hex, octal, decimal)
-        # e.g., 0x7f.0.0.1, 017700000001, 2130706433
-        hex_pattern = re.compile(r'^0x[0-9a-f]+', re.IGNORECASE)
-        octal_pattern = re.compile(r'^0[0-7]+$')
-        decimal_pattern = re.compile(r'^\d{10,}$')
-        if (hex_pattern.match(hostname_lower) or
-            octal_pattern.match(hostname_lower) or
-            decimal_pattern.match(hostname_lower)):
-            return False
-
-        # Try to parse as IP address and check for private/reserved ranges
-        try:
-            if _is_private_ip(hostname):
-                return False
-        except ValueError:
-            # Not an IP address, likely a domain name - continue with DNS check
-            pass
-
-        # DNS rebinding protection: resolve DNS and check the actual IP
-        if resolve_dns:
-            resolved_ip = _resolve_hostname(hostname)
-            if resolved_ip:
-                if _is_private_ip(resolved_ip):
-                    return False
-                if resolved_ip in CLOUD_METADATA_HOSTS:
-                    return False
-
-        return True
-    except Exception:
-        return False
 
 from docling.document_converter import DocumentConverter
 from docling_core.types.doc import ImageRefMode, PictureItem, TableItem
@@ -136,6 +27,7 @@ from .base import BaseMCPServer
 from .rlm_processor import RLMProcessor, DecompositionStrategy
 from django.conf import settings
 from core.models import Company, Project, Document, ResourceEstimate, EconomicStudy
+from core.security_utils import check_url_safety as is_safe_url
 from django.db.models import Q
 
 

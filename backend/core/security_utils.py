@@ -292,6 +292,22 @@ def is_safe_url(url: str, resolve_dns: bool = True) -> Tuple[bool, str]:
     return True, "URL is safe"
 
 
+def check_url_safety(url: str, resolve_dns: bool = False) -> bool:
+    """
+    Simple boolean wrapper for is_safe_url().
+    Use this when you only need a True/False result without the reason.
+
+    Args:
+        url: The URL to validate
+        resolve_dns: Whether to resolve and validate DNS (default: False for performance)
+
+    Returns:
+        True if URL is safe, False otherwise
+    """
+    is_safe, _ = is_safe_url(url, resolve_dns=resolve_dns)
+    return is_safe
+
+
 def is_safe_document_url(url: str) -> Tuple[bool, str]:
     """
     Check if a URL is safe for fetching documents (PDFs, etc.).

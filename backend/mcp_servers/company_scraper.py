@@ -8,52 +8,14 @@ import logging
 import re
 import sys
 import requests
-import ipaddress
 from urllib.parse import urljoin, urlparse
 from typing import Dict, List, Optional, Any
 from datetime import datetime
 from bs4 import BeautifulSoup
 from crawl4ai import AsyncWebCrawler, BrowserConfig, CrawlerRunConfig
+from core.security_utils import check_url_safety as is_safe_url
 
 logger = logging.getLogger(__name__)
-
-
-def is_safe_url(url: str) -> bool:
-    """
-    Validate URL is safe to fetch (prevent SSRF attacks).
-    Blocks internal IPs, localhost, and cloud metadata endpoints.
-    """
-    try:
-        parsed = urlparse(url)
-
-        # Only allow http/https
-        if parsed.scheme not in ('http', 'https'):
-            return False
-
-        hostname = parsed.hostname
-        if not hostname:
-            return False
-
-        # Block localhost variants
-        if hostname in ('localhost', '127.0.0.1', '0.0.0.0', '::1'):
-            return False
-
-        # Block common cloud metadata endpoints
-        if hostname in ('169.254.169.254', 'metadata.google.internal'):
-            return False
-
-        # Try to parse as IP address and check for private/reserved ranges
-        try:
-            ip = ipaddress.ip_address(hostname)
-            if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved:
-                return False
-        except ValueError:
-            # Not an IP address, likely a domain name - that's fine
-            pass
-
-        return True
-    except Exception:
-        return False
 
 # Fix Windows console encoding
 if sys.platform == 'win32':
