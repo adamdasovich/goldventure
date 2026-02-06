@@ -14,7 +14,10 @@ This implementation applies RLMs to NI 43-101 technical mining reports, which ar
 typically 100-300+ pages and contain complex tables, geological data, and financial projections.
 """
 
+import logging
 import json
+
+logger = logging.getLogger(__name__)
 import anthropic
 from typing import Dict, List, Any, Optional, Callable
 from dataclasses import dataclass, field
@@ -135,7 +138,8 @@ class RLMProcessor:
             "data": data or {}
         }
         self.processing_log.append(entry)
-        print(f"[RLM-{level.upper()}] {message}")
+        log_func = getattr(logger, level, logger.info)
+        log_func(f"[RLM] {message}")
 
     # =========================================================================
     # PHASE 1: Document Decomposition

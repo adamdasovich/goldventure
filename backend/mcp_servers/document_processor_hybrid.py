@@ -9,7 +9,10 @@ documents that exceed context windows (100+ pages).
 Based on: "Recursive Language Models" (Zhang, Kraska, Khattab - arXiv:2512.24601)
 """
 
+import logging
 import requests
+
+logger = logging.getLogger(__name__)
 import anthropic
 from typing import Dict, List, Any, Tuple
 from datetime import datetime
@@ -273,7 +276,7 @@ class HybridDocumentProcessor(BaseMCPServer):
                 if e.response.status_code == 403:
                     # Exponential backoff for 403 errors
                     wait_time = 2 ** attempt
-                    print(f"[PDF DOWNLOAD] 403 Forbidden, retrying in {wait_time}s... (attempt {attempt + 1}/{max_retries})")
+                    logger.warning(f"[PDF DOWNLOAD] 403 Forbidden, retrying in {wait_time}s... (attempt {attempt + 1}/{max_retries})")
                     time.sleep(wait_time)
                     continue
                 elif e.response.status_code == 404:
@@ -418,7 +421,7 @@ class HybridDocumentProcessor(BaseMCPServer):
             # Check page count - use RLM for long documents
             page_count = docling_data.get('page_count', 0)
             if page_count > self.RLM_PAGE_THRESHOLD:
-                print(f"[HYBRID] Document has {page_count} pages (>{self.RLM_PAGE_THRESHOLD}), switching to RLM processing")
+                logger.info(f"[HYBRID] Document has {page_count} pages (>{self.RLM_PAGE_THRESHOLD}), switching to RLM processing")
                 pdf_path.unlink()
                 return self._process_ni43101_rlm(
                     document_url=document_url,
@@ -592,7 +595,7 @@ EXTRACTED TABLES ({len(docling_data['tables'])} total tables, showing {len(filte
                         )
                         resources_added += 1
                     except Exception as e:
-                        print(f"Error storing resource: {str(e)}")
+                        logger.error(f"Error storing resource: {str(e)}")
 
             # Store economic study
             econ_data = extracted_data.get('economic_study', {})
@@ -612,7 +615,7 @@ EXTRACTED TABLES ({len(docling_data['tables'])} total tables, showing {len(filte
                     )
                     econ_stored = True
                 except Exception as e:
-                    print(f"Error storing economics: {str(e)}")
+                    logger.error(f"Error storing economics: {str(e)}")
 
             # Store full document text for RAG/semantic search
             chunks_stored = 0
@@ -621,9 +624,9 @@ EXTRACTED TABLES ({len(docling_data['tables'])} total tables, showing {len(filte
                 rag_manager = RAGManager()
                 full_text = docling_data['text']  # Full extracted text from Docling
                 chunks_stored = rag_manager.store_document_chunks(document, full_text)
-                print(f"Stored {chunks_stored} chunks for semantic search")
+                logger.info(f"Stored {chunks_stored} chunks for semantic search")
             except Exception as e:
-                print(f"Error storing document chunks for RAG: {str(e)}")
+                logger.error(f"Error storing document chunks for RAG: {str(e)}")
 
             return {
                 "success": True,
@@ -884,7 +887,7 @@ Structure:
             pdf_path.unlink()
 
             page_count = docling_data.get('page_count', 0)
-            print(f"[RLM] Document has {page_count} pages, {len(docling_data['tables'])} tables")
+            logger.info(f"[RLM] Document has {page_count} pages, {len(docling_data['tables'])} tables")
 
             # Step 3: Process with RLM
             strategy_map = {
@@ -979,7 +982,7 @@ Structure:
                         )
                         resources_added += 1
                     except Exception as e:
-                        print(f"[RLM] Error storing resource: {str(e)}")
+                        logger.error(f"[RLM] Error storing resource: {str(e)}")
 
             # Store economic study
             econ_data = extracted_data.get('economic_study', {})
@@ -1000,7 +1003,7 @@ Structure:
                     )
                     econ_stored = True
                 except Exception as e:
-                    print(f"[RLM] Error storing economics: {str(e)}")
+                    logger.error(f"[RLM] Error storing economics: {str(e)}")
 
             # Store document chunks for RAG
             chunks_stored = 0
@@ -1009,9 +1012,9 @@ Structure:
                 rag_manager = RAGManager()
                 full_text = docling_data['text']
                 chunks_stored = rag_manager.store_document_chunks(document, full_text)
-                print(f"[RLM] Stored {chunks_stored} chunks for semantic search")
+                logger.info(f"[RLM] Stored {chunks_stored} chunks for semantic search")
             except Exception as e:
-                print(f"[RLM] Error storing document chunks for RAG: {str(e)}")
+                logger.error(f"[RLM] Error storing document chunks for RAG: {str(e)}")
 
             # Get processing metadata
             proc_meta = extracted_data.get('processing_metadata', {})

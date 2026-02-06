@@ -5,7 +5,10 @@ Uses Voyage AI for fast, high-quality embeddings.
 Falls back to ChromaDB's default embeddings if Voyage AI is not configured.
 """
 
+import logging
 import os
+
+logger = logging.getLogger(__name__)
 from typing import List, Optional
 from chromadb.api.types import EmbeddingFunction, Documents, Embeddings
 
@@ -91,13 +94,13 @@ def get_embedding_function() -> Optional[EmbeddingFunction]:
         try:
             return VoyageEmbeddingFunction(api_key=api_key)
         except Exception as e:
-            print(f"Warning: Failed to initialize Voyage AI embeddings: {e}")
-            print("Falling back to ChromaDB default embeddings.")
+            logger.warning(f"Failed to initialize Voyage AI embeddings: {e}")
+            logger.info("Falling back to ChromaDB default embeddings.")
             return None
 
     # No Voyage AI - use ChromaDB's default (CPU-based all-MiniLM-L6-v2)
     if not api_key:
-        print("Note: VOYAGE_API_KEY not set. Using slower CPU-based embeddings.")
+        logger.info("VOYAGE_API_KEY not set. Using slower CPU-based embeddings.")
 
     return None
 
@@ -128,5 +131,5 @@ def embed_query(query: str) -> Optional[List[float]]:
         )
         return result.embeddings[0]
     except Exception as e:
-        print(f"Warning: Query embedding failed: {e}")
+        logger.warning(f"Query embedding failed: {e}")
         return None
