@@ -369,9 +369,10 @@ CELERY_BEAT_SCHEDULE = {
     },
 
     # Scrape news releases from ALL company websites daily (7 AM ET / 12:00 UTC)
+    # Runs Monday-Saturday only (no Sunday - markets closed, no news)
     'scrape-all-companies-news-daily': {
         'task': 'core.tasks.scrape_all_companies_news_task',
-        'schedule': crontab(hour=12, minute=0),  # 7 AM ET
+        'schedule': crontab(hour=12, minute=0, day_of_week='1-6'),  # 7 AM ET, Mon-Sat
     },
 
     # Cleanup stuck jobs every 15 minutes
