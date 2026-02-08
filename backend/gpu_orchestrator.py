@@ -703,12 +703,15 @@ CHROMA_PORT=8002
                 return False
 
             # Set proper permissions on remote file
-            subprocess.run(
+            chmod_result = subprocess.run(
                 ['ssh', '-o', 'StrictHostKeyChecking=accept-new',
                  f'root@{self.gpu_droplet_ip}',
                  'chmod 600 /opt/goldventure/.env'],
+                capture_output=True,
                 timeout=30
             )
+            if chmod_result.returncode != 0:
+                logger.warning(f"Failed to set .env permissions: {chmod_result.stderr.decode()}")
 
             logger.info("Credentials transferred securely")
             return True

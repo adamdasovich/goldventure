@@ -416,8 +416,8 @@ def scrape_company_news_task(self, company_id):
         # Check if this is a new company being onboarded (no existing NewsRelease records)
         # For new companies: use 90-day rule (3 months) to show recent financing history
         # For existing companies: use 7-day rule to avoid re-flagging old news daily
-        existing_news_count = NewsRelease.objects.filter(company=company).count()
-        is_new_company = existing_news_count == 0
+        # Use .exists() instead of .count() == 0 for better performance
+        is_new_company = not NewsRelease.objects.filter(company=company).exists()
         if is_new_company:
             logger.info(f"  [ONBOARDING] New company detected - will flag financing from last 90 days")
 

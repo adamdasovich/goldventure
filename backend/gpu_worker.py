@@ -259,9 +259,14 @@ class DatabaseConnection:
         logger.info(f"Connecting to database at {db_config['host']}:{db_config['port']}")
 
         try:
+            # Add connection timeout to prevent indefinite hangs
+            db_config['connect_timeout'] = 30
             self.conn = psycopg2.connect(**db_config)
             self.conn.autocommit = False
             logger.info("Database connection established")
+        except psycopg2.OperationalError as e:
+            logger.error(f"Failed to connect to database (timeout or connection refused): {e}")
+            raise
         except Exception as e:
             logger.error(f"Failed to connect to database: {e}")
             raise
@@ -362,30 +367,54 @@ class DocumentProcessor:
             logger.warning(f"SentenceTransformers not available: {e}")
             self.embedding_model = None
 
-    def download_document(self, url: str) -> Tuple[Optional[Path], Optional[str]]:
+    def download_document(self, url: str, max_retries: int = 3) -> Tuple[Optional[Path], Optional[str]]:
         """Download document from URL to temporary file.
 
         Security features:
         - URL allowlist validation (SSRF prevention)
         - File size limit (disk exhaustion prevention)
+        - Retry with exponential backoff for transient failures
         """
-        try:
-            # Security: Validate URL against allowlist
-            is_allowed, reason = is_url_allowed(url)
-            if not is_allowed:
-                error_msg = f"URL blocked by security policy: {reason}"
-                logger.warning(error_msg)
+        # Security: Validate URL against allowlist (do this before any retries)
+        is_allowed, reason = is_url_allowed(url)
+        if not is_allowed:
+            error_msg = f"URL blocked by security policy: {reason}"
+            logger.warning(error_msg)
+            return None, error_msg
+
+        logger.info(f"Downloading document from {url} ({reason})")
+
+        # Use headers to appear as a browser (some sites block bots)
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        }
+
+        # Retry with exponential backoff for transient network failures
+        last_error = None
+        for attempt in range(max_retries):
+            try:
+                # Shorter timeout per attempt (60s), with retries for resilience
+                timeout = 60 if attempt < max_retries - 1 else 120  # Last attempt gets longer timeout
+                response = requests.get(url, timeout=timeout, stream=True, headers=headers)
+                response.raise_for_status()
+                break  # Success, exit retry loop
+            except (requests.exceptions.Timeout, requests.exceptions.ConnectionError) as e:
+                last_error = e
+                if attempt < max_retries - 1:
+                    wait_time = (2 ** attempt) + (time.time() % 1)  # Exponential backoff with jitter
+                    logger.warning(f"Download attempt {attempt + 1} failed: {e}. Retrying in {wait_time:.1f}s...")
+                    time.sleep(wait_time)
+                else:
+                    error_msg = f"Download failed after {max_retries} attempts: {e}"
+                    logger.error(error_msg)
+                    return None, error_msg
+            except requests.exceptions.HTTPError as e:
+                # Don't retry HTTP errors (4xx, 5xx) - they're usually permanent
+                error_msg = f"HTTP error downloading document: {e.response.status_code} - {e}"
+                logger.error(error_msg)
                 return None, error_msg
 
-            logger.info(f"Downloading document from {url} ({reason})")
-
-            # Use headers to appear as a browser (some sites block bots)
-            headers = {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-            }
-
-            response = requests.get(url, timeout=300, stream=True, headers=headers)
-            response.raise_for_status()
+        try:
 
             # Security: Check content-length header if available
             content_length = response.headers.get('content-length')
@@ -421,12 +450,8 @@ class DocumentProcessor:
 
             return Path(temp_file.name), None
 
-        except requests.exceptions.HTTPError as e:
-            error_msg = f"HTTP error downloading document: {e.response.status_code} - {e}"
-            logger.error(error_msg)
-            return None, error_msg
         except Exception as e:
-            error_msg = f"Failed to download document: {e}"
+            error_msg = f"Failed to process download: {e}"
             logger.error(error_msg)
             return None, error_msg
 
@@ -728,6 +753,7 @@ class GPUWorker:
                 stored_count += 1
 
         # Store embeddings in ChromaDB
+        chroma_success = False
         try:
             chunk_ids = [
                 hashlib.md5(f"{document_id}:{i}".encode()).hexdigest()
@@ -754,9 +780,17 @@ class GPUWorker:
                 embeddings=embeddings
             )
             logger.info(f"Stored {len(chunks)} embeddings in ChromaDB")
+            chroma_success = True
 
         except Exception as e:
-            logger.warning(f"Failed to store in ChromaDB (will retry later): {e}")
+            logger.error(f"Failed to store in ChromaDB: {e}")
+            # Mark the job for ChromaDB retry by updating a flag in the database
+            with self.db.cursor() as cur:
+                cur.execute("""
+                    UPDATE document_processing_jobs
+                    SET progress_message = 'Chunks stored, ChromaDB pending'
+                    WHERE id = %s
+                """, (job.id,))
 
         return stored_count
 
@@ -822,19 +856,19 @@ class GPUWorker:
                         continue
 
                     try:
-                        # Check if already exists
-                        cur.execute("SELECT id FROM company_news WHERE source_url = %s", (url,))
-                        if cur.fetchone():
-                            continue
-
-                        # Insert into company_news
+                        # Use INSERT ON CONFLICT to prevent race conditions
+                        # This is atomic and avoids the check-then-create pattern
                         cur.execute("""
                             INSERT INTO company_news (company_id, title, content, summary, source_url,
                                 is_pdf, publication_date, news_type, is_material, is_processed,
                                 extracted_at, created_at, updated_at)
                             VALUES (%s, %s, '', '', %s, %s, %s, 'corporate', false, false, NOW(), NOW(), NOW())
+                            ON CONFLICT (source_url) DO NOTHING
+                            RETURNING id
                         """, (company_id, title, url, url.lower().endswith('.pdf'), date_str))
-                        created_count += 1
+                        result = cur.fetchone()
+                        if result:  # Only count if actually inserted
+                            created_count += 1
 
                         # Also insert into news_releases for backwards compatibility
                         cur.execute("""

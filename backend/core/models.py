@@ -183,6 +183,11 @@ class Company(models.Model):
         db_table = 'companies'
         verbose_name_plural = 'companies'
         ordering = ['name']
+        indexes = [
+            models.Index(fields=['is_active'], name='idx_company_is_active'),
+            models.Index(fields=['approval_status'], name='idx_company_approval_status'),
+            models.Index(fields=['is_active', 'approval_status'], name='idx_company_active_status'),
+        ]
 
     def __str__(self):
         return f"{self.name} ({self.ticker_symbol})" if self.ticker_symbol else self.name
@@ -324,6 +329,10 @@ class Project(models.Model):
     class Meta:
         db_table = 'projects'
         ordering = ['-is_flagship', 'name']
+        indexes = [
+            models.Index(fields=['is_active'], name='idx_project_is_active'),
+            models.Index(fields=['company', 'is_active'], name='idx_project_company_active'),
+        ]
 
     def __str__(self):
         return f"{self.name} - {self.company.name}"
@@ -3635,6 +3644,7 @@ class StoreProduct(models.Model):
             models.Index(fields=['category', 'is_active']),
             models.Index(fields=['product_type', 'is_active']),
             models.Index(fields=['slug']),
+            models.Index(fields=['is_featured', 'is_active'], name='idx_product_featured'),
         ]
 
     def __str__(self):

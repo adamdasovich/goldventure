@@ -1,5 +1,11 @@
 import type { NextConfig } from "next";
 
+// CSP is stricter in production - no unsafe-eval
+const isDev = process.env.NODE_ENV === 'development';
+const scriptSrc = isDev
+  ? "script-src 'self' 'unsafe-inline' 'unsafe-eval'"  // Dev needs eval for HMR
+  : "script-src 'self' 'unsafe-inline'";  // Prod: no unsafe-eval
+
 const nextConfig: NextConfig = {
   // Enable React strict mode for better development experience
   reactStrictMode: true,
@@ -61,7 +67,7 @@ const nextConfig: NextConfig = {
             key: 'Content-Security-Policy',
             value: [
               "default-src 'self'",
-              "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+              scriptSrc,
               "style-src 'self' 'unsafe-inline'",
               "img-src 'self' data: https: blob:",
               "font-src 'self' data:",
