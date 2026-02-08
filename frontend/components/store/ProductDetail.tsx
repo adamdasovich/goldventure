@@ -8,31 +8,7 @@ import { ProductGallery } from './ProductGallery';
 import { ProductBadges } from './ProductBadges';
 import { ShareToChat } from './ShareToChat';
 import type { StoreProductDetail as ProductDetailType, StoreProductVariant } from '@/types/api';
-
-// Basic HTML sanitization to prevent XSS attacks
-// Removes script tags, event handlers, and dangerous attributes
-function sanitizeHtml(html: string): string {
-  if (!html) return '';
-
-  // Remove script tags and their contents
-  let sanitized = html.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
-
-  // Remove event handlers (onclick, onerror, onload, etc.)
-  sanitized = sanitized.replace(/\s*on\w+\s*=\s*["'][^"']*["']/gi, '');
-  sanitized = sanitized.replace(/\s*on\w+\s*=\s*[^\s>]*/gi, '');
-
-  // Remove javascript: and data: URLs in href/src attributes
-  sanitized = sanitized.replace(/href\s*=\s*["']?\s*javascript:[^"'>]*/gi, 'href="#"');
-  sanitized = sanitized.replace(/src\s*=\s*["']?\s*javascript:[^"'>]*/gi, 'src=""');
-  sanitized = sanitized.replace(/href\s*=\s*["']?\s*data:[^"'>]*/gi, 'href="#"');
-
-  // Remove iframe, object, embed tags
-  sanitized = sanitized.replace(/<iframe\b[^>]*>.*?<\/iframe>/gi, '');
-  sanitized = sanitized.replace(/<object\b[^>]*>.*?<\/object>/gi, '');
-  sanitized = sanitized.replace(/<embed\b[^>]*>/gi, '');
-
-  return sanitized;
-}
+import { sanitize } from '@/lib/sanitize';
 
 interface ProductDetailProps {
   product: ProductDetailType;
@@ -266,7 +242,7 @@ export function ProductDetail({ product }: ProductDetailProps) {
               {activeTab === 'details' && (
                 <div
                   className="prose prose-invert prose-slate max-w-none"
-                  dangerouslySetInnerHTML={{ __html: sanitizeHtml(product.description) }}
+                  dangerouslySetInnerHTML={{ __html: sanitize(product.description) }}
                 />
               )}
               {activeTab === 'provenance' && product.provenance_info && (

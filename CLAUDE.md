@@ -472,10 +472,12 @@ python -c "from core.tasks import scrape_all_companies_news_task; scrape_all_com
 
 ## API Authentication
 
-**Admin Token:** `REDACTED_TOKEN`
+> **SECURITY:** Admin token is stored in the `ADMIN_API_TOKEN` environment variable on the server.
+> **NEVER** hardcode tokens in this file — it is committed to Git.
 
 ```bash
-curl -H "Authorization: Token REDACTED_TOKEN" \
+# Use the token from the environment variable:
+curl -H "Authorization: Token $ADMIN_API_TOKEN" \
   https://juniorminingintelligence.com/api/endpoint/
 ```
 

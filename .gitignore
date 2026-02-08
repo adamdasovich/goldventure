@@ -28,6 +28,13 @@ backend/celerybeat-schedule
 
 # Backup files
 *.backup
+backend/db_backup.json
+backend/goldventure_dev_backup.json
+backend/goldventure_dev_backup.sql
+
+# Windows artifacts
+NUL
+backend/NUL
 
 # Temporary scripts
 backend/company_scraper.py

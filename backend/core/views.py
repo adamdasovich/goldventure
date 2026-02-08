@@ -257,17 +257,17 @@ def metals_prices(request):
                 }
 
                 if info['symbol'] in fallback_prices:
-                    import random
                     results.append({
                         'metal': info['name'],
                         'symbol': info['symbol'],
                         'price': fallback_prices[info['symbol']],
-                        'change_percent': round(random.uniform(-2.5, 2.5), 2),
+                        'change_percent': None,  # Don't fabricate price changes
                         'unit': info['unit'],
                         'currency': 'USD',
                         'last_updated': datetime.now().isoformat(),
-                        'source': 'Estimated',
-                        'note': 'API limit reached'
+                        'source': 'Estimated (stale)',
+                        'stale': True,
+                        'note': 'Real-time data temporarily unavailable'
                     })
 
         except Exception as e:

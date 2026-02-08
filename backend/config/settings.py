@@ -55,6 +55,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'core.security_middleware.SecurityHeadersMiddleware',  # CSP + Permissions-Policy
 ]
 
 ROOT_URLCONF = 'config.urls'
@@ -88,6 +89,8 @@ DATABASES = {
         'PORT': os.getenv('DB_PORT', '5432'),
         # Connection pooling - reuse connections for 10 minutes to reduce overhead
         'CONN_MAX_AGE': 600,
+        # SECURITY: Validate connections before use to prevent stale connection errors
+        'CONN_HEALTH_CHECKS': True,
     }
 }
 
@@ -231,17 +234,36 @@ ASGI_APPLICATION = 'config.asgi.application'
 # Channels (for WebSocket support)
 INSTALLED_APPS += ['channels']
 
-# Channel Layers Configuration (In-Memory for development)
-CHANNEL_LAYERS = {
-    'default': {
-        'BACKEND': 'channels.layers.InMemoryChannelLayer',
-    },
-}
-
-# Cache Configuration
+# Cache & Channel Layers Configuration
 REDIS_URL = os.getenv('REDIS_URL', None)
-if REDIS_URL and not DEBUG:
-    # Production: Use Redis for caching and channel layers
+
+if not DEBUG:
+    # PRODUCTION: Redis is REQUIRED for WebSocket support and caching
+    if not REDIS_URL:
+        from django.core.exceptions import ImproperlyConfigured
+        raise ImproperlyConfigured(
+            "REDIS_URL environment variable is required in production for WebSocket "
+            "and caching support. Set REDIS_URL=redis://localhost:6379/0"
+        )
+    CACHES = {
+        'default': {
+            'BACKEND': 'django_redis.cache.RedisCache',
+            'LOCATION': REDIS_URL,
+            'OPTIONS': {
+                'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+            }
+        }
+    }
+    CHANNEL_LAYERS = {
+        'default': {
+            'BACKEND': 'channels_redis.core.RedisChannelLayer',
+            'CONFIG': {
+                "hosts": [REDIS_URL],
+            },
+        },
+    }
+elif REDIS_URL:
+    # Development with Redis available
     CACHES = {
         'default': {
             'BACKEND': 'django_redis.cache.RedisCache',
@@ -260,12 +282,17 @@ if REDIS_URL and not DEBUG:
         },
     }
 else:
-    # Development: Use LocMemCache
+    # Development without Redis: Use in-memory backends
     CACHES = {
         'default': {
             'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
             'LOCATION': 'unique-snowflake',
         }
+    }
+    CHANNEL_LAYERS = {
+        'default': {
+            'BACKEND': 'channels.layers.InMemoryChannelLayer',
+        },
     }
 
 # ============================================================================

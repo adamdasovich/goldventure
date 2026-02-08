@@ -9,31 +9,7 @@ import {
   BookOpen,
   Award
 } from 'lucide-react';
-
-// Basic HTML sanitization to prevent XSS attacks
-// Removes script tags, event handlers, and dangerous attributes
-function sanitizeHtml(html: string): string {
-  if (!html) return '';
-
-  // Remove script tags and their contents
-  let sanitized = html.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
-
-  // Remove event handlers (onclick, onerror, onload, etc.)
-  sanitized = sanitized.replace(/\s*on\w+\s*=\s*["'][^"']*["']/gi, '');
-  sanitized = sanitized.replace(/\s*on\w+\s*=\s*[^\s>]*/gi, '');
-
-  // Remove javascript: and data: URLs in href/src attributes
-  sanitized = sanitized.replace(/href\s*=\s*["']?\s*javascript:[^"'>]*/gi, 'href="#"');
-  sanitized = sanitized.replace(/src\s*=\s*["']?\s*javascript:[^"'>]*/gi, 'src=""');
-  sanitized = sanitized.replace(/href\s*=\s*["']?\s*data:[^"'>]*/gi, 'href="#"');
-
-  // Remove iframe, object, embed tags
-  sanitized = sanitized.replace(/<iframe\b[^>]*>.*?<\/iframe>/gi, '');
-  sanitized = sanitized.replace(/<object\b[^>]*>.*?<\/object>/gi, '');
-  sanitized = sanitized.replace(/<embed\b[^>]*>/gi, '');
-
-  return sanitized;
-}
+import { sanitize } from '@/lib/sanitize';
 
 interface EducationalModule {
   id: number;
@@ -216,7 +192,7 @@ export default function ModuleContent() {
               prose-ul:text-slate-700 dark:prose-ul:text-slate-300
               prose-ol:text-slate-700 dark:prose-ol:text-slate-300
               prose-a:text-blue-600 dark:prose-a:text-blue-400"
-            dangerouslySetInnerHTML={{ __html: sanitizeHtml(module.content) }}
+            dangerouslySetInnerHTML={{ __html: sanitize(module.content) }}
           />
         </div>
 
