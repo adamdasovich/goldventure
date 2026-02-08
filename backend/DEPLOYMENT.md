@@ -255,10 +255,10 @@ Key environment variables are in `/var/www/goldventure/backend/.env`:
 
 ## API Authentication
 
-**Admin Token:** `REDACTED_TOKEN`
+**Admin Token:** `ADMIN_API_TOKEN_ROTATED`
 
 ```bash
-curl -H "Authorization: Token REDACTED_TOKEN" \
+curl -H "Authorization: Token ADMIN_API_TOKEN_ROTATED" \
   https://juniorminingintelligence.com/api/companies/
 ```
 
