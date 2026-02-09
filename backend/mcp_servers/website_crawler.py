@@ -4317,40 +4317,51 @@ async def crawl_html_news_pages(url: str, months: int = 6, custom_news_url: str 
                         continue
 
                 # ============================================================
-                # STRATEGY 4d.11: Sitekit CMS JSON React props (Treasure Oakes)
-                # Structure: News data embedded as JSON in React component props
-                #   "SectionCaption":"January 28, 2026"
-                #   "Link":"https://www.accessnewswire.com/..."
-                #   "HtmlText":" <p class=\"plain\"><font class=\"plainlarge\">Title</font></p>"
+                # STRATEGY 4d.11: Sitekit CMS DOM structure (Treasure Oakes)
+                # Structure: News items in collapsible sections with:
+                #   div.secHead > div.secTitle > a.secCptn[href] > span.fmCptnMain (date)
+                #   div.secBody p.plain font.plainlarge (title)
+                # Detection: nccdn.net CDN or SK.React.Component in HTML
                 # ============================================================
-                if 'SK.React.Component' in result.html or 'nccdn.net' in result.html:
-                    # Parse JSON-embedded news items from React hydration
-                    import json as json_module
-
-                    # Find all news item patterns with SectionCaption (date) and Link
-                    sitekit_pattern = regex.compile(
-                        r'"SectionCaption"\s*:\s*"([^"]+)"[^}]*?"Link"\s*:\s*"([^"]+)"[^}]*?"HtmlText"\s*:\s*"([^"]*)"',
-                        regex.DOTALL
-                    )
-
-                    for match in sitekit_pattern.finditer(result.html):
+                if 'nccdn.net' in result.html or 'SK.React.Component' in result.html:
+                    # Find all section headers with secCptn links
+                    for sec_head in soup.select('.secHead'):
                         try:
-                            date_text = match.group(1)
-                            href = match.group(2)
-                            html_text = match.group(3)
-
-                            # Skip empty links
-                            if not href or href == "":
+                            # Get the link with date
+                            link = sec_head.select_one('a.secCptn[href]')
+                            if not link:
                                 continue
 
-                            # Parse date
+                            href = link.get('href', '')
+                            if not href or href == '#':
+                                continue
+
+                            # Get date from span.fmCptnMain inside the link
+                            date_el = link.select_one('.fmCptnMain')
+                            if not date_el:
+                                continue
+
+                            date_text = date_el.get_text(strip=True)
                             date_str = parse_date_standalone(date_text)
 
-                            # Extract title from HtmlText - decode escaped HTML
-                            html_text = html_text.replace('\\"', '"').replace('\\/', '/')
-                            title_soup = BeautifulSoup(html_text, 'html.parser')
-                            title = title_soup.get_text(strip=True)
+                            # Find the corresponding secBody for the title
+                            # Usually it's the next sibling after secHead's parent
+                            sec_body = sec_head.find_next_sibling('div', class_='secBody')
+                            if not sec_body:
+                                # Try finding via parent
+                                parent = sec_head.parent
+                                if parent:
+                                    sec_body = parent.select_one('.secBody')
 
+                            if not sec_body:
+                                continue
+
+                            # Get title from p.plain > font.plainlarge or just p.plain
+                            title_el = sec_body.select_one('p.plain font.plainlarge, p.plain font, p.plain')
+                            if not title_el:
+                                continue
+
+                            title = title_el.get_text(strip=True)
                             if not title or len(title) < 10:
                                 continue
 
@@ -4368,7 +4379,7 @@ async def crawl_html_news_pages(url: str, months: int = 6, custom_news_url: str 
                                 'document_type': 'news_release',
                                 'year': date_str[:4] if date_str else None
                             }
-                            _add_news_item(news_by_url, news, cutoff_date, "SITEKIT-JSON")
+                            _add_news_item(news_by_url, news, cutoff_date, "SITEKIT-DOM")
                         except Exception as e:
                             logger.debug(f"Skipping malformed sitekit item: {e}")
                             continue
