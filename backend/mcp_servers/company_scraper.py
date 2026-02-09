@@ -314,6 +314,9 @@ class CompanyDataScraper:
                         f"{self.base_url}/investors/press-releases/{year}/",
                         # Multilingual investor patterns (Starcore: /en/investors/news/YYYY/)
                         f"{self.base_url}/en/investors/news/{year}/",
+                        # Transition Metals / Gridbox pattern: /{year} (recent) and /{year}-press-releases (older)
+                        f"{self.base_url}/{year}",  # Just year path
+                        f"{self.base_url}/{year}-press-releases",  # year-press-releases for older
                     ])
 
             for pattern in common_patterns:
@@ -2758,7 +2761,9 @@ class CompanyDataScraper:
                 'article.post', 'article', '.post', '.entry', '.news-item', '.press-release',
                 '.news-release', '[class*="news-item"]', '[class*="press-release"]',
                 # Tectonic Metals / Blender pattern: div.news-listing > div.item
-                '.news-listing .item'
+                '.news-listing .item',
+                # Transition Metals / Joomla Gridbox pattern
+                '.ba-blog-post'
             ]
 
             for selector in news_selectors:

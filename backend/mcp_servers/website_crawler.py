@@ -2699,6 +2699,12 @@ async def crawl_html_news_pages(url: str, months: int = 6, custom_news_url: str 
             f'{url}/{current_year}-news-releases',
             f'{url}/{current_year - 1}-news-releases',
             f'{url}/{current_year - 2}-news-releases',
+            # Transition Metals / Gridbox pattern: /{year} (recent) and /{year}-press-releases (older)
+            f'{url}/{current_year}',  # Just year for recent news
+            f'{url}/{current_year - 1}',
+            f'{url}/{current_year - 2}-press-releases',  # year-press-releases for older
+            f'{url}/{current_year - 3}-press-releases',
+            f'{url}/{current_year - 4}-press-releases',
             # Squarespace pattern: /press-releases-{year} (Volta Metals)
             f'{url}/press-releases-{current_year}',
             f'{url}/press-releases-{current_year - 1}',
@@ -4254,6 +4260,60 @@ async def crawl_html_news_pages(url: str, months: int = 6, custom_news_url: str 
                         _add_news_item(news_by_url, news, cutoff_date, "NEWS-LISTING")
                     except Exception as e:
                         logger.debug(f"Skipping malformed news-listing item: {e}")
+                        continue
+
+                # ============================================================
+                # STRATEGY 4d.10: Joomla Gridbox BA-BLOG-POST pattern (Transition Metals)
+                # Structure: <div class="ba-blog-post">
+                #   <div class="ba-blog-post-content">
+                #     <div class="ba-blog-post-title-wrapper">
+                #       <h2 class="ba-blog-post-title"><a href="/news/slug">Title</a></h2>
+                #     </div>
+                #     <div class="ba-blog-post-info-wrapper">
+                #       <span class="ba-blog-post-date"><span>January 27th, 2026</span></span>
+                #     </div>
+                #   </div>
+                # </div>
+                # ============================================================
+                for post in soup.select('.ba-blog-post'):
+                    try:
+                        # Get title from .ba-blog-post-title a
+                        title_link = post.select_one('.ba-blog-post-title a')
+                        if not title_link:
+                            continue
+
+                        title = title_link.get_text(strip=True)
+                        if not title or len(title) < 10:
+                            continue
+
+                        href = title_link.get('href', '')
+                        if not href:
+                            continue
+
+                        # Make URL absolute
+                        if not href.startswith('http'):
+                            href = urljoin(news_url, href)
+
+                        if not is_valid_news_url(href):
+                            continue
+
+                        # Get date from .ba-blog-post-date span
+                        date_str = None
+                        date_el = post.select_one('.ba-blog-post-date span')
+                        if date_el:
+                            date_text = date_el.get_text(strip=True)
+                            date_str = parse_date_standalone(date_text)
+
+                        news = {
+                            'title': clean_news_title(title, href),
+                            'url': href,
+                            'date': date_str,
+                            'document_type': 'news_release',
+                            'year': date_str[:4] if date_str else None
+                        }
+                        _add_news_item(news_by_url, news, cutoff_date, "BA-BLOG-POST")
+                    except Exception as e:
+                        logger.debug(f"Skipping malformed ba-blog-post item: {e}")
                         continue
 
                 # ============================================================
