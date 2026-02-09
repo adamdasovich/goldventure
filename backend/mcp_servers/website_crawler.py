@@ -2726,6 +2726,12 @@ async def crawl_html_news_pages(url: str, months: int = 6, custom_news_url: str 
             f'{url}/news/?current_year={current_year - 1}',
             f'{url}/news?current_year={current_year}',
             f'{url}/news?current_year={current_year - 1}',
+            # Q4 Web Systems CMS pattern: /news-and-updates/news/default.aspx (Western Exploration)
+            f'{url}/news-and-updates/news/default.aspx',
+            f'{url}/news-and-updates/news/{current_year}/default.aspx',
+            f'{url}/news-and-updates/news/{current_year - 1}/default.aspx',
+            f'{url}/news-and-updates/news/{current_year - 2}/default.aspx',
+            f'{url}/news-and-updates/news/{current_year - 3}/default.aspx',
             url,  # Homepage fallback for 55 North Mining style sites
         ])
 
