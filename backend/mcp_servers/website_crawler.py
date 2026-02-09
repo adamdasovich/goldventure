@@ -2703,7 +2703,8 @@ async def crawl_html_news_pages(url: str, months: int = 6, custom_news_url: str 
             f'{url}/press-releases-{current_year}',
             f'{url}/press-releases-{current_year - 1}',
             f'{url}/press-releases-{current_year - 2}',
-            # Northern Dynasty pattern: /news/news-releases/YYYY/
+            # Tectonic Metals / Northern Dynasty pattern: /news/news-releases/ and /news/news-releases/YYYY/
+            f'{url}/news/news-releases/',  # Base pattern (Tectonic Metals shows all on main page)
             f'{url}/news/news-releases/{current_year}/',
             f'{url}/news/news-releases/{current_year - 1}/',
             f'{url}/news/news-releases/{current_year - 2}/',

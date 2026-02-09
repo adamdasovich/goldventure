@@ -289,6 +289,8 @@ class CompanyDataScraper:
                 common_patterns.extend([
                     f"{self.base_url}/press-releases/",
                     f"{self.base_url}/news-releases/",
+                    # Tectonic Metals pattern: /news/news-releases/
+                    f"{self.base_url}/news/news-releases/",
                     # Additional patterns for sites with nested news structures
                     f"{self.base_url}/news-media/news-releases/",
                     f"{self.base_url}/news-media/press-releases/",
