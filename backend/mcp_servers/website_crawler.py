@@ -5749,10 +5749,12 @@ async def crawl_html_news_pages(url: str, months: int = 6, custom_news_url: str 
 
     # Tertiary deduplication by URL slug (catch same news with different URL paths)
     # e.g., /news/20260112-article vs /news/2026/20260112-article vs /press-releases/20260112-article
+    # Exclude generic page names that don't uniquely identify content (Q4 CMS uses default.aspx)
+    generic_slugs_final = {'default.aspx', 'index.html', 'index.php', 'index.htm', 'news.aspx', 'default.asp'}
     seen_slugs_final = {}  # Map slug -> news item
     for news in deduped_news:
         slug = extract_url_slug(news['url'])
-        if slug and len(slug) > 10:  # Only for meaningful slugs
+        if slug and len(slug) > 10 and slug.lower() not in generic_slugs_final:  # Only for meaningful slugs
             if slug not in seen_slugs_final:
                 seen_slugs_final[slug] = news
             else:
