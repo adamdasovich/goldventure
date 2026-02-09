@@ -296,6 +296,9 @@ class CompanyDataScraper:
                     f"{self.base_url}/media/press-releases/",
                     f"{self.base_url}/investors/news/",
                     f"{self.base_url}/investors/press-releases/",
+                    # Multilingual investor patterns (Starcore: /en/investors/news/)
+                    f"{self.base_url}/en/investors/",
+                    f"{self.base_url}/en/investors/news/",
                 ])
 
                 # Year-based patterns for nested news structures (e.g., Clean Air Metals)
@@ -307,6 +310,8 @@ class CompanyDataScraper:
                         f"{self.base_url}/media/press-releases/{year}/",
                         f"{self.base_url}/investors/news/{year}/",
                         f"{self.base_url}/investors/press-releases/{year}/",
+                        # Multilingual investor patterns (Starcore: /en/investors/news/YYYY/)
+                        f"{self.base_url}/en/investors/news/{year}/",
                     ])
 
             for pattern in common_patterns:

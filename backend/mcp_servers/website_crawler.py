@@ -2654,6 +2654,12 @@ async def crawl_html_news_pages(url: str, months: int = 6, custom_news_url: str 
             f'{url}/en/news/{current_year - 2}/',
             f'{url}/en/news-releases/',
             f'{url}/en/press-releases/',
+            # Starcore pattern: /en/investors/news/YYYY/
+            f'{url}/en/investors/',  # News embedded in investors page
+            f'{url}/en/investors/news/',
+            f'{url}/en/investors/news/{current_year}/',
+            f'{url}/en/investors/news/{current_year - 1}/',
+            f'{url}/en/investors/news/{current_year - 2}/',
             f'{url}/news-releases/',
             # Northisle WordPress pattern: ?post_year= filtering (needs trailing slash before query params)
             f'{url}/news-releases/?post_year={current_year}',
