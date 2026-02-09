@@ -224,14 +224,10 @@ REDIS_URL=redis://localhost:6379/0
 # Security
 SECURE_SSL_REDIRECT=True
 
-# Email
-EMAIL_BACKEND=django.core.mail.backends.smtp.EmailBackend
-EMAIL_HOST=smtp.gmail.com
-EMAIL_PORT=587
-EMAIL_USE_TLS=True
-EMAIL_HOST_USER=your-email@gmail.com
-EMAIL_HOST_PASSWORD=your-app-password
-DEFAULT_FROM_EMAIL=noreply@juniorminingintelligence.com
+# Email (SendGrid Web API - NOT SMTP)
+# Project uses SendGrid API for reliable email delivery
+EMAIL_HOST_PASSWORD=CHANGE_ME_sendgrid_api_key_starting_with_SG
+DEFAULT_FROM_EMAIL=Junior Mining Intelligence <noreply@juniorminingintelligence.com>
 
 # API Keys (add your keys)
 ANTHROPIC_API_KEY=

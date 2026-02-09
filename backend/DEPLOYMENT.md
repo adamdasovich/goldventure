@@ -249,16 +249,18 @@ Key environment variables are in `/var/www/goldventure/backend/.env`:
 | `REDIS_URL` | Redis connection (Celery broker) |
 | `ANTHROPIC_API_KEY` | Claude API access |
 | `ALPHA_VANTAGE_API_KEY` | Stock price API |
-| `EMAIL_HOST_PASSWORD` | SMTP password |
+| `EMAIL_HOST_PASSWORD` | SendGrid API key (starts with `SG.`) |
 
 ---
 
 ## API Authentication
 
-**Admin Token:** `ADMIN_API_TOKEN_ROTATED`
+> **SECURITY:** Admin token is stored in the `ADMIN_API_TOKEN` environment variable on the server.
+> Never hardcode tokens in documentation or code.
 
 ```bash
-curl -H "Authorization: Token ADMIN_API_TOKEN_ROTATED" \
+# Use the token from the environment variable:
+curl -H "Authorization: Token $ADMIN_API_TOKEN" \
   https://juniorminingintelligence.com/api/companies/
 ```
 

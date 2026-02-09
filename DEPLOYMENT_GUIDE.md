@@ -135,13 +135,10 @@ CORS_ALLOWED_ORIGINS=https://juniorminingintelligence.com,https://www.juniormini
 # Redis
 REDIS_URL=redis://localhost:6379/0
 
-# Email (for production)
-EMAIL_BACKEND=django.core.mail.backends.smtp.EmailBackend
-EMAIL_HOST=smtp.gmail.com
-EMAIL_PORT=587
-EMAIL_USE_TLS=True
-EMAIL_HOST_USER=your-email@gmail.com
-EMAIL_HOST_PASSWORD=your-app-password
+# Email (SendGrid Web API)
+# Note: Project uses SendGrid API, not SMTP
+EMAIL_HOST_PASSWORD=CHANGE_ME_sendgrid_api_key_starting_with_SG
+DEFAULT_FROM_EMAIL=Junior Mining Intelligence <noreply@juniorminingintelligence.com>
 
 # AWS S3 (for media files - optional)
 USE_S3=False
