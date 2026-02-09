@@ -1745,7 +1745,9 @@ def _add_news_item(news_by_url: Dict[str, Dict], news: Dict, cutoff_date: dateti
     # SLUG DEDUPLICATION: Check if we've seen this slug before with a different URL
     # This catches cases like:
     #   /news/20260112-article vs /news/2026/20260112-article vs /press-releases/2026/20260112-article
-    if slug and len(slug) > 10:  # Only for meaningful slugs (not 'news', '2026', etc.)
+    # Exclude generic page names that don't uniquely identify content (Q4 CMS uses default.aspx)
+    generic_slugs = {'default.aspx', 'index.html', 'index.php', 'index.htm', 'news.aspx', 'default.asp'}
+    if slug and len(slug) > 10 and slug.lower() not in generic_slugs:
         if slug in _seen_slugs and _seen_slugs[slug] != url_norm:
             # Same slug, different URL - skip this duplicate
             return False
