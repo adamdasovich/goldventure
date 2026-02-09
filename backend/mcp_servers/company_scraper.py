@@ -2756,7 +2756,9 @@ class CompanyDataScraper:
             # Order matters - put specific semantic elements first, wildcards last
             news_selectors = [
                 'article.post', 'article', '.post', '.entry', '.news-item', '.press-release',
-                '.news-release', '[class*="news-item"]', '[class*="press-release"]'
+                '.news-release', '[class*="news-item"]', '[class*="press-release"]',
+                # Tectonic Metals / Blender pattern: div.news-listing > div.item
+                '.news-listing .item'
             ]
 
             for selector in news_selectors:

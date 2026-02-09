@@ -4203,6 +4203,60 @@ async def crawl_html_news_pages(url: str, months: int = 6, custom_news_url: str 
                         logger.info(f"[SRR] Found {srr_count} news items from Super RSS Reader")
 
                 # ============================================================
+                # STRATEGY 4d.9: Tectonic Metals / Blender news-listing pattern
+                # Structure: <div class="news-listing">
+                #   <div class="item full|column">
+                #     <div class="date">Feb 5, 2026</div>
+                #     <div class="title">Title text...</div>
+                #     <a href="relative-slug" class="button">Read +</a>
+                #   </div>
+                # </div>
+                # ============================================================
+                for item in soup.select('.news-listing .item, div.news-listing > div.item'):
+                    try:
+                        # Get date from div.date
+                        date_el = item.select_one('.date, div.date')
+                        date_str = None
+                        if date_el:
+                            date_text = date_el.get_text(strip=True)
+                            date_str = parse_date_standalone(date_text)
+
+                        # Get title from div.title
+                        title_el = item.select_one('.title, div.title')
+                        if not title_el:
+                            continue
+                        title = title_el.get_text(strip=True)
+                        if not title or len(title) < 10:
+                            continue
+
+                        # Get link from a.button or any link
+                        link = item.select_one('a.button, a[href]')
+                        if not link:
+                            continue
+                        href = link.get('href', '')
+                        if not href:
+                            continue
+
+                        # Make URL absolute
+                        if not href.startswith('http'):
+                            href = urljoin(news_url, href)
+
+                        if not is_valid_news_url(href):
+                            continue
+
+                        news = {
+                            'title': clean_news_title(title, href),
+                            'url': href,
+                            'date': date_str,
+                            'document_type': 'news_release',
+                            'year': date_str[:4] if date_str else None
+                        }
+                        _add_news_item(news_by_url, news, cutoff_date, "NEWS-LISTING")
+                    except Exception as e:
+                        logger.debug(f"Skipping malformed news-listing item: {e}")
+                        continue
+
+                # ============================================================
                 # STRATEGY 4d: Ultimate Elements Grid pattern (CanAlaska)
                 # Structure: <div class="uc_post_title"><a><div class="ue_p_title">TITLE</div></a></div>
                 #            <div class="ue-meta-data"><div class="ue-grid-item-meta-data">DATE</div></div>
