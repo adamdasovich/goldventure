@@ -4393,6 +4393,52 @@ async def crawl_html_news_pages(url: str, months: int = 6, custom_news_url: str 
                             continue
 
                 # ============================================================
+                # STRATEGY 4d.12: Q4 Web Systems MODULE-NEWS pattern (Western Exploration)
+                # Structure: div.module_item containing:
+                #   - div.module_date-text > span.module_date-text (date)
+                #   - div.module_headline > a.module_headline-link (title + URL)
+                # Detection: .module-news or .module_item with q4cdn in page
+                # ============================================================
+                for item in soup.select('.module_item'):
+                    try:
+                        # Get date from module_date-text
+                        date_el = item.select_one('.module_date-text')
+                        if not date_el:
+                            continue
+                        date_text = date_el.get_text(strip=True)
+                        date_str = parse_date_standalone(date_text)
+
+                        # Get title and URL from module_headline-link
+                        link = item.select_one('.module_headline-link, .module_headline a')
+                        if not link:
+                            continue
+                        href = link.get('href', '')
+                        if not href:
+                            continue
+                        title = link.get_text(strip=True)
+                        if not title or len(title) < 10:
+                            continue
+
+                        # Build full URL
+                        if not href.startswith('http'):
+                            href = urljoin(news_url, href)
+
+                        if not is_valid_news_url(href):
+                            continue
+
+                        news = {
+                            'title': clean_news_title(title, href),
+                            'url': href,
+                            'date': date_str,
+                            'document_type': 'news_release',
+                            'year': date_str[:4] if date_str else None
+                        }
+                        _add_news_item(news_by_url, news, cutoff_date, "MODULE-NEWS")
+                    except Exception as e:
+                        logger.debug(f"Skipping malformed module-news item: {e}")
+                        continue
+
+                # ============================================================
                 # STRATEGY 4d: Ultimate Elements Grid pattern (CanAlaska)
                 # Structure: <div class="uc_post_title"><a><div class="ue_p_title">TITLE</div></a></div>
                 #            <div class="ue-meta-data"><div class="ue-grid-item-meta-data">DATE</div></div>
