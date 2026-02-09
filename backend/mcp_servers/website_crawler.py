@@ -4356,12 +4356,20 @@ async def crawl_html_news_pages(url: str, months: int = 6, custom_news_url: str 
                             if not sec_body:
                                 continue
 
-                            # Get title from p.plain > font.plainlarge or just p.plain
-                            title_el = sec_body.select_one('p.plain font.plainlarge, p.plain font, p.plain')
-                            if not title_el:
-                                continue
+                            # Get title - try font.plainlarge first (most reliable),
+                            # then iterate p.plain elements to find non-empty text
+                            title = ''
+                            title_el = sec_body.select_one('font.plainlarge')
+                            if title_el:
+                                title = title_el.get_text(strip=True)
+                            if not title:
+                                # Try all p.plain elements and find one with text
+                                for p_el in sec_body.select('p.plain'):
+                                    p_text = p_el.get_text(strip=True)
+                                    if p_text and len(p_text) >= 10:
+                                        title = p_text
+                                        break
 
-                            title = title_el.get_text(strip=True)
                             if not title or len(title) < 10:
                                 continue
 
