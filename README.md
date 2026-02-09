@@ -331,18 +331,18 @@ Deployment guide coming in Phase 4.
 # Get JWT token
 POST /api/token/
 {
-  "username": "adam",
+  "username": "your-username",
   "password": "your-password"
 }
 
 # Response
 {
-  "access": "eyJ0eXAiOiJKV1QiLCJhbGc...",
-  "refresh": "eyJ0eXAiOiJKV1QiLCJhbGc..."
+  "access": "<YOUR_ACCESS_TOKEN>",
+  "refresh": "<YOUR_REFRESH_TOKEN>"
 }
 
 # Use token in requests
-Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGc...
+Authorization: Bearer <YOUR_ACCESS_TOKEN>
 ```
 
 ### Claude Chat
