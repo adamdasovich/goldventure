@@ -4317,6 +4317,63 @@ async def crawl_html_news_pages(url: str, months: int = 6, custom_news_url: str 
                         continue
 
                 # ============================================================
+                # STRATEGY 4d.11: Sitekit CMS JSON React props (Treasure Oakes)
+                # Structure: News data embedded as JSON in React component props
+                #   "SectionCaption":"January 28, 2026"
+                #   "Link":"https://www.accessnewswire.com/..."
+                #   "HtmlText":" <p class=\"plain\"><font class=\"plainlarge\">Title</font></p>"
+                # ============================================================
+                if 'SK.React.Component' in result.html or 'nccdn.net' in result.html:
+                    # Parse JSON-embedded news items from React hydration
+                    import json as json_module
+
+                    # Find all news item patterns with SectionCaption (date) and Link
+                    sitekit_pattern = regex.compile(
+                        r'"SectionCaption"\s*:\s*"([^"]+)"[^}]*?"Link"\s*:\s*"([^"]+)"[^}]*?"HtmlText"\s*:\s*"([^"]*)"',
+                        regex.DOTALL
+                    )
+
+                    for match in sitekit_pattern.finditer(result.html):
+                        try:
+                            date_text = match.group(1)
+                            href = match.group(2)
+                            html_text = match.group(3)
+
+                            # Skip empty links
+                            if not href or href == "":
+                                continue
+
+                            # Parse date
+                            date_str = parse_date_standalone(date_text)
+
+                            # Extract title from HtmlText - decode escaped HTML
+                            html_text = html_text.replace('\\"', '"').replace('\\/', '/')
+                            title_soup = BeautifulSoup(html_text, 'html.parser')
+                            title = title_soup.get_text(strip=True)
+
+                            if not title or len(title) < 10:
+                                continue
+
+                            # Validate URL
+                            if not href.startswith('http'):
+                                href = urljoin(news_url, href)
+
+                            if not is_valid_news_url(href):
+                                continue
+
+                            news = {
+                                'title': clean_news_title(title, href),
+                                'url': href,
+                                'date': date_str,
+                                'document_type': 'news_release',
+                                'year': date_str[:4] if date_str else None
+                            }
+                            _add_news_item(news_by_url, news, cutoff_date, "SITEKIT-JSON")
+                        except Exception as e:
+                            logger.debug(f"Skipping malformed sitekit item: {e}")
+                            continue
+
+                # ============================================================
                 # STRATEGY 4d: Ultimate Elements Grid pattern (CanAlaska)
                 # Structure: <div class="uc_post_title"><a><div class="ue_p_title">TITLE</div></a></div>
                 #            <div class="ue-meta-data"><div class="ue-grid-item-meta-data">DATE</div></div>
