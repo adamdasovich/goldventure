@@ -5429,12 +5429,13 @@ async def crawl_html_news_pages(url: str, months: int = 6, custom_news_url: str 
                     successful_news_url = news_url
                     logger.info(f"[CACHE] URL found news, marking for cache: {news_url}")
 
-                    # EARLY EXIT: If cached/custom URL found news, no need to try other patterns
-                    # These URLs are known to work - skip the 50+ standard patterns
+                    # EARLY EXIT: If cached/custom URL found ENOUGH news, skip remaining patterns
+                    # Only fast-exit if we found 5+ items - year-based archive sites often
+                    # only show current year on main page (Starcore: /en/investors/news/ shows 1 item)
                     news_url_clean = news_url.rstrip('/').split('?')[0]  # Normalize for comparison
                     is_cached = cached_news_url and news_url_clean == cached_news_url.rstrip('/').split('?')[0]
                     is_custom = custom_news_url and news_url_clean.startswith(custom_news_url.rstrip('/'))
-                    if is_cached or is_custom:
+                    if (is_cached or is_custom) and len(news_by_url) >= 5:
                         logger.info(f"[FAST-EXIT] Known URL found {len(news_by_url)} items, skipping remaining patterns")
                         break
 
