@@ -8020,8 +8020,11 @@ def create_closed_financing(request):
         }, status=status.HTTP_201_CREATED)
 
     except Exception as e:
-        logger.error(f"Error creating closed financing: {str(e)}")
-        return Response({'error': 'Failed to create financing. Please try again later.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        import traceback
+        error_details = traceback.format_exc()
+        logger.error(f"Error creating closed financing: {str(e)}\nTraceback: {error_details}")
+        logger.error(f"Request data: {request.data}")
+        return Response({'error': f'Failed to create financing: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 @api_view(['PUT', 'PATCH'])
