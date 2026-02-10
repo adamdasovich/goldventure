@@ -3,8 +3,8 @@ import type { NextConfig } from "next";
 // CSP is stricter in production - no unsafe-eval
 const isDev = process.env.NODE_ENV === 'development';
 const scriptSrc = isDev
-  ? "script-src 'self' 'unsafe-inline' 'unsafe-eval'"  // Dev needs eval for HMR
-  : "script-src 'self' 'unsafe-inline'";  // Prod: no unsafe-eval
+  ? "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.googletagmanager.com https://www.google-analytics.com"
+  : "script-src 'self' 'unsafe-inline' https://www.googletagmanager.com https://www.google-analytics.com";
 
 const nextConfig: NextConfig = {
   // Enable React strict mode for better development experience
@@ -71,7 +71,7 @@ const nextConfig: NextConfig = {
               "style-src 'self' 'unsafe-inline'",
               "img-src 'self' data: https: blob:",
               "font-src 'self' data:",
-              "connect-src 'self' https://juniorminingintelligence.com https://api.juniorminingintelligence.com wss://juniorminingintelligence.com wss://api.juniorminingintelligence.com",
+              "connect-src 'self' https://juniorminingintelligence.com https://api.juniorminingintelligence.com wss://juniorminingintelligence.com wss://api.juniorminingintelligence.com https://www.google-analytics.com https://analytics.google.com",
               "frame-ancestors 'none'",
               "base-uri 'self'",
               "form-action 'self'",
