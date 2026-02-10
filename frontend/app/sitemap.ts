@@ -5,33 +5,63 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/a
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const baseUrl = 'https://juniorminingintelligence.com';
 
-  // Fetch all companies for dynamic routes
+  // Fetch ALL companies using pagination (API returns 25 per page)
   let companies: any[] = [];
-  try {
-    const response = await fetch(`${API_BASE_URL}/companies/`, {
-      cache: 'no-store',
-    });
-    if (response.ok) {
-      const data = await response.json();
-      companies = data.results || [];
-    }
-  } catch (error) {
-    console.error('Failed to fetch companies for sitemap:', error);
-  }
+  let page = 1;
+  let hasMore = true;
 
-  // Fetch property listings for dynamic routes
-  let properties: any[] = [];
-  try {
-    const response = await fetch(`${API_BASE_URL}/properties/listings/?status=active`, {
-      cache: 'no-store',
-    });
-    if (response.ok) {
-      const data = await response.json();
-      properties = Array.isArray(data) ? data : data.results || [];
+  while (hasMore) {
+    try {
+      const response = await fetch(`${API_BASE_URL}/companies/?page=${page}`, {
+        cache: 'no-store',
+      });
+      if (response.ok) {
+        const data = await response.json();
+        const results = data.results || [];
+        companies = [...companies, ...results];
+        hasMore = !!data.next;
+        page++;
+      } else {
+        hasMore = false;
+      }
+    } catch (error) {
+      console.error(`Failed to fetch companies page ${page} for sitemap:`, error);
+      hasMore = false;
     }
-  } catch (error) {
-    console.error('Failed to fetch properties for sitemap:', error);
   }
+  console.log(`Sitemap: Fetched ${companies.length} companies from ${page - 1} pages`);
+
+  // Fetch ALL property listings using pagination
+  let properties: any[] = [];
+  let propPage = 1;
+  let hasMoreProps = true;
+
+  while (hasMoreProps) {
+    try {
+      const response = await fetch(`${API_BASE_URL}/properties/listings/?status=active&page=${propPage}`, {
+        cache: 'no-store',
+      });
+      if (response.ok) {
+        const data = await response.json();
+        // Handle both array and paginated responses
+        if (Array.isArray(data)) {
+          properties = data;
+          hasMoreProps = false;
+        } else {
+          const results = data.results || [];
+          properties = [...properties, ...results];
+          hasMoreProps = !!data.next;
+          propPage++;
+        }
+      } else {
+        hasMoreProps = false;
+      }
+    } catch (error) {
+      console.error(`Failed to fetch properties page ${propPage} for sitemap:`, error);
+      hasMoreProps = false;
+    }
+  }
+  console.log(`Sitemap: Fetched ${properties.length} properties`);
 
   // Static routes
   const staticRoutes: MetadataRoute.Sitemap = [
