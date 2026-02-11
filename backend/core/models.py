@@ -476,7 +476,7 @@ class Financing(models.Model):
     lead_agent = models.CharField(max_length=200, blank=True)
 
     # Documents
-    press_release_url = models.URLField(blank=True)
+    press_release_url = models.URLField(max_length=500, blank=True)
     notes = models.TextField(blank=True)
 
     # Closed financing tracking (for /closed-financings page)
