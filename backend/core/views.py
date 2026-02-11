@@ -1847,18 +1847,45 @@ class FinancingViewSet(viewsets.ModelViewSet):
         user = request.user
         financing = self.get_object()
 
-        # Allow superusers and staff
+        # Check permissions first
+        has_permission = False
         if user.is_superuser or user.is_staff:
-            return super().destroy(request, *args, **kwargs)
+            has_permission = True
+        elif hasattr(user, 'company_id') and user.company_id == financing.company_id:
+            has_permission = True
 
-        # Allow company representatives for their own company
-        if hasattr(user, 'company_id') and user.company_id == financing.company_id:
-            return super().destroy(request, *args, **kwargs)
+        if not has_permission:
+            return Response(
+                {'error': 'You do not have permission to delete this financing'},
+                status=status.HTTP_403_FORBIDDEN
+            )
 
-        return Response(
-            {'error': 'You do not have permission to delete this financing'},
-            status=status.HTTP_403_FORBIDDEN
-        )
+        # Check for actual investment records that should NOT be auto-deleted
+        if financing.investment_interests.exists():
+            return Response(
+                {'error': 'Cannot delete financing with existing investment interests. Please remove them first.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        if financing.subscription_agreements.exists():
+            return Response(
+                {'error': 'Cannot delete financing with existing subscription agreements. Please remove them first.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        if financing.investment_transactions.exists():
+            return Response(
+                {'error': 'Cannot delete financing with existing investment transactions. Please remove them first.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Safe to delete aggregate stats (they're just computed data, not actual records)
+        # Delete InvestmentInterestAggregate if exists
+        if hasattr(financing, 'interest_aggregate'):
+            financing.interest_aggregate.delete()
+        # Delete FinancingAggregate if exists
+        if hasattr(financing, 'aggregate_data'):
+            financing.aggregate_data.delete()
+
+        return super().destroy(request, *args, **kwargs)
 
 
 # ============================================================================
