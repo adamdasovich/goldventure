@@ -2749,8 +2749,10 @@ async def crawl_html_news_pages(url: str, months: int = 6, custom_news_url: str 
         # Determine timeout based on scrape depth
         # For onboarding (months > 6), allow more time to find historical news
         # For daily scrapes (months <= 6), use shorter timeouts
-        time_limit_with_news = 300 if months > 6 else 60  # 5 min for onboarding, 1 min for daily
-        time_limit_no_news = 300 if months > 6 else 90    # 5 min for onboarding, 90s for daily
+        # Daily limits raised from 60s/90s to 150s/180s — the old values were too aggressive
+        # and caused the scraper to time out before reaching URL patterns with newer releases
+        time_limit_with_news = 300 if months > 6 else 150  # 5 min for onboarding, 2.5 min for daily
+        time_limit_no_news = 300 if months > 6 else 180    # 5 min for onboarding, 3 min for daily
 
         for news_url in news_page_patterns:
             # PRE-PATTERN TIME CHECK: Skip remaining patterns if we've exceeded time limits
@@ -5675,12 +5677,12 @@ async def crawl_html_news_pages(url: str, months: int = 6, custom_news_url: str 
                     logger.info(f"[CACHE] URL found news, marking for cache: {news_url}")
 
                     # EARLY EXIT: If cached/custom URL found ENOUGH news, skip remaining patterns
-                    # Only fast-exit if we found 5+ items - year-based archive sites often
-                    # only show current year on main page (Starcore: /en/investors/news/ shows 1 item)
+                    # Threshold raised from 5 to 15 — cached URLs can return stale pages
+                    # missing the newest releases, so we need a higher bar before trusting them
                     news_url_clean = news_url.rstrip('/').split('?')[0]  # Normalize for comparison
                     is_cached = cached_news_url and news_url_clean == cached_news_url.rstrip('/').split('?')[0]
                     is_custom = custom_news_url and news_url_clean.startswith(custom_news_url.rstrip('/'))
-                    if (is_cached or is_custom) and len(news_by_url) >= 5:
+                    if (is_cached or is_custom) and len(news_by_url) >= 15:
                         logger.info(f"[FAST-EXIT] Known URL found {len(news_by_url)} items, skipping remaining patterns")
                         break
 
@@ -5689,12 +5691,14 @@ async def crawl_html_news_pages(url: str, months: int = 6, custom_news_url: str 
                 # ============================================================
 
                 # EARLY EXIT 1: For daily scraping, stop if we found enough recent news
-                # This dramatically speeds up the scrape by skipping unnecessary URL patterns
+                # Threshold raised from 3 to 10 — the old value of 3 caused the scraper
+                # to exit before reaching URL patterns where newer releases lived,
+                # resulting in missed news (e.g., Feb 10th releases not captured)
                 if months <= 6:  # Only for short-term scraping (daily scrape uses months=3)
                     recent_count = sum(1 for n in news_by_url.values()
                                       if n.get('date') and
                                       datetime.strptime(n['date'], '%Y-%m-%d') > datetime.now() - timedelta(days=30))
-                    if recent_count >= 3:
+                    if recent_count >= 10:
                         logger.info(f"[EARLY-EXIT] Found {recent_count} recent news items, stopping URL pattern search")
                         break
 

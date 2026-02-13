@@ -901,8 +901,10 @@ def scrape_single_company_news_task(self, company_id: int):
                 try:
                     release_date = datetime.strptime(date_str, '%Y-%m-%d').date()
                 except (ValueError, TypeError):
+                    logger.warning(f"   {company.name}: Skipping news with unparseable date '{date_str}': {title[:60]}")
                     continue  # Skip entries without valid dates
             else:
+                logger.debug(f"   {company.name}: Skipping news with no date: {title[:60]}")
                 continue  # Skip entries without valid dates
 
             # Create or update news release
@@ -1056,13 +1058,17 @@ def scrape_all_companies_news_task(self):
 
     except Exception as e:
         logger.error(f"Error queuing company news scrape tasks: {str(e)}")
-        # Release lock on error so future runs can proceed
-        cache.delete(LOCK_KEY)
         return {
             'status': 'error',
             'error': str(e),
             'message': f'Failed to queue company news scrape tasks: {str(e)}'
         }
+    finally:
+        # Always release lock when batch task completes (success or error)
+        # Previously only released on error, relying on 2hr TTL for success —
+        # this blocked manual re-triggers for up to 2 hours after completion
+        cache.delete(LOCK_KEY)
+        logger.info(f"Released batch lock (key: {LOCK_KEY})")
 
 
 @shared_task(bind=True, max_retries=3, retry_backoff=True, retry_backoff_max=600, retry_jitter=True, time_limit=600, soft_time_limit=580, on_failure=log_task_failure)
