@@ -1199,44 +1199,28 @@ def company_news_releases(request, company_id):
     ).order_by('-release_date')[:5]
     financial_data = NewsReleaseSerializer(financial_releases, many=True).data
 
-    # Get company news - use CompanyNews as primary source (where scraped news goes)
-    # Fall back to NewsRelease only if CompanyNews is empty
-    scraped_news = CompanyNews.objects.filter(company=company).order_by('-publication_date')[:20]
+    # Get company news from NewsRelease (primary source - updated by daily scraper)
+    # The daily scraper (crawl_news_releases) writes to NewsRelease, which has
+    # the most up-to-date data. CompanyNews is only populated during onboarding
+    # and was stale (missing recent releases like Feb 10th).
+    news_releases = NewsRelease.objects.filter(company=company).order_by('-release_date')[:20]
     non_financial_data = []
     last_updated = None
 
-    if scraped_news.exists():
-        # Use CompanyNews data (from website scraping - primary source)
-        for news in scraped_news:
-            news_item = {
-                'id': news.id,
-                'title': news.title,
-                'release_date': str(news.publication_date) if news.publication_date else None,
-                'release_type': news.news_type or 'corporate',
-                'summary': news.summary or '',
-                'url': news.source_url,
-                'is_material': news.is_material or False,
-            }
-            non_financial_data.append(news_item)
-        latest_scraped = scraped_news.first()
-        last_updated = str(latest_scraped.extracted_at) if latest_scraped else None
-    else:
-        # Fallback to NewsRelease (legacy)
-        news_releases = NewsRelease.objects.filter(company=company).order_by('-release_date')[:20]
-        for news in news_releases:
-            news_item = {
-                'id': news.id,
-                'title': news.title,
-                'release_date': str(news.release_date) if news.release_date else None,
-                'release_type': news.release_type or 'general',
-                'summary': news.summary or '',
-                'url': news.url,
-                'is_material': news.is_material or False,
-            }
-            non_financial_data.append(news_item)
-        if news_releases.exists():
-            latest = news_releases.first()
-            last_updated = str(latest.updated_at) if latest and latest.updated_at else None
+    for news in news_releases:
+        news_item = {
+            'id': news.id,
+            'title': news.title,
+            'release_date': str(news.release_date) if news.release_date else None,
+            'release_type': news.release_type or 'general',
+            'summary': news.summary or '',
+            'url': news.url,
+            'is_material': news.is_material or False,
+        }
+        non_financial_data.append(news_item)
+    if news_releases.exists():
+        latest = news_releases.first()
+        last_updated = str(latest.updated_at) if latest and latest.updated_at else None
 
     return Response({
         'financial': financial_data,
