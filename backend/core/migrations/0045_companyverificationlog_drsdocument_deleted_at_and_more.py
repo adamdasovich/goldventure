@@ -12,23 +12,6 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.CreateModel(
-            name='CompanyVerificationLog',
-            fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('status', models.CharField(choices=[('complete', 'Complete'), ('incomplete', 'Incomplete'), ('needs_review', 'Needs Review'), ('error', 'Error')], default='incomplete', max_length=20)),
-                ('overall_score', models.IntegerField(default=0)),
-                ('issues', models.JSONField(blank=True, default=list)),
-                ('fixes_applied', models.JSONField(blank=True, default=list)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-            ],
-            options={
-                'verbose_name': 'Company Verification Log',
-                'verbose_name_plural': 'Company Verification Logs',
-                'db_table': 'company_verification_logs',
-                'ordering': ['-created_at'],
-            },
-        ),
         migrations.AddField(
             model_name='drsdocument',
             name='deleted_at',
@@ -208,10 +191,5 @@ class Migration(migrations.Migration):
         migrations.AddIndex(
             model_name='subscriptionagreement',
             index=models.Index(fields=['is_deleted'], name='subscriptio_is_dele_c69322_idx'),
-        ),
-        migrations.AddField(
-            model_name='companyverificationlog',
-            name='company',
-            field=models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='verification_logs', to='core.company'),
         ),
     ]

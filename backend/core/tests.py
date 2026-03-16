@@ -525,7 +525,8 @@ class CompanyNewsReleasesViewTests(TestCase):
         self.factory = RequestFactory()
         self.company = Company.objects.create(
             name="Test Gold Corp",
-            ticker="TGC",
+            status="public",
+            ticker_symbol="TGC",
             exchange="TSXV",
             website="https://testgoldcorp.com",
             is_active=True,
@@ -577,12 +578,14 @@ class CompanyNewsReleasesViewTests(TestCase):
             title="Older News",
             url="https://testgoldcorp.com/news/older",
             release_date="2025-12-01",
+            release_type="news_release",
         )
         NewsRelease.objects.create(
             company=self.company,
             title="Newer News",
             url="https://testgoldcorp.com/news/newer",
             release_date="2026-02-10",
+            release_type="news_release",
         )
         request = self.factory.get(f'/api/companies/{self.company.id}/news-releases/')
         response = company_news_releases(request, self.company.id)
@@ -597,6 +600,7 @@ class CompanyNewsReleasesViewTests(TestCase):
             title="Financing Announcement",
             url="https://testgoldcorp.com/news/financing",
             release_date="2026-02-10",
+            release_type="financing",
             is_material=True,
         )
         NewsRelease.objects.create(
@@ -604,6 +608,7 @@ class CompanyNewsReleasesViewTests(TestCase):
             title="Drill Results",
             url="https://testgoldcorp.com/news/drills",
             release_date="2026-02-11",
+            release_type="news_release",
             is_material=False,
         )
         request = self.factory.get(f'/api/companies/{self.company.id}/news-releases/')
@@ -620,6 +625,7 @@ class CompanyNewsReleasesViewTests(TestCase):
                 title=f"News Item {i}",
                 url=f"https://testgoldcorp.com/news/item-{i}",
                 release_date="2026-02-10",
+                release_type="news_release",
             )
         request = self.factory.get(f'/api/companies/{self.company.id}/news-releases/')
         response = company_news_releases(request, self.company.id)
@@ -629,7 +635,8 @@ class CompanyNewsReleasesViewTests(TestCase):
     def test_inactive_company_returns_404(self):
         inactive = Company.objects.create(
             name="Inactive Corp",
-            ticker="IC",
+            status="public",
+            ticker_symbol="IC",
             exchange="TSXV",
             is_active=False,
         )

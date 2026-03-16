@@ -357,7 +357,6 @@ def parse_date_standalone(text: str) -> Optional[str]:
             mm_dd_date = f"{year}-{first.zfill(2)}-{second.zfill(2)}"  # MM/DD interpretation
             # Check if DD/MM interpretation is far in the future (>7 days)
             try:
-                from datetime import datetime, timedelta
                 dd_mm_parsed = datetime.strptime(dd_mm_date, "%Y-%m-%d")
                 mm_dd_parsed = datetime.strptime(mm_dd_date, "%Y-%m-%d")
                 now = datetime.now()
