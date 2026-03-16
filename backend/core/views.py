@@ -6458,13 +6458,13 @@ def _infer_project_stage_from_name(name: str) -> str:
     if any(kw in name_lower for kw in ['permitting', 'permitted']):
         return 'permitting'
 
+    # PFS indicators (must check before FS — 'pre-feasibility' contains 'feasibility')
+    if 'pfs' in name_lower or 'pre-feasibility' in name_lower or 'prefeasibility' in name_lower:
+        return 'pfs'
+
     # Feasibility indicators
     if any(kw in name_lower for kw in ['feasibility', 'fs ']):
         return 'fs'
-
-    # PFS indicators
-    if 'pfs' in name_lower or 'pre-feasibility' in name_lower or 'prefeasibility' in name_lower:
-        return 'pfs'
 
     # PEA indicators
     if 'pea' in name_lower or 'preliminary economic' in name_lower:

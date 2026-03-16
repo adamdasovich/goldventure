@@ -1185,8 +1185,13 @@ class InferProjectStageFromNameTests(TestCase):
         self.assertEqual(_infer_project_stage_from_name('Preliminary Economic Assessment'), 'pea')
 
     def test_pfs(self):
-        """Note: 'pfs' keyword must not contain 'feasibility' or 'fs ' to avoid earlier match."""
-        self.assertEqual(_infer_project_stage_from_name('Gold PFS-Stage Project'), 'pfs')
+        self.assertEqual(_infer_project_stage_from_name('Pre-Feasibility Study Project'), 'pfs')
+
+    def test_pfs_abbreviation(self):
+        self.assertEqual(_infer_project_stage_from_name('PFS Stage Gold Project'), 'pfs')
+
+    def test_pfs_prefeasibility(self):
+        self.assertEqual(_infer_project_stage_from_name('Prefeasibility Complete'), 'pfs')
 
     def test_resource(self):
         self.assertEqual(_infer_project_stage_from_name('Resource Estimate Project'), 'resource')
