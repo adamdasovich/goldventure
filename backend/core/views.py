@@ -7976,11 +7976,15 @@ def create_closed_financing(request):
                 announced_date__lte=date_range_end,
             )
 
-            # Delete duplicates
+            # Delete duplicates (must remove protected InvestmentInterestAggregate first)
             duplicates_removed = duplicate_financings.count()
             if duplicates_removed > 0:
                 logger.info(f"Removing {duplicates_removed} duplicate announced financing(s) for {company.name}")
-                duplicate_financings.delete()
+                for dup in duplicate_financings:
+                    # Remove the aggregate record that references this financing via PROTECT FK
+                    if hasattr(dup, 'interest_aggregate'):
+                        dup.interest_aggregate.delete()
+                    dup.delete()
 
         # Create the financing
         financing = Financing.objects.create(

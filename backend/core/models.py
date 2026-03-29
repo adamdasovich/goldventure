@@ -4933,7 +4933,7 @@ class NewsReleaseFlag(models.Model):
 
 
 class DismissedNewsURL(models.Model):
-    url = models.URLField(unique=True)
+    url = models.URLField(max_length=2000, unique=True)
     normalized_url = models.CharField(max_length=500, blank=True, db_index=True)
     title = models.CharField(max_length=500, blank=True)
     normalized_title = models.CharField(max_length=500, blank=True, db_index=True)
