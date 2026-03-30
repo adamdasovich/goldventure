@@ -187,6 +187,7 @@ class Company(models.Model):
             models.Index(fields=['is_active'], name='idx_company_is_active'),
             models.Index(fields=['approval_status'], name='idx_company_approval_status'),
             models.Index(fields=['is_active', 'approval_status'], name='idx_company_active_status'),
+            models.Index(fields=['ticker_symbol'], name='idx_company_ticker'),
         ]
 
     def __str__(self):
@@ -740,6 +741,9 @@ class NewsRelease(models.Model):
     class Meta:
         db_table = 'news_releases'
         ordering = ['-release_date']
+        indexes = [
+            models.Index(fields=['company', '-release_date']),
+        ]
 
 
 class Document(models.Model):
@@ -4354,6 +4358,7 @@ class CompanyNews(models.Model):
         verbose_name_plural = 'Company News'
         indexes = [
             models.Index(fields=['company', 'publication_date']),
+            models.Index(fields=['company', '-publication_date']),
         ]
 
     def __str__(self):
@@ -4570,23 +4575,9 @@ class MetalPrice(models.Model):
 
     @classmethod
     def get_latest_prices(cls):
-        """Get the most recent price for each metal"""
-        from django.db.models import Max
-
-        latest_times = cls.objects.values('metal').annotate(
-            latest=Max('scraped_at')
-        )
-
-        prices = {}
-        for item in latest_times:
-            price = cls.objects.filter(
-                metal=item['metal'],
-                scraped_at=item['latest']
-            ).first()
-            if price:
-                prices[item['metal']] = price
-
-        return prices
+        """Get the most recent price for each metal (single query)"""
+        latest_prices = cls.objects.order_by('metal', '-scraped_at').distinct('metal')
+        return {price.metal: price for price in latest_prices}
 
 
 class StockPrice(models.Model):
@@ -4632,23 +4623,9 @@ class StockPrice(models.Model):
 
     @classmethod
     def get_latest_prices(cls):
-        """Get the most recent price for each company"""
-        from django.db.models import Max
-
-        latest_dates = cls.objects.values('company').annotate(
-            latest=Max('date')
-        )
-
-        prices = {}
-        for item in latest_dates:
-            price = cls.objects.filter(
-                company_id=item['company'],
-                date=item['latest']
-            ).select_related('company').first()
-            if price:
-                prices[price.company.ticker_symbol] = price
-
-        return prices
+        """Get the most recent price for each company (single query)"""
+        latest_prices = cls.objects.order_by('company_id', '-date').distinct('company_id').select_related('company')
+        return {price.company.ticker_symbol: price for price in latest_prices}
 
     @classmethod
     def get_company_history(cls, company, days=30):

@@ -89,6 +89,8 @@ class CompanySerializer(serializers.ModelSerializer):
         }
 
     def get_project_count(self, obj):
+        if hasattr(obj, '_project_count'):
+            return obj._project_count
         return obj.projects.filter(is_active=True).count()
 
 
@@ -112,6 +114,8 @@ class ProjectSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'created_at', 'updated_at']
 
     def get_resource_count(self, obj):
+        if hasattr(obj, '_resource_count'):
+            return obj._resource_count
         return obj.resources.count()
 
 
@@ -770,6 +774,8 @@ class ProspectorProfileSerializer(serializers.ModelSerializer):
                           'created_at', 'updated_at']
 
     def get_listings_count(self, obj):
+        if hasattr(obj, '_listings_count'):
+            return obj._listings_count
         return obj.listings.filter(status='active').count()
 
 

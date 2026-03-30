@@ -29,6 +29,7 @@ from .models import (
 @admin.register(User)
 class UserAdmin(BaseUserAdmin):
     list_display = ['username', 'email', 'user_type', 'company', 'is_staff']
+    list_select_related = ['company']
     list_filter = ['user_type', 'is_staff', 'is_superuser']
     fieldsets = BaseUserAdmin.fieldsets + (
         ('Additional Info', {'fields': ('user_type', 'company', 'phone', 'linkedin_url', 'bio')}),
@@ -45,6 +46,7 @@ class CompanyAdmin(admin.ModelAdmin):
 @admin.register(Project)
 class ProjectAdmin(admin.ModelAdmin):
     list_display = ['name', 'company', 'project_stage', 'primary_commodity', 'country', 'is_flagship']
+    list_select_related = ['company']
     list_filter = ['project_stage', 'primary_commodity', 'country', 'is_flagship']
     search_fields = ['name', 'company__name']
 
@@ -52,6 +54,7 @@ class ProjectAdmin(admin.ModelAdmin):
 @admin.register(ResourceEstimate)
 class ResourceEstimateAdmin(admin.ModelAdmin):
     list_display = ['project', 'category', 'gold_ounces', 'tonnes', 'report_date']
+    list_select_related = ['project']
     list_filter = ['category', 'standard']
     search_fields = ['project__name']
 
@@ -59,6 +62,7 @@ class ResourceEstimateAdmin(admin.ModelAdmin):
 @admin.register(EconomicStudy)
 class EconomicStudyAdmin(admin.ModelAdmin):
     list_display = ['project', 'study_type', 'npv_5_usd', 'irr_percent', 'release_date']
+    list_select_related = ['project']
     list_filter = ['study_type']
     search_fields = ['project__name']
 
@@ -66,6 +70,7 @@ class EconomicStudyAdmin(admin.ModelAdmin):
 @admin.register(Financing)
 class FinancingAdmin(admin.ModelAdmin):
     list_display = ['company', 'financing_type', 'amount_raised_usd', 'announced_date', 'status']
+    list_select_related = ['company']
     list_filter = ['financing_type', 'status']
     search_fields = ['company__name']
 
@@ -80,6 +85,7 @@ class InvestorAdmin(admin.ModelAdmin):
 @admin.register(InvestorPosition)
 class InvestorPositionAdmin(admin.ModelAdmin):
     list_display = ['investor', 'company', 'shares_held', 'percentage_ownership', 'position_date']
+    list_select_related = ['investor', 'company']
     list_filter = ['is_insider']
     search_fields = ['investor__company_name', 'company__name']
 
@@ -87,6 +93,7 @@ class InvestorPositionAdmin(admin.ModelAdmin):
 @admin.register(MarketData)
 class MarketDataAdmin(admin.ModelAdmin):
     list_display = ['company', 'date', 'close_price', 'volume']
+    list_select_related = ['company']
     list_filter = ['company', 'date']
     search_fields = ['company__name']
 
@@ -100,6 +107,7 @@ class CommodityPriceAdmin(admin.ModelAdmin):
 @admin.register(NewsRelease)
 class NewsReleaseAdmin(admin.ModelAdmin):
     list_display = ['title', 'company', 'release_type', 'release_date', 'is_material']
+    list_select_related = ['company']
     list_filter = ['release_type', 'is_material']
     search_fields = ['title', 'company__name']
 
@@ -107,6 +115,7 @@ class NewsReleaseAdmin(admin.ModelAdmin):
 @admin.register(Document)
 class DocumentAdmin(admin.ModelAdmin):
     list_display = ['title', 'company', 'document_type', 'document_date', 'is_public']
+    list_select_related = ['company']
     list_filter = ['document_type', 'is_public']
     search_fields = ['title', 'company__name']
 
@@ -114,6 +123,7 @@ class DocumentAdmin(admin.ModelAdmin):
 @admin.register(InvestorCommunication)
 class InvestorCommunicationAdmin(admin.ModelAdmin):
     list_display = ['investor', 'company', 'communication_type', 'communication_date', 'requires_followup']
+    list_select_related = ['investor', 'company']
     list_filter = ['communication_type', 'requires_followup', 'followup_completed']
     search_fields = ['investor__company_name', 'company__name', 'subject']
 
@@ -121,6 +131,7 @@ class InvestorCommunicationAdmin(admin.ModelAdmin):
 @admin.register(CompanyMetrics)
 class CompanyMetricsAdmin(admin.ModelAdmin):
     list_display = ['company', 'period_end_date', 'cash_usd', 'burn_rate_monthly_usd', 'runway_months']
+    list_select_related = ['company']
     list_filter = ['period_end_date']
     search_fields = ['company__name']
 
@@ -128,6 +139,7 @@ class CompanyMetricsAdmin(admin.ModelAdmin):
 @admin.register(Watchlist)
 class WatchlistAdmin(admin.ModelAdmin):
     list_display = ['name', 'user', 'is_default']
+    list_select_related = ['user']
     list_filter = ['is_default']
     search_fields = ['name', 'user__username']
 
@@ -135,6 +147,7 @@ class WatchlistAdmin(admin.ModelAdmin):
 @admin.register(Alert)
 class AlertAdmin(admin.ModelAdmin):
     list_display = ['user', 'company', 'alert_type', 'is_active', 'last_triggered']
+    list_select_related = ['user', 'company']
     list_filter = ['alert_type', 'is_active']
     search_fields = ['user__username', 'company__name']
 
@@ -330,6 +343,7 @@ class SpeakerEventAdmin(admin.ModelAdmin):
         'title', 'company', 'status', 'format', 'scheduled_start',
         'registered_count', 'attended_count', 'created_by'
     ]
+    list_select_related = ['company', 'created_by']
     list_filter = ['status', 'format', 'company', 'scheduled_start']
     search_fields = ['title', 'description', 'topic', 'company__name']
     readonly_fields = ['created_by', 'registered_count', 'attended_count', 'questions_count', 'created_at', 'updated_at']
@@ -366,6 +380,7 @@ class SpeakerEventAdmin(admin.ModelAdmin):
 class EventSpeakerAdmin(admin.ModelAdmin):
     """Admin interface for event speakers"""
     list_display = ['user', 'event', 'title', 'is_primary']
+    list_select_related = ['user', 'event']
     list_filter = ['is_primary', 'event']
     search_fields = ['user__username', 'event__title', 'title']
 
@@ -374,6 +389,7 @@ class EventSpeakerAdmin(admin.ModelAdmin):
 class EventRegistrationAdmin(admin.ModelAdmin):
     """Admin interface for event registrations"""
     list_display = ['user', 'event', 'status', 'registered_at', 'reminder_sent']
+    list_select_related = ['user', 'event']
     list_filter = ['status', 'reminder_sent', 'registered_at']
     search_fields = ['user__username', 'event__title']
     readonly_fields = ['registered_at', 'joined_at', 'left_at']
@@ -383,6 +399,7 @@ class EventRegistrationAdmin(admin.ModelAdmin):
 class EventQuestionAdmin(admin.ModelAdmin):
     """Admin interface for event questions"""
     list_display = ['content_preview', 'event', 'user', 'status', 'upvotes', 'is_featured', 'created_at']
+    list_select_related = ['event', 'user']
     list_filter = ['status', 'is_featured', 'event']
     search_fields = ['content', 'user__username', 'event__title']
     readonly_fields = ['upvotes', 'created_at', 'answered_at']
@@ -396,6 +413,7 @@ class EventQuestionAdmin(admin.ModelAdmin):
 class EventReactionAdmin(admin.ModelAdmin):
     """Admin interface for event reactions"""
     list_display = ['user', 'event', 'reaction_type', 'timestamp']
+    list_select_related = ['user', 'event']
     list_filter = ['reaction_type', 'event', 'timestamp']
     search_fields = ['user__username', 'event__title']
     readonly_fields = ['timestamp']
@@ -438,6 +456,7 @@ class EducationalModuleAdmin(admin.ModelAdmin):
 class ModuleCompletionAdmin(admin.ModelAdmin):
     """Admin interface for module completions"""
     list_display = ['user', 'module', 'started_at', 'completed_at', 'time_spent_seconds', 'passed']
+    list_select_related = ['user', 'module']
     list_filter = ['module', 'passed', 'completed_at']
     search_fields = ['user__username', 'module__title']
     readonly_fields = ['started_at']
@@ -447,6 +466,7 @@ class ModuleCompletionAdmin(admin.ModelAdmin):
 class AccreditedInvestorQualificationAdmin(admin.ModelAdmin):
     """Admin interface for accredited investor qualifications"""
     list_display = ['user', 'status', 'criteria_met', 'qualified_at', 'expires_at', 'reviewed_by']
+    list_select_related = ['user', 'reviewed_by']
     list_filter = ['status', 'criteria_met', 'documents_verified']
     search_fields = ['user__username', 'review_notes']
     readonly_fields = ['created_at', 'updated_at']
@@ -484,6 +504,7 @@ class SubscriptionAgreementAdmin(admin.ModelAdmin):
         'investor', 'company', 'financing', 'total_investment_amount',
         'num_shares', 'status', 'investor_signed_at', 'shares_issued'
     ]
+    list_select_related = ['investor', 'company', 'financing']
     list_filter = ['status', 'company', 'accreditation_verified', 'kyc_completed', 'shares_issued']
     search_fields = ['investor__username', 'company__name', 'docusign_envelope_id']
     readonly_fields = ['created_at', 'updated_at', 'masked_ip_address']
@@ -552,6 +573,7 @@ class SubscriptionAgreementAdmin(admin.ModelAdmin):
 class InvestmentTransactionAdmin(admin.ModelAdmin):
     """Admin interface for investment transactions"""
     list_display = ['user', 'financing', 'amount', 'status', 'payment_date', 'shares_allocated']
+    list_select_related = ['user', 'financing']
     list_filter = ['status', 'financing', 'payment_date']
     search_fields = ['user__username', 'payment_reference']
     readonly_fields = ['created_at', 'updated_at']
@@ -564,6 +586,7 @@ class FinancingAggregateAdmin(admin.ModelAdmin):
         'financing', 'total_subscriptions', 'total_subscribers',
         'total_committed_amount', 'total_funded_amount', 'last_calculated_at'
     ]
+    list_select_related = ['financing']
     list_filter = ['last_calculated_at']
     search_fields = ['financing__company__name']
     readonly_fields = ['last_calculated_at']
@@ -577,6 +600,7 @@ class PaymentInstructionAdmin(admin.ModelAdmin):
     Only superusers can see full account details.
     """
     list_display = ['subscription_agreement', 'company', 'payment_method', 'sent_to_investor_at', 'viewed_by_investor_at']
+    list_select_related = ['subscription_agreement', 'company']
     list_filter = ['payment_method', 'company']
     search_fields = ['reference_code', 'bank_name']
     readonly_fields = ['created_at', 'updated_at', 'masked_account_number', 'masked_routing_number', 'masked_swift_code']
@@ -645,6 +669,7 @@ class DRSDocumentAdmin(admin.ModelAdmin):
         'user', 'company', 'document_type', 'num_shares',
         'delivery_status', 'sent_at', 'delivered_at'
     ]
+    list_select_related = ['user', 'company', 'subscription_agreement']
     list_filter = ['document_type', 'delivery_status', 'company']
     search_fields = ['user__username', 'certificate_number', 'document_hash']
     readonly_fields = ['created_at', 'updated_at']
@@ -676,6 +701,7 @@ class DRSDocumentAdmin(admin.ModelAdmin):
 class CompanyResourceAdmin(admin.ModelAdmin):
     """Admin interface for company resources"""
     list_display = ['title', 'company', 'resource_type', 'category', 'is_public', 'uploaded_at']
+    list_select_related = ['company']
     list_filter = ['resource_type', 'category', 'is_public', 'company']
     search_fields = ['title', 'description', 'company__name']
     readonly_fields = ['uploaded_at', 'uploaded_by']
@@ -685,6 +711,7 @@ class CompanyResourceAdmin(admin.ModelAdmin):
 class SpeakingEventAdmin(admin.ModelAdmin):
     """Admin interface for speaking events"""
     list_display = ['title', 'company', 'event_type', 'start_datetime', 'status', 'is_featured']
+    list_select_related = ['company']
     list_filter = ['event_type', 'status', 'is_featured', 'company']
     search_fields = ['title', 'description', 'company__name', 'location']
     readonly_fields = ['created_at', 'updated_at', 'created_by']
@@ -694,6 +721,7 @@ class SpeakingEventAdmin(admin.ModelAdmin):
 class CompanySubscriptionAdmin(admin.ModelAdmin):
     """Admin interface for company subscriptions"""
     list_display = ['company', 'status', 'is_active', 'trial_end', 'current_period_end', 'cancel_at_period_end']
+    list_select_related = ['company']
     list_filter = ['status', 'cancel_at_period_end']
     search_fields = ['company__name', 'stripe_customer_id', 'stripe_subscription_id']
     readonly_fields = ['created_at', 'updated_at']
@@ -703,6 +731,7 @@ class CompanySubscriptionAdmin(admin.ModelAdmin):
 class SubscriptionInvoiceAdmin(admin.ModelAdmin):
     """Admin interface for subscription invoices"""
     list_display = ['subscription', 'status', 'amount_cents', 'invoice_date', 'paid_at']
+    list_select_related = ['subscription']
     list_filter = ['status', 'invoice_date']
     search_fields = ['stripe_invoice_id', 'subscription__company__name']
     readonly_fields = ['created_at']
@@ -715,6 +744,7 @@ class CompanyAccessRequestAdmin(admin.ModelAdmin):
         'user', 'company', 'status_badge', 'role', 'job_title',
         'work_email', 'created_at', 'reviewer'
     ]
+    list_select_related = ['user', 'company', 'reviewer']
     list_filter = ['status', 'role', 'company', 'created_at']
     search_fields = ['user__username', 'user__email', 'company__name', 'job_title', 'work_email']
     readonly_fields = ['user', 'created_at', 'updated_at', 'reviewed_at']
@@ -777,6 +807,7 @@ class CompanyAccessRequestAdmin(admin.ModelAdmin):
 class CompanyPersonAdmin(admin.ModelAdmin):
     """Admin interface for company people (scraped)"""
     list_display = ['full_name', 'company', 'role_type', 'title', 'display_order', 'extracted_at']
+    list_select_related = ['company']
     list_filter = ['role_type', 'company', 'extracted_at']
     search_fields = ['full_name', 'title', 'company__name']
     readonly_fields = ['extracted_at']
@@ -786,6 +817,7 @@ class CompanyPersonAdmin(admin.ModelAdmin):
 class CompanyDocumentAdmin(admin.ModelAdmin):
     """Admin interface for company documents (scraped)"""
     list_display = ['title', 'company', 'document_type', 'year', 'extracted_at']
+    list_select_related = ['company']
     list_filter = ['document_type', 'company', 'year']
     search_fields = ['title', 'company__name']
     readonly_fields = ['extracted_at']
@@ -795,6 +827,7 @@ class CompanyDocumentAdmin(admin.ModelAdmin):
 class CompanyNewsAdmin(admin.ModelAdmin):
     """Admin interface for company news (scraped)"""
     list_display = ['title', 'company', 'publication_date', 'is_pdf', 'extracted_at']
+    list_select_related = ['company']
     list_filter = ['company', 'is_pdf', 'publication_date']
     search_fields = ['title', 'company__name']
     readonly_fields = ['extracted_at']
@@ -808,6 +841,7 @@ class ScrapingJobAdmin(admin.ModelAdmin):
         'people_found', 'documents_found', 'news_found',
         'started_at', 'initiated_by'
     ]
+    list_select_related = ['company', 'initiated_by']
     list_filter = ['status', 'started_at']
     search_fields = ['company_name_input', 'website_url', 'company__name']
     readonly_fields = [
@@ -919,6 +953,7 @@ class GlossaryTermAdmin(admin.ModelAdmin):
 class GlossaryTermSubmissionAdmin(admin.ModelAdmin):
     """Admin interface for user-submitted glossary terms with approval workflow"""
     list_display = ['term', 'status_badge', 'category', 'submitted_by', 'submitted_at', 'reviewed_by']
+    list_select_related = ['submitted_by', 'reviewed_by']
     list_filter = ['status', 'category', 'submitted_at']
     search_fields = ['term', 'definition', 'submitted_by__username']
     readonly_fields = ['submitted_by', 'submitted_at', 'reviewed_by', 'reviewed_at', 'approved_term']

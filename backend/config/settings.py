@@ -341,7 +341,7 @@ CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = 'UTC'
 CELERY_TASK_TRACK_STARTED = True
 CELERY_TASK_TIME_LIMIT = 30 * 60  # 30 minutes max
-CELERY_RESULT_EXPIRES = 86400  # 24 hours - prevent Redis memory bloat from old results
+CELERY_RESULT_EXPIRES = 3600  # 1 hour - most task results are consumed immediately
 
 # CRITICAL: Task reliability settings to prevent task loss
 CELERY_TASK_ACKS_LATE = True  # Acknowledge only after successful completion (prevents loss on worker crash)
@@ -402,25 +402,22 @@ CELERY_BEAT_SCHEDULE = {
         'schedule': crontab(hour=12, minute=0, day_of_week='1-6'),  # 7 AM ET, Mon-Sat
     },
 
-    # Cleanup stuck jobs every 15 minutes
-    # Detects and marks as failed any jobs stuck in 'running' or 'processing' state
+    # Cleanup stuck jobs every 30 minutes (was 15 - reduced to cut unnecessary DB polls)
     'cleanup-stuck-jobs': {
         'task': 'core.tasks.cleanup_stuck_jobs_task',
-        'schedule': crontab(minute='*/15'),  # Every 15 minutes
+        'schedule': crontab(minute='*/30'),
     },
 
-    # Cleanup orphaned browser (Chrome/Chromium) processes every 10 minutes
-    # Prevents memory accumulation from crashed/frozen scraping tasks
+    # Cleanup orphaned browser processes every 15 minutes (was 10 - already checks age >10min)
     'cleanup-browser-processes': {
         'task': 'core.tasks.cleanup_browser_processes_task',
-        'schedule': crontab(minute='*/10'),  # Every 10 minutes
+        'schedule': crontab(minute='*/15'),
     },
 
     # Worker health check every 5 minutes
-    # Verifies workers are responsive and monitors memory/Chrome process count
     'celery-worker-health-check': {
         'task': 'core.tasks.celery_worker_health_check_task',
-        'schedule': crontab(minute='*/5'),  # Every 5 minutes
+        'schedule': crontab(minute='*/5'),
     },
 }
 

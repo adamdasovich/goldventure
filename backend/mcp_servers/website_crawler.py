@@ -12,6 +12,7 @@ from typing import List, Dict, Set, Optional, Tuple
 import re
 import sys
 from datetime import datetime, timedelta
+import aiohttp
 from crawl4ai import AsyncWebCrawler, BrowserConfig, CrawlerRunConfig
 from bs4 import BeautifulSoup
 from core.security_utils import check_url_safety as is_safe_url
@@ -1807,7 +1808,8 @@ async def crawl_html_news_pages(url: str, months: int = 6, custom_news_url: str 
     # Track scrape start time for time-based early exit
     scrape_start_time = datetime.now()
 
-    async with AsyncWebCrawler(config=browser_config) as crawler:
+    async with AsyncWebCrawler(config=browser_config) as crawler, \
+            aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=15)) as http_session:
         current_year = datetime.now().year
 
         # Normalize URL - remove trailing slashes to avoid double slashes
@@ -1934,7 +1936,6 @@ async def crawl_html_news_pages(url: str, months: int = 6, custom_news_url: str 
         # News is loaded via AJAX from polaris.brighterir.com API
         # ============================================================
         try:
-            import aiohttp
             import re as regex
 
             # Check homepage and investor pages for BrighterIR iframe
@@ -1966,15 +1967,13 @@ async def crawl_html_news_pages(url: str, months: int = 6, custom_news_url: str 
                 # Fetch news from BrighterIR API
                 # Fetch large page to get recent news (API returns in default order, we filter by cutoff)
                 api_url = f"https://polaris.brighterir.com/public/{brighter_slug}/news/rns?draw=1&start=0&length=500"
-                async with aiohttp.ClientSession() as session:
-                    async with session.get(
-                        api_url,
-                        headers={
-                            "X-Requested-With": "XMLHttpRequest",
-                            "Accept": "application/json"
-                        },
-                        timeout=aiohttp.ClientTimeout(total=15)
-                    ) as response:
+                async with http_session.get(
+                    api_url,
+                    headers={
+                        "X-Requested-With": "XMLHttpRequest",
+                        "Accept": "application/json"
+                    },
+                ) as response:
                         if response.status == 200:
                             data = await response.json()
                             items_found = 0
@@ -2025,8 +2024,6 @@ async def crawl_html_news_pages(url: str, months: int = 6, custom_news_url: str 
         # that use JavaScript to render content (Beaver Builder, etc.)
         # ============================================================
         try:
-            import aiohttp
-
             # Try WordPress REST API endpoints - custom post types first, standard posts last
             wp_endpoints = [
                 f"{base_url}/wp-json/wp/v2/press-release?per_page=100",  # North Peak, etc.
@@ -2038,95 +2035,93 @@ async def crawl_html_news_pages(url: str, months: int = 6, custom_news_url: str 
             ]
 
             wp_items_total = 0
-            async with aiohttp.ClientSession() as session:
-                for wp_api_url in wp_endpoints:
-                    # Stop checking more endpoints if we already found press releases
-                    # (avoids mixing blog posts with press releases)
-                    if wp_items_total >= 10:
-                        break
+            for wp_api_url in wp_endpoints:
+                # Stop checking more endpoints if we already found press releases
+                # (avoids mixing blog posts with press releases)
+                if wp_items_total >= 10:
+                    break
 
-                    try:
-                        async with session.get(
-                            wp_api_url,
-                            headers={
-                                "Accept": "application/json",
-                                "User-Agent": "Mozilla/5.0 (compatible; NewsBot/1.0)"
-                            },
-                            timeout=aiohttp.ClientTimeout(total=10)
-                        ) as response:
-                            if response.status != 200:
-                                continue
-                            content_type = response.headers.get('Content-Type', '')
-                            if 'application/json' not in content_type:
-                                continue
-                            data = await response.json()
-                            if not isinstance(data, list) or len(data) == 0:
-                                continue
-                            # Check if this looks like a valid WP posts response
-                            first_post = data[0]
-                            if 'title' not in first_post or 'link' not in first_post or 'date' not in first_post:
-                                continue
+                try:
+                    async with http_session.get(
+                        wp_api_url,
+                        headers={
+                            "Accept": "application/json",
+                            "User-Agent": "Mozilla/5.0 (compatible; NewsBot/1.0)"
+                        },
+                    ) as response:
+                        if response.status != 200:
+                            continue
+                        content_type = response.headers.get('Content-Type', '')
+                        if 'application/json' not in content_type:
+                            continue
+                        data = await response.json()
+                        if not isinstance(data, list) or len(data) == 0:
+                            continue
+                        # Check if this looks like a valid WP posts response
+                        first_post = data[0]
+                        if 'title' not in first_post or 'link' not in first_post or 'date' not in first_post:
+                            continue
 
-                            # Spam filter keywords - skip posts with these in title
-                            # (some WordPress sites have compromised databases)
-                            spam_keywords = ['casino', 'poker', 'gambling', 'slot', 'bitcoin',
-                                            'freispiele', 'giros', 'spins', 'ruleta', 'tragamonedas',
-                                            'spielautomat', 'jackpot slot', 'betting', 'sportsbook']
+                        # Spam filter keywords - skip posts with these in title
+                        # (some WordPress sites have compromised databases)
+                        spam_keywords = ['casino', 'poker', 'gambling', 'slot', 'bitcoin',
+                                        'freispiele', 'giros', 'spins', 'ruleta', 'tragamonedas',
+                                        'spielautomat', 'jackpot slot', 'betting', 'sportsbook']
 
-                            items_found = 0
-                            spam_count = 0
-                            for post in data:
-                                try:
-                                    # Extract title (may contain HTML entities)
-                                    title_obj = post.get('title', {})
-                                    title = title_obj.get('rendered', '') if isinstance(title_obj, dict) else str(title_obj)
-                                    # Clean HTML entities
-                                    title = title.replace('&#8211;', '-').replace('&#8217;', "'")
-                                    title = title.replace('&ndash;', '-').replace('&amp;', '&')
-                                    title = title.replace('&#8220;', '"').replace('&#8221;', '"')
+                        items_found = 0
+                        spam_count = 0
+                        for post in data:
+                            try:
+                                # Extract title (may contain HTML entities)
+                                title_obj = post.get('title', {})
+                                title = title_obj.get('rendered', '') if isinstance(title_obj, dict) else str(title_obj)
+                                # Clean HTML entities
+                                title = title.replace('&#8211;', '-').replace('&#8217;', "'")
+                                title = title.replace('&ndash;', '-').replace('&amp;', '&')
+                                title = title.replace('&#8220;', '"').replace('&#8221;', '"')
 
-                                    if not title or len(title) < 15:
-                                        continue
-
-                                    # Skip spam content
-                                    title_lower = title.lower()
-                                    if any(spam in title_lower for spam in spam_keywords):
-                                        spam_count += 1
-                                        continue
-
-                                    # Parse date from ISO format (2026-01-27T14:05:41)
-                                    date_raw = post.get('date', '')
-                                    date_str = None
-                                    if date_raw and len(date_raw) >= 10:
-                                        date_str = date_raw[:10]  # Extract YYYY-MM-DD
-
-                                    news_url = post.get('link', '')
-                                    if not news_url:
-                                        continue
-
-                                    news = {
-                                        'title': clean_news_title(title, news_url),
-                                        'url': news_url,
-                                        'date': date_str,
-                                        'document_type': 'news_release',
-                                        'year': date_str[:4] if date_str else None
-                                    }
-                                    _add_news_item(news_by_url, news, cutoff_date, "WORDPRESS-API")
-                                    items_found += 1
-                                except Exception as e:
-                                    logger.debug(f"Skipping malformed WordPress post: {e}")
+                                if not title or len(title) < 15:
                                     continue
 
-                            if items_found > 0:
-                                if spam_count > 0:
-                                    logger.info(f"[WORDPRESS] Filtered {spam_count} spam posts")
-                                logger.info(f"[WORDPRESS] Found {items_found} news items from {wp_api_url}")
-                                wp_items_total += items_found
-                    except aiohttp.ClientError:
-                        continue  # Endpoint doesn't exist or failed
-                    except Exception as e:
-                        logger.debug(f"WordPress endpoint check failed ({wp_api_url}): {e}")
-                        continue
+                                # Skip spam content
+                                title_lower = title.lower()
+                                if any(spam in title_lower for spam in spam_keywords):
+                                    spam_count += 1
+                                    continue
+
+                                # Parse date from ISO format (2026-01-27T14:05:41)
+                                date_raw = post.get('date', '')
+                                date_str = None
+                                if date_raw and len(date_raw) >= 10:
+                                    date_str = date_raw[:10]  # Extract YYYY-MM-DD
+
+                                news_url = post.get('link', '')
+                                if not news_url:
+                                    continue
+
+                                news = {
+                                    'title': clean_news_title(title, news_url),
+                                    'url': news_url,
+                                    'date': date_str,
+                                    'document_type': 'news_release',
+                                    'year': date_str[:4] if date_str else None
+                                }
+                                _add_news_item(news_by_url, news, cutoff_date, "WORDPRESS-API")
+                                items_found += 1
+                            except Exception as e:
+                                logger.debug(f"Skipping malformed WordPress post: {e}")
+                                continue
+
+                        if items_found > 0:
+                            if spam_count > 0:
+                                logger.info(f"[WORDPRESS] Filtered {spam_count} spam posts")
+                            logger.info(f"[WORDPRESS] Found {items_found} news items from {wp_api_url}")
+                            wp_items_total += items_found
+                except aiohttp.ClientError:
+                    continue  # Endpoint doesn't exist or failed
+                except Exception as e:
+                    logger.debug(f"WordPress endpoint check failed ({wp_api_url}): {e}")
+                    continue
 
             if wp_items_total > 0:
                 logger.info(f"[WORDPRESS] Total: {wp_items_total} news items from REST API")
@@ -2139,64 +2134,60 @@ async def crawl_html_news_pages(url: str, months: int = 6, custom_news_url: str 
         # News is available via /api/news endpoint as JSON
         # ============================================================
         try:
-            import aiohttp
-
             # Try Strapi API endpoint
             strapi_api_url = f"{base_url}/api/news"
             logger.info(f"[STRAPI] Checking Strapi CMS API: {strapi_api_url}")
 
-            async with aiohttp.ClientSession() as session:
-                async with session.get(
-                    strapi_api_url,
-                    headers={
-                        "Accept": "application/json",
-                        "User-Agent": "Mozilla/5.0 (compatible; NewsBot/1.0)"
-                    },
-                    timeout=aiohttp.ClientTimeout(total=15)
-                ) as response:
-                    if response.status == 200:
-                        content_type = response.headers.get('Content-Type', '')
-                        if 'application/json' in content_type:
-                            data = await response.json()
-                            # Strapi v4 returns { data: [...] }
-                            items = data.get('data', []) if isinstance(data, dict) else data
-                            if isinstance(items, list) and len(items) > 0:
-                                # Check if this looks like a valid Strapi response
-                                first_item = items[0]
-                                if 'Title' in first_item and 'Date' in first_item:
-                                    items_found = 0
-                                    for item in items:
-                                        try:
-                                            title = item.get('Title', '')
-                                            if not title or len(title) < 15:
-                                                continue
-
-                                            # Parse date (YYYY-MM-DD format)
-                                            date_raw = item.get('Date', '')
-                                            date_str = None
-                                            if date_raw and len(date_raw) >= 10:
-                                                date_str = date_raw[:10]
-
-                                            # Build URL - Strapi items may have documentId or id
-                                            doc_id = item.get('documentId') or item.get('id')
-                                            # Create a slug from the title for the URL
-                                            slug = re.sub(r'[^a-zA-Z0-9]+', '-', title.lower()).strip('-')[:80]
-                                            news_url = f"{base_url}/news/{slug}" if slug else f"{base_url}/news/{doc_id}"
-
-                                            news = {
-                                                'title': clean_news_title(title, news_url),
-                                                'url': news_url,
-                                                'date': date_str,
-                                                'document_type': 'news_release',
-                                                'year': date_str[:4] if date_str else None
-                                            }
-                                            _add_news_item(news_by_url, news, cutoff_date, "STRAPI-API")
-                                            items_found += 1
-                                        except Exception as e:
-                                            logger.debug(f"Skipping malformed Strapi item: {e}")
+            async with http_session.get(
+                strapi_api_url,
+                headers={
+                    "Accept": "application/json",
+                    "User-Agent": "Mozilla/5.0 (compatible; NewsBot/1.0)"
+                },
+            ) as response:
+                if response.status == 200:
+                    content_type = response.headers.get('Content-Type', '')
+                    if 'application/json' in content_type:
+                        data = await response.json()
+                        # Strapi v4 returns { data: [...] }
+                        items = data.get('data', []) if isinstance(data, dict) else data
+                        if isinstance(items, list) and len(items) > 0:
+                            # Check if this looks like a valid Strapi response
+                            first_item = items[0]
+                            if 'Title' in first_item and 'Date' in first_item:
+                                items_found = 0
+                                for item in items:
+                                    try:
+                                        title = item.get('Title', '')
+                                        if not title or len(title) < 15:
                                             continue
 
-                                    logger.info(f"[STRAPI] Found {items_found} news items from Strapi API")
+                                        # Parse date (YYYY-MM-DD format)
+                                        date_raw = item.get('Date', '')
+                                        date_str = None
+                                        if date_raw and len(date_raw) >= 10:
+                                            date_str = date_raw[:10]
+
+                                        # Build URL - Strapi items may have documentId or id
+                                        doc_id = item.get('documentId') or item.get('id')
+                                        # Create a slug from the title for the URL
+                                        slug = re.sub(r'[^a-zA-Z0-9]+', '-', title.lower()).strip('-')[:80]
+                                        news_url = f"{base_url}/news/{slug}" if slug else f"{base_url}/news/{doc_id}"
+
+                                        news = {
+                                            'title': clean_news_title(title, news_url),
+                                            'url': news_url,
+                                            'date': date_str,
+                                            'document_type': 'news_release',
+                                            'year': date_str[:4] if date_str else None
+                                        }
+                                        _add_news_item(news_by_url, news, cutoff_date, "STRAPI-API")
+                                        items_found += 1
+                                    except Exception as e:
+                                        logger.debug(f"Skipping malformed Strapi item: {e}")
+                                        continue
+
+                                logger.info(f"[STRAPI] Found {items_found} news items from Strapi API")
         except Exception as e:
             logger.debug(f"Strapi CMS API extraction failed: {e}")
 
@@ -2207,81 +2198,78 @@ async def crawl_html_news_pages(url: str, months: int = 6, custom_news_url: str 
         # This RSS feed contains all blog posts with proper dates and URLs
         # ============================================================
         try:
-            import aiohttp
             import xml.etree.ElementTree as ET
 
             # Try Wix RSS feed endpoint
             wix_rss_url = f"{base_url}/blog-feed.xml"
             logger.info(f"[WIX-RSS] Checking Wix RSS feed: {wix_rss_url}")
 
-            async with aiohttp.ClientSession() as session:
-                async with session.get(
-                    wix_rss_url,
-                    headers={
-                        "Accept": "application/rss+xml, application/xml, text/xml",
-                        "User-Agent": "Mozilla/5.0 (compatible; NewsBot/1.0)"
-                    },
-                    timeout=aiohttp.ClientTimeout(total=15)
-                ) as response:
-                    if response.status == 200:
-                        content_type = response.headers.get('Content-Type', '')
-                        if 'xml' in content_type:
-                            xml_content = await response.text()
-                            # Parse RSS XML
-                            root = ET.fromstring(xml_content)
-                            channel = root.find('channel')
-                            if channel is not None:
-                                items_found = 0
-                                for item in channel.findall('item'):
-                                    try:
-                                        title_elem = item.find('title')
-                                        link_elem = item.find('link')
-                                        pubdate_elem = item.find('pubDate')
+            async with http_session.get(
+                wix_rss_url,
+                headers={
+                    "Accept": "application/rss+xml, application/xml, text/xml",
+                    "User-Agent": "Mozilla/5.0 (compatible; NewsBot/1.0)"
+                },
+            ) as response:
+                if response.status == 200:
+                    content_type = response.headers.get('Content-Type', '')
+                    if 'xml' in content_type:
+                        xml_content = await response.text()
+                        # Parse RSS XML
+                        root = ET.fromstring(xml_content)
+                        channel = root.find('channel')
+                        if channel is not None:
+                            items_found = 0
+                            for item in channel.findall('item'):
+                                try:
+                                    title_elem = item.find('title')
+                                    link_elem = item.find('link')
+                                    pubdate_elem = item.find('pubDate')
 
-                                        if title_elem is None or link_elem is None:
-                                            continue
-
-                                        title = title_elem.text or ''
-                                        # Clean CDATA wrapper if present
-                                        title = title.strip()
-                                        if not title or len(title) < 15:
-                                            continue
-
-                                        news_url = link_elem.text or ''
-                                        if not news_url:
-                                            continue
-
-                                        # Parse pubDate (format: "Thu, 22 Jan 2026 12:03:27 GMT")
-                                        date_str = None
-                                        if pubdate_elem is not None and pubdate_elem.text:
-                                            try:
-                                                from email.utils import parsedate_to_datetime
-                                                dt = parsedate_to_datetime(pubdate_elem.text)
-                                                date_str = dt.strftime('%Y-%m-%d')
-                                            except Exception:
-                                                # Try to parse manually
-                                                pubdate_text = pubdate_elem.text
-                                                date_match = re.search(r'(\d{1,2})\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{4})', pubdate_text)
-                                                if date_match:
-                                                    day = date_match.group(1).zfill(2)
-                                                    month = MONTH_MAP.get(date_match.group(2).lower(), '01')
-                                                    year = date_match.group(3)
-                                                    date_str = f"{year}-{month}-{day}"
-
-                                        news = {
-                                            'title': clean_news_title(title, news_url),
-                                            'url': news_url,
-                                            'date': date_str,
-                                            'document_type': 'news_release',
-                                            'year': date_str[:4] if date_str else None
-                                        }
-                                        _add_news_item(news_by_url, news, cutoff_date, "WIX-RSS")
-                                        items_found += 1
-                                    except Exception as e:
-                                        logger.debug(f"Skipping malformed Wix RSS item: {e}")
+                                    if title_elem is None or link_elem is None:
                                         continue
 
-                                logger.info(f"[WIX-RSS] Found {items_found} news items from RSS feed")
+                                    title = title_elem.text or ''
+                                    # Clean CDATA wrapper if present
+                                    title = title.strip()
+                                    if not title or len(title) < 15:
+                                        continue
+
+                                    news_url = link_elem.text or ''
+                                    if not news_url:
+                                        continue
+
+                                    # Parse pubDate (format: "Thu, 22 Jan 2026 12:03:27 GMT")
+                                    date_str = None
+                                    if pubdate_elem is not None and pubdate_elem.text:
+                                        try:
+                                            from email.utils import parsedate_to_datetime
+                                            dt = parsedate_to_datetime(pubdate_elem.text)
+                                            date_str = dt.strftime('%Y-%m-%d')
+                                        except Exception:
+                                            # Try to parse manually
+                                            pubdate_text = pubdate_elem.text
+                                            date_match = re.search(r'(\d{1,2})\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{4})', pubdate_text)
+                                            if date_match:
+                                                day = date_match.group(1).zfill(2)
+                                                month = MONTH_MAP.get(date_match.group(2).lower(), '01')
+                                                year = date_match.group(3)
+                                                date_str = f"{year}-{month}-{day}"
+
+                                    news = {
+                                        'title': clean_news_title(title, news_url),
+                                        'url': news_url,
+                                        'date': date_str,
+                                        'document_type': 'news_release',
+                                        'year': date_str[:4] if date_str else None
+                                    }
+                                    _add_news_item(news_by_url, news, cutoff_date, "WIX-RSS")
+                                    items_found += 1
+                                except Exception as e:
+                                    logger.debug(f"Skipping malformed Wix RSS item: {e}")
+                                    continue
+
+                            logger.info(f"[WIX-RSS] Found {items_found} news items from RSS feed")
         except Exception as e:
             logger.debug(f"Wix RSS feed extraction failed: {e}")
 
@@ -2818,47 +2806,46 @@ async def crawl_html_news_pages(url: str, months: int = 6, custom_news_url: str 
                             # Call Investi API directly
                             investi_api_url = f"https://api.investi.com.au/api/announcements?ticker={ticker}&limit=50&apiKey={api_key}"
 
-                            async with aiohttp.ClientSession() as session:
-                                async with session.get(investi_api_url, timeout=aiohttp.ClientTimeout(total=15)) as resp:
-                                    if resp.status == 200:
-                                        announcements = await resp.json()
-                                        items_found = 0
+                            async with http_session.get(investi_api_url) as resp:
+                                if resp.status == 200:
+                                    announcements = await resp.json()
+                                    items_found = 0
 
-                                        for ann in announcements:
-                                            try:
-                                                title = ann.get('headline', '').strip()
-                                                date_str_raw = ann.get('date', '')  # ISO format: 2026-01-30T10:03:44
-                                                local_path = ann.get('localPath', '')  # /api/announcements/mth/xxx.pdf
+                                    for ann in announcements:
+                                        try:
+                                            title = ann.get('headline', '').strip()
+                                            date_str_raw = ann.get('date', '')  # ISO format: 2026-01-30T10:03:44
+                                            local_path = ann.get('localPath', '')  # /api/announcements/mth/xxx.pdf
 
-                                                if not title or not local_path:
-                                                    continue
-
-                                                # Parse ISO date
-                                                date_str = None
-                                                if date_str_raw:
-                                                    try:
-                                                        dt = datetime.fromisoformat(date_str_raw.replace('Z', '+00:00'))
-                                                        date_str = dt.strftime('%Y-%m-%d')
-                                                    except (ValueError, TypeError):
-                                                        pass
-
-                                                # Build full PDF URL
-                                                pdf_url = f"https://api.investi.com.au{local_path}"
-
-                                                news = {
-                                                    'title': title,
-                                                    'url': pdf_url,
-                                                    'date': date_str,
-                                                    'document_type': 'news_release',
-                                                    'year': date_str[:4] if date_str else None
-                                                }
-                                                _add_news_item(news_by_url, news, cutoff_date, "INVESTI-API")
-                                                items_found += 1
-                                            except Exception as e:
-                                                logger.debug(f"Skipping malformed Investi announcement: {e}")
+                                            if not title or not local_path:
                                                 continue
 
-                                        logger.info(f"[INVESTI-API] Found {items_found} announcements from Investi API")
+                                            # Parse ISO date
+                                            date_str = None
+                                            if date_str_raw:
+                                                try:
+                                                    dt = datetime.fromisoformat(date_str_raw.replace('Z', '+00:00'))
+                                                    date_str = dt.strftime('%Y-%m-%d')
+                                                except (ValueError, TypeError):
+                                                    pass
+
+                                            # Build full PDF URL
+                                            pdf_url = f"https://api.investi.com.au{local_path}"
+
+                                            news = {
+                                                'title': title,
+                                                'url': pdf_url,
+                                                'date': date_str,
+                                                'document_type': 'news_release',
+                                                'year': date_str[:4] if date_str else None
+                                            }
+                                            _add_news_item(news_by_url, news, cutoff_date, "INVESTI-API")
+                                            items_found += 1
+                                        except Exception as e:
+                                            logger.debug(f"Skipping malformed Investi announcement: {e}")
+                                            continue
+
+                                    logger.info(f"[INVESTI-API] Found {items_found} announcements from Investi API")
                 except Exception as e:
                     logger.debug(f"Investi API extraction failed: {e}")
 

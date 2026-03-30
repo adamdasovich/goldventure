@@ -15,7 +15,7 @@ from rest_framework.decorators import api_view, permission_classes, action
 from rest_framework.permissions import IsAuthenticated, AllowAny, IsAuthenticatedOrReadOnly
 from rest_framework.response import Response
 from rest_framework.pagination import PageNumberPagination
-from django.db.models import Q
+from django.db.models import Count, Q
 
 
 class FlexiblePagePagination(PageNumberPagination):
@@ -1277,6 +1277,11 @@ class CompanyViewSet(viewsets.ModelViewSet):
                 queryset = queryset.filter(
                     projects__primary_commodity__in=commodities
                 ).distinct()
+
+        # Annotate counts to avoid N+1 in serializers
+        queryset = queryset.annotate(
+            _project_count=Count('projects', filter=Q(projects__is_active=True))
+        )
 
         # Optimize queries to avoid N+1 - prefetch commonly accessed relations
         # This prevents separate queries for each company's projects/news/documents
@@ -6190,23 +6195,20 @@ class StoreAdminOrderViewSet(viewsets.ModelViewSet):
         today = timezone.now().date()
         thirty_days_ago = today - timedelta(days=30)
 
-        stats = {
-            'total_orders': StoreOrder.objects.count(),
-            'pending_orders': StoreOrder.objects.filter(status='paid').count(),
-            'processing_orders': StoreOrder.objects.filter(status='processing').count(),
-            'shipped_orders': StoreOrder.objects.filter(status='shipped').count(),
-            'delivered_orders': StoreOrder.objects.filter(status='delivered').count(),
-            'total_revenue_cents': StoreOrder.objects.filter(
-                status__in=['paid', 'processing', 'shipped', 'delivered']
-            ).aggregate(total=Sum('total_cents'))['total'] or 0,
-            'last_30_days_orders': StoreOrder.objects.filter(
-                created_at__date__gte=thirty_days_ago
-            ).count(),
-            'last_30_days_revenue_cents': StoreOrder.objects.filter(
-                created_at__date__gte=thirty_days_ago,
-                status__in=['paid', 'processing', 'shipped', 'delivered']
-            ).aggregate(total=Sum('total_cents'))['total'] or 0,
-        }
+        paid_statuses = ['paid', 'processing', 'shipped', 'delivered']
+        agg = StoreOrder.objects.aggregate(
+            total_orders=Count('id'),
+            pending_orders=Count('id', filter=Q(status='paid')),
+            processing_orders=Count('id', filter=Q(status='processing')),
+            shipped_orders=Count('id', filter=Q(status='shipped')),
+            delivered_orders=Count('id', filter=Q(status='delivered')),
+            total_revenue_cents=Sum('total_cents', filter=Q(status__in=paid_statuses)),
+            last_30_days_orders=Count('id', filter=Q(created_at__date__gte=thirty_days_ago)),
+            last_30_days_revenue_cents=Sum('total_cents', filter=Q(
+                created_at__date__gte=thirty_days_ago, status__in=paid_statuses
+            )),
+        )
+        stats = {k: v or 0 for k, v in agg.items()}
 
         # Convert cents to dollars
         stats['total_revenue_dollars'] = stats['total_revenue_cents'] / 100
