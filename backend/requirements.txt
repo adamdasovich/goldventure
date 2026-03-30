@@ -1,4 +1,5 @@
 # Django Core
+# AUDIT 2026-03-30: Django 5.0 EOL April 2025, upgrade to 5.1+ recommended
 Django==5.0.1
 djangorestframework==3.14.0
 django-cors-headers==4.3.1
@@ -11,6 +12,7 @@ psycopg2-binary==2.9.9
 djangorestframework-simplejwt==5.3.1
 
 # AI/ML
+# AUDIT 2026-03-30: anthropic 0.18.1 is very old (current: 0.42+), upgrade recommended
 anthropic==0.18.1
 voyageai>=0.2.0
 

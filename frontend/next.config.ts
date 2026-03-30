@@ -38,6 +38,9 @@ const nextConfig: NextConfig = {
   // Compression
   compress: true,
 
+  // Hide X-Powered-By header
+  poweredByHeader: false,
+
   // Generate ETags for better caching
   generateEtags: true,
 

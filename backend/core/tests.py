@@ -1472,3 +1472,148 @@ class StoreProductPropertyTests(TestCase):
         from core.models import StoreProduct
         product = StoreProduct(inventory_count=0, product_type='digital')
         self.assertTrue(product.in_stock)
+
+
+# ============================================================================
+# STOCK QUOTE EXCHANGE NORMALIZATION TESTS
+# ============================================================================
+
+class NormalizeExchangeTests(TestCase):
+    """Tests for _normalize_exchange helper in stocks view."""
+
+    def test_tsxv_variants(self):
+        from core.views.stocks import _normalize_exchange
+        for exchange in ('TSXV', 'TSX Venture', 'TSX-V', 'TSXVENTURE'):
+            suffix, code = _normalize_exchange(exchange)
+            self.assertEqual(suffix, '.V', f"Failed for {exchange}")
+            self.assertEqual(code, 'TSXV', f"Failed for {exchange}")
+
+    def test_tsx(self):
+        from core.views.stocks import _normalize_exchange
+        suffix, code = _normalize_exchange('TSX')
+        self.assertEqual(suffix, '.TO')
+        self.assertEqual(code, 'TSX')
+
+    def test_cse(self):
+        from core.views.stocks import _normalize_exchange
+        suffix, code = _normalize_exchange('CSE')
+        self.assertEqual(suffix, '.CN')
+        self.assertEqual(code, 'CSE')
+
+    def test_asx(self):
+        from core.views.stocks import _normalize_exchange
+        suffix, code = _normalize_exchange('ASX')
+        self.assertEqual(suffix, '.AX')
+        self.assertEqual(code, 'ASX')
+
+    def test_us_exchanges_no_suffix(self):
+        from core.views.stocks import _normalize_exchange
+        for exchange in ('NYSE', 'NASDAQ', 'OTC'):
+            suffix, code = _normalize_exchange(exchange)
+            self.assertEqual(suffix, '', f"US exchange {exchange} should have no suffix")
+
+    def test_empty_exchange(self):
+        from core.views.stocks import _normalize_exchange
+        suffix, code = _normalize_exchange('')
+        self.assertEqual(suffix, '')
+        self.assertEqual(code, '')
+
+    def test_none_exchange(self):
+        from core.views.stocks import _normalize_exchange
+        suffix, code = _normalize_exchange(None)
+        self.assertEqual(suffix, '')
+
+
+# ============================================================================
+# ONBOARDING HELPER TESTS
+# ============================================================================
+
+class CreateFinancingFlagTests(TestCase):
+    """Tests for _create_financing_flag helper."""
+
+    def test_no_flag_without_keywords(self):
+        from core.views.onboarding import _create_financing_flag
+        from core.models import Company, NewsReleaseFlag
+        company = Company.objects.create(name='Test Corp', is_active=True)
+        _create_financing_flag(company, 'https://example.com/news/1', 'Drill Results Update', '2026-03-25')
+        self.assertEqual(NewsReleaseFlag.objects.count(), 0)
+
+    def test_flag_created_with_financing_keywords(self):
+        from core.views.onboarding import _create_financing_flag
+        from core.models import Company, NewsReleaseFlag
+        company = Company.objects.create(name='Test Corp', is_active=True)
+        _create_financing_flag(
+            company, 'https://example.com/news/2',
+            'Company Announces Private Placement Financing', '2026-03-25'
+        )
+        self.assertEqual(NewsReleaseFlag.objects.count(), 1)
+        flag = NewsReleaseFlag.objects.first()
+        self.assertIn('private placement', flag.detected_keywords)
+
+    def test_no_duplicate_flags(self):
+        from core.views.onboarding import _create_financing_flag
+        from core.models import Company, NewsReleaseFlag
+        company = Company.objects.create(name='Test Corp', is_active=True)
+        url = 'https://example.com/news/3'
+        title = 'Closes Private Placement Offering'
+        _create_financing_flag(company, url, title, '2026-03-25')
+        _create_financing_flag(company, url, title, '2026-03-25')
+        self.assertEqual(NewsReleaseFlag.objects.count(), 1)
+
+
+class SaveProjectsTests(TestCase):
+    """Tests for _save_projects helper."""
+
+    def test_creates_project(self):
+        from core.views.onboarding import _save_projects
+        from core.models import Company, Project
+        company = Company.objects.create(name='Test Corp', is_active=True)
+        _save_projects(company, [{'name': 'Gold Mountain Project', 'location': 'Canada'}])
+        self.assertEqual(Project.objects.filter(company=company).count(), 1)
+        project = Project.objects.get(company=company)
+        self.assertEqual(project.name, 'Gold Mountain Project')
+        self.assertEqual(project.country, 'Canada')
+
+    def test_skips_invalid_project_names(self):
+        from core.views.onboarding import _save_projects
+        from core.models import Company, Project
+        company = Company.objects.create(name='Test Corp', is_active=True)
+        _save_projects(company, [
+            {'name': 'Epworth Au ppm'},  # geochemistry label
+            {'name': 'Valid Project'},
+        ])
+        self.assertEqual(Project.objects.filter(company=company).count(), 1)
+        self.assertEqual(Project.objects.first().name, 'Valid Project')
+
+    def test_updates_existing_project(self):
+        from core.views.onboarding import _save_projects
+        from core.models import Company, Project
+        company = Company.objects.create(name='Test Corp', is_active=True)
+        Project.objects.create(company=company, name='Existing Mine', country='Unknown', primary_commodity='gold')
+        _save_projects(company, [{'name': 'Existing Mine', 'location': 'Canada', 'description': 'Updated desc'}])
+        project = Project.objects.get(company=company, name='Existing Mine')
+        self.assertEqual(project.country, 'Canada')
+        self.assertEqual(project.primary_commodity, 'gold')  # preserved, not overwritten
+
+
+class WebSocketRateLimitTests(TestCase):
+    """Tests for the cache-based rate limiter."""
+
+    def test_allows_under_limit(self):
+        import asyncio
+        from core.consumers import _cache_rate_limit
+        result = asyncio.get_event_loop().run_until_complete(
+            _cache_rate_limit(user_id=999, scope='test', limit=5)
+        )
+        self.assertTrue(result)
+
+    def test_blocks_over_limit(self):
+        import asyncio
+        from core.consumers import _cache_rate_limit
+        loop = asyncio.get_event_loop()
+        for _ in range(10):
+            loop.run_until_complete(_cache_rate_limit(user_id=998, scope='test_block', limit=10))
+        result = loop.run_until_complete(
+            _cache_rate_limit(user_id=998, scope='test_block', limit=10)
+        )
+        self.assertFalse(result)
