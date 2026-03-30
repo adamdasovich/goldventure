@@ -30,12 +30,12 @@ cd /var/www/goldventure && git pull
 systemctl restart celery-worker celery-beat
 
 # 4. Restart Gunicorn (if needed)
-pkill -f gunicorn
-cd backend && source venv/bin/activate
-gunicorn config.wsgi:application --bind 127.0.0.1:8000 --workers 3 --timeout 300 --daemon
+systemctl restart gunicorn
 ```
 
 > **CRITICAL:** Server path is `/var/www/goldventure` (NOT `/var/www/goldventure-platform`). Always deploy immediately after pushing — don't wait for the user to notice.
+>
+> **CRITICAL:** Gunicorn is managed by systemd (`/etc/systemd/system/gunicorn.service`). NEVER use `pkill -f gunicorn` + `gunicorn --daemon` — this creates duplicate processes because systemd auto-restarts the killed process (`Restart=always`). Always use `systemctl restart gunicorn`. For zero-downtime reload: `systemctl reload gunicorn` (sends HUP to master, gracefully replaces workers).
 
 ---
 
@@ -46,8 +46,9 @@ goldventure-platform/
 ├── backend/                    # Django REST API + Celery
 │   ├── config/                 # Settings, celery config
 │   ├── core/                   # Main app
-│   │   ├── models.py          # 85 models (~4,700 lines)
-│   │   ├── views.py           # ViewSets (~8,000 lines)
+│   │   ├── models/            # 89 models split into 8 domain files
+│   │   ├── views/             # ViewSets split into 23 domain files
+│   │   ├── serializers/       # DRF serializers split into 10 domain files
 │   │   ├── tasks.py           # Celery tasks (~1,400 lines)
 │   │   ├── serializers.py     # DRF serializers (~2,100 lines)
 │   │   └── urls.py            # 145+ endpoints
@@ -155,10 +156,11 @@ curl -X POST "https://juniorminingintelligence.com/api/companies/{id}/scrape-new
 
 | Need to... | Look at... |
 |------------|------------|
-| Add news scraping strategy | `website_crawler.py` ~line 1640 |
+| Add news scraping strategy | `mcp_servers/website_crawler.py` ~line 1640 |
 | Modify Celery schedule | `config/settings.py` CELERY_BEAT_SCHEDULE |
-| Add API endpoint | `core/urls.py` + `core/views.py` |
-| Add database model | `core/models.py` |
+| Add API endpoint | `core/urls.py` + `core/views/<domain>.py` |
+| Add database model | `core/models/<domain>.py` + `core/models/__init__.py` (re-export) |
+| Add serializer | `core/serializers/<domain>.py` + `core/serializers/__init__.py` (re-export) |
 | Fix financing detection | `core/tasks.py` ~lines 384, 810 |
 
 ---
@@ -207,6 +209,8 @@ curl -X POST "https://juniorminingintelligence.com/api/companies/{id}/scrape-new
 
 ### Deployment & Operations
 - Always restart Celery after deploying — worker keeps OLD code in memory
+- **Gunicorn is managed by systemd** — NEVER `pkill -f gunicorn` + `gunicorn --daemon`. This creates duplicate processes (systemd has `Restart=always`). Use `systemctl restart gunicorn` or `systemctl reload gunicorn` (graceful zero-downtime reload via HUP)
+- When splitting/refactoring Python files, verify ALL runtime imports are present — `import` at module level in the original file may not carry to split files, causing 500s only on code paths that hit the missing name
 - Check if batch is already running before triggering manual scrapes (distributed lock exists)
 - `company_scraper.py` has its OWN news extraction separate from `website_crawler.py` — fixes must go to the correct file
 - `crawl4ai` has `page_timeout=60000` default — slow sites cause 60s blocks per URL pattern
