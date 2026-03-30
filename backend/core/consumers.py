@@ -38,6 +38,17 @@ User = get_user_model()
 logger = logging.getLogger(__name__)
 
 
+async def _cache_rate_limit(user_id: int, scope: str, limit: int = 10, window: int = 60) -> bool:
+    """Generic cache-based rate limiter. Returns True if within limits."""
+    from django.core.cache import cache
+    key = f'ws_rate:{scope}:{user_id}'
+    count = cache.get(key, 0)
+    if count >= limit:
+        return False
+    cache.set(key, count + 1, window)
+    return True
+
+
 class ForumConsumer(AsyncWebsocketConsumer):
     """
     WebSocket consumer for real-time forum discussions.
@@ -683,6 +694,10 @@ class SessionConsumer(AsyncWebsocketConsumer):
     async def receive(self, text_data):
         """Route incoming messages."""
         try:
+            if not await _cache_rate_limit(self.user.id, f'session:{self.session_id}'):
+                await self.send_error("Rate limit exceeded. Please slow down.")
+                return
+
             data = json.loads(text_data)
             message_type = data.get('type')
 
@@ -1311,6 +1326,10 @@ class SpeakerEventConsumer(AsyncWebsocketConsumer):
     async def receive(self, text_data):
         """Handle incoming WebSocket messages."""
         try:
+            if not await _cache_rate_limit(self.user.id, f'speaker_event:{self.event_id}'):
+                await self.send_error("Rate limit exceeded. Please slow down.")
+                return
+
             data = json.loads(text_data)
             message_type = data.get('type')
 
@@ -1329,7 +1348,6 @@ class SpeakerEventConsumer(AsyncWebsocketConsumer):
             await self.send_error("Invalid JSON")
         except Exception as e:
             logger.error(f"Error in receive: {str(e)}")
-            # SECURITY: Don't expose internal error details to clients
             await self.send_error("An error occurred processing your request")
 
     # Message Handlers
@@ -1662,6 +1680,10 @@ class InquiryConsumer(AsyncWebsocketConsumer):
     async def receive(self, text_data):
         """Handle incoming WebSocket messages."""
         try:
+            if not await _cache_rate_limit(self.user.id, f'inquiry:{self.inquiry_id}'):
+                await self.send_error("Rate limit exceeded. Please slow down.")
+                return
+
             data = json.loads(text_data)
             message_type = data.get('type')
 

@@ -155,6 +155,10 @@ class CompanyViewSet(viewsets.ModelViewSet):
             _project_count=Count('projects', filter=Q(projects__is_active=True))
         )
 
+        # For list views, defer heavy text fields not needed in the list response
+        if self.action == 'list':
+            queryset = queryset.defer('description', 'presentation', 'rejection_reason')
+
         # Optimize queries to avoid N+1 - prefetch commonly accessed relations
         # This prevents separate queries for each company's projects/news/documents
         queryset = queryset.prefetch_related(

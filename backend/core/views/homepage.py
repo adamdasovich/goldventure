@@ -99,15 +99,14 @@ from django.db.models import Count, Q
 def hero_section_data(request):
     """
     Get data for the three hero section cards on the homepage.
-
-    GET /api/hero-section/
-
-    Returns:
-    - upcoming_events: Speaker events within the next 7 days
-    - active_financings: Companies with active financing rounds
-    - featured_property: The currently featured property listing
+    Cached for 2 minutes to reduce DB load on every page visit.
     """
     from django.utils import timezone
+    from django.core.cache import cache
+
+    cached = cache.get('hero_section_data')
+    if cached:
+        return Response(cached)
     from datetime import timedelta
 
     now = timezone.now()
@@ -209,11 +208,13 @@ def hero_section_data(request):
             'is_manual_selection': config.is_manual_selection,
         }
 
-    return Response({
+    response_data = {
         'upcoming_events': events_data,
         'active_financings': financings_data,
         'featured_property': featured_property,
-    })
+    }
+    cache.set('hero_section_data', response_data, 120)  # 2 minutes
+    return Response(response_data)
 
 
 
