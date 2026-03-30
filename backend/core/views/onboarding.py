@@ -597,41 +597,44 @@ def _classify_news(title: str) -> dict:
 
 def _save_scraped_company_data(data: dict, source_url: str, update_existing: bool, user) -> 'Company':
     """Helper function to save scraped data to database."""
-    from core.models import (
-        Company, Project, CompanyPerson, CompanyDocument, CompanyNews, DocumentProcessingJob,
-        NewsRelease, NewsReleaseFlag
-    )
+    from core.models import Company
+    from core.claude_validator import validate_scraped_data
 
-    # Validate scraped data using Claude-powered validation
-    # This filters out invalid projects, news with date-only titles, and garbage descriptions
     try:
-        from core.claude_validator import validate_scraped_data
         data = validate_scraped_data(data, source_url)
     except Exception as e:
         logger.warning(f"Claude validation failed, using raw data: {e}")
 
-    company_data = data.get('company', {})
+    company = _create_or_update_company(data, source_url, update_existing)
+    _save_people(company, data.get('people', []))
+    processing_jobs = _save_documents(company, data.get('documents', []), user)
+    data['_processing_jobs_created'] = processing_jobs
+    _set_presentation_url(company)
+    news_jobs = _save_news(company, data.get('news', []), user)
+    processing_jobs.extend(news_jobs)
+    _save_projects(company, data.get('projects', []))
+    return company
 
+
+def _create_or_update_company(data: dict, source_url: str, update_existing: bool):
+    """Find or create company from scraped data."""
+    from core.models import Company
+
+    company_data = data.get('company', {})
     if not company_data.get('name'):
         raise Exception("No company name extracted - cannot create record")
 
     # Check for existing company
-    existing_company = None
+    existing = None
     if company_data.get('ticker_symbol'):
-        existing_company = Company.objects.filter(
-            ticker_symbol__iexact=company_data['ticker_symbol']
-        ).first()
+        existing = Company.objects.filter(ticker_symbol__iexact=company_data['ticker_symbol']).first()
+    if not existing:
+        existing = Company.objects.filter(name__iexact=company_data['name']).first()
+    if existing and not update_existing:
+        return existing
 
-    if not existing_company:
-        existing_company = Company.objects.filter(
-            name__iexact=company_data['name']
-        ).first()
-
-    if existing_company and not update_existing:
-        return existing_company
-
-    # Prepare company fields with length truncation to prevent DB errors
-    company_fields = {
+    # Prepare fields with length truncation
+    fields = {
         'name': (company_data.get('name') or '')[:200],
         'legal_name': (company_data.get('legal_name') or company_data.get('name') or '')[:200],
         'ticker_symbol': (company_data.get('ticker_symbol') or '')[:10],
@@ -642,174 +645,142 @@ def _save_scraped_company_data(data: dict, source_url: str, update_existing: boo
         'source_website_url': source_url[:200],
         'auto_populated': True,
         'last_scraped_at': timezone.now(),
-        # Contact info
         'ir_contact_email': (company_data.get('ir_contact_email') or '')[:254],
         'general_email': (company_data.get('general_email') or '')[:254],
         'media_email': (company_data.get('media_email') or '')[:254],
         'general_phone': (company_data.get('general_phone') or '')[:30],
         'street_address': (company_data.get('street_address') or '')[:300],
-        # Social media
         'linkedin_url': (company_data.get('linkedin_url') or '')[:200],
         'twitter_url': (company_data.get('twitter_url') or '')[:200],
         'facebook_url': (company_data.get('facebook_url') or '')[:200],
         'youtube_url': (company_data.get('youtube_url') or '')[:200],
     }
 
-    # Map exchange
     exchange_map = {
         'TSX': 'tsx', 'TSXV': 'tsxv', 'TSX-V': 'tsxv',
         'CSE': 'cse', 'OTC': 'otc', 'ASX': 'asx', 'AIM': 'aim',
     }
     if company_data.get('exchange'):
-        company_fields['exchange'] = exchange_map.get(company_data['exchange'].upper(), 'other')
-
-    # Market data
+        fields['exchange'] = exchange_map.get(company_data['exchange'].upper(), 'other')
     if company_data.get('market_cap_usd'):
-        company_fields['market_cap_usd'] = company_data['market_cap_usd']
+        fields['market_cap_usd'] = company_data['market_cap_usd']
     if company_data.get('shares_outstanding'):
-        company_fields['shares_outstanding'] = company_data['shares_outstanding']
+        fields['shares_outstanding'] = company_data['shares_outstanding']
+    fields['status'] = 'public' if fields.get('ticker_symbol') and fields.get('exchange') else 'private'
 
-    # Set status
-    if company_fields.get('ticker_symbol') and company_fields.get('exchange'):
-        company_fields['status'] = 'public'
-    else:
-        company_fields['status'] = 'private'
-
-    # Create or update company
-    if existing_company:
-        for field, value in company_fields.items():
+    if existing:
+        for field, value in fields.items():
             if value:
-                setattr(existing_company, field, value)
-        existing_company.save()
-        company = existing_company
+                setattr(existing, field, value)
+        existing.save()
+        company = existing
     else:
-        company = Company.objects.create(**company_fields)
+        company = Company.objects.create(**fields)
 
-    # Calculate completeness score
     company.calculate_completeness_score()
     company.save()
+    return company
 
-    # Save people
-    for i, person_data in enumerate(data.get('people', [])):
+
+def _save_people(company, people_data: list):
+    """Save scraped people to database."""
+    from core.models import CompanyPerson
+    for i, person in enumerate(people_data):
         CompanyPerson.objects.update_or_create(
             company=company,
-            full_name=person_data.get('full_name', '')[:200],
+            full_name=person.get('full_name', '')[:200],
             defaults={
-                'role_type': person_data.get('role_type', 'executive'),
-                'title': person_data.get('title', '')[:200],
-                'biography': person_data.get('biography', ''),
-                'photo_url': person_data.get('photo_url', '')[:200],
-                'linkedin_url': person_data.get('linkedin_url', '')[:200],
-                'source_url': person_data.get('source_url', '')[:200],
+                'role_type': person.get('role_type', 'executive'),
+                'title': person.get('title', '')[:200],
+                'biography': person.get('biography', ''),
+                'photo_url': person.get('photo_url', '')[:200],
+                'linkedin_url': person.get('linkedin_url', '')[:200],
+                'source_url': person.get('source_url', '')[:200],
                 'extracted_at': timezone.now(),
                 'display_order': i,
             }
         )
 
-    # Save documents and create processing jobs for key document types
-    from core.models import DocumentProcessingJob
+
+def _save_documents(company, documents: list, user) -> list:
+    """Save scraped documents, create processing jobs for key types. Returns list of created jobs."""
+    import re
+    from core.models import CompanyDocument, DocumentProcessingJob
+
     processing_job_types = ['ni43101', 'pea', 'presentation', 'fact_sheet']
-    processing_jobs_created = []
+    jobs_created = []
 
-    # IMPORTANT: Filter documents to only keep the most recent of each type
-    # Old presentations and reports are not useful - investors want current info
-    documents = data.get('documents', [])
-
-    # Sort by year (newest first) if available, then by title containing year
     def get_doc_year(doc):
-        # Try explicit year field
         if doc.get('year'):
             return int(doc['year'])
-        # Try to extract year from title or URL
-        import re
         text = f"{doc.get('title', '')} {doc.get('source_url', '')}"
         years = re.findall(r'20[12]\d', text)
-        if years:
-            return max(int(y) for y in years)
-        return 0
+        return max(int(y) for y in years) if years else 0
 
     documents.sort(key=get_doc_year, reverse=True)
 
-    # Filter to keep only most recent documents by type
-    filtered_docs = []
+    # Keep only most recent of each key type
     seen_types = {'presentation': 0, 'fact_sheet': 0, 'ni43101': 0, 'pea': 0}
-    type_limits = {'presentation': 1, 'fact_sheet': 1, 'ni43101': 2, 'pea': 1}  # How many to keep per type
-
+    type_limits = {'presentation': 1, 'fact_sheet': 1, 'ni43101': 2, 'pea': 1}
+    filtered = []
     for doc in documents:
         doc_type = doc.get('document_type', 'other')
-
         if doc_type in seen_types:
-            # Check if we've reached the limit for this type
             if seen_types[doc_type] < type_limits.get(doc_type, 1):
-                filtered_docs.append(doc)
+                filtered.append(doc)
                 seen_types[doc_type] += 1
         else:
-            # Keep other document types (news_release, financial_statement, etc.)
-            filtered_docs.append(doc)
+            filtered.append(doc)
 
-    logger.info(f"Filtered documents: {len(filtered_docs)} from {len(documents)} total")
-    for doc_type, count in seen_types.items():
-        if count > 0:
-            logger.debug(f"  - {doc_type}: {count} (limit: {type_limits.get(doc_type, 1)})")
+    logger.info(f"Filtered documents: {len(filtered)} from {len(documents)} total")
 
-    for doc_data in filtered_docs:
+    for doc_data in filtered:
         doc_type = doc_data.get('document_type', 'other')
-        source_url = doc_data.get('source_url', '')
-
-        # Skip documents with URLs that are too long (max 200 chars for source_url field)
-        if len(source_url) > 200:
+        doc_url = doc_data.get('source_url', '')
+        if len(doc_url) > 200:
             continue
 
-        # Save document record
         CompanyDocument.objects.update_or_create(
-            company=company,
-            source_url=source_url,
+            company=company, source_url=doc_url,
             defaults={
                 'document_type': doc_type,
-                'title': doc_data.get('title', 'Untitled')[:500],  # Truncate title to max length
+                'title': doc_data.get('title', 'Untitled')[:500],
                 'year': doc_data.get('year'),
                 'extracted_at': timezone.now(),
             }
         )
 
-        # Create document processing job for key document types (if PDF)
-        if doc_type in processing_job_types and source_url and '.pdf' in source_url.lower():
-            # Check if job already exists for this URL
-            existing_job = DocumentProcessingJob.objects.filter(url=source_url).first()
-            if not existing_job:
+        if doc_type in processing_job_types and doc_url and '.pdf' in doc_url.lower():
+            if not DocumentProcessingJob.objects.filter(url=doc_url).exists():
                 job = DocumentProcessingJob.objects.create(
-                    url=source_url,
-                    document_type=doc_type,
-                    company_name=company.name,
-                    status='pending',
-                    created_by=user,
+                    url=doc_url, document_type=doc_type, company_name=company.name,
+                    status='pending', created_by=user,
                 )
-                processing_jobs_created.append({
-                    'id': job.id,
-                    'type': doc_type,
-                    'url': source_url
-                })
+                jobs_created.append({'id': job.id, 'type': doc_type, 'url': doc_url})
 
-    # Store processing jobs info for later use
-    data['_processing_jobs_created'] = processing_jobs_created
+    return jobs_created
 
-    # Set Company.presentation field from first presentation document
-    # This ensures the presentation URL is accessible via the Company model directly
-    presentation_doc = CompanyDocument.objects.filter(
-        company=company,
-        document_type='presentation'
+
+def _set_presentation_url(company):
+    """Set Company.presentation field from most recent presentation document."""
+    from core.models import CompanyDocument
+    doc = CompanyDocument.objects.filter(
+        company=company, document_type='presentation'
     ).order_by('-year', '-created_at').first()
-    if presentation_doc and presentation_doc.source_url and not company.presentation:
-        company.presentation = presentation_doc.source_url
+    if doc and doc.source_url and not company.presentation:
+        company.presentation = doc.source_url
         company.save(update_fields=['presentation'])
-        logger.info(f"Set company.presentation from document: {presentation_doc.source_url}")
 
-    # Save news with classification and document processing
-    from datetime import datetime
-    news_processing_jobs = []
 
-    # FALLBACK: If company_scraper found no news, use website_crawler which has better extraction
-    news_items = data.get('news', [])
+def _save_news(company, news_items: list, user) -> list:
+    """Save scraped news with classification and financing flags. Returns processing jobs."""
+    import re
+    from datetime import datetime, timedelta
+    from core.models import CompanyNews, DocumentProcessingJob, NewsRelease, NewsReleaseFlag
+
+    jobs = []
+
+    # Fallback: use website_crawler if no news from company_scraper
     if not news_items and company and company.website:
         try:
             import asyncio
@@ -818,18 +789,18 @@ def _save_scraped_company_data(data: dict, source_url: str, update_existing: boo
             asyncio.set_event_loop(loop)
             try:
                 crawler_news = loop.run_until_complete(crawl_news_releases(company.website, months=12))
-                news_items = []
-                for item in crawler_news:
-                    news_items.append({
-                        'title': item.get('title', ''),
-                        'source_url': item.get('url', ''),
-                        'publication_date': item.get('date'),
-                    })
+                news_items = [{'title': n.get('title', ''), 'source_url': n.get('url', ''),
+                               'publication_date': n.get('date')} for n in crawler_news]
                 logger.info(f"website_crawler found {len(news_items)} news items")
             finally:
                 loop.close()
         except Exception as e:
             logger.warning(f"website_crawler error: {e}")
+
+    date_only_re = re.compile(
+        r'^(January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},?\s+\d{4}$',
+        re.IGNORECASE
+    )
 
     for news_item in news_items[:50]:
         pub_date = None
@@ -838,46 +809,22 @@ def _save_scraped_company_data(data: dict, source_url: str, update_existing: boo
                 pub_date = datetime.strptime(news_item['publication_date'], '%Y-%m-%d').date()
             except (ValueError, TypeError):
                 pass
-
-        # Skip news without dates
         if not pub_date:
             continue
 
         news_url = news_item.get('source_url', '')
         news_title = news_item.get('title', 'Untitled')[:500]
-
-        # Skip news items with URLs that are too long (max 200 chars for source_url field)
-        if len(news_url) > 200:
-            continue
-
-        # Skip items with very short titles
-        if len(news_title) < 10:
-            continue
-
-        # Skip titles that are just dates (e.g., "January 8, 2026", "December 23, 2025")
-        import re
-        date_only_pattern = re.compile(
-            r'^(January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},?\s+\d{4}$',
-            re.IGNORECASE
-        )
-        if date_only_pattern.match(news_title.strip()):
+        if len(news_url) > 200 or len(news_title) < 10 or date_only_re.match(news_title.strip()):
             continue
 
         is_pdf = '.pdf' in news_url.lower()
-
-        # Classify the news item
         classification = _classify_news(news_title)
 
-        # Create or update the news record with classification data
-        news_record, created = CompanyNews.objects.update_or_create(
-            company=company,
-            source_url=news_url,
+        news_record, _ = CompanyNews.objects.update_or_create(
+            company=company, source_url=news_url,
             defaults={
-                'title': news_title,
-                'publication_date': pub_date,
-                'is_pdf': is_pdf,
-                'news_type': classification['news_type'],
-                'is_material': classification['is_material'],
+                'title': news_title, 'publication_date': pub_date, 'is_pdf': is_pdf,
+                'news_type': classification['news_type'], 'is_material': classification['is_material'],
                 'financing_type': classification['financing_type'],
                 'financing_amount': classification['financing_amount'],
                 'financing_price_per_unit': classification['financing_price_per_unit'],
@@ -886,109 +833,76 @@ def _save_scraped_company_data(data: dict, source_url: str, update_existing: boo
             }
         )
 
-        # Create financing flag for superuser review if financing-related AND recent (within 7 days)
+        # Create financing flag for recent financing news
         if classification['news_type'] == 'financing' and pub_date:
-            # Only flag recent financing news (within 7 days) - older ones are not actionable
-            from datetime import timedelta
-            cutoff_date = timezone.now().date() - timedelta(days=7)
-            is_recent = pub_date >= cutoff_date
+            cutoff = timezone.now().date() - timedelta(days=7)
+            if pub_date >= cutoff:
+                _create_financing_flag(company, news_url, news_title, pub_date)
 
-            if is_recent:
-                financing_keywords = [
-                    'private placement', 'financing', 'funding round', 'capital raise',
-                    'bought deal', 'equity financing', 'debt financing', 'flow-through',
-                    'warrant', 'subscription', 'offering', 'closes', 'tranche',
-                    'non-brokered', 'brokered', 'strategic investment', 'strategic partner'
-                ]
-                title_lower = news_title.lower()
-                detected_keywords = [kw for kw in financing_keywords if kw in title_lower]
-
-                if detected_keywords:
-                    # Import NewsReleaseFlag here to ensure it's available in this scope
-                    from core.models import NewsReleaseFlag
-                    # Create NewsRelease record (needed for NewsReleaseFlag)
-                    news_release, _ = NewsRelease.objects.get_or_create(
-                        company=company,
-                        url=news_url,
-                        defaults={
-                            'title': news_title,
-                            'release_date': pub_date,
-                            'is_material': True,
-                        }
-                    )
-                    # Create the flag
-                    NewsReleaseFlag.objects.get_or_create(
-                        news_release=news_release,
-                        defaults={
-                            'detected_keywords': detected_keywords,
-                            'status': 'pending'
-                        }
-                    )
-
-        # Create DocumentProcessingJob for PDF news releases
+        # Create processing job for PDF news
         if is_pdf and news_url and not news_record.is_processed:
-            existing_job = DocumentProcessingJob.objects.filter(url=news_url).first()
-            if not existing_job:
+            if not DocumentProcessingJob.objects.filter(url=news_url).exists():
                 job = DocumentProcessingJob.objects.create(
-                    url=news_url,
-                    document_type='news_release',
-                    company_name=company.name,
-                    project_name='',
-                    status='pending',
-                    created_by=user,
+                    url=news_url, document_type='news_release', company_name=company.name,
+                    project_name='', status='pending', created_by=user,
                 )
                 news_record.processing_job = job
                 news_record.save(update_fields=['processing_job'])
-                news_processing_jobs.append({
-                    'id': job.id,
-                    'type': 'news_release',
-                    'url': news_url,
-                    'is_material': classification['is_material'],
-                })
+                jobs.append({'id': job.id, 'type': 'news_release', 'url': news_url,
+                            'is_material': classification['is_material']})
 
-    # Add news processing jobs to the list
-    if news_processing_jobs:
-        processing_jobs_created.extend(news_processing_jobs)
+    return jobs
 
-    # Save projects
-    for project_data in data.get('projects', []):
-        if project_data.get('name'):
-            project_name = project_data.get('name', '')[:200]
 
-            # Skip invalid project names (geochemistry data, sample labels, etc.)
-            if _is_invalid_project_name(project_name):
-                continue
+def _create_financing_flag(company, news_url, news_title, pub_date):
+    """Create NewsReleaseFlag for financing-related news."""
+    from core.models import NewsRelease, NewsReleaseFlag
 
-            # Check if project already exists
-            existing_project = Project.objects.filter(
-                company=company,
-                name=project_name
-            ).first()
+    financing_keywords = [
+        'private placement', 'financing', 'funding round', 'capital raise',
+        'bought deal', 'equity financing', 'debt financing', 'flow-through',
+        'warrant', 'subscription', 'offering', 'closes', 'tranche',
+        'non-brokered', 'brokered', 'strategic investment', 'strategic partner'
+    ]
+    detected = [kw for kw in financing_keywords if kw in news_title.lower()]
+    if not detected:
+        return
 
-            if existing_project:
-                # Only update description and location, preserve commodity and stage
-                # (to avoid overwriting manual corrections)
-                if project_data.get('description'):
-                    existing_project.description = (project_data.get('description') or '')[:2000]
-                if project_data.get('location'):
-                    existing_project.country = (project_data.get('location') or '')[:100]
-                existing_project.save()
-            else:
-                # New project - infer commodity and stage from name
-                commodity = _infer_commodity_from_name(project_name)
-                stage = _infer_project_stage_from_name(project_name)
-                # Use 'Unknown' as default country if not provided (NOT NULL constraint)
-                country = (project_data.get('location') or project_data.get('country') or 'Unknown')[:100]
-                Project.objects.create(
-                    company=company,
-                    name=project_name,
-                    description=(project_data.get('description') or '')[:2000],
-                    country=country,
-                    project_stage=stage,
-                    primary_commodity=commodity,
-                )
+    news_release, _ = NewsRelease.objects.get_or_create(
+        company=company, url=news_url,
+        defaults={'title': news_title, 'release_date': pub_date, 'is_material': True}
+    )
+    NewsReleaseFlag.objects.get_or_create(
+        news_release=news_release,
+        defaults={'detected_keywords': detected, 'status': 'pending'}
+    )
 
-    return company
+
+def _save_projects(company, projects_data: list):
+    """Save scraped projects to database."""
+    from core.models import Project
+
+    for project_data in projects_data:
+        name = (project_data.get('name') or '')[:200]
+        if not name or _is_invalid_project_name(name):
+            continue
+
+        existing = Project.objects.filter(company=company, name=name).first()
+        if existing:
+            if project_data.get('description'):
+                existing.description = (project_data.get('description') or '')[:2000]
+            if project_data.get('location'):
+                existing.country = (project_data.get('location') or '')[:100]
+            existing.save()
+        else:
+            country = (project_data.get('location') or project_data.get('country') or 'Unknown')[:100]
+            Project.objects.create(
+                company=company, name=name,
+                description=(project_data.get('description') or '')[:2000],
+                country=country,
+                project_stage=_infer_project_stage_from_name(name),
+                primary_commodity=_infer_commodity_from_name(name),
+            )
 
 
 

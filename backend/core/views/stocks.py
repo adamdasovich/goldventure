@@ -97,6 +97,49 @@ from django.db.models import Count, Q
 # STOCK QUOTE API
 # ============================================================================
 
+# Exchange suffix mapping for Yahoo Finance / Alpha Vantage ticker formats
+_EXCHANGE_SUFFIXES = {
+    'TSXV': '.V', 'TSX VENTURE': '.V', 'TSX-V': '.V', 'TSXVENTURE': '.V',
+    'TSX': '.TO', 'TORONTO': '.TO', 'TORONTO STOCK EXCHANGE': '.TO',
+    'CSE': '.CN', 'CANADIAN SECURITIES EXCHANGE': '.CN',
+    'ASX': '.AX', 'AUSTRALIAN SECURITIES EXCHANGE': '.AX',
+    'AIM': '.L', 'LSE': '.L', 'LONDON STOCK EXCHANGE': '.L',
+}
+# Canonical exchange code mapping
+_EXCHANGE_CODES = {
+    'TSXV': 'TSXV', 'TSX VENTURE': 'TSXV', 'TSX-V': 'TSXV', 'TSXVENTURE': 'TSXV',
+    'TSX': 'TSX', 'TORONTO': 'TSX', 'TORONTO STOCK EXCHANGE': 'TSX',
+    'CSE': 'CSE', 'CANADIAN SECURITIES EXCHANGE': 'CSE',
+    'ASX': 'ASX', 'AUSTRALIAN SECURITIES EXCHANGE': 'ASX',
+}
+
+
+def _normalize_exchange(exchange: str) -> tuple:
+    """Return (yahoo_ticker_suffix, exchange_code) for a given exchange string."""
+    upper = exchange.upper() if exchange else ''
+    suffix = _EXCHANGE_SUFFIXES.get(upper, '')
+    code = _EXCHANGE_CODES.get(upper, upper)
+    return suffix, code
+
+
+def _build_quote_response(company, price, change, change_pct, volume, date_str, source, cache_ttl=300):
+    """Build, cache, and return a stock quote response."""
+    response_data = {
+        'ticker': company.ticker_symbol,
+        'exchange': company.exchange,
+        'price': price,
+        'change': change,
+        'change_percent': change_pct,
+        'volume': volume,
+        'date': date_str,
+        'source': source,
+        'cached': False,
+    }
+    cache_key = f'stock_quote_{company.id}'
+    cache.set(cache_key, response_data, cache_ttl)
+    return Response(response_data)
+
+
 def _get_stockwatch_quote(ticker_symbol: str, exchange: str) -> dict:
     """
     Fetch real-time stock quote from StockWatch.com for Canadian stocks.
@@ -270,37 +313,19 @@ def _get_yahoo_finance_quote(ticker_symbol: str) -> dict:
 def stock_quote(request, company_id):
     """
     Get real-time stock quote for a company.
-
-    GET /api/companies/<company_id>/stock-quote/
-
-    Fetches stock data with the following priority:
-    1. In-memory cache (5 minute TTL)
-    2. Yahoo Finance (more up-to-date for Canadian stocks)
-    3. StockWatch.com (fallback for Canadian CSE/TSXV/TSX stocks)
-    4. Alpha Vantage (fallback for non-CSE stocks - CSE not supported)
-    5. Database (last resort fallback)
-
-    Returns only essential data (ticker, price, change) to minimize payload.
+    Tries: cache -> Yahoo Finance -> StockWatch -> Alpha Vantage -> database.
     """
     from datetime import date
 
-    # Get company
     try:
         company = Company.objects.get(id=company_id)
     except Company.DoesNotExist:
-        return Response(
-            {'error': 'Company not found'},
-            status=status.HTTP_404_NOT_FOUND
-        )
+        return Response({'error': 'Company not found'}, status=status.HTTP_404_NOT_FOUND)
 
-    # Validate ticker symbol exists
     if not company.ticker_symbol:
-        return Response(
-            {'error': 'No ticker symbol configured for this company'},
-            status=status.HTTP_400_BAD_REQUEST
-        )
+        return Response({'error': 'No ticker symbol configured for this company'}, status=status.HTTP_400_BAD_REQUEST)
 
-    # Check in-memory cache first (5 minute TTL)
+    # Check cache first (5 minute TTL)
     cache_key = f'stock_quote_{company_id}'
     cached_data = cache.get(cache_key)
     if cached_data:
@@ -308,182 +333,52 @@ def stock_quote(request, company_id):
         return Response(cached_data)
 
     today = date.today()
-
-    # Build ticker symbol for Yahoo Finance / Alpha Vantage
     ticker = company.ticker_symbol
-    exchange_upper = company.exchange.upper() if company.exchange else ''
+    suffix, exchange_code = _normalize_exchange(company.exchange)
+    api_ticker = f"{ticker}{suffix}" if suffix else ticker
 
-    # Normalize exchange variations to standard codes
-    if exchange_upper in ('TSXV', 'TSX VENTURE', 'TSX-V', 'TSXVENTURE'):
-        yahoo_ticker = f"{ticker}.V"
-        av_ticker = f"{ticker}.V"
-        exchange_code = 'TSXV'
-    elif exchange_upper in ('TSX', 'TORONTO', 'TORONTO STOCK EXCHANGE'):
-        yahoo_ticker = f"{ticker}.TO"
-        av_ticker = f"{ticker}.TO"
-        exchange_code = 'TSX'
-    elif exchange_upper in ('CSE', 'CANADIAN SECURITIES EXCHANGE'):
-        yahoo_ticker = f"{ticker}.CN"
-        av_ticker = f"{ticker}.CN"
-        exchange_code = 'CSE'
-    elif exchange_upper in ('ASX', 'AUSTRALIAN SECURITIES EXCHANGE'):
-        yahoo_ticker = f"{ticker}.AX"
-        av_ticker = f"{ticker}.AX"
-        exchange_code = 'ASX'
-    elif exchange_upper in ('AIM', 'LSE', 'LONDON STOCK EXCHANGE'):
-        yahoo_ticker = f"{ticker}.L"
-        av_ticker = f"{ticker}.L"
-        exchange_code = exchange_upper
-    elif exchange_upper in ('NYSE', 'NASDAQ', 'AMEX', 'OTC', 'OTCQX', 'OTCQB'):
-        yahoo_ticker = ticker  # US stocks don't need suffix
-        av_ticker = ticker
-        exchange_code = exchange_upper
-    else:
-        yahoo_ticker = ticker
-        av_ticker = ticker
-        exchange_code = exchange_upper
+    logger.debug(f"Stock quote lookup: {company.name} - exchange='{exchange_code}' ticker='{api_ticker}'")
 
-    logger.debug(
-        f"Stock quote lookup: {company.name} - raw exchange='{company.exchange}' "
-        f"normalized='{exchange_code}' yahoo_ticker='{yahoo_ticker}'"
-    )
+    # 1. Yahoo Finance
+    result = _get_yahoo_finance_quote(api_ticker)
+    if 'error' not in result and result.get('price', 0) > 0:
+        return _build_quote_response(company, result['price'], result['change'],
+                                     result['change_percent'], result['volume'], str(today), 'yahoo_finance')
 
-    # Try Yahoo Finance first (more up-to-date for Canadian stocks)
-    yahoo_result = _get_yahoo_finance_quote(yahoo_ticker)
+    # 2. StockWatch (Canadian stocks only)
+    if exchange_code in ('CSE', 'TSXV', 'TSX'):
+        result = _get_stockwatch_quote(ticker, exchange_code)
+        if 'error' not in result and result.get('price', 0) > 0:
+            return _build_quote_response(company, result['price'], result['change'],
+                                         result['change_percent'], result['volume'], str(today), 'stockwatch')
 
-    if 'error' not in yahoo_result and yahoo_result.get('price', 0) > 0:
-        response_data = {
-            'ticker': company.ticker_symbol,
-            'exchange': company.exchange,
-            'price': yahoo_result['price'],
-            'change': yahoo_result['change'],
-            'change_percent': yahoo_result['change_percent'],
-            'volume': yahoo_result['volume'],
-            'date': str(today),
-            'source': 'yahoo_finance',
-            'cached': False
-        }
-
-        # Cache for 5 minutes
-        cache.set(cache_key, response_data, 300)
-        return Response(response_data)
-
-    # Yahoo Finance failed - try StockWatch for Canadian stocks (CSE, TSXV, TSX)
-    if exchange_code in ['CSE', 'TSXV', 'TSX']:
-        stockwatch_result = _get_stockwatch_quote(ticker, exchange_code)
-
-        if 'error' not in stockwatch_result and stockwatch_result.get('price', 0) > 0:
-            response_data = {
-                'ticker': company.ticker_symbol,
-                'exchange': company.exchange,
-                'price': stockwatch_result['price'],
-                'change': stockwatch_result['change'],
-                'change_percent': stockwatch_result['change_percent'],
-                'volume': stockwatch_result['volume'],
-                'date': str(today),
-                'source': 'stockwatch',
-                'cached': False
-            }
-
-            # Cache for 5 minutes
-            cache.set(cache_key, response_data, 300)
-            return Response(response_data)
-
-    # StockWatch failed or not Canadian - try Alpha Vantage as fallback
-    # Note: Alpha Vantage does NOT support CSE stocks
+    # 3. Alpha Vantage (not CSE)
     if exchange_code != 'CSE':
         from mcp_servers.alpha_vantage import AlphaVantageServer
-
-        alpha_vantage = AlphaVantageServer(company_id=company_id)
-        quote_result = alpha_vantage._get_quote(av_ticker)
-
+        quote_result = AlphaVantageServer(company_id=company_id)._get_quote(api_ticker)
         if 'error' not in quote_result and quote_result.get('price', 0) > 0:
-            response_data = {
-                'ticker': company.ticker_symbol,
-                'exchange': company.exchange,
-                'price': quote_result.get('price', 0),
-                'change': quote_result.get('change', 0),
-                'change_percent': float(quote_result.get('change_percent', '0')),
-                'volume': quote_result.get('volume', 0),
-                'date': quote_result.get('latest_trading_day', str(today)),
-                'source': 'alpha_vantage',
-                'cached': False
-            }
+            return _build_quote_response(
+                company, quote_result.get('price', 0), quote_result.get('change', 0),
+                float(quote_result.get('change_percent', '0')), quote_result.get('volume', 0),
+                quote_result.get('latest_trading_day', str(today)), 'alpha_vantage')
 
-            # Cache for 5 minutes
-            cache.set(cache_key, response_data, 300)
-            return Response(response_data)
-
-    # All external APIs failed - try database as last resort
-    market_data = MarketData.objects.filter(
-        company=company,
-        date=today
-    ).first()
-
+    # 4. Database fallback
+    market_data = MarketData.objects.filter(company=company, date=today).first()
     if market_data:
-        # Calculate change from previous day
-        yesterday_data = MarketData.objects.filter(
-            company=company,
-            date__lt=today
-        ).order_by('-date').first()
+        yesterday = MarketData.objects.filter(company=company, date__lt=today).order_by('-date').first()
+        change, change_pct = 0.0, 0.0
+        if yesterday and yesterday.close_price and yesterday.close_price > 0:
+            change = float(market_data.close_price - yesterday.close_price)
+            change_pct = (change / float(yesterday.close_price)) * 100
+        return _build_quote_response(
+            company, float(market_data.close_price), round(change, 4),
+            round(change_pct, 2), market_data.volume, str(market_data.date),
+            'database_fallback', cache_ttl=CacheTTL.SHORT)
 
-        change = 0.0
-        change_percent = 0.0
-        if yesterday_data and yesterday_data.close_price:
-            change = float(market_data.close_price - yesterday_data.close_price)
-            if yesterday_data.close_price > 0:
-                change_percent = (change / float(yesterday_data.close_price)) * 100
-
-        response_data = {
-            'ticker': company.ticker_symbol,
-            'exchange': company.exchange,
-            'price': float(market_data.close_price),
-            'change': round(change, 4),
-            'change_percent': round(change_percent, 2),
-            'volume': market_data.volume,
-            'date': str(market_data.date),
-            'source': 'database_fallback',
-            'cached': False
-        }
-
-        # Cache for 2 minutes (shorter since it's fallback data)
-        cache.set(cache_key, response_data, CacheTTL.SHORT)
-        return Response(response_data)
-
-    # No data available from any source
-    logger.warning(
-        f"Stock quote failed for {company.name} ({company.ticker_symbol}:{company.exchange}). "
-        f"Yahoo: {yahoo_result.get('error', 'N/A')}"
-    )
+    # No data from any source
+    logger.warning(f"Stock quote failed for {company.name} ({ticker}:{exchange_code})")
     return Response(
-        {
-            'error': 'Unable to fetch stock data',
-            'ticker': company.ticker_symbol,
-            'exchange': company.exchange,
-            'details': f"Try setting ticker to format like 'XYZ.V' for TSXV or 'XYZ.TO' for TSX"
-        },
+        {'error': 'Unable to fetch stock data', 'ticker': ticker, 'exchange': company.exchange},
         status=status.HTTP_503_SERVICE_UNAVAILABLE
     )
-
-
-# ============================================================================
-# CLAUDE CHAT API
-# ============================================================================
-
-import re
-
-# Prompt injection patterns to detect and block
-PROMPT_INJECTION_PATTERNS = [
-    r'ignore\s+(all\s+)?(previous|prior|above)\s+(instructions|prompts|rules)',
-    r'disregard\s+(all\s+)?(previous|prior|above)',
-    r'forget\s+(all\s+)?(previous|prior|above|your)\s+(instructions|rules|context)',
-    r'new\s+instructions?\s*:',
-    r'system\s*:\s*you\s+are',
-    r'you\s+are\s+now\s+a',
-    r'act\s+as\s+if\s+you\s+(are|were)',
-    r'pretend\s+(you\s+)?(are|were|to\s+be)',
-    r'override\s+(your\s+)?(instructions|rules|guidelines)',
-    r'(reveal|show|output|print)\s+(your\s+)?(system\s+)?prompt',
-    r'what\s+(is|are)\s+your\s+(system\s+)?prompt',
-]
 
