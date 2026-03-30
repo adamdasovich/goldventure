@@ -3,6 +3,8 @@ API Views for GoldVenture Platform
 """
 
 import logging
+import requests
+from django.conf import settings
 from datetime import datetime
 import json
 from django.core.cache import cache

@@ -3,6 +3,7 @@ API Views for GoldVenture Platform
 """
 
 import logging
+import requests
 import re
 
 from rest_framework import viewsets, status, permissions

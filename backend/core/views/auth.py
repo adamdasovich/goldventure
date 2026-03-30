@@ -3,6 +3,8 @@ API Views for GoldVenture Platform
 """
 
 import logging
+from django.contrib.auth import authenticate
+from rest_framework_simplejwt.tokens import RefreshToken
 
 from rest_framework import viewsets, status, permissions
 
