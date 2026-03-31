@@ -5,6 +5,7 @@ API Views for GoldVenture Platform
 import logging
 import requests
 import re
+import anthropic
 
 from rest_framework import viewsets, status, permissions
 
@@ -211,8 +212,23 @@ def claude_chat(request):
 
         return Response(result)
 
+    except anthropic.APIStatusError as e:
+        logger.error(f"Claude chat API error for user {request.user.id}: {e.status_code} {str(e)}")
+        if e.status_code == 529:
+            return Response(
+                {'error': 'The AI service is temporarily busy. Please try again in a moment.'},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE
+            )
+        if e.status_code == 429:
+            return Response(
+                {'error': 'AI rate limit reached. Please wait a minute and try again.'},
+                status=status.HTTP_429_TOO_MANY_REQUESTS
+            )
+        return Response(
+            {'error': 'An error occurred processing your request. Please try again.'},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
     except Exception as e:
-        # SECURITY: Log full error but return generic message (don't leak API errors)
         logger.error(f"Claude chat error for user {request.user.id}: {str(e)}")
         return Response(
             {'error': 'An error occurred processing your request. Please try again.'},
@@ -315,6 +331,22 @@ Be concise but thorough. Cite data sources and dates when relevant."""
         return Response(
             {'error': 'Company not found'},
             status=status.HTTP_404_NOT_FOUND
+        )
+    except anthropic.APIStatusError as e:
+        logger.error(f"company_chat API error for company {company_id}: {e.status_code} {str(e)}")
+        if e.status_code == 529:
+            return Response(
+                {'error': 'The AI service is temporarily busy. Please try again in a moment.'},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE
+            )
+        if e.status_code == 429:
+            return Response(
+                {'error': 'AI rate limit reached. Please wait a minute and try again.'},
+                status=status.HTTP_429_TOO_MANY_REQUESTS
+            )
+        return Response(
+            {'error': 'An error occurred processing your request. Please try again.'},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
     except Exception as e:
         logger.error(f"company_chat error for company {company_id}: {str(e)}")
