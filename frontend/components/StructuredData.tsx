@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 interface StructuredDataProps {
   data: Record<string, any>;
@@ -16,26 +16,27 @@ export default function StructuredData({ data }: StructuredDataProps) {
 // Organization Schema for homepage
 export function OrganizationSchema() {
   const schema = {
-    '@context': 'https://schema.org',
-    '@type': 'Organization',
-    name: 'Junior Gold Mining Intelligence',
-    url: 'https://juniorminingintelligence.com',
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    name: "Junior Gold Mining Intelligence",
+    url: "https://juniorminingintelligence.com",
     logo: {
-      '@type': 'ImageObject',
-      url: 'https://juniorminingintelligence.com/android-chrome-512x512.png',
+      "@type": "ImageObject",
+      url: "https://juniorminingintelligence.com/android-chrome-512x512.png",
       width: 512,
       height: 512,
     },
-    description: 'AI-powered platform for analyzing and discovering junior gold mining companies with real-time data, resource estimates, and expert insights.',
+    description:
+      "AI-powered platform for analyzing and discovering junior gold mining companies with real-time data, resource estimates, and expert insights.",
     sameAs: [
       // Add social media profiles here
       // 'https://twitter.com/jrgoldmining',
       // 'https://linkedin.com/company/junior-gold-mining-intelligence',
     ],
     contactPoint: {
-      '@type': 'ContactPoint',
-      contactType: 'Customer Service',
-      availableLanguage: 'English',
+      "@type": "ContactPoint",
+      contactType: "Customer Service",
+      availableLanguage: "English",
     },
   };
 
@@ -61,20 +62,22 @@ export function CompanySchema({
   description,
 }: CompanySchemaProps) {
   const schema = {
-    '@context': 'https://schema.org',
-    '@type': 'Corporation',
+    "@context": "https://schema.org",
+    "@type": "Corporation",
     name,
     tickerSymbol,
-    description: description || `${name} is a junior gold mining and exploration company listed on ${exchange} under ticker ${tickerSymbol}.`,
+    description:
+      description ||
+      `${name} is a junior gold mining and exploration company listed on ${exchange} under ticker ${tickerSymbol}.`,
     ...(website && { url: website }),
     ...(headquarters && {
       address: {
-        '@type': 'PostalAddress',
+        "@type": "PostalAddress",
         addressLocality: headquarters,
       },
     }),
-    industry: 'Mining',
-    sector: 'Precious Metals Exploration',
+    industry: "Mining",
+    sector: "Precious Metals Exploration",
   };
 
   return <StructuredData data={schema} />;
@@ -97,12 +100,14 @@ export function MiningProjectSchema({
   description,
 }: ProjectSchemaProps) {
   const schema = {
-    '@context': 'https://schema.org',
-    '@type': 'Place',
+    "@context": "https://schema.org",
+    "@type": "Place",
     name,
-    description: description || `${name} is a ${commodity} exploration project operated by ${companyName}.`,
+    description:
+      description ||
+      `${name} is a ${commodity} exploration project operated by ${companyName}.`,
     ...(location && { address: location }),
-    additionalType: 'Mining Project',
+    additionalType: "Mining Project",
   };
 
   return <StructuredData data={schema} />;
@@ -125,21 +130,21 @@ export function NewsArticleSchema({
   summary,
 }: NewsArticleSchemaProps) {
   const schema = {
-    '@context': 'https://schema.org',
-    '@type': 'NewsArticle',
+    "@context": "https://schema.org",
+    "@type": "NewsArticle",
     headline,
     datePublished,
     url,
     author: {
-      '@type': 'Organization',
+      "@type": "Organization",
       name: companyName,
     },
     publisher: {
-      '@type': 'Organization',
-      name: 'Junior Gold Mining Intelligence',
+      "@type": "Organization",
+      name: "Junior Gold Mining Intelligence",
       logo: {
-        '@type': 'ImageObject',
-        url: 'https://juniorminingintelligence.com/android-chrome-512x512.png',
+        "@type": "ImageObject",
+        url: "https://juniorminingintelligence.com/android-chrome-512x512.png",
         width: 512,
         height: 512,
       },
@@ -162,14 +167,67 @@ interface BreadcrumbListSchemaProps {
 
 export function BreadcrumbListSchema({ items }: BreadcrumbListSchemaProps) {
   const schema = {
-    '@context': 'https://schema.org',
-    '@type': 'BreadcrumbList',
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
     itemListElement: items.map((item, index) => ({
-      '@type': 'ListItem',
+      "@type": "ListItem",
       position: index + 1,
       name: item.name,
       item: item.url,
     })),
+  };
+
+  return <StructuredData data={schema} />;
+}
+
+// Product Schema for store items
+interface ProductSchemaProps {
+  name: string;
+  description: string;
+  slug: string;
+  priceDollars: number;
+  imageUrl?: string;
+  inStock: boolean;
+  sku?: string;
+  categoryName?: string;
+}
+
+export function ProductSchema({
+  name,
+  description,
+  slug,
+  priceDollars,
+  imageUrl,
+  inStock,
+  sku,
+  categoryName,
+}: ProductSchemaProps) {
+  const schema = {
+    "@context": "https://schema.org",
+    "@type": "Product",
+    name,
+    description,
+    url: `https://juniorminingintelligence.com/store/product/${slug}`,
+    ...(imageUrl && { image: imageUrl }),
+    ...(sku && { sku }),
+    ...(categoryName && { category: categoryName }),
+    brand: {
+      "@type": "Organization",
+      name: "Junior Mining Intelligence",
+    },
+    offers: {
+      "@type": "Offer",
+      url: `https://juniorminingintelligence.com/store/product/${slug}`,
+      priceCurrency: "CAD",
+      price: priceDollars.toFixed(2),
+      availability: inStock
+        ? "https://schema.org/InStock"
+        : "https://schema.org/OutOfStock",
+      seller: {
+        "@type": "Organization",
+        name: "Junior Mining Intelligence",
+      },
+    },
   };
 
   return <StructuredData data={schema} />;
@@ -184,16 +242,21 @@ interface DatasetSchemaProps {
 
 export function DatasetSchema({ name, description, url }: DatasetSchemaProps) {
   const schema = {
-    '@context': 'https://schema.org',
-    '@type': 'Dataset',
+    "@context": "https://schema.org",
+    "@type": "Dataset",
     name,
     description,
     url,
     creator: {
-      '@type': 'Organization',
-      name: 'Junior Gold Mining Intelligence',
+      "@type": "Organization",
+      name: "Junior Gold Mining Intelligence",
     },
-    keywords: ['gold mining', 'mineral exploration', 'mining data', 'resource estimates'],
+    keywords: [
+      "gold mining",
+      "mineral exploration",
+      "mining data",
+      "resource estimates",
+    ],
   };
 
   return <StructuredData data={schema} />;

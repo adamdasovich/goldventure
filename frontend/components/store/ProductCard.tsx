@@ -1,23 +1,28 @@
-'use client';
+"use client";
 
-import React, { useState } from 'react';
-import Link from 'next/link';
-import { useCart } from '@/contexts/CartContext';
-import { Button } from '@/components/ui/Button';
-import { ProductBadges } from './ProductBadges';
-import type { StoreProductList } from '@/types/api';
+import React, { useState } from "react";
+import Link from "next/link";
+import Image from "next/image";
+import { useCart } from "@/contexts/CartContext";
+import { Button } from "@/components/ui/Button";
+import { ProductBadges } from "./ProductBadges";
+import type { StoreProductList } from "@/types/api";
 
 interface ProductCardProps {
   product: StoreProductList;
   showQuickAdd?: boolean;
 }
 
-export function ProductCard({ product, showQuickAdd = true }: ProductCardProps) {
+export function ProductCard({
+  product,
+  showQuickAdd = true,
+}: ProductCardProps) {
   const { addItem, isLoading } = useCart();
   const [isAdding, setIsAdding] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
 
-  const imageUrl = product.primary_image?.image_url || '/placeholder-product.png';
+  const imageUrl =
+    product.primary_image?.image_url || "/placeholder-product.png";
   const isOnSale = product.is_on_sale && product.compare_at_price_cents;
   // High-value items (over $5000) show "Inquire" instead of "Add to Cart"
   const requiresInquiry = product.price_cents >= 500000;
@@ -32,7 +37,7 @@ export function ProductCard({ product, showQuickAdd = true }: ProductCardProps) 
       setIsAdding(true);
       await addItem(product.id);
     } catch (error) {
-      console.error('Failed to add to cart:', error);
+      console.error("Failed to add to cart:", error);
     } finally {
       setIsAdding(false);
     }
@@ -48,10 +53,12 @@ export function ProductCard({ product, showQuickAdd = true }: ProductCardProps) 
       <div className="glass-card rounded-xl overflow-hidden transition-all duration-300 hover:shadow-gold hover:border-gold-500/30">
         {/* Image Container */}
         <div className="relative aspect-square overflow-hidden bg-slate-800/50">
-          <img
+          <Image
             src={imageUrl}
             alt={product.name}
-            className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+            fill
+            sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 25vw"
+            className="object-cover transition-transform duration-500 group-hover:scale-105"
           />
 
           {/* Badges Overlay */}
@@ -72,7 +79,7 @@ export function ProductCard({ product, showQuickAdd = true }: ProductCardProps) 
           {showQuickAdd && product.in_stock && !requiresInquiry && (
             <div
               className={`absolute bottom-0 left-0 right-0 p-3 bg-gradient-to-t from-slate-900 to-transparent transition-opacity duration-300 ${
-                isHovered ? 'opacity-100' : 'opacity-0'
+                isHovered ? "opacity-100" : "opacity-0"
               }`}
             >
               <Button
@@ -82,7 +89,7 @@ export function ProductCard({ product, showQuickAdd = true }: ProductCardProps) 
                 onClick={handleQuickAdd}
                 disabled={isAdding || isLoading}
               >
-                {isAdding ? 'Adding...' : 'Add to Cart'}
+                {isAdding ? "Adding..." : "Add to Cart"}
               </Button>
             </div>
           )}
@@ -91,7 +98,7 @@ export function ProductCard({ product, showQuickAdd = true }: ProductCardProps) 
           {showQuickAdd && product.in_stock && requiresInquiry && (
             <div
               className={`absolute bottom-0 left-0 right-0 p-3 bg-gradient-to-t from-slate-900 to-transparent transition-opacity duration-300 ${
-                isHovered ? 'opacity-100' : 'opacity-0'
+                isHovered ? "opacity-100" : "opacity-0"
               }`}
             >
               <Button variant="secondary" size="sm" className="w-full">

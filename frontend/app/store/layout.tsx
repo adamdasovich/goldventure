@@ -1,10 +1,40 @@
-import { Metadata } from 'next';
-import { TheTicker } from '@/components/store/TheTicker';
-import { StoreHeader } from '@/components/store/StoreHeader';
+import { Metadata } from "next";
+import { TheTicker } from "@/components/store/TheTicker";
+import { StoreHeader } from "@/components/store/StoreHeader";
 
 export const metadata: Metadata = {
-  title: 'Store',
-  description: 'Browse rare specimens, field gear, and educational resources for gold mining enthusiasts.',
+  title: "Mining Store - Rare Specimens, Field Gear & Resources",
+  description:
+    "Shop rare mineral specimens, prospecting field gear, and educational resources for gold mining enthusiasts. Authenticated mining collectibles from junior mining properties.",
+  keywords: [
+    "mining specimens",
+    "gold specimens",
+    "mineral specimens for sale",
+    "prospecting gear",
+    "mining field equipment",
+    "mineral collecting",
+    "gold nuggets",
+    "mining books",
+    "geological specimens",
+    "mining memorabilia",
+  ],
+  openGraph: {
+    title: "Mining Store - Rare Specimens & Field Gear",
+    description:
+      "Shop rare mineral specimens, prospecting gear, and educational resources for mining enthusiasts.",
+    type: "website",
+    images: ["/og-image.png"],
+    url: "https://juniorminingintelligence.com/store",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Mining Store - Rare Specimens & Field Gear",
+    description:
+      "Shop rare mineral specimens, prospecting gear, and educational resources for mining enthusiasts.",
+  },
+  alternates: {
+    canonical: "https://juniorminingintelligence.com/store",
+  },
 };
 
 export default function StoreLayout({

@@ -1,8 +1,9 @@
-'use client';
+"use client";
 
-import { Card } from '@/components/ui/Card';
-import { Badge } from '@/components/ui/Badge';
-import { PropertyListingListItem } from '@/types/property';
+import Image from "next/image";
+import { Card } from "@/components/ui/Card";
+import { Badge } from "@/components/ui/Badge";
+import { PropertyListingListItem } from "@/types/property";
 
 interface PropertyCardProps {
   listing: PropertyListingListItem;
@@ -10,59 +11,81 @@ interface PropertyCardProps {
 
 export function PropertyCard({ listing }: PropertyCardProps) {
   const formatPrice = (price: number | null, currency: string) => {
-    if (!price) return 'Contact for Price';
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: currency || 'CAD',
+    if (!price) return "Contact for Price";
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: currency || "CAD",
       maximumFractionDigits: 0,
     }).format(price);
   };
 
   const formatNumber = (num: number) => {
-    return new Intl.NumberFormat('en-US').format(num);
+    return new Intl.NumberFormat("en-US").format(num);
   };
 
   const getMineralColor = (mineral: string) => {
     const colors: Record<string, string> = {
-      gold: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',
-      silver: 'bg-slate-400/20 text-slate-300 border-slate-400/30',
-      copper: 'bg-orange-500/20 text-orange-400 border-orange-500/30',
-      lithium: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
-      uranium: 'bg-green-500/20 text-green-400 border-green-500/30',
-      nickel: 'bg-teal-500/20 text-teal-400 border-teal-500/30',
-      zinc: 'bg-indigo-500/20 text-indigo-400 border-indigo-500/30',
+      gold: "bg-yellow-500/20 text-yellow-400 border-yellow-500/30",
+      silver: "bg-slate-400/20 text-slate-300 border-slate-400/30",
+      copper: "bg-orange-500/20 text-orange-400 border-orange-500/30",
+      lithium: "bg-blue-500/20 text-blue-400 border-blue-500/30",
+      uranium: "bg-green-500/20 text-green-400 border-green-500/30",
+      nickel: "bg-teal-500/20 text-teal-400 border-teal-500/30",
+      zinc: "bg-indigo-500/20 text-indigo-400 border-indigo-500/30",
     };
-    return colors[mineral] || 'bg-slate-500/20 text-slate-400 border-slate-500/30';
+    return (
+      colors[mineral] || "bg-slate-500/20 text-slate-400 border-slate-500/30"
+    );
   };
 
   const getStatusBadge = (status: string) => {
     const statusStyles: Record<string, string> = {
-      active: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
-      under_contract: 'bg-amber-500/20 text-amber-400 border-amber-500/30',
-      sold: 'bg-red-500/20 text-red-400 border-red-500/30',
-      pending: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
+      active: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30",
+      under_contract: "bg-amber-500/20 text-amber-400 border-amber-500/30",
+      sold: "bg-red-500/20 text-red-400 border-red-500/30",
+      pending: "bg-blue-500/20 text-blue-400 border-blue-500/30",
     };
-    return statusStyles[status] || 'bg-slate-500/20 text-slate-400 border-slate-500/30';
+    return (
+      statusStyles[status] ||
+      "bg-slate-500/20 text-slate-400 border-slate-500/30"
+    );
   };
 
   return (
     <Card
       className="group cursor-pointer hover:border-gold-500/50 transition-all duration-300 overflow-hidden"
-      onClick={() => window.location.href = `/properties/${listing.slug}`}
+      onClick={() => (window.location.href = `/properties/${listing.slug}`)}
     >
       {/* Image */}
       <div className="relative h-48 bg-slate-800 overflow-hidden">
         {listing.hero_image ? (
-          <img
+          <Image
             src={listing.hero_image}
             alt={listing.title}
-            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+            fill
+            sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+            className="object-cover group-hover:scale-105 transition-transform duration-300"
           />
         ) : (
           <div className="w-full h-full flex items-center justify-center bg-slate-800">
-            <svg className="w-16 h-16 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+            <svg
+              className="w-16 h-16 text-slate-600"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={1}
+                d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
+              />
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={1}
+                d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"
+              />
             </svg>
           </div>
         )}
@@ -70,22 +93,28 @@ export function PropertyCard({ listing }: PropertyCardProps) {
         {/* Featured Badge */}
         {listing.is_featured && (
           <div className="absolute top-3 left-3">
-            <Badge variant="gold" className="text-xs">Featured</Badge>
+            <Badge variant="gold" className="text-xs">
+              Featured
+            </Badge>
           </div>
         )}
 
         {/* Status Badge */}
-        {listing.status !== 'active' && (
+        {listing.status !== "active" && (
           <div className="absolute top-3 right-3">
-            <span className={`px-2 py-1 rounded-full text-xs font-medium border ${getStatusBadge(listing.status)}`}>
-              {listing.status.replace('_', ' ').toUpperCase()}
+            <span
+              className={`px-2 py-1 rounded-full text-xs font-medium border ${getStatusBadge(listing.status)}`}
+            >
+              {listing.status.replace("_", " ").toUpperCase()}
             </span>
           </div>
         )}
 
         {/* Mineral Type Badge */}
         <div className="absolute bottom-3 left-3">
-          <span className={`px-2 py-1 rounded-full text-xs font-medium border ${getMineralColor(listing.primary_mineral)}`}>
+          <span
+            className={`px-2 py-1 rounded-full text-xs font-medium border ${getMineralColor(listing.primary_mineral)}`}
+          >
             {listing.primary_mineral_display}
           </span>
         </div>
@@ -109,9 +138,24 @@ export function PropertyCard({ listing }: PropertyCardProps) {
           {listing.title}
         </h3>
         <p className="text-sm text-slate-400 mb-3 flex items-center gap-1">
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+          <svg
+            className="w-4 h-4"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
+            />
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"
+            />
           </svg>
           {listing.province_state}, {listing.country_display}
         </p>
@@ -119,27 +163,72 @@ export function PropertyCard({ listing }: PropertyCardProps) {
         {/* Details Grid */}
         <div className="grid grid-cols-2 gap-2 mb-4 text-sm">
           <div className="flex items-center gap-1 text-slate-400">
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+            <svg
+              className="w-4 h-4"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"
+              />
             </svg>
             {formatNumber(listing.total_hectares)} ha
           </div>
           <div className="flex items-center gap-1 text-slate-400">
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+            <svg
+              className="w-4 h-4"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
+              />
             </svg>
             {listing.exploration_stage_display}
           </div>
           <div className="flex items-center gap-1 text-slate-400">
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+            <svg
+              className="w-4 h-4"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+              />
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
+              />
             </svg>
             {formatNumber(listing.views_count)} views
           </div>
           <div className="flex items-center gap-1 text-slate-400">
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+            <svg
+              className="w-4 h-4"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"
+              />
             </svg>
             {listing.listing_type_display}
           </div>
