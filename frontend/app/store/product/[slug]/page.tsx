@@ -1,23 +1,17 @@
 import { Metadata } from "next";
+import { notFound } from "next/navigation";
 import ProductPageClient from "./ProductPageClient";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api";
 
 async function getProduct(slug: string) {
-  const fetchUrl = `${API_URL}/store/products/${slug}/`;
-
   try {
-    const response = await fetch(fetchUrl, {
+    const response = await fetch(`${API_URL}/store/products/${slug}/`, {
       cache: "no-store",
     });
-
-    if (!response.ok) {
-      return null;
-    }
-
+    if (!response.ok) return null;
     return await response.json();
-  } catch (error) {
-    console.error("Failed to fetch product for metadata:", error);
+  } catch {
     return null;
   }
 }
@@ -33,7 +27,6 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   if (!product) {
     return {
       title: "Product Not Found",
-      description: "The requested product could not be found.",
     };
   }
 
@@ -71,6 +64,13 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   };
 }
 
-export default function ProductPage() {
+export default async function ProductPage({ params }: Props) {
+  const { slug } = await params;
+  const product = await getProduct(slug);
+
+  if (!product) {
+    notFound();
+  }
+
   return <ProductPageClient />;
 }

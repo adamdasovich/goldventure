@@ -1,7 +1,8 @@
 import { Metadata } from "next";
+import { notFound } from "next/navigation";
 import ProspectorProfileClient from "./ProspectorProfileClient";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api";
 
 async function getProspector(id: string) {
   try {
@@ -26,7 +27,6 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   if (!prospector) {
     return {
       title: "Prospector Not Found",
-      description: "The requested prospector profile could not be found.",
     };
   }
 
@@ -51,6 +51,13 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   };
 }
 
-export default function ProspectorProfilePage({ params }: Props) {
+export default async function ProspectorProfilePage({ params }: Props) {
+  const { id } = await params;
+  const prospector = await getProspector(id);
+
+  if (!prospector) {
+    notFound();
+  }
+
   return <ProspectorProfileClient params={params} />;
 }
