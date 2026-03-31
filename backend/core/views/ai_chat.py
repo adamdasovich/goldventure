@@ -43,6 +43,9 @@ from ..models import (
     GlossaryTerm, GlossaryTermSubmission,
 )
 
+from claude_integration.client import ClaudeClient
+from claude_integration.client_optimized import OptimizedClaudeClient
+
 from ..serializers import (
     CompanySerializer, CompanyDetailSerializer,
     ProjectSerializer, ProjectDetailSerializer,
