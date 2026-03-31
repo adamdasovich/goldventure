@@ -4,6 +4,7 @@ API Views for GoldVenture Platform
 
 import logging
 import json
+import requests
 from django.core.cache import cache
 
 from rest_framework import viewsets, status, permissions
