@@ -1,7 +1,10 @@
 import { Metadata } from "next";
 import PropertyDetailClient from "./PropertyDetailClient";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api";
+const API_URL =
+  process.env.API_BASE_URL ||
+  process.env.NEXT_PUBLIC_API_URL ||
+  "http://localhost:8000/api";
 
 async function getProperty(slug: string) {
   const fetchUrl = `${API_URL}/properties/listings/${slug}/`;

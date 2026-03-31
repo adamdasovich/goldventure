@@ -2,7 +2,10 @@ import { Metadata } from "next";
 import { notFound } from "next/navigation";
 import ProductPageClient from "./ProductPageClient";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api";
+const API_URL =
+  process.env.API_BASE_URL ||
+  process.env.NEXT_PUBLIC_API_URL ||
+  "http://localhost:8000/api";
 
 async function getProduct(slug: string) {
   try {
