@@ -147,7 +147,40 @@ class FinancialDataServer(BaseMCPServer):
             handler=self._compare_market_caps
         )
 
-        # Tool 6: Financing analytics
+        # Tool 6: Top price movers across all companies
+        self.register_tool(
+            name="financial_top_movers",
+            description=(
+                "Find the top stock price movers (gainers and losers) across ALL companies "
+                "over a given period. Returns companies ranked by percentage price change. "
+                "Use when user asks which stock moved the most, biggest gainers/losers, "
+                "or price performance comparisons. Does NOT require a company name."
+            ),
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "days": {
+                        "type": "integer",
+                        "description": "Number of days to measure change over (default 7, use 1 for today, 30 for month)",
+                        "default": 7
+                    },
+                    "top_n": {
+                        "type": "integer",
+                        "description": "Number of top movers to return per category (default 10)",
+                        "default": 10
+                    },
+                    "direction": {
+                        "type": "string",
+                        "description": "Filter by direction: 'gainers', 'losers', or 'both' (default 'both')",
+                        "default": "both"
+                    }
+                },
+                "required": []
+            },
+            handler=self._top_movers
+        )
+
+        # Tool 7: Financing analytics
         self.register_tool(
             name="financial_financing_analytics",
             description=(
@@ -448,6 +481,103 @@ class FinancialDataServer(BaseMCPServer):
         except Exception as e:
             logger.error(f"Financial data error: {str(e)}")
             return {"error": "Failed to retrieve financial data. Please try again."}
+
+    def _top_movers(self, days: int = 7, top_n: int = 10, direction: str = "both") -> Dict:
+        """Find top stock price movers across all companies"""
+        try:
+            today = datetime.now().date()
+            start_date = today - timedelta(days=days)
+
+            companies = Company.objects.filter(
+                is_active=True,
+                ticker_symbol__isnull=False
+            ).exclude(ticker_symbol='')
+
+            movers = []
+            for company in companies:
+                # Get most recent price (latest available)
+                latest = MarketData.objects.filter(
+                    company=company
+                ).order_by('-date').first()
+
+                if not latest:
+                    # Try StockPrice fallback
+                    latest = StockPrice.objects.filter(
+                        company=company
+                    ).order_by('-date').first()
+
+                if not latest:
+                    continue
+
+                # Get the price closest to start_date (look back a few extra days for weekends/holidays)
+                lookback = start_date - timedelta(days=5)
+                earlier = MarketData.objects.filter(
+                    company=company,
+                    date__gte=lookback,
+                    date__lte=start_date
+                ).order_by('-date').first()
+
+                if not earlier:
+                    earlier = StockPrice.objects.filter(
+                        company=company,
+                        date__gte=lookback,
+                        date__lte=start_date
+                    ).order_by('-date').first()
+
+                if not earlier or not earlier.close_price or earlier.close_price == 0:
+                    continue
+
+                latest_price = float(latest.close_price)
+                earlier_price = float(earlier.close_price)
+
+                if earlier_price == 0:
+                    continue
+
+                pct_change = ((latest_price - earlier_price) / earlier_price) * 100
+                dollar_change = latest_price - earlier_price
+
+                ticker = company.ticker_symbol or ''
+                exchange = company.exchange or ''
+                ticker_display = f"{ticker}.{exchange.upper()}" if ticker and exchange else ticker
+
+                movers.append({
+                    "company": company.name,
+                    "ticker": ticker_display,
+                    "current_price": latest_price,
+                    "previous_price": earlier_price,
+                    "change_dollar": round(dollar_change, 4),
+                    "change_percent": round(pct_change, 2),
+                    "current_date": latest.date.isoformat(),
+                    "previous_date": earlier.date.isoformat(),
+                    "volume": latest.volume,
+                })
+
+            if not movers:
+                return {
+                    "message": f"No price data available for comparison over {days} days",
+                    "gainers": [],
+                    "losers": []
+                }
+
+            # Sort by percentage change
+            gainers = sorted(movers, key=lambda x: x["change_percent"], reverse=True)
+            losers = sorted(movers, key=lambda x: x["change_percent"])
+
+            result = {
+                "period": f"{days} days",
+                "total_companies_analyzed": len(movers),
+            }
+
+            if direction in ("both", "gainers"):
+                result["top_gainers"] = gainers[:top_n]
+            if direction in ("both", "losers"):
+                result["top_losers"] = [l for l in losers[:top_n] if l["change_percent"] < 0]
+
+            return result
+
+        except Exception as e:
+            logger.error(f"Top movers error: {str(e)}")
+            return {"error": "Failed to calculate top movers. Please try again."}
 
     def _financing_analytics(self, period_months: int = 12) -> Dict:
         """Get financing analytics and trends"""

@@ -121,6 +121,10 @@ class ToolRegistry:
             "Compare market caps and valuations across companies",
             ["compare", "market cap", "valuation", "ranking"])
 
+        self._register_metadata("financial_top_movers", ToolCategory.FINANCIAL,
+            "Find top stock price movers (gainers/losers) across ALL companies by percentage change",
+            ["movers", "gainers", "losers", "price change", "percentage", "performance", "moved", "biggest", "top"])
+
         self._register_metadata("financial_financing_analytics", ToolCategory.FINANCIAL,
             "Get aggregate financing statistics and trends",
             ["analytics", "trends", "statistics", "financing", "aggregate"])
