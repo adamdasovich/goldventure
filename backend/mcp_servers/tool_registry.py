@@ -173,6 +173,10 @@ class ToolRegistry:
             "Get news within a specific date range",
             ["news", "date", "range", "historical"])
 
+        self._register_metadata("get_recent_news_all_companies", ToolCategory.NEWS,
+            "Get recent news across ALL companies - shows which companies have news this week/today",
+            ["news", "recent", "all", "companies", "this week", "today", "aggregate", "cross-company"])
+
         # Glossary tools
         self._register_metadata("glossary_search", ToolCategory.GLOSSARY,
             "Search for mining industry glossary term definitions",

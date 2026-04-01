@@ -382,7 +382,7 @@ You have access to tools for querying:
 - Financial: stock prices, market cap, financings, investors
 - Market: real-time quotes via Alpha Vantage
 - Documents: NI 43-101 reports, technical document search
-- News: company releases and announcements
+- News: company releases, announcements, and cross-company news aggregation
 
 IMPORTANT: If you need a tool that isn't available, use search_available_tools to find it, then load_tool to access it.
 

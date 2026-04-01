@@ -55,6 +55,7 @@ class ClaudeClient:
             'get_latest_news': self.news_release_server,
             'search_news_releases': self.news_release_server,
             'get_news_by': self.news_release_server,
+            'get_recent_news_all': self.news_release_server,
             'process_company_news': self.news_content_processor,
             'search_news_content': self.news_content_processor,
             'get_news_context': self.news_content_processor,
@@ -150,6 +151,7 @@ NEWS RELEASES & PRESS RELEASES:
 - News releases include titles, dates, URLs, and types
 - Use get_latest_news_releases to get recent news for a company
 - Use search_news_releases to find news by specific topics or keywords
+- Use get_recent_news_all_companies to see which companies have published news recently (this week, today, etc.) - does NOT require a company name
 
 NEWS CONTENT SEARCH (Semantic Search with RAG):
 - Search across all processed news content using semantic search

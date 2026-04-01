@@ -5,6 +5,7 @@ Provides tools for accessing company news releases from the database
 
 from typing import Dict, List
 from datetime import datetime, timedelta
+from django.db.models import Count, Max
 from core.models import NewsRelease, Company
 
 
@@ -86,6 +87,26 @@ class NewsReleaseServer:
                     },
                     "required": ["company_name", "start_date"]
                 }
+            },
+            {
+                "name": "get_recent_news_all_companies",
+                "description": "Get recent news releases across ALL companies. Use when user asks what companies have news out recently, this week, or today. Returns companies grouped by name with their latest news titles and dates. Does NOT require a company name.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "days_back": {
+                            "type": "integer",
+                            "description": "Number of days to look back (default 7 for 'this week', use 1 for 'today', 30 for 'this month')",
+                            "default": 7
+                        },
+                        "limit": {
+                            "type": "integer",
+                            "description": "Maximum number of companies to return (default 50)",
+                            "default": 50
+                        }
+                    },
+                    "required": []
+                }
             }
         ]
 
@@ -98,6 +119,8 @@ class NewsReleaseServer:
             return self._search_news(parameters)
         elif tool_name == "get_news_by_date_range":
             return self._get_news_by_date_range(parameters)
+        elif tool_name == "get_recent_news_all_companies":
+            return self._get_recent_news_all_companies(parameters)
         else:
             return {"error": f"Unknown tool: {tool_name}"}
 
@@ -252,3 +275,73 @@ class NewsReleaseServer:
             return {"error": f"Invalid date format. Use YYYY-MM-DD: {str(e)}"}
         except Exception as e:
             return {"error": f"Error retrieving news: {str(e)}"}
+
+    def _get_recent_news_all_companies(self, parameters: Dict) -> Dict:
+        """Get recent news across all companies, grouped by company"""
+
+        days_back = parameters.get('days_back', 7)
+        limit = min(parameters.get('limit', 50), 100)
+
+        try:
+            cutoff_date = datetime.now().date() - timedelta(days=days_back)
+
+            # Get companies that have news in the date range, with counts
+            companies_with_news = (
+                NewsRelease.objects
+                .filter(release_date__gte=cutoff_date)
+                .values('company__id', 'company__name', 'company__ticker_symbol', 'company__exchange')
+                .annotate(
+                    news_count=Count('id'),
+                    latest_date=Max('release_date')
+                )
+                .order_by('-latest_date')[:limit]
+            )
+
+            if not companies_with_news:
+                return {
+                    "message": f"No companies have published news in the last {days_back} days",
+                    "date_range": f"Last {days_back} days (since {cutoff_date.isoformat()})",
+                    "companies": []
+                }
+
+            # For each company, get their recent news titles (up to 3 per company)
+            results = []
+            for company_data in companies_with_news:
+                recent_news = (
+                    NewsRelease.objects
+                    .filter(
+                        company_id=company_data['company__id'],
+                        release_date__gte=cutoff_date
+                    )
+                    .order_by('-release_date')[:3]
+                )
+
+                news_items = [
+                    {
+                        "title": nr.title,
+                        "date": nr.release_date.isoformat(),
+                        "url": nr.url,
+                    }
+                    for nr in recent_news
+                ]
+
+                ticker = company_data['company__ticker_symbol'] or ''
+                exchange = company_data['company__exchange'] or ''
+                ticker_display = f"{ticker}.{exchange.upper()}" if ticker and exchange else ticker
+
+                results.append({
+                    "company": company_data['company__name'],
+                    "ticker": ticker_display,
+                    "news_count": company_data['news_count'],
+                    "latest_date": company_data['latest_date'].isoformat(),
+                    "recent_news": news_items,
+                })
+
+            return {
+                "date_range": f"Last {days_back} days (since {cutoff_date.isoformat()})",
+                "total_companies_with_news": len(results),
+                "companies": results
+            }
+
+        except Exception as e:
+            return {"error": f"Error retrieving cross-company news: {str(e)}"}
