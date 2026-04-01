@@ -57,6 +57,7 @@ class ClaudeClient:
             'search_news_releases': self.news_release_server,
             'get_news_by': self.news_release_server,
             'get_recent_news_all': self.news_release_server,
+            'search_news_all': self.news_release_server,
             'process_company_news': self.news_content_processor,
             'search_news_content': self.news_content_processor,
             'get_news_context': self.news_content_processor,

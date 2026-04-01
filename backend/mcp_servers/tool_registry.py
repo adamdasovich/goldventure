@@ -177,6 +177,10 @@ class ToolRegistry:
             "Get recent news across ALL companies - shows which companies have news this week/today",
             ["news", "recent", "all", "companies", "this week", "today", "aggregate", "cross-company"])
 
+        self._register_metadata("search_news_all_companies", ToolCategory.NEWS,
+            "Search news by keyword across ALL companies - find PEA, NI 43-101, drill results, financings industry-wide",
+            ["news", "search", "all", "companies", "keyword", "PEA", "NI 43-101", "feasibility", "drill", "resource", "financing", "cross-company"])
+
         # Glossary tools
         self._register_metadata("glossary_search", ToolCategory.GLOSSARY,
             "Search for mining industry glossary term definitions",

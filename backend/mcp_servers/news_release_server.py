@@ -107,6 +107,30 @@ class NewsReleaseServer:
                     },
                     "required": []
                 }
+            },
+            {
+                "name": "search_news_all_companies",
+                "description": "Search news releases by keyword across ALL companies. Use when user asks about specific topics across the industry like NI 43-101, PEA, PFS, feasibility study, drill results, financing, resource estimate, etc. Does NOT require a company name. Returns matching news grouped by company.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "keyword": {
+                            "type": "string",
+                            "description": "Keyword to search for in news titles (e.g., 'PEA', 'NI 43-101', 'feasibility', 'drill results', 'resource estimate', 'financing')"
+                        },
+                        "days_back": {
+                            "type": "integer",
+                            "description": "Number of days to look back (default 30, use 7 for 'this week', 90 for 'this quarter')",
+                            "default": 30
+                        },
+                        "limit": {
+                            "type": "integer",
+                            "description": "Maximum number of results to return (default 50)",
+                            "default": 50
+                        }
+                    },
+                    "required": ["keyword"]
+                }
             }
         ]
 
@@ -121,6 +145,8 @@ class NewsReleaseServer:
             return self._get_news_by_date_range(parameters)
         elif tool_name == "get_recent_news_all_companies":
             return self._get_recent_news_all_companies(parameters)
+        elif tool_name == "search_news_all_companies":
+            return self._search_news_all_companies(parameters)
         else:
             return {"error": f"Unknown tool: {tool_name}"}
 
@@ -345,3 +371,61 @@ class NewsReleaseServer:
 
         except Exception as e:
             return {"error": f"Error retrieving cross-company news: {str(e)}"}
+
+    def _search_news_all_companies(self, parameters: Dict) -> Dict:
+        """Search news releases by keyword across all companies"""
+
+        keyword = parameters.get('keyword', '').strip()
+        days_back = parameters.get('days_back', 30)
+        limit = min(parameters.get('limit', 50), 100)
+
+        if not keyword:
+            return {"error": "keyword is required"}
+
+        try:
+            cutoff_date = datetime.now().date() - timedelta(days=days_back)
+
+            # Search in title across all companies
+            news_releases = (
+                NewsRelease.objects
+                .filter(
+                    release_date__gte=cutoff_date,
+                    title__icontains=keyword
+                )
+                .select_related('company')
+                .order_by('-release_date')[:limit]
+            )
+
+            if not news_releases:
+                return {
+                    "keyword": keyword,
+                    "date_range": f"Last {days_back} days (since {cutoff_date.isoformat()})",
+                    "message": f"No news releases found matching '{keyword}' in the last {days_back} days",
+                    "total_results": 0,
+                    "results": []
+                }
+
+            results = []
+            for nr in news_releases:
+                ticker = nr.company.ticker_symbol or ''
+                exchange = nr.company.exchange or ''
+                ticker_display = f"{ticker}.{exchange.upper()}" if ticker and exchange else ticker
+
+                results.append({
+                    "company": nr.company.name,
+                    "ticker": ticker_display,
+                    "title": nr.title,
+                    "date": nr.release_date.isoformat(),
+                    "url": nr.url,
+                    "type": nr.get_release_type_display(),
+                })
+
+            return {
+                "keyword": keyword,
+                "date_range": f"Last {days_back} days (since {cutoff_date.isoformat()})",
+                "total_results": len(results),
+                "results": results
+            }
+
+        except Exception as e:
+            return {"error": f"Error searching news across companies: {str(e)}"}
