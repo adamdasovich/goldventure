@@ -4,6 +4,7 @@ Handles conversation management and tool calling
 """
 
 import anthropic
+from datetime import datetime
 from django.conf import settings
 from typing import List, Dict, Any
 from mcp_servers.mining_data import MiningDataServer
@@ -103,7 +104,10 @@ class ClaudeClient:
 
         # Default system prompt
         if system_prompt is None:
-            system_prompt = """You are an AI assistant for a junior gold mining investment platform.
+            today = datetime.now().strftime('%B %d, %Y')
+            system_prompt = f"""You are an AI assistant for a junior gold mining investment platform.
+
+Today's date is {today}. All dates in the database are real and current — do NOT treat any dates as test data or futuristic.
 
 You have access to a comprehensive database of mining companies, projects, resources, financial data, and market information.
 Use the available tools to answer questions accurately about:

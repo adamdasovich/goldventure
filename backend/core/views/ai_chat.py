@@ -6,6 +6,7 @@ import logging
 import requests
 import re
 import anthropic
+from datetime import datetime
 
 from rest_framework import viewsets, status, permissions
 
@@ -286,7 +287,10 @@ def company_chat(request, company_id):
         company = Company.objects.get(pk=company_id)
 
         # Create company-specific system prompt
+        today = datetime.now().strftime('%B %d, %Y')
         system_prompt = f"""You are a helpful AI assistant for {company.name} ({company.ticker_symbol}).
+
+Today's date is {today}. All dates in the database are real and current — do NOT treat any dates as test data or futuristic.
 
 You have access to tools for company data including projects, resources, financials, news, and documents.
 If you need a tool that isn't loaded, use search_available_tools to find it.

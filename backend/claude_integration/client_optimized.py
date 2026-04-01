@@ -17,6 +17,7 @@ Expected improvements:
 """
 
 import anthropic
+from datetime import datetime
 from django.conf import settings
 from django.core.cache import cache
 from typing import List, Dict, Any, Optional
@@ -375,7 +376,10 @@ class OptimizedClaudeClient:
         The original prompt was ~1500 tokens. This optimized version
         provides the same guidance in fewer tokens.
         """
-        return """You are an AI assistant for a junior gold mining investment platform.
+        today = datetime.now().strftime('%B %d, %Y')
+        return f"""You are an AI assistant for a junior gold mining investment platform.
+
+Today's date is {today}. All dates in the database are real and current — do NOT treat any dates as test data or futuristic.
 
 You have access to tools for querying:
 - Mining: companies, projects, resources (gold/silver/copper)
