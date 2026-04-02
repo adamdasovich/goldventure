@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import ChatInterface from "@/components/ChatInterface";
@@ -30,9 +30,53 @@ export default function Home() {
   const [showLogin, setShowLogin] = useState(false);
   const [showRegister, setShowRegister] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [isVibrating, setIsVibrating] = useState(false);
   const { user, logout } = useAuth();
   const newsSectionRef = useRef<HTMLElement>(null);
   const chatSectionRef = useRef<HTMLElement>(null);
+
+  const handleSocratesFart = useCallback(() => {
+    if (isVibrating) return;
+    setIsVibrating(true);
+
+    // Synthesize fart sound with Web Audio API
+    try {
+      const ctx = new AudioContext();
+      const oscillator = ctx.createOscillator();
+      const gain = ctx.createGain();
+      const noise = ctx.createOscillator();
+      const noiseGain = ctx.createGain();
+
+      // Low rumble
+      oscillator.type = "sawtooth";
+      oscillator.frequency.setValueAtTime(80, ctx.currentTime);
+      oscillator.frequency.exponentialRampToValueAtTime(
+        40,
+        ctx.currentTime + 0.6,
+      );
+      gain.gain.setValueAtTime(0.3, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.8);
+      oscillator.connect(gain).connect(ctx.destination);
+
+      // Flutter/buzz
+      noise.type = "square";
+      noise.frequency.setValueAtTime(120, ctx.currentTime);
+      noise.frequency.linearRampToValueAtTime(60, ctx.currentTime + 0.3);
+      noise.frequency.linearRampToValueAtTime(30, ctx.currentTime + 0.7);
+      noiseGain.gain.setValueAtTime(0.15, ctx.currentTime);
+      noiseGain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.7);
+      noise.connect(noiseGain).connect(ctx.destination);
+
+      oscillator.start(ctx.currentTime);
+      noise.start(ctx.currentTime);
+      oscillator.stop(ctx.currentTime + 0.8);
+      noise.stop(ctx.currentTime + 0.7);
+    } catch {
+      // Audio not supported — vibration is still fun
+    }
+
+    setTimeout(() => setIsVibrating(false), 800);
+  }, [isVibrating]);
 
   const scrollToNews = () => {
     newsSectionRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -326,17 +370,21 @@ export default function Home() {
 
             {/* Right: Socrates Miner + secondary CTAs */}
             <div className="flex-shrink-0 flex flex-col items-center animate-fade-in">
-              <div className="relative">
+              <button
+                onClick={handleSocratesFart}
+                className="relative cursor-pointer bg-transparent border-0 p-0"
+                aria-label="Click Socrates"
+              >
                 <div className="absolute inset-0 rounded-full bg-gold-500/10 blur-3xl scale-110"></div>
                 <Image
                   src="/images/socrates-miner.png"
                   alt="Junior Mining Intelligence Platform - AI-Powered Mining Stock Analysis"
                   width={280}
                   height={280}
-                  className="relative w-48 sm:w-56 lg:w-64 h-auto opacity-90 hover:opacity-100 transition-opacity duration-300 drop-shadow-2xl"
+                  className={`relative w-48 sm:w-56 lg:w-64 h-auto opacity-90 hover:opacity-100 transition-opacity duration-300 drop-shadow-2xl ${isVibrating ? "animate-vibrate" : ""}`}
                   priority
                 />
-              </div>
+              </button>
               <div className="flex flex-wrap gap-2 mt-6 justify-center">
                 <Link href="/properties">
                   <Button variant="ghost" size="sm">
