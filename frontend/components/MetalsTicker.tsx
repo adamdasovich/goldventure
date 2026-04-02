@@ -28,7 +28,8 @@ export default function MetalsTicker() {
 
   useEffect(() => {
     fetchPrices();
-    const interval = setInterval(fetchPrices, 30000);
+    // 5-minute refresh — backend caches for 5min, anon rate limit is 100/hr
+    const interval = setInterval(fetchPrices, 300000);
     return () => clearInterval(interval);
   }, [fetchPrices]);
 
