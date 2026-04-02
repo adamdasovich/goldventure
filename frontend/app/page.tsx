@@ -367,6 +367,9 @@ export default function Home() {
           </div>
 
           {/* Compact Feature Cards */}
+          <h3 className="text-lg font-semibold text-gradient-gold text-center mb-4">
+            Everything You Need for Mining Research
+          </h3>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
             {[
               {
