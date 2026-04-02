@@ -166,17 +166,24 @@ def peer_comparison(request):
     GET /api/tools/peer-comparison/?company_id=123
     GET /api/tools/peer-comparison/?company_ids=1,2,3,4,5
     """
-    company_id = request.GET.get('company_id')
+    company_id = request.GET.get('company_id', '').strip()
     company_ids_raw = request.GET.get('company_ids', '')
 
     if company_ids_raw:
-        company_ids = [int(x) for x in company_ids_raw.split(',') if x.strip()]
+        company_ids = [int(x) for x in company_ids_raw.split(',') if x.strip().isdigit()]
     elif company_id:
-        # Auto-detect peers
-        try:
-            target = Company.objects.get(id=company_id, is_active=True)
-        except Company.DoesNotExist:
-            return Response({'error': 'Company not found'}, status=404)
+        # Support both numeric ID and name/ticker search
+        target = None
+        if company_id.isdigit():
+            target = Company.objects.filter(id=int(company_id), is_active=True).first()
+        if not target:
+            target = Company.objects.filter(
+                Q(name__icontains=company_id) | Q(ticker_symbol__iexact=company_id),
+                is_active=True,
+            ).first()
+        if not target:
+            return Response({'error': f'Company not found: {company_id}'}, status=404)
+        company_id = str(target.id)
 
         # Find peers: same primary commodity, same exchange
         flagship = Project.objects.filter(company=target, is_flagship=True).first()
