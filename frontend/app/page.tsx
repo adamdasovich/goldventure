@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import ChatInterface from "@/components/ChatInterface";
@@ -12,44 +12,6 @@ import HeroCards from "@/components/HeroCards";
 import { LoginModal, RegisterModal } from "@/components/auth";
 import { useAuth } from "@/contexts/AuthContext";
 import { CartButton } from "@/components/store";
-
-/* ─── Animated counter hook ─── */
-function useCountUp(target: number, duration = 2000) {
-  const [count, setCount] = useState(0);
-  const [hasStarted, setHasStarted] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting && !hasStarted) setHasStarted(true);
-      },
-      { threshold: 0.3 },
-    );
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, [hasStarted]);
-
-  useEffect(() => {
-    if (!hasStarted) return;
-    let start = 0;
-    const step = target / (duration / 16);
-    const timer = setInterval(() => {
-      start += step;
-      if (start >= target) {
-        setCount(target);
-        clearInterval(timer);
-      } else {
-        setCount(Math.floor(start));
-      }
-    }, 16);
-    return () => clearInterval(timer);
-  }, [hasStarted, target, duration]);
-
-  return { count, ref };
-}
 
 /* ─── Nav link data ─── */
 const NAV_LINKS = [
@@ -94,12 +56,6 @@ export default function Home() {
       document.body.style.overflow = "";
     };
   }, [mobileMenuOpen]);
-
-  // Stats counter hooks
-  const stat1 = useCountUp(500, 2000);
-  const stat2 = useCountUp(15, 1500);
-  const stat3 = useCountUp(1000, 2500);
-  const stat4 = useCountUp(43, 1800);
 
   return (
     <div className="min-h-screen">
@@ -399,7 +355,7 @@ export default function Home() {
           </div>
 
           {/* Secondary Navigation Buttons */}
-          <div className="flex flex-wrap gap-3 justify-center">
+          <div className="flex flex-wrap gap-3 justify-center mb-10">
             <Link href="/closed-financings">
               <Button variant="ghost" size="md">
                 Closed Financings
@@ -409,44 +365,61 @@ export default function Home() {
               Latest News
             </Button>
           </div>
-        </div>
-      </section>
 
-      {/* ════════ Stats / Social Proof Bar ════════ */}
-      <section className="relative py-10 px-4 sm:px-6 lg:px-8 border-y border-slate-700/30">
-        <div className="absolute inset-0 bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900"></div>
-        <div className="relative max-w-5xl mx-auto">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-6 md:gap-0">
-            <div className="stat-item text-center px-4" ref={stat1.ref}>
-              <div className="text-3xl sm:text-4xl font-bold text-gradient-amber">
-                {stat1.count}+
-              </div>
-              <div className="text-sm text-slate-400 mt-1">
-                Companies Tracked
-              </div>
-            </div>
-            <div className="stat-item text-center px-4" ref={stat2.ref}>
-              <div className="text-3xl sm:text-4xl font-bold text-gradient-amber">
-                {stat2.count}+
-              </div>
-              <div className="text-sm text-slate-400 mt-1">
-                Minerals & Metals
-              </div>
-            </div>
-            <div className="stat-item text-center px-4" ref={stat3.ref}>
-              <div className="text-3xl sm:text-4xl font-bold text-gradient-amber">
-                {stat3.count}+
-              </div>
-              <div className="text-sm text-slate-400 mt-1">
-                News Articles / Week
-              </div>
-            </div>
-            <div className="stat-item text-center px-4" ref={stat4.ref}>
-              <div className="text-3xl sm:text-4xl font-bold text-gradient-amber">
-                NI {stat4.count}-101
-              </div>
-              <div className="text-sm text-slate-400 mt-1">Report Analysis</div>
-            </div>
+          {/* Compact Feature Cards */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            {[
+              {
+                title: "Claude AI Assistant",
+                desc: "Natural language queries for mining data",
+                icon: "M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z",
+                href: "#chat-section",
+              },
+              {
+                title: "Resource Database",
+                desc: "M&I resource tracking & NI 43-101 data",
+                icon: "M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4",
+                href: "/companies",
+              },
+              {
+                title: "Metals Prices",
+                desc: "Real-time precious & battery metals pricing",
+                icon: "M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z",
+                href: "/metals",
+              },
+              {
+                title: "Project Analytics",
+                desc: "Economic studies & feasibility data",
+                icon: "M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z",
+                href: "/dashboard",
+              },
+            ].map((f, i) => (
+              <Link key={i} href={f.href} className="group block">
+                <div className="glass-card rounded-xl px-4 py-3 flex items-center gap-3 hover:border-gold-400/30 transition-all">
+                  <div className="w-9 h-9 rounded-lg flex-shrink-0 flex items-center justify-center bg-gold-500/15 border border-gold-500/30 group-hover:scale-110 transition-transform">
+                    <svg
+                      className="w-4.5 h-4.5 text-gold-400"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d={f.icon}
+                      />
+                    </svg>
+                  </div>
+                  <div className="min-w-0">
+                    <h3 className="text-sm font-semibold text-slate-200 group-hover:text-gold-400 transition-colors">
+                      {f.title}
+                    </h3>
+                    <p className="text-xs text-slate-500 truncate">{f.desc}</p>
+                  </div>
+                </div>
+              </Link>
+            ))}
           </div>
         </div>
       </section>
