@@ -385,3 +385,86 @@ def stock_quote(request, company_id):
         status=status.HTTP_503_SERVICE_UNAVAILABLE
     )
 
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def top_movers(request):
+    """
+    Get top stock price movers (biggest % change) from the last trading session.
+
+    GET /api/market/top-movers/?limit=5&days=1
+    """
+    from datetime import timedelta
+    from django.utils import timezone
+    from ..models import MarketData, StockPrice
+
+    limit = min(int(request.query_params.get('limit', 5)), 20)
+    days = min(int(request.query_params.get('days', 7)), 30)
+
+    cached = cache.get(f'top_movers_{limit}_{days}')
+    if cached:
+        cached['cached'] = True
+        return Response(cached)
+
+    today = timezone.now().date()
+    start_date = today - timedelta(days=days)
+    lookback = start_date - timedelta(days=5)
+
+    companies = Company.objects.filter(
+        is_active=True,
+        ticker_symbol__isnull=False,
+    ).exclude(ticker_symbol='')
+
+    movers = []
+    for company in companies:
+        latest = MarketData.objects.filter(company=company).order_by('-date').first()
+        if not latest:
+            latest = StockPrice.objects.filter(company=company).order_by('-date').first()
+        if not latest:
+            continue
+
+        earlier = MarketData.objects.filter(
+            company=company, date__gte=lookback, date__lte=start_date
+        ).order_by('-date').first()
+        if not earlier:
+            earlier = StockPrice.objects.filter(
+                company=company, date__gte=lookback, date__lte=start_date
+            ).order_by('-date').first()
+
+        if not earlier or not earlier.close_price or float(earlier.close_price) == 0:
+            continue
+
+        latest_price = float(latest.close_price)
+        earlier_price = float(earlier.close_price)
+        if earlier_price == 0:
+            continue
+
+        pct_change = ((latest_price - earlier_price) / earlier_price) * 100
+        ticker = company.ticker_symbol or ''
+        exchange = company.exchange or ''
+
+        movers.append({
+            'company_id': company.id,
+            'company_name': company.name,
+            'ticker': f"{ticker}.{exchange.upper()}" if ticker and exchange else ticker,
+            'price': round(latest_price, 4),
+            'change_percent': round(pct_change, 2),
+            'change_amount': round(latest_price - earlier_price, 4),
+            'volume': latest.volume,
+            'currency': getattr(latest, 'currency', 'CAD'),
+            'date': latest.date.isoformat(),
+        })
+
+    # Sort by absolute change for "biggest movers"
+    movers.sort(key=lambda x: abs(x['change_percent']), reverse=True)
+
+    result = {
+        'movers': movers[:limit],
+        'period_days': days,
+        'total_analyzed': len(movers),
+        'timestamp': timezone.now().isoformat(),
+    }
+
+    cache.set(f'top_movers_{limit}_{days}', result, 300)
+    return Response(result)
+

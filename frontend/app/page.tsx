@@ -12,6 +12,10 @@ import HeroCards from "@/components/HeroCards";
 import { LoginModal, RegisterModal } from "@/components/auth";
 import { useAuth } from "@/contexts/AuthContext";
 import { CartButton } from "@/components/store";
+import MetalsTicker from "@/components/MetalsTicker";
+import TopMovers from "@/components/TopMovers";
+import CompactNewsFeed from "@/components/CompactNewsFeed";
+import Testimonials from "@/components/Testimonials";
 
 /* ─── Nav link data ─── */
 const NAV_LINKS = [
@@ -240,6 +244,13 @@ export default function Home() {
         />
       )}
 
+      {/* ════════ Metals Price Ticker ════════ */}
+      <div className="bg-slate-900/80 border-b border-slate-700/30 px-4 sm:px-6 lg:px-8">
+        <div className="max-w-7xl mx-auto py-2">
+          <MetalsTicker />
+        </div>
+      </div>
+
       {/* ════════ Hero Section ════════ */}
       <section className="relative py-16 md:py-24 px-4 sm:px-6 lg:px-8 overflow-hidden">
         {/* Layered background effects */}
@@ -455,7 +466,47 @@ export default function Home() {
       {/* Section Divider */}
       <div className="section-divider"></div>
 
-      {/* ════════ News Articles Section ════════ */}
+      {/* ════════ Dynamic News Feed & Top Movers ════════ */}
+      <section className="py-12 md:py-16 px-4 sm:px-6 lg:px-8">
+        <div className="max-w-7xl mx-auto">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* News Headlines (2/3 width) */}
+            <div className="lg:col-span-2">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-gradient-gold">
+                  Recent Headlines
+                </h3>
+                <Badge variant="slate" className="text-[10px]">
+                  Updated 3x Daily
+                </Badge>
+              </div>
+              <div className="backdrop-blur-sm bg-slate-800/20 border border-slate-700/40 rounded-xl p-4">
+                <CompactNewsFeed />
+              </div>
+            </div>
+
+            {/* Top Movers (1/3 width) */}
+            <div>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-gradient-gold">
+                  Top Movers
+                </h3>
+                <Badge variant="slate" className="text-[10px]">
+                  7-Day
+                </Badge>
+              </div>
+              <div className="backdrop-blur-sm bg-slate-800/20 border border-slate-700/40 rounded-xl p-4">
+                <TopMovers />
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Section Divider */}
+      <div className="section-divider"></div>
+
+      {/* ════════ News Articles Section (Full) ════════ */}
       <section
         ref={newsSectionRef}
         id="news-section"
@@ -479,6 +530,25 @@ export default function Home() {
           <div className="backdrop-blur-sm bg-slate-800/30 border border-slate-700/50 rounded-xl p-6">
             <NewsArticles initialLimit={50} showLoadMore={true} />
           </div>
+        </div>
+      </section>
+
+      {/* ════════ Testimonials ════════ */}
+      <section className="py-12 md:py-16 px-4 sm:px-6 lg:px-8 bg-gradient-slate">
+        <div className="max-w-5xl mx-auto">
+          <div className="text-center mb-8">
+            <Badge variant="gold" className="mb-3">
+              Trusted by Investors
+            </Badge>
+            <h2 className="text-2xl sm:text-3xl font-bold text-gradient-gold">
+              What Our Users Say
+            </h2>
+          </div>
+          <Testimonials />
+          <p className="text-[10px] text-slate-600 text-center mt-4">
+            Testimonials reflect individual experiences. Past results do not
+            guarantee future performance.
+          </p>
         </div>
       </section>
 

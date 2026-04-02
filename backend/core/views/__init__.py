@@ -12,6 +12,7 @@ from .metals import (  # noqa: F401
 )
 from .stocks import (  # noqa: F401
     stock_quote,
+    top_movers,
 )
 from .ai_chat import (  # noqa: F401
     check_prompt_injection,

@@ -290,6 +290,34 @@ export const metalsAPI = {
   },
 };
 
+// Market / Top Movers API
+export interface TopMover {
+  company_id: number;
+  company_name: string;
+  ticker: string;
+  price: number;
+  change_percent: number;
+  change_amount: number;
+  volume: number;
+  currency: string;
+  date: string;
+}
+
+export interface TopMoversResponse {
+  movers: TopMover[];
+  period_days: number;
+  total_analyzed: number;
+  timestamp: string;
+  cached?: boolean;
+}
+
+export const marketAPI = {
+  getTopMovers: (limit = 5, days = 7) =>
+    apiFetch<TopMoversResponse>(
+      `/market/top-movers/?limit=${limit}&days=${days}`,
+    ),
+};
+
 // News Releases API
 export interface NewsRelease {
   id: number;

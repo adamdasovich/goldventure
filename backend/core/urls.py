@@ -71,6 +71,9 @@ urlpatterns = [
     # Stock Quote endpoint
     path('companies/<int:company_id>/stock-quote/', views.stock_quote, name='stock_quote'),
 
+    # Market data endpoints
+    path('market/top-movers/', views.top_movers, name='top_movers'),
+
     # Company Forum Discussion endpoint
     path('companies/<int:company_id>/discussion/', views.get_company_discussion, name='get_company_discussion'),
 
