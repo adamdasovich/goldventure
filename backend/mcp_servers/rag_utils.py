@@ -9,12 +9,16 @@ Uses Voyage AI for fast embeddings when available, falls back to local model.
 import chromadb
 from chromadb.config import Settings
 import tiktoken
-from typing import List, Dict, Tuple, Optional
+from typing import List, Dict
 from pathlib import Path
 import anthropic
 from django.conf import settings
-from core.models import Document, DocumentChunk
+from core.models import Document, DocumentChunk, NewsChunk
 from .embeddings import get_embedding_function
+from .retrieval_enhancements import (
+    rerank_results, bm25_search_postgres, reciprocal_rank_fusion,
+    mmr_diversify, apply_relevance_threshold
+)
 
 
 class RAGManager:
@@ -176,7 +180,10 @@ class RAGManager:
 
     def search_documents(self, query: str, n_results: int = 5, filter_company: str = None) -> List[Dict]:
         """
-        Semantic search across all document chunks
+        Hybrid search across document chunks: vector (ChromaDB) + BM25 (PostgreSQL),
+        merged via Reciprocal Rank Fusion, then re-ranked with a cross-encoder.
+
+        Pipeline: ChromaDB top-4x + BM25 top-4x → RRF merge → cross-encoder → top-k
 
         Args:
             query: User's question or search query
@@ -191,24 +198,47 @@ class RAGManager:
         if filter_company:
             where_filter = {"company": filter_company}
 
-        # Query ChromaDB
+        # Over-fetch 4x candidates from each source for merging + re-ranking
+        fetch_count = n_results * 4
+
+        # --- Vector search (ChromaDB) ---
         results = self.collection.query(
             query_texts=[query],
-            n_results=n_results,
+            n_results=fetch_count,
             where=where_filter
         )
 
-        # Format results
-        formatted_results = []
+        vector_results = []
         if results and results['documents']:
             for idx in range(len(results['documents'][0])):
-                formatted_results.append({
+                vector_results.append({
                     'text': results['documents'][0][idx],
                     'metadata': results['metadatas'][0][idx],
                     'distance': results['distances'][0][idx] if results.get('distances') else None,
                     'document_id': results['metadatas'][0][idx]['document_id'],
                     'chunk_index': results['metadatas'][0][idx]['chunk_index']
                 })
+
+        # --- BM25 keyword search (PostgreSQL) ---
+        bm25_results = bm25_search_postgres(
+            query, DocumentChunk, top_k=fetch_count, filter_company=filter_company
+        )
+        # Normalize BM25 results to match vector result format
+        for r in bm25_results:
+            if 'metadata' not in r:
+                r['metadata'] = {'document_id': r.get('id', ''), 'chunk_index': r.get('chunk_index', 0)}
+
+        # --- Reciprocal Rank Fusion ---
+        merged = reciprocal_rank_fusion(vector_results, bm25_results)
+
+        # --- MMR diversity (select 2x top_k diverse candidates for re-ranking) ---
+        diverse = mmr_diversify(merged, top_k=n_results * 2, lambda_param=0.7)
+
+        # --- Cross-encoder re-ranking on diverse set ---
+        formatted_results = rerank_results(query, diverse, top_k=n_results)
+
+        # --- Relevance threshold (filter out clearly irrelevant results) ---
+        formatted_results = apply_relevance_threshold(formatted_results)
 
         return formatted_results
 
@@ -242,7 +272,8 @@ class RAGManager:
 
     def search_news(self, query: str, n_results: int = 5, filter_company: str = None) -> List[Dict]:
         """
-        Semantic search across news content chunks
+        Hybrid search across news chunks: vector (ChromaDB) + BM25 (PostgreSQL),
+        merged via Reciprocal Rank Fusion, then re-ranked with a cross-encoder.
 
         Args:
             query: User's question or search query
@@ -257,18 +288,21 @@ class RAGManager:
         if filter_company:
             where_filter = {"company": filter_company}
 
-        # Query news collection
+        # Over-fetch 4x candidates from each source
+        fetch_count = n_results * 4
+
+        # --- Vector search (ChromaDB) ---
         results = self.news_collection.query(
             query_texts=[query],
-            n_results=n_results,
+            n_results=fetch_count,
             where=where_filter
         )
 
-        formatted_results = []
+        vector_results = []
         if results and results['documents'] and results['documents'][0]:
             for idx in range(len(results['documents'][0])):
                 meta = results['metadatas'][0][idx]
-                formatted_results.append({
+                vector_results.append({
                     'text': results['documents'][0][idx],
                     'metadata': meta,
                     'distance': results['distances'][0][idx] if results.get('distances') else None,
@@ -277,6 +311,27 @@ class RAGManager:
                     'date': meta.get('date', ''),
                     'company': meta.get('company', '')
                 })
+
+        # --- BM25 keyword search (PostgreSQL) ---
+        bm25_results = bm25_search_postgres(
+            query, NewsChunk, top_k=fetch_count, filter_company=filter_company
+        )
+        for r in bm25_results:
+            if 'metadata' not in r:
+                r['metadata'] = {'source_id': r.get('id', ''), 'chunk_index': r.get('chunk_index', 0)}
+            r['source_type'] = 'news'
+
+        # --- Reciprocal Rank Fusion ---
+        merged = reciprocal_rank_fusion(vector_results, bm25_results)
+
+        # --- MMR diversity (select 2x top_k diverse candidates for re-ranking) ---
+        diverse = mmr_diversify(merged, top_k=n_results * 2, lambda_param=0.7)
+
+        # --- Cross-encoder re-ranking on diverse set ---
+        formatted_results = rerank_results(query, diverse, top_k=n_results)
+
+        # --- Relevance threshold (filter out clearly irrelevant results) ---
+        formatted_results = apply_relevance_threshold(formatted_results)
 
         return formatted_results
 
