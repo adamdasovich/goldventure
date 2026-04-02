@@ -39,43 +39,92 @@ export default function Home() {
     if (isVibrating) return;
     setIsVibrating(true);
 
-    // Synthesize fart sound with Web Audio API
+    // Synthesize realistic fart sound with Web Audio API
     try {
       const ctx = new AudioContext();
-      const oscillator = ctx.createOscillator();
-      const gain = ctx.createGain();
-      const noise = ctx.createOscillator();
+      const t = ctx.currentTime;
+      const duration = 1.2;
+
+      // 1. Filtered white noise — the airy, breathy texture
+      const bufferSize = ctx.sampleRate * duration;
+      const noiseBuffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+      const data = noiseBuffer.getChannelData(0);
+      for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+      const noiseSrc = ctx.createBufferSource();
+      noiseSrc.buffer = noiseBuffer;
+
+      const bandpass = ctx.createBiquadFilter();
+      bandpass.type = "bandpass";
+      bandpass.frequency.setValueAtTime(200, t);
+      bandpass.frequency.exponentialRampToValueAtTime(80, t + duration);
+      bandpass.Q.setValueAtTime(2, t);
+
       const noiseGain = ctx.createGain();
+      noiseGain.gain.setValueAtTime(0, t);
+      noiseGain.gain.linearRampToValueAtTime(0.6, t + 0.03);
+      noiseGain.gain.setValueAtTime(0.5, t + 0.1);
+      noiseGain.gain.linearRampToValueAtTime(0.35, t + 0.4);
+      noiseGain.gain.linearRampToValueAtTime(0.15, t + 0.8);
+      noiseGain.gain.exponentialRampToValueAtTime(0.001, t + duration);
 
-      // Low rumble
-      oscillator.type = "sawtooth";
-      oscillator.frequency.setValueAtTime(80, ctx.currentTime);
-      oscillator.frequency.exponentialRampToValueAtTime(
-        40,
-        ctx.currentTime + 0.6,
-      );
-      gain.gain.setValueAtTime(0.3, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.8);
-      oscillator.connect(gain).connect(ctx.destination);
+      noiseSrc.connect(bandpass).connect(noiseGain).connect(ctx.destination);
 
-      // Flutter/buzz
-      noise.type = "square";
-      noise.frequency.setValueAtTime(120, ctx.currentTime);
-      noise.frequency.linearRampToValueAtTime(60, ctx.currentTime + 0.3);
-      noise.frequency.linearRampToValueAtTime(30, ctx.currentTime + 0.7);
-      noiseGain.gain.setValueAtTime(0.15, ctx.currentTime);
-      noiseGain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.7);
-      noise.connect(noiseGain).connect(ctx.destination);
+      // 2. Low-frequency rumble oscillator
+      const rumble = ctx.createOscillator();
+      rumble.type = "sawtooth";
+      rumble.frequency.setValueAtTime(85, t);
+      rumble.frequency.exponentialRampToValueAtTime(55, t + 0.4);
+      rumble.frequency.exponentialRampToValueAtTime(35, t + duration);
 
-      oscillator.start(ctx.currentTime);
-      noise.start(ctx.currentTime);
-      oscillator.stop(ctx.currentTime + 0.8);
-      noise.stop(ctx.currentTime + 0.7);
+      const rumbleGain = ctx.createGain();
+      rumbleGain.gain.setValueAtTime(0, t);
+      rumbleGain.gain.linearRampToValueAtTime(0.25, t + 0.03);
+      rumbleGain.gain.linearRampToValueAtTime(0.15, t + 0.5);
+      rumbleGain.gain.exponentialRampToValueAtTime(0.001, t + duration);
+
+      const rumbleFilter = ctx.createBiquadFilter();
+      rumbleFilter.type = "lowpass";
+      rumbleFilter.frequency.setValueAtTime(300, t);
+      rumbleFilter.frequency.exponentialRampToValueAtTime(100, t + duration);
+
+      rumble.connect(rumbleFilter).connect(rumbleGain).connect(ctx.destination);
+
+      // 3. LFO amplitude modulation — the sputtering/flapping
+      const lfo = ctx.createOscillator();
+      lfo.type = "sine";
+      lfo.frequency.setValueAtTime(25, t);
+      lfo.frequency.linearRampToValueAtTime(15, t + 0.3);
+      lfo.frequency.linearRampToValueAtTime(8, t + duration);
+
+      const lfoGain = ctx.createGain();
+      lfoGain.gain.setValueAtTime(0.4, t);
+      lfoGain.gain.linearRampToValueAtTime(0.2, t + duration);
+
+      lfo.connect(lfoGain).connect(noiseGain.gain);
+
+      // 4. Sub-bass thump at the start
+      const sub = ctx.createOscillator();
+      sub.type = "sine";
+      sub.frequency.setValueAtTime(60, t);
+      sub.frequency.exponentialRampToValueAtTime(30, t + 0.3);
+      const subGain = ctx.createGain();
+      subGain.gain.setValueAtTime(0.3, t);
+      subGain.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
+      sub.connect(subGain).connect(ctx.destination);
+
+      noiseSrc.start(t);
+      rumble.start(t);
+      lfo.start(t);
+      sub.start(t);
+      noiseSrc.stop(t + duration);
+      rumble.stop(t + duration);
+      lfo.stop(t + duration);
+      sub.stop(t + 0.3);
     } catch {
       // Audio not supported — vibration is still fun
     }
 
-    setTimeout(() => setIsVibrating(false), 800);
+    setTimeout(() => setIsVibrating(false), 1200);
   }, [isVibrating]);
 
   const scrollToNews = () => {
