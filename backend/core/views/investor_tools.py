@@ -181,6 +181,14 @@ def peer_comparison(request):
                 Q(name__icontains=company_id) | Q(ticker_symbol__iexact=company_id),
                 is_active=True,
             ).first()
+        # Fuzzy fallback: try each word for partial match
+        if not target:
+            words = [w for w in company_id.split() if len(w) > 2]
+            if words:
+                q = Q(is_active=True)
+                for w in words:
+                    q &= Q(name__icontains=w)
+                target = Company.objects.filter(q).first()
         if not target:
             return Response({'error': f'Company not found: {company_id}'}, status=404)
         company_id = str(target.id)
