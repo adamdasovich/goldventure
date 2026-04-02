@@ -74,6 +74,12 @@ urlpatterns = [
     # Market data endpoints
     path('market/top-movers/', views.top_movers, name='top_movers'),
 
+    # Investor Tools endpoints
+    path('tools/grade-ranker/', views.grade_ranker, name='grade_ranker'),
+    path('tools/peer-comparison/', views.peer_comparison, name='peer_comparison'),
+    path('tools/financing-flow/', views.financing_flow, name='financing_flow'),
+    path('tools/sector-pulse/', views.sector_pulse, name='sector_pulse'),
+
     # Company Forum Discussion endpoint
     path('companies/<int:company_id>/discussion/', views.get_company_discussion, name='get_company_discussion'),
 

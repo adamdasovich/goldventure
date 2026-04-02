@@ -19,8 +19,8 @@ import Testimonials from "@/components/Testimonials";
 const NAV_LINKS = [
   { href: "/dashboard", label: "Dashboard" },
   { href: "/companies", label: "Companies" },
+  { href: "/investor-tools", label: "Investor Tools" },
   { href: "/properties", label: "Prospector's Exchange" },
-  { href: "/glossary", label: "Glossary" },
   { href: "/metals", label: "Metals" },
   { href: "/financial-hub", label: "Financial Hub" },
   { href: "/store", label: "Store" },

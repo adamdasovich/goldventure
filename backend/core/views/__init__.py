@@ -147,3 +147,9 @@ from .closed_financings import (  # noqa: F401
 from .document_processing import (  # noqa: F401
     document_processing_summary,
 )
+from .investor_tools import (  # noqa: F401
+    grade_ranker,
+    peer_comparison,
+    financing_flow,
+    sector_pulse,
+)

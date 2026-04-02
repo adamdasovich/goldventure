@@ -318,6 +318,23 @@ export const marketAPI = {
     ),
 };
 
+// Investor Tools API
+export const toolsAPI = {
+  gradeRanker: (params: Record<string, string> = {}) => {
+    const q = new URLSearchParams(params).toString();
+    return apiFetch<any>(`/tools/grade-ranker/${q ? `?${q}` : ""}`);
+  },
+  peerComparison: (params: Record<string, string> = {}) => {
+    const q = new URLSearchParams(params).toString();
+    return apiFetch<any>(`/tools/peer-comparison/${q ? `?${q}` : ""}`);
+  },
+  financingFlow: (params: Record<string, string> = {}) => {
+    const q = new URLSearchParams(params).toString();
+    return apiFetch<any>(`/tools/financing-flow/${q ? `?${q}` : ""}`);
+  },
+  sectorPulse: () => apiFetch<any>("/tools/sector-pulse/"),
+};
+
 // News Releases API
 export interface NewsRelease {
   id: number;
