@@ -75,6 +75,7 @@ goldventure-platform/
 - Onboarding uses the LIMITED scraper — manually trigger `/api/companies/{id}/scrape-news/` if news is missing
 - Company news = press releases ONLY. Media coverage (Mining.com, Northern Miner, etc.) belongs in `NewsArticle` table (homepage). Blocked by `is_news_article_url()` in website_crawler.py
 - Homepage news = `scrape_mining_news_task` (separate system)
+- Do NOT run tests unless explicitly asked. Never auto-run tests after edits.
 
 ---
 
@@ -128,6 +129,13 @@ Celery managed by systemd: `systemctl status celery-worker celery-beat`
 | `Financing` | Investment rounds |
 | `ScrapingJob` / `DocumentProcessingJob` | Job tracking |
 | `NewsArticle` / `NewsScrapeJob` | Industry news (homepage) |
+
+---
+
+## Communication Style
+
+- When the user says 'next', continue to the next step in the current workflow/spec. Do not change topics or provide unrelated explanations.
+- When the user says 'nope' or gives a negative response, ask a brief clarifying question rather than guessing what they want.
 
 ---
 
@@ -219,3 +227,4 @@ curl -X POST "https://juniorminingintelligence.com/api/companies/{id}/scrape-new
 - Never use sed hacks on server files — use proper tools
 - For optional string fields: use `blank=True, default=''` (NOT `null=True`)
 - When `parse_date_standalone()` returns None for valid-looking dates: check for ordinal suffixes, unusual formats
+

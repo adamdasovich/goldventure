@@ -1,5 +1,9 @@
-# Claude Code conversation logs
+# Claude Code
 Claude Conversations/
+.claude/
+
+# Next.js build output
+.next/
 
 # Environment files
 .env
