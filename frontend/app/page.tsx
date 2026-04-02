@@ -13,7 +13,6 @@ import { LoginModal, RegisterModal } from "@/components/auth";
 import { useAuth } from "@/contexts/AuthContext";
 import { CartButton } from "@/components/store";
 import MetalsTicker from "@/components/MetalsTicker";
-import TopMovers from "@/components/TopMovers";
 import Testimonials from "@/components/Testimonials";
 
 /* ─── Nav link data ─── */
@@ -459,26 +458,6 @@ export default function Home() {
           </div>
 
           <ChatInterface />
-        </div>
-      </section>
-
-      {/* Section Divider */}
-      <div className="section-divider"></div>
-
-      {/* ════════ Top Movers ════════ */}
-      <section className="py-12 md:py-16 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-md mx-auto">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-gradient-gold">
-              Top Movers
-            </h3>
-            <Badge variant="slate" className="text-[10px]">
-              7-Day
-            </Badge>
-          </div>
-          <div className="backdrop-blur-sm bg-slate-800/20 border border-slate-700/40 rounded-xl p-4">
-            <TopMovers />
-          </div>
         </div>
       </section>
 

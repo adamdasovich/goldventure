@@ -1,112 +1,135 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { metalsAPI, type MetalPrice } from "@/lib/api";
+import Link from "next/link";
+import {
+  metalsAPI,
+  marketAPI,
+  type MetalPrice,
+  type TopMover,
+} from "@/lib/api";
+
+interface TickerItem {
+  key: string;
+  label: string;
+  price: string;
+  change: number;
+  href?: string;
+  isMetal?: boolean;
+}
 
 export default function MetalsTicker() {
-  const [metals, setMetals] = useState<MetalPrice[]>([]);
-  const [lastUpdated, setLastUpdated] = useState<string>("");
+  const [items, setItems] = useState<TickerItem[]>([]);
   const [error, setError] = useState(false);
 
-  const fetchPrices = useCallback(async () => {
+  const fetchData = useCallback(async () => {
     try {
-      const data = await metalsAPI.getPrices();
-      // Filter to gold, silver, and optionally copper/platinum
-      const priority = ["XAU", "XAG", "XPT"];
-      const filtered = data.metals
-        .filter((m) => priority.includes(m.symbol))
-        .sort(
-          (a, b) => priority.indexOf(a.symbol) - priority.indexOf(b.symbol),
-        );
-      setMetals(filtered.length > 0 ? filtered : data.metals.slice(0, 3));
-      setLastUpdated(data.timestamp);
-      setError(false);
+      const [metalsData, moversData] = await Promise.allSettled([
+        metalsAPI.getPrices(),
+        marketAPI.getTopMovers(10, 7),
+      ]);
+
+      const tickerItems: TickerItem[] = [];
+
+      // Metals
+      if (metalsData.status === "fulfilled") {
+        const priority = ["XAU", "XAG", "XPT"];
+        const metals = metalsData.value.metals
+          .filter((m) => priority.includes(m.symbol))
+          .sort(
+            (a, b) => priority.indexOf(a.symbol) - priority.indexOf(b.symbol),
+          );
+
+        for (const m of metals) {
+          tickerItems.push({
+            key: `metal-${m.symbol}`,
+            label: m.metal,
+            price:
+              m.price && m.price >= 100
+                ? `$${m.price.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
+                : `$${(m.price ?? 0).toFixed(2)}`,
+            change: m.change_percent,
+            href: "/metals",
+            isMetal: true,
+          });
+        }
+      }
+
+      // Top movers
+      if (moversData.status === "fulfilled") {
+        for (const m of moversData.value.movers) {
+          tickerItems.push({
+            key: `stock-${m.company_id}`,
+            label: m.ticker || m.company_name,
+            price: `$${m.price.toFixed(2)}`,
+            change: m.change_percent,
+            href: `/companies/${m.company_id}`,
+          });
+        }
+      }
+
+      if (tickerItems.length > 0) {
+        setItems(tickerItems);
+        setError(false);
+      }
     } catch {
       setError(true);
     }
   }, []);
 
   useEffect(() => {
-    fetchPrices();
-    // 5-minute refresh — backend caches for 5min, anon rate limit is 100/hr
-    const interval = setInterval(fetchPrices, 300000);
+    fetchData();
+    const interval = setInterval(fetchData, 300000);
     return () => clearInterval(interval);
-  }, [fetchPrices]);
+  }, [fetchData]);
 
-  if (error || metals.length === 0) return null;
+  if (error || items.length === 0) return null;
 
-  const formatPrice = (price: number | null) => {
-    if (!price) return "—";
-    return price >= 100
-      ? `$${price.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
-      : `$${price.toFixed(2)}`;
-  };
-
-  const formatTime = (ts: string) => {
-    try {
-      return new Date(ts).toLocaleTimeString("en-US", {
-        hour: "numeric",
-        minute: "2-digit",
-        hour12: true,
-      });
-    } catch {
-      return "";
-    }
-  };
+  // Duplicate items for seamless loop
+  const tickerContent = [...items, ...items];
 
   return (
-    <div className="flex items-center gap-4 sm:gap-6 overflow-x-auto py-1 scrollbar-none">
-      {metals.map((m) => (
-        <div key={m.symbol} className="flex items-center gap-2 flex-shrink-0">
-          <span className="text-xs font-semibold text-slate-400">
-            {m.metal}
-          </span>
-          <span className="text-sm font-bold text-slate-200">
-            {formatPrice(m.price)}
-          </span>
-          <span
-            className={`text-xs font-medium flex items-center gap-0.5 ${
-              m.change_percent >= 0 ? "text-emerald-400" : "text-red-400"
-            }`}
-          >
-            {m.change_percent >= 0 ? (
-              <svg
-                className="w-3 h-3"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
+    <div className="ticker-wrap overflow-hidden" aria-label="Market ticker">
+      <div className="ticker-track flex items-center gap-8">
+        {tickerContent.map((item, i) => {
+          const inner = (
+            <span className="flex items-center gap-2 flex-shrink-0 py-2 group">
+              <span
+                className={`text-xs font-semibold ${item.isMetal ? "text-gold-400" : "text-slate-400"} group-hover:text-gold-300 transition-colors`}
               >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M7 17l5-5 5 5"
-                />
-              </svg>
-            ) : (
-              <svg
-                className="w-3 h-3"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
+                {item.label}
+              </span>
+              <span className="text-sm font-bold text-slate-200">
+                {item.price}
+              </span>
+              <span
+                className={`text-xs font-medium flex items-center gap-0.5 ${
+                  item.change >= 0 ? "text-emerald-400" : "text-red-400"
+                }`}
               >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M17 7l-5 5-5-5"
-                />
-              </svg>
-            )}
-            {Math.abs(m.change_percent).toFixed(2)}%
-          </span>
-        </div>
-      ))}
-      {lastUpdated && (
-        <span className="text-[10px] text-slate-600 flex-shrink-0 ml-auto">
-          Updated {formatTime(lastUpdated)}
-        </span>
-      )}
+                {item.change >= 0 ? "\u25B2" : "\u25BC"}
+                {Math.abs(item.change).toFixed(2)}%
+              </span>
+              {/* Separator dot */}
+              <span className="text-slate-700 ml-2">&middot;</span>
+            </span>
+          );
+
+          return item.href ? (
+            <Link
+              key={`${item.key}-${i}`}
+              href={item.href}
+              className="flex-shrink-0"
+            >
+              {inner}
+            </Link>
+          ) : (
+            <span key={`${item.key}-${i}`} className="flex-shrink-0">
+              {inner}
+            </span>
+          );
+        })}
+      </div>
     </div>
   );
 }

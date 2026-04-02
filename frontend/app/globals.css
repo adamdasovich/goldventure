@@ -628,3 +628,55 @@ body {
 .cta-glow:hover::after {
   opacity: 0.5;
 }
+
+/* Scrolling stock ticker */
+@keyframes tickerScroll {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+.ticker-wrap {
+  position: relative;
+}
+
+.ticker-wrap::before,
+.ticker-wrap::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 40px;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.ticker-wrap::before {
+  left: 0;
+  background: linear-gradient(90deg, var(--slate-900), transparent);
+}
+
+.ticker-wrap::after {
+  right: 0;
+  background: linear-gradient(270deg, var(--slate-900), transparent);
+}
+
+.ticker-track {
+  animation: tickerScroll 40s linear infinite;
+  width: max-content;
+}
+
+.ticker-wrap:hover .ticker-track {
+  animation-play-state: paused;
+}
+
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
