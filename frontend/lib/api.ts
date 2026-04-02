@@ -333,6 +333,22 @@ export const toolsAPI = {
     return apiFetch<any>(`/tools/financing-flow/${q ? `?${q}` : ""}`);
   },
   sectorPulse: () => apiFetch<any>("/tools/sector-pulse/"),
+  drillScanner: (params: Record<string, string> = {}) => {
+    const q = new URLSearchParams(params).toString();
+    return apiFetch<any>(`/tools/drill-scanner/${q ? `?${q}` : ""}`);
+  },
+  catalystCalendar: (params: Record<string, string> = {}) => {
+    const q = new URLSearchParams(params).toString();
+    return apiFetch<any>(`/tools/catalyst-calendar/${q ? `?${q}` : ""}`);
+  },
+  portfolioXray: (params: Record<string, string> = {}) => {
+    const q = new URLSearchParams(params).toString();
+    return apiFetch<any>(`/tools/portfolio-xray/${q ? `?${q}` : ""}`);
+  },
+  propertyValuation: (params: Record<string, string> = {}) => {
+    const q = new URLSearchParams(params).toString();
+    return apiFetch<any>(`/tools/property-valuation/${q ? `?${q}` : ""}`);
+  },
 };
 
 // News Releases API

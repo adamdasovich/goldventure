@@ -54,20 +54,20 @@ const TOOLS = [
   {
     title: "Drill Result Scanner",
     description:
-      "AI scans press releases for drill results, extracts grades and widths, and scores significance. Find discovery plays early.",
-    href: "#",
-    badge: "Coming Soon",
+      "Search press releases for drill results across all companies. Find the most active drillers and track exploration news by commodity.",
+    href: "/investor-tools/drill-scanner",
+    badge: "Screener",
     icon: "M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z",
-    available: false,
+    available: true,
   },
   {
     title: "News Catalyst Calendar",
     description:
-      "AI extracts upcoming milestones from news releases and tracks delivery. Know what catalysts are coming and when.",
-    href: "#",
-    badge: "Coming Soon",
+      "Track news release frequency by company. Spot quiet companies, find the most active newsmakers, and monitor weekly volume trends.",
+    href: "/investor-tools/catalyst-calendar",
+    badge: "Market Intel",
     icon: "M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z",
-    available: false,
+    available: true,
   },
   {
     title: "Insider Activity Dashboard",
@@ -81,20 +81,20 @@ const TOOLS = [
   {
     title: "Property Valuation Tool",
     description:
-      "Estimate fair value for exploration properties using comparable transactions, in-ground value, and jurisdictional benchmarks.",
-    href: "#",
-    badge: "Coming Soon",
+      "Compare property listings with $/hectare benchmarks by mineral and jurisdiction. Find undervalued exploration properties.",
+    href: "/investor-tools/property-valuation",
+    badge: "Marketplace",
     icon: "M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z",
-    available: false,
+    available: true,
   },
   {
     title: "Portfolio X-Ray",
     description:
-      "Analyze your portfolio for commodity exposure, geographic risk, stage diversification, and upcoming dilution events.",
-    href: "#",
-    badge: "Coming Soon",
+      "Analyze a set of companies for commodity exposure, geographic concentration, stage diversification, and dilution risk.",
+    href: "/investor-tools/portfolio-xray",
+    badge: "Portfolio",
     icon: "M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2",
-    available: false,
+    available: true,
   },
 ];
 

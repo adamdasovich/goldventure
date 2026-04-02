@@ -18,7 +18,7 @@ from rest_framework.response import Response
 from ..models import (
     Company, Project, ResourceEstimate, EconomicStudy,
     Financing, MarketData, StockPrice, MetalPrice,
-    NewsRelease, NewsArticle,
+    NewsRelease, NewsArticle, PropertyListing,
 )
 
 logger = logging.getLogger(__name__)
@@ -491,3 +491,329 @@ def sector_pulse(request):
 
     cache.set('sector_pulse', data, 300)
     return Response(data)
+
+
+# ============================================================================
+# DRILL RESULT SCANNER
+# ============================================================================
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def drill_scanner(request):
+    """
+    Search news releases for drill results. Returns recent drill-related news.
+    GET /api/tools/drill-scanner/?commodity=gold&days=30&company=
+    """
+    days = min(int(request.GET.get('days', 30)), 90)
+    commodity = request.GET.get('commodity', '')
+    company_search = request.GET.get('company', '').strip()
+
+    start_date = timezone.now().date() - timedelta(days=days)
+
+    DRILL_KEYWORDS = [
+        'drill', 'assay', 'intercept', 'metres', 'meters', 'g/t', 'gpt',
+        'mineralization', 'mineralized', 'hole', 'core', 'exploration results',
+        'sampling', 'trench', 'channel sample',
+    ]
+
+    q_filter = Q(published_date__gte=start_date)
+    keyword_q = Q()
+    for kw in DRILL_KEYWORDS:
+        keyword_q |= Q(title__icontains=kw)
+    q_filter &= keyword_q
+
+    if company_search:
+        q_filter &= Q(company__name__icontains=company_search) | Q(company__ticker_symbol__iexact=company_search)
+
+    if commodity:
+        commodity_companies = Project.objects.filter(
+            primary_commodity=commodity, is_active=True
+        ).values_list('company_id', flat=True)
+        q_filter &= Q(company_id__in=commodity_companies)
+
+    releases = NewsRelease.objects.filter(q_filter).select_related('company').order_by('-published_date')[:50]
+
+    results = [{
+        'id': nr.id,
+        'company_id': nr.company_id,
+        'company_name': nr.company.name,
+        'ticker': nr.company.ticker_symbol,
+        'title': nr.title,
+        'published_date': nr.published_date.isoformat() if nr.published_date else None,
+        'url': nr.url,
+    } for nr in releases]
+
+    # Company counts
+    company_counts = {}
+    for r in results:
+        cid = r['company_id']
+        if cid not in company_counts:
+            company_counts[cid] = {'company_name': r['company_name'], 'ticker': r['ticker'], 'count': 0}
+        company_counts[cid]['count'] += 1
+
+    most_active = sorted(company_counts.values(), key=lambda x: x['count'], reverse=True)[:10]
+
+    return Response({
+        'results': results,
+        'count': len(results),
+        'most_active_drillers': most_active,
+        'period_days': days,
+    })
+
+
+# ============================================================================
+# NEWS CATALYST CALENDAR
+# ============================================================================
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def catalyst_calendar(request):
+    """
+    Recent news releases grouped by company with activity frequency analysis.
+    GET /api/tools/catalyst-calendar/?days=60&commodity=
+    """
+    days = min(int(request.GET.get('days', 60)), 180)
+    commodity = request.GET.get('commodity', '')
+
+    start_date = timezone.now().date() - timedelta(days=days)
+
+    releases_qs = NewsRelease.objects.filter(
+        published_date__gte=start_date,
+        company__is_active=True,
+    ).select_related('company')
+
+    if commodity:
+        commodity_companies = Project.objects.filter(
+            primary_commodity=commodity, is_active=True
+        ).values_list('company_id', flat=True)
+        releases_qs = releases_qs.filter(company_id__in=commodity_companies)
+
+    # Group by company with counts and last release date
+    company_data = {}
+    for nr in releases_qs.order_by('-published_date'):
+        cid = nr.company_id
+        if cid not in company_data:
+            company_data[cid] = {
+                'company_id': cid,
+                'company_name': nr.company.name,
+                'ticker': nr.company.ticker_symbol,
+                'releases': [],
+                'count': 0,
+                'latest_date': None,
+                'earliest_date': None,
+            }
+        cd = company_data[cid]
+        cd['count'] += 1
+        pub = nr.published_date.isoformat() if nr.published_date else None
+        if pub:
+            if not cd['latest_date'] or pub > cd['latest_date']:
+                cd['latest_date'] = pub
+            if not cd['earliest_date'] or pub < cd['earliest_date']:
+                cd['earliest_date'] = pub
+        if len(cd['releases']) < 5:
+            cd['releases'].append({
+                'id': nr.id,
+                'title': nr.title,
+                'date': pub,
+                'url': nr.url,
+            })
+
+    # Calculate days since last release and avg frequency
+    for cd in company_data.values():
+        if cd['latest_date']:
+            from datetime import date as dt_date
+            latest = dt_date.fromisoformat(cd['latest_date'])
+            cd['days_since_last'] = (timezone.now().date() - latest).days
+        else:
+            cd['days_since_last'] = None
+        if cd['count'] > 1 and cd['earliest_date'] and cd['latest_date']:
+            earliest = dt_date.fromisoformat(cd['earliest_date'])
+            latest = dt_date.fromisoformat(cd['latest_date'])
+            span = (latest - earliest).days
+            cd['avg_days_between'] = round(span / (cd['count'] - 1), 1) if span > 0 else None
+        else:
+            cd['avg_days_between'] = None
+
+    companies_list = sorted(company_data.values(), key=lambda x: x['count'], reverse=True)
+
+    # Quiet companies (no news in last 30 days but had news before)
+    quiet = [c for c in companies_list if c['days_since_last'] and c['days_since_last'] > 30]
+
+    # Weekly news volume
+    weekly = releases_qs.annotate(
+        week=TruncWeek('published_date')
+    ).values('week').annotate(count=Count('id')).order_by('week')
+
+    return Response({
+        'companies': companies_list[:50],
+        'quiet_companies': quiet[:20],
+        'weekly_volume': [{'week': w['week'].isoformat(), 'count': w['count']} for w in weekly],
+        'total_releases': releases_qs.count(),
+        'period_days': days,
+    })
+
+
+# ============================================================================
+# PORTFOLIO X-RAY
+# ============================================================================
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def portfolio_xray(request):
+    """
+    Analyze a set of companies for exposure, diversification, and risk.
+    GET /api/tools/portfolio-xray/?company_ids=1,2,3,4,5
+    """
+    company_ids_raw = request.GET.get('company_ids', '')
+    if not company_ids_raw:
+        return Response({'error': 'Provide company_ids (comma-separated)'}, status=400)
+
+    company_ids = [int(x) for x in company_ids_raw.split(',') if x.strip().isdigit()]
+    if not company_ids:
+        return Response({'error': 'No valid company IDs provided'}, status=400)
+
+    companies = Company.objects.filter(id__in=company_ids, is_active=True)
+
+    # Build portfolio analysis
+    holdings = []
+    commodity_exposure = {}
+    country_exposure = {}
+    stage_exposure = {}
+    total_market_cap = 0
+
+    for company in companies:
+        projects = Project.objects.filter(company=company, is_active=True)
+        latest_price = StockPrice.objects.filter(company=company).order_by('-date').first()
+        market = MarketData.objects.filter(company=company).order_by('-date').first()
+        resources = ResourceEstimate.objects.filter(
+            project__company=company
+        ).aggregate(gold_oz=Sum('gold_ounces'), silver_oz=Sum('silver_ounces'))
+
+        mcap = float(market.market_cap_usd) if market and market.market_cap_usd else 0
+        total_market_cap += mcap
+
+        # Upcoming financing risk
+        open_financings = Financing.objects.filter(
+            company=company, status__in=['announced', 'closing']
+        ).count()
+
+        flagship = projects.filter(is_flagship=True).first() or projects.first()
+
+        holdings.append({
+            'company_id': company.id,
+            'company_name': company.name,
+            'ticker': company.ticker_symbol,
+            'exchange': company.exchange,
+            'stock_price': float(latest_price.close_price) if latest_price else None,
+            'change_pct': float(latest_price.change_percent) if latest_price else None,
+            'market_cap_usd': mcap,
+            'gold_oz': float(resources['gold_oz'] or 0),
+            'silver_oz': float(resources['silver_oz'] or 0),
+            'project_count': projects.count(),
+            'commodity': flagship.primary_commodity if flagship else None,
+            'country': flagship.country if flagship else None,
+            'stage': flagship.project_stage if flagship else None,
+            'open_financings': open_financings,
+        })
+
+        # Exposure tracking
+        if flagship:
+            comm = flagship.primary_commodity
+            commodity_exposure[comm] = commodity_exposure.get(comm, 0) + 1
+            country = flagship.country
+            country_exposure[country] = country_exposure.get(country, 0) + 1
+            stage = flagship.project_stage
+            stage_exposure[stage] = stage_exposure.get(stage, 0) + 1
+
+    total_companies = len(holdings)
+
+    def to_pct_list(d):
+        return sorted([
+            {'name': k, 'count': v, 'pct': round(v / total_companies * 100, 1) if total_companies else 0}
+            for k, v in d.items()
+        ], key=lambda x: x['count'], reverse=True)
+
+    # Dilution risk: companies with open financings
+    dilution_risks = [h for h in holdings if h['open_financings'] > 0]
+
+    return Response({
+        'holdings': holdings,
+        'count': total_companies,
+        'total_market_cap_usd': total_market_cap,
+        'commodity_exposure': to_pct_list(commodity_exposure),
+        'country_exposure': to_pct_list(country_exposure),
+        'stage_exposure': to_pct_list(stage_exposure),
+        'dilution_risks': dilution_risks,
+    })
+
+
+# ============================================================================
+# PROPERTY VALUATION TOOL
+# ============================================================================
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def property_valuation(request):
+    """
+    Property comparables and valuation benchmarks.
+    GET /api/tools/property-valuation/?mineral=gold&country=Canada
+    """
+    mineral = request.GET.get('mineral', '')
+    country = request.GET.get('country', '')
+
+    listings = PropertyListing.objects.filter(
+        status='active'
+    ).select_related('seller').order_by('-created_at')
+
+    if mineral:
+        listings = listings.filter(primary_mineral__iexact=mineral)
+    if country:
+        listings = listings.filter(country__iexact=country)
+
+    results = []
+    for p in listings[:30]:
+        hectares = float(p.total_hectares) if p.total_hectares else None
+        price = float(p.asking_price) if p.asking_price else None
+        price_per_ha = round(price / hectares, 2) if price and hectares and hectares > 0 else None
+
+        results.append({
+            'id': p.id,
+            'slug': p.slug,
+            'title': p.title,
+            'location': p.location,
+            'country': p.country,
+            'primary_mineral': p.primary_mineral,
+            'exploration_stage': p.exploration_stage,
+            'total_hectares': hectares,
+            'asking_price': price,
+            'price_currency': p.price_currency,
+            'price_per_hectare': price_per_ha,
+            'listing_type': p.listing_type,
+        })
+
+    # Benchmarks
+    priced = [r for r in results if r['price_per_hectare']]
+    benchmarks = {}
+    if priced:
+        prices = [r['price_per_hectare'] for r in priced]
+        benchmarks = {
+            'avg_price_per_ha': round(sum(prices) / len(prices), 2),
+            'min_price_per_ha': min(prices),
+            'max_price_per_ha': max(prices),
+            'median_price_per_ha': round(sorted(prices)[len(prices) // 2], 2),
+            'sample_size': len(priced),
+        }
+
+    # Distinct values for filters
+    minerals = list(PropertyListing.objects.filter(status='active').values_list('primary_mineral', flat=True).distinct().order_by('primary_mineral'))
+    countries = list(PropertyListing.objects.filter(status='active').values_list('country', flat=True).distinct().order_by('country'))
+
+    return Response({
+        'listings': results,
+        'count': len(results),
+        'benchmarks': benchmarks,
+        'filters': {
+            'minerals': minerals,
+            'countries': countries,
+        },
+    })

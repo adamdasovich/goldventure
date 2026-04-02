@@ -152,4 +152,8 @@ from .investor_tools import (  # noqa: F401
     peer_comparison,
     financing_flow,
     sector_pulse,
+    drill_scanner,
+    catalyst_calendar,
+    portfolio_xray,
+    property_valuation,
 )

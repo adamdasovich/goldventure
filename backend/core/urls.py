@@ -79,6 +79,10 @@ urlpatterns = [
     path('tools/peer-comparison/', views.peer_comparison, name='peer_comparison'),
     path('tools/financing-flow/', views.financing_flow, name='financing_flow'),
     path('tools/sector-pulse/', views.sector_pulse, name='sector_pulse'),
+    path('tools/drill-scanner/', views.drill_scanner, name='drill_scanner'),
+    path('tools/catalyst-calendar/', views.catalyst_calendar, name='catalyst_calendar'),
+    path('tools/portfolio-xray/', views.portfolio_xray, name='portfolio_xray'),
+    path('tools/property-valuation/', views.property_valuation, name='property_valuation'),
 
     # Company Forum Discussion endpoint
     path('companies/<int:company_id>/discussion/', views.get_company_discussion, name='get_company_discussion'),
