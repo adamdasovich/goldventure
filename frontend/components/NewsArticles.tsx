@@ -1,7 +1,14 @@
-'use client';
+"use client";
 
-import { useState, useEffect, useRef } from 'react';
-import { ExternalLink, Newspaper, Calendar, ChevronDown, RefreshCw, Loader2 } from 'lucide-react';
+import { useState, useEffect, useRef } from "react";
+import {
+  ExternalLink,
+  Newspaper,
+  Calendar,
+  ChevronDown,
+  RefreshCw,
+  Loader2,
+} from "lucide-react";
 
 interface NewsArticle {
   id: number;
@@ -18,11 +25,20 @@ interface NewsArticle {
 interface NewsArticlesProps {
   initialLimit?: number;
   showLoadMore?: boolean;
+  initialArticles?: NewsArticle[];
 }
 
-export default function NewsArticles({ initialLimit = 10, showLoadMore = true }: NewsArticlesProps) {
-  const [articles, setArticles] = useState<NewsArticle[]>([]);
-  const [loading, setLoading] = useState(true);
+export default function NewsArticles({
+  initialLimit = 10,
+  showLoadMore = true,
+  initialArticles,
+}: NewsArticlesProps) {
+  const [articles, setArticles] = useState<NewsArticle[]>(
+    initialArticles || [],
+  );
+  const [loading, setLoading] = useState(
+    !initialArticles || initialArticles.length === 0,
+  );
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [offset, setOffset] = useState(0);
@@ -30,9 +46,13 @@ export default function NewsArticles({ initialLimit = 10, showLoadMore = true }:
   const [hasMore, setHasMore] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api';
+  const API_URL =
+    process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api";
 
-  const fetchArticles = async (newOffset: number = 0, append: boolean = false) => {
+  const fetchArticles = async (
+    newOffset: number = 0,
+    append: boolean = false,
+  ) => {
     try {
       if (append) {
         setLoadingMore(true);
@@ -41,17 +61,17 @@ export default function NewsArticles({ initialLimit = 10, showLoadMore = true }:
       }
 
       const res = await fetch(
-        `${API_URL}/news/articles/?limit=${initialLimit}&offset=${newOffset}&days=7`
+        `${API_URL}/news/articles/?limit=${initialLimit}&offset=${newOffset}&days=7`,
       );
 
       if (!res.ok) {
-        throw new Error('Failed to fetch news articles');
+        throw new Error("Failed to fetch news articles");
       }
 
       const data = await res.json();
 
       if (append) {
-        setArticles(prev => [...prev, ...data.articles]);
+        setArticles((prev) => [...prev, ...data.articles]);
       } else {
         setArticles(data.articles);
       }
@@ -61,7 +81,7 @@ export default function NewsArticles({ initialLimit = 10, showLoadMore = true }:
       setHasMore(newOffset + data.articles.length < data.total);
       setError(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load news');
+      setError(err instanceof Error ? err.message : "Failed to load news");
     } finally {
       setLoading(false);
       setLoadingMore(false);
@@ -69,7 +89,9 @@ export default function NewsArticles({ initialLimit = 10, showLoadMore = true }:
   };
 
   useEffect(() => {
-    fetchArticles();
+    if (!initialArticles || initialArticles.length === 0) {
+      fetchArticles();
+    }
   }, []);
 
   const handleLoadMore = () => {
@@ -82,7 +104,7 @@ export default function NewsArticles({ initialLimit = 10, showLoadMore = true }:
   };
 
   const formatDate = (dateString: string | null) => {
-    if (!dateString) return 'Unknown date';
+    if (!dateString) return "Unknown date";
     const date = new Date(dateString);
     const now = new Date();
     const diffMs = now.getTime() - date.getTime();
@@ -90,17 +112,17 @@ export default function NewsArticles({ initialLimit = 10, showLoadMore = true }:
     const diffDays = Math.floor(diffHours / 24);
 
     if (diffHours < 1) {
-      return 'Just now';
+      return "Just now";
     } else if (diffHours < 24) {
       return `${diffHours}h ago`;
     } else if (diffDays === 1) {
-      return 'Yesterday';
+      return "Yesterday";
     } else if (diffDays < 7) {
       return `${diffDays}d ago`;
     } else {
-      return date.toLocaleDateString('en-US', {
-        month: 'short',
-        day: 'numeric',
+      return date.toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
       });
     }
   };
@@ -134,8 +156,12 @@ export default function NewsArticles({ initialLimit = 10, showLoadMore = true }:
     return (
       <div className="text-center py-12">
         <Newspaper className="w-12 h-12 text-slate-500 mx-auto mb-4" />
-        <p className="text-slate-400">No news articles available at the moment.</p>
-        <p className="text-sm text-slate-500 mt-2">Check back later for the latest mining industry news.</p>
+        <p className="text-slate-400">
+          No news articles available at the moment.
+        </p>
+        <p className="text-sm text-slate-500 mt-2">
+          Check back later for the latest mining industry news.
+        </p>
       </div>
     );
   }
@@ -145,14 +171,16 @@ export default function NewsArticles({ initialLimit = 10, showLoadMore = true }:
       {/* Header with refresh button */}
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-2">
-          <span className="text-sm text-slate-400">{total} articles from the last 7 days</span>
+          <span className="text-sm text-slate-400">
+            {total} articles from the last 7 days
+          </span>
         </div>
         <button
           onClick={handleRefresh}
           disabled={loading}
           className="inline-flex items-center gap-1 px-3 py-1 text-sm text-slate-400 hover:text-gold-400 transition-colors disabled:opacity-50"
         >
-          <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+          <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
           Refresh
         </button>
       </div>
@@ -190,7 +218,9 @@ export default function NewsArticles({ initialLimit = 10, showLoadMore = true }:
 
                 {/* Summary if available */}
                 {article.summary && (
-                  <p className="mt-2 text-sm text-slate-400 line-clamp-2">{article.summary}</p>
+                  <p className="mt-2 text-sm text-slate-400 line-clamp-2">
+                    {article.summary}
+                  </p>
                 )}
               </div>
 
