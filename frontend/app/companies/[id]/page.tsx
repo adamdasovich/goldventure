@@ -23,7 +23,12 @@ export async function generateStaticParams() {
       if (!res.ok) break;
       const data = await res.json();
       const results = data.results || [];
-      allIds = [...allIds, ...results.map((c: any) => ({ id: String(c.id) }))];
+      allIds = [
+        ...allIds,
+        ...results
+          .filter((c: any) => c.name && (c.description || c.brief_description))
+          .map((c: any) => ({ id: String(c.id) })),
+      ];
       hasMore = !!data.next;
       page++;
     }

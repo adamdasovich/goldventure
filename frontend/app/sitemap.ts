@@ -183,13 +183,18 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     },
   ];
 
-  // Dynamic company routes
-  const companyRoutes: MetadataRoute.Sitemap = companies.map((company) => ({
-    url: `${baseUrl}/companies/${company.id}`,
-    lastModified: new Date(company.updated_at || new Date()),
-    changeFrequency: "weekly" as const,
-    priority: 0.8,
-  }));
+  // Dynamic company routes — exclude thin-content companies to avoid soft 404s
+  const companyRoutes: MetadataRoute.Sitemap = companies
+    .filter(
+      (company) =>
+        company.name && (company.description || company.brief_description),
+    )
+    .map((company) => ({
+      url: `${baseUrl}/companies/${company.id}`,
+      lastModified: new Date(company.updated_at || new Date()),
+      changeFrequency: "weekly" as const,
+      priority: 0.8,
+    }));
 
   // Dynamic property routes
   const propertyRoutes: MetadataRoute.Sitemap = properties.map((property) => ({
