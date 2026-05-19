@@ -51,14 +51,24 @@ interface StockQuote {
   cached: boolean;
 }
 
-export default function CompanyDetailClient() {
+interface CompanyDetailClientProps {
+  initialCompany?: Company;
+  initialProjects?: Project[];
+}
+
+export default function CompanyDetailClient({
+  initialCompany,
+  initialProjects,
+}: CompanyDetailClientProps) {
   const params = useParams();
   const companyId = params.id as string;
   const { user, accessToken, logout } = useAuth();
 
-  const [company, setCompany] = useState<Company | null>(null);
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [company, setCompany] = useState<Company | null>(
+    initialCompany || null,
+  );
+  const [projects, setProjects] = useState<Project[]>(initialProjects || []);
+  const [loading, setLoading] = useState(!initialCompany);
   const [error, setError] = useState<string | null>(null);
   const [newsData, setNewsData] = useState<NewsReleasesResponse | null>(null);
   const [newsLoading, setNewsLoading] = useState(false);
@@ -144,8 +154,10 @@ export default function CompanyDetailClient() {
     const abortController = new AbortController();
 
     if (companyId) {
-      // Pass abort signal to fetch functions
-      fetchCompanyDetails(abortController.signal);
+      // Skip company/projects fetch if we have SSR data
+      if (!initialCompany) {
+        fetchCompanyDetails(abortController.signal);
+      }
       fetchNewsReleases(abortController.signal);
       fetchFinancings(abortController.signal);
       fetchStockQuote(abortController.signal);
