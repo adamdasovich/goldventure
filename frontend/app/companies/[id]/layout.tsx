@@ -16,7 +16,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   try {
     // Fetch company data for metadata
     const response = await fetch(`${API_BASE_URL}/companies/${id}/`, {
-      cache: "no-store",
+      next: { revalidate: 3600 },
     });
 
     if (!response.ok) {
