@@ -91,6 +91,38 @@ from django.db.models import Count, Q
 
 
 # ============================================================================
+# HOMEPAGE PLATFORM STATS
+# ============================================================================
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def platform_stats(request):
+    """
+    GET /api/platform-stats/
+    Returns aggregate stats for the homepage. Cached for 10 minutes.
+    """
+    from django.core.cache import cache
+
+    cached = cache.get('platform_stats')
+    if cached:
+        return Response(cached)
+
+    company_count = Company.objects.count()
+    project_count = Project.objects.count()
+    financing_count = Financing.objects.count()
+    news_article_count = NewsArticle.objects.count()
+
+    data = {
+        'companies': company_count,
+        'projects': project_count,
+        'financings': financing_count,
+        'news_articles': news_article_count,
+    }
+    cache.set('platform_stats', data, 600)  # 10 minutes
+    return Response(data)
+
+
+# ============================================================================
 # HOMEPAGE HERO SECTION CARDS API
 # ============================================================================
 

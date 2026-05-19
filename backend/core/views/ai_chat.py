@@ -129,9 +129,23 @@ def check_prompt_injection(message: str) -> tuple:
 
 
 def get_or_create_ai_usage(user):
-    """Get or create AI usage record for user."""
-    from ..models import UserAIUsage
+    """Get or create AI usage record for user, with tier-aware limits."""
+    from ..models import UserAIUsage, PlatformSubscription
     usage, created = UserAIUsage.objects.get_or_create(user=user)
+
+    # Sync daily limit with subscription tier
+    try:
+        sub = PlatformSubscription.objects.get(user=user)
+        tier_limit = sub.daily_chat_limit  # 0 = unlimited for paid tiers
+        if usage.daily_message_limit != tier_limit:
+            usage.daily_message_limit = tier_limit
+            usage.save(update_fields=['daily_message_limit'])
+    except PlatformSubscription.DoesNotExist:
+        # No subscription = explorer = 5 messages/day
+        if usage.daily_message_limit != 5 and not user.is_superuser:
+            usage.daily_message_limit = 5
+            usage.save(update_fields=['daily_message_limit'])
+
     return usage
 
 

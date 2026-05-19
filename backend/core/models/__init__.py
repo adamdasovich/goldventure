@@ -65,6 +65,8 @@ from .community import (  # noqa: F401
     GlossaryTerm,
     GlossaryTermSubmission,
     UserAIUsage,
+    PlatformSubscription,
+    PlatformSubscriptionInvoice,
 )
 from .properties import (  # noqa: F401
     ProspectorProfile,

@@ -254,21 +254,18 @@ export function HeroCards({ onLoginClick, onRegisterClick }: HeroCardsProps) {
               )}
             </div>
           ) : (
-            <div className="text-center py-8 text-slate-500">
-              <svg
-                className="w-12 h-12 mx-auto mb-3 opacity-50"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
+            <div className="text-center py-6 text-slate-400">
+              <p className="text-sm mb-3">No upcoming events this week</p>
+              <p className="text-xs text-slate-500 mb-4">
+                Company speaking events and presentations are listed here when
+                scheduled.
+              </p>
+              <Link
+                href="/companies"
+                className="text-xs text-gold-400 hover:underline"
               >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={1.5}
-                  d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
-                />
-              </svg>
-              <p className="text-sm">No upcoming events this week</p>
+                Browse Companies →
+              </Link>
             </div>
           )}
         </CardContent>
@@ -358,7 +355,16 @@ export function HeroCards({ onLoginClick, onRegisterClick }: HeroCardsProps) {
                   d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
                 />
               </svg>
-              <p className="text-sm">No active financing opportunities</p>
+              <p className="text-sm mb-3">No active financing opportunities</p>
+              <p className="text-xs text-slate-500 mb-4">
+                Active private placements and bought deals appear here.
+              </p>
+              <Link
+                href="/closed-financings"
+                className="text-xs text-gold-400 hover:underline"
+              >
+                View Closed Financings →
+              </Link>
             </div>
           )}
         </CardContent>
@@ -521,7 +527,16 @@ export function HeroCards({ onLoginClick, onRegisterClick }: HeroCardsProps) {
                   d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
                 />
               </svg>
-              <p className="text-sm">No featured property available</p>
+              <p className="text-sm mb-3">No featured property available</p>
+              <p className="text-xs text-slate-500 mb-4">
+                Featured mining properties and claims are showcased here weekly.
+              </p>
+              <Link
+                href="/properties"
+                className="text-xs text-gold-400 hover:underline"
+              >
+                Browse Properties →
+              </Link>
             </div>
           )}
         </CardContent>

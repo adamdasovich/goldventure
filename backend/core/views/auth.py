@@ -250,6 +250,15 @@ def login_user(request):
     # Get full name
     user_full_name = f"{user.first_name} {user.last_name}".strip() or user.username
 
+    # Get subscription tier
+    login_sub_data = {'tier': 'explorer', 'effective_tier': 'explorer'}
+    try:
+        from ..models import PlatformSubscription
+        sub = PlatformSubscription.objects.get(user=user)
+        login_sub_data = {'tier': sub.tier, 'effective_tier': sub.effective_tier, 'features': sub.features}
+    except Exception:
+        pass
+
     return Response({
         'user': {
             'id': user.id,
@@ -259,6 +268,7 @@ def login_user(request):
             'user_type': user.user_type,
             'is_staff': user.is_staff,
             'is_superuser': user.is_superuser,
+            'subscription': login_sub_data,
         },
         'access': str(refresh.access_token),
         'refresh': str(refresh),
@@ -289,6 +299,25 @@ def get_current_user(request):
     # Get full name
     user_full_name = f"{user.first_name} {user.last_name}".strip() or user.username
 
+    # Get subscription tier
+    subscription_data = {'tier': 'explorer', 'effective_tier': 'explorer', 'features': {
+        'tier': 'explorer', 'daily_chat_limit': 5,
+        'investor_tools': ['grade-ranker', 'sector-pulse'],
+        'full_company_data': False, 'metals_history': False,
+        'financing_alerts': False, 'csv_export': False,
+        'api_access': False, 'ni43101_full_access': False, 'priority_chat': False,
+    }}
+    try:
+        from ..models import PlatformSubscription
+        sub = PlatformSubscription.objects.get(user=user)
+        subscription_data = {
+            'tier': sub.tier,
+            'effective_tier': sub.effective_tier,
+            'features': sub.features,
+        }
+    except Exception:
+        pass
+
     return Response({
         'id': user.id,
         'username': user.username,
@@ -299,6 +328,7 @@ def get_current_user(request):
         'is_superuser': user.is_superuser,
         'company_id': user.company_id,
         'company_name': user.company.name if user.company else None,
+        'subscription': subscription_data,
     }, status=status.HTTP_200_OK)
 
 

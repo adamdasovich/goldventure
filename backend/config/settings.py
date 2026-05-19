@@ -206,6 +206,9 @@ STRIPE_PRICE_ID = os.getenv('STRIPE_PRICE_ID', '')  # Optional: Pre-configured p
 # Stripe Store Webhook (separate webhook for e-commerce store)
 STRIPE_STORE_WEBHOOK_SECRET = os.getenv('STRIPE_STORE_WEBHOOK_SECRET', '')
 
+# Stripe Platform Subscription Webhook (user-level subscriptions)
+STRIPE_PLATFORM_WEBHOOK_SECRET = os.getenv('STRIPE_PLATFORM_WEBHOOK_SECRET', '')
+
 # ============================================================================
 # EMAIL CONFIGURATION
 # ============================================================================

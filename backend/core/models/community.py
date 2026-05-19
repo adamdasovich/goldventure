@@ -965,6 +965,169 @@ class UserAIUsage(models.Model):
 
 
 # ============================================================================
+# PLATFORM SUBSCRIPTION - User-level subscription tiers
+# ============================================================================
+
+class PlatformSubscription(models.Model):
+    """
+    User-level subscription for platform access tiers.
+    Free tier (explorer) is the default - no Stripe needed.
+    Paid tiers (prospector, miner) use Stripe subscriptions.
+    """
+    TIER_CHOICES = [
+        ('explorer', 'Explorer (Free)'),
+        ('prospector', 'Prospector'),
+        ('miner', 'Miner'),
+    ]
+
+    SUBSCRIPTION_STATUS = [
+        ('active', 'Active'),
+        ('trialing', 'Trial Period'),
+        ('past_due', 'Past Due'),
+        ('canceled', 'Canceled'),
+        ('unpaid', 'Unpaid'),
+        ('incomplete', 'Incomplete'),
+        ('incomplete_expired', 'Incomplete Expired'),
+    ]
+
+    INTERVAL_CHOICES = [
+        ('month', 'Monthly'),
+        ('year', 'Annual'),
+    ]
+
+    user = models.OneToOneField(
+        User,
+        on_delete=models.CASCADE,
+        related_name='platform_subscription'
+    )
+
+    # Tier & status
+    tier = models.CharField(max_length=20, choices=TIER_CHOICES, default='explorer')
+    status = models.CharField(max_length=30, choices=SUBSCRIPTION_STATUS, default='active')
+
+    # Stripe identifiers (empty for free tier)
+    stripe_customer_id = models.CharField(max_length=255, blank=True, default='')
+    stripe_subscription_id = models.CharField(max_length=255, blank=True, default='')
+    stripe_price_id = models.CharField(max_length=255, blank=True, default='')
+
+    # Plan details
+    plan_interval = models.CharField(max_length=10, choices=INTERVAL_CHOICES, default='month')
+    price_cents = models.IntegerField(default=0, help_text="Current price in cents")
+
+    # Trial period
+    trial_start = models.DateTimeField(null=True, blank=True)
+    trial_end = models.DateTimeField(null=True, blank=True)
+
+    # Billing period
+    current_period_start = models.DateTimeField(null=True, blank=True)
+    current_period_end = models.DateTimeField(null=True, blank=True)
+
+    # Cancellation
+    cancel_at_period_end = models.BooleanField(default=False)
+    canceled_at = models.DateTimeField(null=True, blank=True)
+
+    # Audit
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'platform_subscriptions'
+        indexes = [
+            models.Index(fields=['stripe_customer_id']),
+            models.Index(fields=['stripe_subscription_id']),
+            models.Index(fields=['tier']),
+            models.Index(fields=['status']),
+        ]
+
+    def __str__(self):
+        return f"{self.user.username} - {self.get_tier_display()} ({self.get_status_display()})"
+
+    @property
+    def is_active(self):
+        """Check if subscription is in good standing (includes trial)."""
+        return self.status in ('active', 'trialing')
+
+    @property
+    def is_paid_tier(self):
+        return self.tier in ('prospector', 'miner')
+
+    @property
+    def effective_tier(self):
+        """Return the tier the user should be treated as right now."""
+        if self.tier == 'explorer':
+            return 'explorer'
+        if self.is_active:
+            return self.tier
+        # Paid sub that lapsed -> treat as explorer
+        return 'explorer'
+
+    @property
+    def daily_chat_limit(self):
+        """Messages per day for this tier. 0 = unlimited."""
+        limits = {'explorer': 5, 'prospector': 0, 'miner': 0}
+        return limits.get(self.effective_tier, 5)
+
+    @property
+    def allowed_tools(self):
+        """Which investor tools this tier can access."""
+        free_tools = ['grade-ranker', 'sector-pulse']
+        if self.effective_tier in ('prospector', 'miner'):
+            return 'all'
+        return free_tools
+
+    @property
+    def features(self):
+        """Return a dict of feature flags for this tier."""
+        tier = self.effective_tier
+        return {
+            'tier': tier,
+            'daily_chat_limit': self.daily_chat_limit,
+            'investor_tools': self.allowed_tools,
+            'full_company_data': tier in ('prospector', 'miner'),
+            'metals_history': tier in ('prospector', 'miner'),
+            'financing_alerts': tier in ('prospector', 'miner'),
+            'csv_export': tier in ('prospector', 'miner'),
+            'api_access': tier == 'miner',
+            'ni43101_full_access': tier == 'miner',
+            'priority_chat': tier == 'miner',
+        }
+
+
+class PlatformSubscriptionInvoice(models.Model):
+    """Track Stripe invoices for platform user subscriptions."""
+    INVOICE_STATUS = [
+        ('draft', 'Draft'),
+        ('open', 'Open'),
+        ('paid', 'Paid'),
+        ('void', 'Void'),
+        ('uncollectible', 'Uncollectible'),
+    ]
+
+    subscription = models.ForeignKey(
+        PlatformSubscription,
+        on_delete=models.CASCADE,
+        related_name='invoices'
+    )
+    stripe_invoice_id = models.CharField(max_length=255, unique=True)
+    stripe_payment_intent_id = models.CharField(max_length=255, blank=True, default='')
+    status = models.CharField(max_length=20, choices=INVOICE_STATUS)
+    amount_cents = models.IntegerField(help_text="Amount in cents")
+    currency = models.CharField(max_length=3, default='usd')
+    invoice_date = models.DateTimeField()
+    paid_at = models.DateTimeField(null=True, blank=True)
+    invoice_pdf_url = models.URLField(blank=True, default='')
+    hosted_invoice_url = models.URLField(blank=True, default='')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'platform_subscription_invoices'
+        ordering = ['-invoice_date']
+
+    def __str__(self):
+        return f"{self.subscription.user.username} - ${self.amount_cents / 100:.2f} ({self.status})"
+
+
+# ============================================================================
 # FAILED TASK LOG - Dead Letter Queue for Celery
 # ============================================================================
 

@@ -1,13 +1,19 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import LogoMono from "@/components/LogoMono";
+import UpgradeModal from "@/components/UpgradeModal";
+import { useAuth } from "@/contexts/AuthContext";
+
+const FREE_TOOL_SLUGS = ["grade-ranker", "sector-pulse"];
 
 const TOOLS = [
   {
     title: "Resource Grade Ranker",
+    slug: "grade-ranker",
     description:
       "Rank all companies by resource grade and size. Filter by commodity, stage, and minimum resource. Find the highest-grade deposits at a glance.",
     href: "/investor-tools/grade-ranker",
@@ -17,6 +23,7 @@ const TOOLS = [
   },
   {
     title: "Peer Comparison Engine",
+    slug: "peer-comparison",
     description:
       "Compare any company against auto-detected peers on EV/oz, P/NAV, grade, AISC, and financing history. Find mispriced opportunities.",
     href: "/investor-tools/peer-comparison",
@@ -26,6 +33,7 @@ const TOOLS = [
   },
   {
     title: "Financing Flow Tracker",
+    slug: "financing-flow",
     description:
       "Track where capital is flowing in junior mining. Monthly trends, by commodity, by type. Spot smart money before the crowd.",
     href: "/investor-tools/financing-flow",
@@ -35,6 +43,7 @@ const TOOLS = [
   },
   {
     title: "Sector Pulse Dashboard",
+    slug: "sector-pulse",
     description:
       "Real-time sector overview: metals prices, market breadth, top gainers/losers, financing activity, and news volume.",
     href: "/investor-tools/sector-pulse",
@@ -44,6 +53,7 @@ const TOOLS = [
   },
   {
     title: "NI 43-101 Report Analyzer",
+    slug: "ni43-101-analyzer",
     description:
       "AI-powered analysis of technical reports. Get structured summaries, compare NPV vs market cap, and extract key data points.",
     href: "/investor-tools/ni43-101-analyzer",
@@ -53,6 +63,7 @@ const TOOLS = [
   },
   {
     title: "Drill Result Scanner",
+    slug: "drill-scanner",
     description:
       "Search press releases for drill results across all companies. Find the most active drillers and track exploration news by commodity.",
     href: "/investor-tools/drill-scanner",
@@ -62,6 +73,7 @@ const TOOLS = [
   },
   {
     title: "News Catalyst Calendar",
+    slug: "catalyst-calendar",
     description:
       "Track news release frequency by company. Spot quiet companies, find the most active newsmakers, and monitor weekly volume trends.",
     href: "/investor-tools/catalyst-calendar",
@@ -71,6 +83,7 @@ const TOOLS = [
   },
   {
     title: "Insider Activity Dashboard",
+    slug: "insider-activity",
     description:
       "Track management buying and selling from SEDI filings. Detect cluster buying — the strongest signal in junior mining.",
     href: "#",
@@ -80,6 +93,7 @@ const TOOLS = [
   },
   {
     title: "Property Valuation Tool",
+    slug: "property-valuation",
     description:
       "Compare property listings with $/hectare benchmarks by mineral and jurisdiction. Find undervalued exploration properties.",
     href: "/investor-tools/property-valuation",
@@ -89,6 +103,7 @@ const TOOLS = [
   },
   {
     title: "Portfolio X-Ray",
+    slug: "portfolio-xray",
     description:
       "Analyze a set of companies for commodity exposure, geographic concentration, stage diversification, and dilution risk.",
     href: "/investor-tools/portfolio-xray",
@@ -99,8 +114,34 @@ const TOOLS = [
 ];
 
 export default function InvestorToolsPage() {
+  const { subscription } = useAuth();
+  const [showUpgrade, setShowUpgrade] = useState(false);
+  const tier = subscription?.effective_tier || "explorer";
+  const hasFullAccess = tier === "prospector" || tier === "miner";
+
+  const isToolFree = (slug: string) => FREE_TOOL_SLUGS.includes(slug);
+
+  const handleToolClick = (
+    e: React.MouseEvent,
+    tool: (typeof TOOLS)[number],
+  ) => {
+    if (!tool.available) return;
+    if (!hasFullAccess && !isToolFree(tool.slug)) {
+      e.preventDefault();
+      setShowUpgrade(true);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-slate-900">
+      {showUpgrade && (
+        <UpgradeModal
+          onClose={() => setShowUpgrade(false)}
+          feature="All 10 Investor Tools"
+          requiredTier="prospector"
+        />
+      )}
+
       {/* Nav */}
       <nav className="glass-nav sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -142,6 +183,18 @@ export default function InvestorToolsPage() {
             Purpose-built analytics for junior mining investors. Screen,
             compare, and analyze 500+ companies with data-driven tools.
           </p>
+          {!hasFullAccess && (
+            <div className="mt-4">
+              <Link href="/pricing">
+                <Badge
+                  variant="slate"
+                  className="cursor-pointer hover:border-gold-400/50"
+                >
+                  Free tier: 2 tools &middot; Upgrade for all 10
+                </Badge>
+              </Link>
+            </div>
+          )}
         </div>
       </section>
 
@@ -149,57 +202,82 @@ export default function InvestorToolsPage() {
       <section className="py-12 px-4 sm:px-6 lg:px-8">
         <div className="max-w-7xl mx-auto">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-            {TOOLS.map((tool, i) => (
-              <Link
-                key={i}
-                href={tool.available ? tool.href : "#"}
-                className={`group block ${!tool.available ? "pointer-events-none opacity-60" : ""}`}
-              >
-                <div className="glass-card rounded-xl p-5 h-full flex flex-col transition-all hover:border-gold-400/30">
-                  {/* Header */}
-                  <div className="flex items-start justify-between mb-3">
-                    <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-gold-500/15 border border-gold-500/30 group-hover:scale-110 transition-transform">
-                      <svg
-                        className="w-5 h-5 text-gold-400"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
+            {TOOLS.map((tool, i) => {
+              const isFree = isToolFree(tool.slug);
+              const isLocked = !hasFullAccess && !isFree && tool.available;
+
+              return (
+                <Link
+                  key={i}
+                  href={tool.available ? tool.href : "#"}
+                  onClick={(e) => handleToolClick(e, tool)}
+                  className={`group block ${!tool.available ? "pointer-events-none opacity-60" : ""}`}
+                >
+                  <div
+                    className={`glass-card rounded-xl p-5 h-full flex flex-col transition-all hover:border-gold-400/30 ${isLocked ? "relative" : ""}`}
+                  >
+                    {/* Lock overlay for premium tools */}
+                    {isLocked && (
+                      <div className="absolute top-3 right-3">
+                        <svg
+                          className="w-4 h-4 text-slate-500"
+                          fill="currentColor"
+                          viewBox="0 0 20 20"
+                        >
+                          <path
+                            fillRule="evenodd"
+                            d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z"
+                            clipRule="evenodd"
+                          />
+                        </svg>
+                      </div>
+                    )}
+
+                    {/* Header */}
+                    <div className="flex items-start justify-between mb-3">
+                      <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-gold-500/15 border border-gold-500/30 group-hover:scale-110 transition-transform">
+                        <svg
+                          className="w-5 h-5 text-gold-400"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d={tool.icon}
+                          />
+                        </svg>
+                      </div>
+                      <Badge
+                        variant={tool.available ? "gold" : "slate"}
+                        className="text-[10px]"
                       >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d={tool.icon}
-                        />
-                      </svg>
+                        {tool.badge}
+                      </Badge>
                     </div>
-                    <Badge
-                      variant={tool.available ? "gold" : "slate"}
-                      className="text-[10px]"
-                    >
-                      {tool.badge}
-                    </Badge>
+
+                    {/* Content */}
+                    <h3 className="text-lg font-semibold text-slate-200 group-hover:text-gold-400 transition-colors mb-2">
+                      {tool.title}
+                    </h3>
+                    <p className="text-sm text-slate-400 leading-relaxed flex-1">
+                      {tool.description}
+                    </p>
+
+                    {/* CTA */}
+                    {tool.available && (
+                      <div className="mt-4 pt-3 border-t border-slate-700/50">
+                        <span className="text-sm text-gold-400 font-medium group-hover:underline">
+                          {isLocked ? "Upgrade to Access →" : "Launch Tool →"}
+                        </span>
+                      </div>
+                    )}
                   </div>
-
-                  {/* Content */}
-                  <h3 className="text-lg font-semibold text-slate-200 group-hover:text-gold-400 transition-colors mb-2">
-                    {tool.title}
-                  </h3>
-                  <p className="text-sm text-slate-400 leading-relaxed flex-1">
-                    {tool.description}
-                  </p>
-
-                  {/* CTA */}
-                  {tool.available && (
-                    <div className="mt-4 pt-3 border-t border-slate-700/50">
-                      <span className="text-sm text-gold-400 font-medium group-hover:underline">
-                        Launch Tool →
-                      </span>
-                    </div>
-                  )}
-                </div>
-              </Link>
-            ))}
+                </Link>
+              );
+            })}
           </div>
         </div>
       </section>

@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import Link from "next/link";
 import Image from "next/image";
+import { useRouter } from "next/navigation";
 import ChatInterface from "@/components/ChatInterface";
 import NewsArticles from "@/components/NewsArticles";
 import { Button } from "@/components/ui/Button";
@@ -13,7 +14,7 @@ import { LoginModal, RegisterModal } from "@/components/auth";
 import { useAuth } from "@/contexts/AuthContext";
 import { CartButton } from "@/components/store";
 import MetalsTicker from "@/components/MetalsTicker";
-import Testimonials from "@/components/Testimonials";
+import { companyAPI } from "@/lib/api";
 
 /* ─── Nav link data ─── */
 const NAV_LINKS = [
@@ -26,6 +27,58 @@ const NAV_LINKS = [
   { href: "/store", label: "Store" },
 ];
 
+const FEATURES = [
+  {
+    title: "AI Mining Assistant",
+    description:
+      "Ask Claude anything about companies, resources, projects, and financings. Powered by real-time MCP data access.",
+    icon: "M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z",
+    href: "#chat-section",
+  },
+  {
+    title: "10 Investor Tools",
+    description:
+      "Grade Ranker, Peer Comparison, Financing Flow, Drill Scanner, NI 43-101 Analyzer, and more.",
+    icon: "M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z",
+    href: "/investor-tools",
+  },
+  {
+    title: "Company Database",
+    description:
+      "500+ junior mining companies with profiles, projects, resource estimates, financings, and news releases.",
+    icon: "M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4",
+    href: "/companies",
+  },
+  {
+    title: "Prospector's Exchange",
+    description:
+      "Marketplace connecting property holders with investors. Browse mineral claims, exploration properties, and joint ventures.",
+    icon: "M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z",
+    href: "/properties",
+  },
+  {
+    title: "Financing Tracker",
+    description:
+      "Track active and closed private placements, bought deals, and flow-through financings across the sector.",
+    icon: "M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z",
+    href: "/closed-financings",
+  },
+  {
+    title: "Real-Time Metals",
+    description:
+      "Live pricing for gold, silver, platinum, palladium, and top-moving mining stocks with historical charts.",
+    icon: "M13 7h8m0 0v8m0-8l-8 8-4-4-6 6",
+    href: "/metals",
+  },
+];
+
+interface SearchResult {
+  id: number;
+  name: string;
+  ticker_symbol: string;
+  primary_commodity: string;
+}
+
 interface HomeClientProps {
   initialArticles?: any[];
 }
@@ -34,34 +87,72 @@ export default function HomeClient({ initialArticles }: HomeClientProps) {
   const [showLogin, setShowLogin] = useState(false);
   const [showRegister, setShowRegister] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [isVibrating, setIsVibrating] = useState(false);
   const { user, logout } = useAuth();
   const newsSectionRef = useRef<HTMLElement>(null);
   const chatSectionRef = useRef<HTMLElement>(null);
+  const router = useRouter();
 
-  const handleSocratesFart = useCallback(() => {
-    if (isVibrating) return;
-    setIsVibrating(true);
+  // Search state
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-    try {
-      const audio = new Audio("/sounds/fart.mp3");
-      audio.play();
-    } catch {
-      // Audio not supported
+  // Platform stats
+  const [stats, setStats] = useState({
+    companies: 500,
+    projects: 0,
+    financings: 0,
+    news_articles: 0,
+  });
+
+  useEffect(() => {
+    fetch(
+      `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api"}/platform-stats/`,
+    )
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => data && setStats(data))
+      .catch(() => {});
+  }, []);
+
+  // Debounced company search
+  const handleSearchChange = useCallback((value: string) => {
+    setSearchQuery(value);
+    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+    if (value.trim().length < 2) {
+      setSearchResults([]);
+      setSearchOpen(false);
+      return;
     }
+    searchTimeoutRef.current = setTimeout(async () => {
+      try {
+        const res = await companyAPI.getAll({
+          search: value.trim(),
+          page_size: 6,
+        });
+        setSearchResults(res.results as any);
+        setSearchOpen(true);
+      } catch {
+        setSearchResults([]);
+      }
+    }, 300);
+  }, []);
 
-    setTimeout(() => setIsVibrating(false), 1200);
-  }, [isVibrating]);
-
-  const scrollToNews = () => {
-    newsSectionRef.current?.scrollIntoView({ behavior: "smooth" });
+  const handleSearchSelect = (company: SearchResult) => {
+    setSearchQuery("");
+    setSearchOpen(false);
+    router.push(`/companies/${company.id}`);
   };
 
   const scrollToChat = () => {
     chatSectionRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
-  // Close mobile menu on resize to desktop
+  const scrollToNews = () => {
+    newsSectionRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  // Close mobile menu on resize
   useEffect(() => {
     const handleResize = () => {
       if (window.innerWidth >= 1024) setMobileMenuOpen(false);
@@ -88,7 +179,6 @@ export default function HomeClient({ initialArticles }: HomeClientProps) {
       >
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-20 lg:h-24">
-            {/* Logo */}
             <Link
               href="/"
               className="flex items-center space-x-3 flex-shrink-0"
@@ -96,7 +186,7 @@ export default function HomeClient({ initialArticles }: HomeClientProps) {
               <LogoMono className="h-12 lg:h-16" />
             </Link>
 
-            {/* Desktop Nav Links */}
+            {/* Desktop Nav */}
             <div className="hidden lg:flex items-center space-x-1">
               {NAV_LINKS.map((link) => (
                 <Link key={link.href} href={link.href}>
@@ -105,6 +195,11 @@ export default function HomeClient({ initialArticles }: HomeClientProps) {
                   </Button>
                 </Link>
               ))}
+              <Link href="/pricing">
+                <Button variant="ghost" size="sm">
+                  Pricing
+                </Button>
+              </Link>
               <CartButton />
 
               {user ? (
@@ -179,7 +274,7 @@ export default function HomeClient({ initialArticles }: HomeClientProps) {
           </div>
         </div>
 
-        {/* Mobile Menu Dropdown */}
+        {/* Mobile Menu */}
         {mobileMenuOpen && (
           <div className="lg:hidden mobile-nav-overlay border-t border-slate-700/50 animate-slide-in-up">
             <div className="px-4 py-4 space-y-1">
@@ -193,6 +288,13 @@ export default function HomeClient({ initialArticles }: HomeClientProps) {
                   {link.label}
                 </Link>
               ))}
+              <Link
+                href="/pricing"
+                onClick={() => setMobileMenuOpen(false)}
+                className="block px-4 py-3 rounded-lg text-gold-400 hover:bg-slate-800/50 transition-colors"
+              >
+                Pricing
+              </Link>
               <div className="pt-3 mt-3 border-t border-slate-700/50 space-y-2">
                 {user ? (
                   <>
@@ -270,7 +372,6 @@ export default function HomeClient({ initialArticles }: HomeClientProps) {
 
       {/* ════════ Hero Section ════════ */}
       <section className="relative py-16 md:py-24 px-4 sm:px-6 lg:px-8 overflow-hidden">
-        {/* Layered background effects */}
         <div className="absolute inset-0 bg-gradient-to-b from-[#0a0e1a] via-slate-900 to-slate-800"></div>
         <div className="absolute inset-0 hero-grid"></div>
         <div
@@ -280,131 +381,212 @@ export default function HomeClient({ initialArticles }: HomeClientProps) {
               "radial-gradient(circle at 30% 40%, rgba(212, 161, 42, 0.15) 0%, transparent 50%), radial-gradient(circle at 70% 60%, rgba(184, 134, 11, 0.08) 0%, transparent 40%)",
           }}
         ></div>
-        {/* Floating gold particles */}
         <div className="hero-particles"></div>
-        <div
-          className="absolute top-[15%] left-[10%] w-2 h-2 bg-gold-400/30 rounded-full animate-float"
-          style={{ animationDelay: "1s" }}
-        ></div>
-        <div
-          className="absolute top-[40%] right-[12%] w-3 h-3 bg-gold-500/20 rounded-full animate-float-slow"
-          style={{ animationDelay: "3s" }}
-        ></div>
-        <div
-          className="absolute bottom-[25%] left-[25%] w-1.5 h-1.5 bg-gold-300/25 rounded-full animate-float"
-          style={{ animationDelay: "2s" }}
-        ></div>
-        <div
-          className="absolute top-[70%] right-[30%] w-2 h-2 bg-gold-400/20 rounded-full animate-float-slow"
-          style={{ animationDelay: "4s" }}
-        ></div>
 
         <div className="relative max-w-7xl mx-auto">
-          {/* Hero content: two-column on desktop */}
-          <div className="flex flex-col lg:flex-row items-center gap-8 lg:gap-16 mb-16">
-            {/* Left: Text content */}
-            <div className="flex-1 text-center lg:text-left">
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-gold-500/10 border border-gold-500/20 mb-6 animate-fade-in">
-                <span className="w-2 h-2 bg-gold-400 rounded-full animate-pulse"></span>
-                <span className="text-sm text-gold-400 font-medium">
-                  AI-Powered Mining Research
-                </span>
-              </div>
+          {/* Hero content */}
+          <div className="text-center max-w-3xl mx-auto mb-12">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-gold-500/10 border border-gold-500/20 mb-6 animate-fade-in">
+              <span className="w-2 h-2 bg-gold-400 rounded-full animate-pulse"></span>
+              <span className="text-sm text-gold-400 font-medium">
+                AI-Powered Mining Research
+              </span>
+            </div>
 
-              <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold mb-6 text-gradient-gold animate-fade-in leading-tight pb-2">
-                Junior Mining Intelligence
-              </h1>
-              <p className="text-lg sm:text-xl text-slate-300 max-w-2xl animate-slide-in-up mb-8">
-                Track 500+ TSXV/TSX mining stocks with real-time exploration
-                data, NI 43-101 reports, resource estimates, and AI-powered
-                project analytics across gold, silver, lithium, copper, rare
-                earths & critical minerals.
-              </p>
+            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold mb-6 text-gradient-gold animate-fade-in leading-tight pb-2">
+              Junior Mining Intelligence
+            </h1>
+            <p className="text-lg sm:text-xl text-slate-300 animate-slide-in-up mb-8">
+              Track {stats.companies}+ TSXV/TSX mining stocks with real-time
+              exploration data, NI 43-101 reports, resource estimates, and
+              AI-powered analytics.
+            </p>
 
-              {/* Primary CTAs */}
-              <div className="flex flex-col sm:flex-row gap-3 justify-center lg:justify-start animate-slide-in-up">
-                <Link href="/companies">
-                  <Button
-                    variant="primary"
-                    size="lg"
-                    className="cta-glow w-full sm:w-auto"
-                  >
-                    Explore Companies
-                  </Button>
-                </Link>
-                <Button
-                  variant="secondary"
-                  size="lg"
-                  onClick={scrollToChat}
-                  className="w-full sm:w-auto"
+            {/* ── Search Bar ── */}
+            <div className="relative max-w-xl mx-auto mb-8 animate-slide-in-up">
+              <div className="relative">
+                <svg
+                  className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
                 >
-                  Ask the AI Assistant
-                </Button>
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                  />
+                </svg>
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => handleSearchChange(e.target.value)}
+                  onFocus={() =>
+                    searchResults.length > 0 && setSearchOpen(true)
+                  }
+                  onBlur={() => setTimeout(() => setSearchOpen(false), 200)}
+                  placeholder="Search companies by name or ticker..."
+                  className="w-full pl-12 pr-4 py-4 rounded-xl bg-slate-800/80 border border-slate-600/50 text-white placeholder-slate-400 focus:outline-none focus:border-gold-500/50 focus:ring-1 focus:ring-gold-500/30 text-base backdrop-blur-sm"
+                />
               </div>
+
+              {/* Search Dropdown */}
+              {searchOpen && searchResults.length > 0 && (
+                <div className="absolute top-full left-0 right-0 mt-2 bg-slate-800/95 border border-slate-700/50 rounded-xl shadow-2xl backdrop-blur-sm z-20 overflow-hidden">
+                  {searchResults.map((company) => (
+                    <button
+                      key={company.id}
+                      onMouseDown={() => handleSearchSelect(company)}
+                      className="w-full flex items-center justify-between px-4 py-3 hover:bg-gold-500/10 transition-colors text-left"
+                    >
+                      <div>
+                        <p className="text-sm font-medium text-white">
+                          {company.name}
+                        </p>
+                        <p className="text-xs text-slate-400">
+                          {company.ticker_symbol}
+                        </p>
+                      </div>
+                      {company.primary_commodity && (
+                        <span className="text-xs text-gold-400 bg-gold-500/10 px-2 py-0.5 rounded">
+                          {company.primary_commodity}
+                        </span>
+                      )}
+                    </button>
+                  ))}
+                  <Link
+                    href={`/companies?search=${encodeURIComponent(searchQuery)}`}
+                    className="block px-4 py-3 text-center text-sm text-gold-400 hover:bg-gold-500/10 border-t border-slate-700/50"
+                  >
+                    View all results →
+                  </Link>
+                </div>
+              )}
             </div>
 
-            {/* Right: Socrates Miner + secondary CTAs */}
-            <div className="flex-shrink-0 flex flex-col items-center animate-fade-in">
-              <button
-                onClick={handleSocratesFart}
-                className="relative cursor-pointer bg-transparent border-0 p-0"
-                aria-label="Click Socrates"
+            {/* Primary CTAs */}
+            <div className="flex flex-col sm:flex-row gap-3 justify-center animate-slide-in-up">
+              <Link href="/companies">
+                <Button
+                  variant="primary"
+                  size="lg"
+                  className="cta-glow w-full sm:w-auto"
+                >
+                  Explore Companies
+                </Button>
+              </Link>
+              <Button
+                variant="secondary"
+                size="lg"
+                onClick={scrollToChat}
+                className="w-full sm:w-auto"
               >
-                <div className="absolute inset-0 rounded-full bg-gold-500/10 blur-3xl scale-110"></div>
-                <Image
-                  src="/images/socrates-miner.png"
-                  alt="Junior Mining Intelligence Platform - AI-Powered Mining Stock Analysis"
-                  width={280}
-                  height={280}
-                  className={`relative w-48 sm:w-56 lg:w-64 h-auto opacity-90 hover:opacity-100 transition-opacity duration-300 drop-shadow-2xl ${isVibrating ? "animate-vibrate" : ""}`}
-                  priority
-                />
-              </button>
-              <div className="flex flex-wrap gap-2 mt-6 justify-center">
-                <Link href="/properties">
-                  <Button variant="ghost" size="sm">
-                    Prospector&apos;s Exchange
-                  </Button>
-                </Link>
-                <Link href="/guides">
-                  <Button variant="ghost" size="sm">
-                    Investment Guides
-                  </Button>
-                </Link>
-              </div>
+                Ask the AI Assistant
+              </Button>
             </div>
+          </div>
+
+          {/* ── Stats Bar ── */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-12 animate-fade-in">
+            {[
+              { value: `${stats.companies}+`, label: "Companies Tracked" },
+              { value: "10", label: "Investor Tools" },
+              { value: "3x Daily", label: "News Updates" },
+              { value: "AI", label: "Powered by Claude" },
+            ].map((stat, i) => (
+              <div key={i} className="text-center stat-item py-3">
+                <p className="text-2xl sm:text-3xl font-bold text-gradient-gold">
+                  {stat.value}
+                </p>
+                <p className="text-xs sm:text-sm text-slate-400 mt-1">
+                  {stat.label}
+                </p>
+              </div>
+            ))}
           </div>
 
           {/* Gold accent line */}
           <div className="accent-line-animated mb-12"></div>
 
-          {/* Three Content Cards */}
+          {/* Three Hero Cards */}
           <div className="mb-12">
             <HeroCards
               onLoginClick={() => setShowLogin(true)}
               onRegisterClick={() => setShowRegister(true)}
             />
           </div>
+        </div>
+      </section>
 
-          {/* Secondary Navigation Buttons */}
-          <div className="flex flex-wrap gap-3 justify-center mb-10">
-            <Link href="/closed-financings">
-              <Button variant="ghost" size="md">
-                Closed Financings
+      {/* ════════ Features Showcase ════════ */}
+      <section className="py-16 md:py-20 px-4 sm:px-6 lg:px-8 bg-gradient-slate">
+        <div className="max-w-7xl mx-auto">
+          <div className="text-center mb-12">
+            <Badge variant="gold" className="mb-4">
+              Platform Features
+            </Badge>
+            <h2 className="text-3xl sm:text-4xl font-bold text-gradient-gold mb-4">
+              Everything You Need for Mining Research
+            </h2>
+            <p className="text-slate-300 text-lg max-w-2xl mx-auto">
+              From AI-powered analysis to real-time market data, our platform
+              gives you the edge in junior mining investment.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+            {FEATURES.map((feature, i) => (
+              <Link key={i} href={feature.href} className="group block">
+                <div className="glass-card feature-card rounded-xl p-5 h-full">
+                  <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-gold-500/15 border border-gold-500/30 mb-4 feature-icon">
+                    <svg
+                      className="w-5 h-5 text-gold-400"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d={feature.icon}
+                      />
+                    </svg>
+                  </div>
+                  <h3 className="text-lg font-semibold text-slate-200 group-hover:text-gold-400 transition-colors mb-2">
+                    {feature.title}
+                  </h3>
+                  <p className="text-sm text-slate-400 leading-relaxed">
+                    {feature.description}
+                  </p>
+                </div>
+              </Link>
+            ))}
+          </div>
+
+          {/* Pricing CTA */}
+          <div className="text-center mt-10">
+            <p className="text-slate-400 mb-3">
+              Start free. Upgrade when you&apos;re ready.
+            </p>
+            <Link href="/pricing">
+              <Button variant="secondary" size="lg">
+                View Plans &amp; Pricing
               </Button>
             </Link>
-            <Button variant="ghost" size="md" onClick={scrollToNews}>
-              Latest News
-            </Button>
           </div>
         </div>
       </section>
+
+      {/* Section Divider */}
+      <div className="section-divider"></div>
 
       {/* ════════ Chat Interface Section ════════ */}
       <section
         ref={chatSectionRef}
         id="chat-section"
-        className="py-16 md:py-20 px-4 sm:px-6 lg:px-8 bg-gradient-slate"
+        className="py-16 md:py-20 px-4 sm:px-6 lg:px-8"
       >
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-12">
@@ -416,8 +598,7 @@ export default function HomeClient({ initialArticles }: HomeClientProps) {
             </h2>
             <p className="text-slate-300 text-lg max-w-2xl mx-auto">
               Natural language access to exploration projects, NI 43-101
-              resources, prospector listings, and economic studies. Claude AI
-              queries mining data in real-time via MCP servers.
+              resources, prospector listings, and economic studies.
             </p>
           </div>
 
@@ -428,11 +609,11 @@ export default function HomeClient({ initialArticles }: HomeClientProps) {
       {/* Section Divider */}
       <div className="section-divider"></div>
 
-      {/* ════════ News Articles Section (Full) ════════ */}
+      {/* ════════ News Articles Section ════════ */}
       <section
         ref={newsSectionRef}
         id="news-section"
-        className="py-16 md:py-20 px-4 sm:px-6 lg:px-8"
+        className="py-16 md:py-20 px-4 sm:px-6 lg:px-8 bg-gradient-slate"
       >
         <div className="max-w-4xl mx-auto">
           <div className="text-center mb-8">
@@ -440,41 +621,56 @@ export default function HomeClient({ initialArticles }: HomeClientProps) {
               Updated 3x Daily
             </Badge>
             <h2 className="text-3xl sm:text-4xl font-bold text-gradient-gold mb-4">
-              Latest Mining News & Industry Updates
+              Latest Mining News
             </h2>
             <p className="text-slate-300 text-lg max-w-2xl mx-auto">
-              Track exploration discoveries, TSXV market updates, and industry
-              developments across gold, silver, lithium, copper & critical
+              Exploration discoveries, TSXV market updates, and industry
+              developments across gold, silver, lithium, copper &amp; critical
               minerals.
             </p>
           </div>
 
           <div className="backdrop-blur-sm bg-slate-800/30 border border-slate-700/50 rounded-xl p-6">
             <NewsArticles
-              initialLimit={50}
+              initialLimit={8}
               showLoadMore={true}
-              initialArticles={initialArticles}
+              initialArticles={initialArticles?.slice(0, 8)}
             />
           </div>
         </div>
       </section>
 
-      {/* ════════ Testimonials ════════ */}
-      <section className="py-12 md:py-16 px-4 sm:px-6 lg:px-8 bg-gradient-slate">
-        <div className="max-w-5xl mx-auto">
-          <div className="text-center mb-8">
-            <Badge variant="gold" className="mb-3">
-              Trusted by Investors
-            </Badge>
-            <h2 className="text-2xl sm:text-3xl font-bold text-gradient-gold">
-              What Our Users Say
-            </h2>
-          </div>
-          <Testimonials />
-          <p className="text-[10px] text-slate-600 text-center mt-4">
-            Testimonials reflect individual experiences. Past results do not
-            guarantee future performance.
+      {/* ════════ Pricing CTA Section ════════ */}
+      <section className="py-12 md:py-16 px-4 sm:px-6 lg:px-8">
+        <div className="max-w-4xl mx-auto text-center">
+          <h2 className="text-2xl sm:text-3xl font-bold text-gradient-gold mb-4">
+            Ready for Unlimited Mining Intelligence?
+          </h2>
+          <p className="text-slate-300 mb-6 max-w-xl mx-auto">
+            Start free with 5 AI messages per day and 2 investor tools. Upgrade
+            for unlimited access, all tools, and full data.
           </p>
+          <div className="flex flex-col sm:flex-row gap-3 justify-center">
+            <Link href="/pricing">
+              <Button
+                variant="primary"
+                size="lg"
+                className="cta-glow w-full sm:w-auto"
+              >
+                View Plans &amp; Pricing
+              </Button>
+            </Link>
+            {!user && (
+              <Button
+                variant="secondary"
+                size="lg"
+                onClick={() => setShowRegister(true)}
+                className="w-full sm:w-auto"
+              >
+                Create Free Account
+              </Button>
+            )}
+          </div>
         </div>
       </section>
 
@@ -487,9 +683,8 @@ export default function HomeClient({ initialArticles }: HomeClientProps) {
               <LogoMono className="h-12 lg:h-16" />
             </div>
 
-            {/* Footer nav links */}
             <div className="flex flex-wrap gap-4 justify-center">
-              {NAV_LINKS.slice(0, 5).map((link) => (
+              {NAV_LINKS.map((link) => (
                 <Link
                   key={link.href}
                   href={link.href}
@@ -498,9 +693,15 @@ export default function HomeClient({ initialArticles }: HomeClientProps) {
                   {link.label}
                 </Link>
               ))}
+              <Link
+                href="/pricing"
+                className="text-sm text-slate-400 hover:text-gold-400 transition-colors"
+              >
+                Pricing
+              </Link>
             </div>
 
-            {/* Social Media Links */}
+            {/* Social */}
             <div className="flex space-x-4">
               <a
                 href="https://www.linkedin.com/company/juniorminingintelligence"
@@ -557,18 +758,32 @@ export default function HomeClient({ initialArticles }: HomeClientProps) {
             </div>
           </div>
 
-          {/* Divider */}
           <div className="section-divider mb-6"></div>
 
-          {/* Bottom: tagline + badges */}
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
             <p className="text-sm text-slate-500">
-              AI-Powered Mining Intelligence Platform
+              &copy; {new Date().getFullYear()} Junior Mining Intelligence. All
+              rights reserved.
             </p>
-            <div className="flex gap-2">
-              <Badge variant="slate">Next.js</Badge>
-              <Badge variant="slate">Django</Badge>
-              <Badge variant="slate">PostgreSQL</Badge>
+            <div className="flex gap-4 text-sm text-slate-500">
+              <Link
+                href="/about"
+                className="hover:text-gold-400 transition-colors"
+              >
+                About
+              </Link>
+              <Link
+                href="/glossary"
+                className="hover:text-gold-400 transition-colors"
+              >
+                Glossary
+              </Link>
+              <Link
+                href="/guides"
+                className="hover:text-gold-400 transition-colors"
+              >
+                Guides
+              </Link>
             </div>
           </div>
         </div>

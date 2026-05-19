@@ -1242,6 +1242,53 @@ export const storeAdminAPI = {
   },
 };
 
+// ============================================================================
+// Platform Subscription API
+// ============================================================================
+
+export const platformAPI = {
+  getTiers: () => apiFetch<{ tiers: any[] }>("/platform/tiers/"),
+
+  getSubscription: (accessToken: string) =>
+    apiFetch<any>("/platform/subscription/", {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    }),
+
+  createCheckout: (
+    accessToken: string,
+    tier: string,
+    interval: string,
+    baseUrl?: string,
+  ) =>
+    apiFetch<{ checkout_url: string; session_id: string }>(
+      "/platform/checkout/",
+      {
+        method: "POST",
+        headers: { Authorization: `Bearer ${accessToken}` },
+        body: JSON.stringify({ tier, interval, base_url: baseUrl }),
+      },
+    ),
+
+  getBillingPortal: (accessToken: string, returnUrl?: string) =>
+    apiFetch<{ portal_url: string }>("/platform/billing-portal/", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${accessToken}` },
+      body: JSON.stringify({ return_url: returnUrl }),
+    }),
+
+  cancel: (accessToken: string) =>
+    apiFetch<{ message: string }>("/platform/cancel/", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${accessToken}` },
+    }),
+
+  reactivate: (accessToken: string) =>
+    apiFetch<{ message: string }>("/platform/reactivate/", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${accessToken}` },
+    }),
+};
+
 // Re-export types for convenience
 export type {
   Company,

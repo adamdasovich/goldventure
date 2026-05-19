@@ -1,6 +1,33 @@
-'use client';
+"use client";
 
-import { createContext, useContext, useState, useEffect, useRef, useCallback, ReactNode } from 'react';
+import {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  useRef,
+  useCallback,
+  ReactNode,
+} from "react";
+
+interface SubscriptionFeatures {
+  tier: string;
+  daily_chat_limit: number;
+  investor_tools: string[] | "all";
+  full_company_data: boolean;
+  metals_history: boolean;
+  financing_alerts: boolean;
+  csv_export: boolean;
+  api_access: boolean;
+  ni43101_full_access: boolean;
+  priority_chat: boolean;
+}
+
+interface SubscriptionInfo {
+  tier: string;
+  effective_tier: string;
+  features?: SubscriptionFeatures;
+}
 
 interface User {
   id: number;
@@ -12,6 +39,7 @@ interface User {
   is_superuser?: boolean;
   company_id?: number | null;
   company_name?: string | null;
+  subscription?: SubscriptionInfo;
 }
 
 interface AuthContextType {
@@ -19,8 +47,15 @@ interface AuthContextType {
   accessToken: string | null;
   isAuthenticated: boolean;
   isLoading: boolean;
+  subscription: SubscriptionInfo;
   login: (username: string, password: string) => Promise<void>;
-  register: (username: string, email: string, password: string, fullName: string, userType: string) => Promise<void>;
+  register: (
+    username: string,
+    email: string,
+    password: string,
+    fullName: string,
+    userType: string,
+  ) => Promise<void>;
   logout: () => void;
   refreshAccessToken: () => Promise<string | null>;
 }
@@ -44,7 +79,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return accessToken;
     }
 
-    const refreshToken = localStorage.getItem('refreshToken');
+    const refreshToken = localStorage.getItem("refreshToken");
     if (!refreshToken) {
       return null;
     }
@@ -52,28 +87,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     isRefreshingRef.current = true;
 
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api'}/auth/token/refresh/`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api"}/auth/token/refresh/`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ refresh: refreshToken }),
         },
-        body: JSON.stringify({ refresh: refreshToken }),
-      });
+      );
 
       if (!response.ok) {
         // Refresh token is invalid, log out
-        throw new Error('Refresh token expired');
+        throw new Error("Refresh token expired");
       }
 
       const data = await response.json();
       const newAccessToken = data.access;
 
       setAccessToken(newAccessToken);
-      localStorage.setItem('accessToken', newAccessToken);
+      localStorage.setItem("accessToken", newAccessToken);
 
       // If a new refresh token was returned (token rotation), store it
       if (data.refresh) {
-        localStorage.setItem('refreshToken', data.refresh);
+        localStorage.setItem("refreshToken", data.refresh);
       }
 
       return newAccessToken;
@@ -101,8 +139,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Load user from localStorage on mount
   useEffect(() => {
-    const storedToken = localStorage.getItem('accessToken');
-    const storedUser = localStorage.getItem('user');
+    const storedToken = localStorage.getItem("accessToken");
+    const storedUser = localStorage.getItem("user");
 
     if (storedToken && storedUser) {
       setAccessToken(storedToken);
@@ -111,9 +149,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(JSON.parse(storedUser));
       } catch {
         // Corrupted user data, clear storage
-        localStorage.removeItem('user');
-        localStorage.removeItem('accessToken');
-        localStorage.removeItem('refreshToken');
+        localStorage.removeItem("user");
+        localStorage.removeItem("accessToken");
+        localStorage.removeItem("refreshToken");
         setIsLoading(false);
         return;
       }
@@ -146,40 +184,46 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const fetchCurrentUser = async (token: string) => {
-    const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api'}/auth/me/`, {
-      headers: {
-        'Authorization': `Bearer ${token}`,
+    const response = await fetch(
+      `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api"}/auth/me/`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
       },
-    });
+    );
 
     if (!response.ok) {
-      throw new Error('Failed to fetch user');
+      throw new Error("Failed to fetch user");
     }
 
     const userData = await response.json();
     setUser(userData);
-    localStorage.setItem('user', JSON.stringify(userData));
+    localStorage.setItem("user", JSON.stringify(userData));
   };
 
   const login = async (username: string, password: string) => {
     // Clear any existing auth data first
-    localStorage.removeItem('accessToken');
-    localStorage.removeItem('refreshToken');
-    localStorage.removeItem('user');
+    localStorage.removeItem("accessToken");
+    localStorage.removeItem("refreshToken");
+    localStorage.removeItem("user");
     setUser(null);
     setAccessToken(null);
 
-    const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api'}/auth/login/`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
+    const response = await fetch(
+      `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api"}/auth/login/`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ username, password }),
       },
-      body: JSON.stringify({ username, password }),
-    });
+    );
 
     if (!response.ok) {
       const error = await response.json();
-      throw new Error(error.error || 'Login failed');
+      throw new Error(error.error || "Login failed");
     }
 
     const data = await response.json();
@@ -187,9 +231,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(data.user);
     setAccessToken(data.access);
 
-    localStorage.setItem('accessToken', data.access);
-    localStorage.setItem('refreshToken', data.refresh);
-    localStorage.setItem('user', JSON.stringify(data.user));
+    localStorage.setItem("accessToken", data.access);
+    localStorage.setItem("refreshToken", data.refresh);
+    localStorage.setItem("user", JSON.stringify(data.user));
 
     // Set up automatic token refresh
     setupTokenRefresh();
@@ -203,32 +247,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     email: string,
     password: string,
     fullName: string,
-    userType: string
+    userType: string,
   ) => {
     // Clear any existing auth data first
-    localStorage.removeItem('accessToken');
-    localStorage.removeItem('refreshToken');
-    localStorage.removeItem('user');
+    localStorage.removeItem("accessToken");
+    localStorage.removeItem("refreshToken");
+    localStorage.removeItem("user");
     setUser(null);
     setAccessToken(null);
 
-    const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api'}/auth/register/`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
+    const response = await fetch(
+      `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api"}/auth/register/`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          username,
+          email,
+          password,
+          full_name: fullName,
+          user_type: userType,
+        }),
       },
-      body: JSON.stringify({
-        username,
-        email,
-        password,
-        full_name: fullName,
-        user_type: userType,
-      }),
-    });
+    );
 
     if (!response.ok) {
       const error = await response.json();
-      throw new Error(error.error || 'Registration failed');
+      throw new Error(error.error || "Registration failed");
     }
 
     const data = await response.json();
@@ -236,9 +283,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(data.user);
     setAccessToken(data.access);
 
-    localStorage.setItem('accessToken', data.access);
-    localStorage.setItem('refreshToken', data.refresh);
-    localStorage.setItem('user', JSON.stringify(data.user));
+    localStorage.setItem("accessToken", data.access);
+    localStorage.setItem("refreshToken", data.refresh);
+    localStorage.setItem("user", JSON.stringify(data.user));
 
     // Set up automatic token refresh
     setupTokenRefresh();
@@ -256,12 +303,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     setUser(null);
     setAccessToken(null);
-    localStorage.removeItem('accessToken');
-    localStorage.removeItem('refreshToken');
-    localStorage.removeItem('user');
+    localStorage.removeItem("accessToken");
+    localStorage.removeItem("refreshToken");
+    localStorage.removeItem("user");
     // Force reload to clear all state
-    window.location.href = '/';
+    window.location.href = "/";
   };
+
+  const DEFAULT_SUB: SubscriptionInfo = {
+    tier: "explorer",
+    effective_tier: "explorer",
+  };
+  const subscription: SubscriptionInfo = user?.subscription ?? DEFAULT_SUB;
 
   return (
     <AuthContext.Provider
@@ -270,6 +323,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         accessToken,
         isAuthenticated: !!user,
         isLoading,
+        subscription,
         login,
         register,
         logout,
@@ -284,7 +338,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 export function useAuth() {
   const context = useContext(AuthContext);
   if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
+    throw new Error("useAuth must be used within an AuthProvider");
   }
   return context;
 }

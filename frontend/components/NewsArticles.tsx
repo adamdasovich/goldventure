@@ -186,7 +186,7 @@ export default function NewsArticles({
       </div>
 
       {/* Articles List */}
-      <div className="space-y-3 max-h-[800px] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-slate-800">
+      <div className="space-y-3">
         {articles.map((article) => (
           <a
             key={article.id}

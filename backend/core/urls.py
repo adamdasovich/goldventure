@@ -97,6 +97,9 @@ urlpatterns = [
     path('companies/<int:company_id>/news-releases/', views.company_news_releases, name='company_news_releases'),
     path('tasks/<str:task_id>/status/', views.check_scrape_status, name='check_scrape_status'),
 
+    # Platform stats (homepage)
+    path('platform-stats/', views.platform_stats, name='platform_stats'),
+
     # Hero Section endpoints (homepage cards)
     path('hero-section/', views.hero_section_data, name='hero_section_data'),
     path('hero-section/set-featured/', views.set_featured_property, name='set_featured_property'),
@@ -129,6 +132,15 @@ urlpatterns = [
     path('investment-interest/<int:interest_id>/update/', views.update_my_investment_interest, name='update_my_investment_interest'),
     path('investment-interest/export/<int:financing_id>/', views.export_investment_interests, name='export_investment_interests'),
     path('investment-interest/admin/dashboard/', views.admin_investment_interest_dashboard, name='admin_investment_interest_dashboard'),
+
+    # Platform Subscription endpoints
+    path('platform/tiers/', views.platform_subscription_tiers, name='platform_subscription_tiers'),
+    path('platform/subscription/', views.platform_subscription_status, name='platform_subscription_status'),
+    path('platform/checkout/', views.platform_create_checkout, name='platform_create_checkout'),
+    path('platform/billing-portal/', views.platform_billing_portal, name='platform_billing_portal'),
+    path('platform/cancel/', views.platform_cancel_subscription, name='platform_cancel_subscription'),
+    path('platform/reactivate/', views.platform_reactivate_subscription, name='platform_reactivate_subscription'),
+    path('platform/webhooks/stripe/', views.platform_stripe_webhook, name='platform_stripe_webhook'),
 
     # Store endpoints
     path('store/ticker/', views.store_ticker, name='store_ticker'),
