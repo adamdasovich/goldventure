@@ -22,6 +22,9 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     if (!response.ok) {
       return {
         title: "Company Not Found",
+        alternates: {
+          canonical: `https://juniorminingintelligence.com/companies/${id}`,
+        },
       };
     }
 
@@ -74,6 +77,9 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     console.error("Error generating metadata:", error);
     return {
       title: "Company Profile",
+      alternates: {
+        canonical: `https://juniorminingintelligence.com/companies/${id}`,
+      },
     };
   }
 }
