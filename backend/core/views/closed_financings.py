@@ -158,7 +158,7 @@ def closed_financings_list(request):
     sort_order = request.query_params.get('sort_order', 'desc')
 
     sort_mapping = {
-        'closed_at': 'closed_at',
+        'closed_at': 'closing_date',
         'company': 'company__name',
         'amount': 'amount_raised_usd',
         'closing_date': 'closing_date',
