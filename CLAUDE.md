@@ -7,9 +7,10 @@
 **Live URL:** https://juniorminingintelligence.com
 
 ### Servers (DigitalOcean)
-| Server | IP | Purpose |
-|--------|-----|---------|
-| **Main (CPU)** | 137.184.168.166 | Django, Celery, PostgreSQL, ChromaDB, GPU Orchestrator |
+
+| Server         | IP                  | Purpose                                                            |
+| -------------- | ------------------- | ------------------------------------------------------------------ |
+| **Main (CPU)** | 137.184.168.166     | Django, Celery, PostgreSQL, ChromaDB, GPU Orchestrator             |
 | **GPU Worker** | Dynamic (on-demand) | Docling PDF processing (~$1.57/hr, auto-destroyed after 5min idle) |
 
 **User Timezone:** EST (UTC-5)
@@ -29,13 +30,15 @@ cd /var/www/goldventure && git pull
 # 3. Restart services (if backend changes)
 systemctl restart celery-worker celery-beat
 
-# 4. Restart Gunicorn (if needed)
-systemctl restart gunicorn
+# 4. Reload Gunicorn (zero-downtime, picks up new code)
+systemctl reload gunicorn
 ```
 
 > **CRITICAL:** Server path is `/var/www/goldventure` (NOT `/var/www/goldventure-platform`). Always deploy immediately after pushing — don't wait for the user to notice.
 >
-> **CRITICAL:** Gunicorn is managed by systemd (`/etc/systemd/system/gunicorn.service`). NEVER use `pkill -f gunicorn` + `gunicorn --daemon` — this creates duplicate processes because systemd auto-restarts the killed process (`Restart=always`). Always use `systemctl restart gunicorn`. For zero-downtime reload: `systemctl reload gunicorn` (sends HUP to master, gracefully replaces workers).
+> **CRITICAL:** Gunicorn is managed by systemd (`/etc/systemd/system/gunicorn.service`). NEVER use `pkill -f gunicorn` + `gunicorn --daemon` — this creates duplicate processes because systemd auto-restarts the killed process (`Restart=always`). Use `systemctl reload gunicorn` for normal deploys: the unit defines `ExecReload=/bin/kill -s HUP $MAINPID`, so the master survives and gracefully cycles workers (zero downtime), and each worker re-imports the new code. Use `systemctl restart gunicorn` only when the master itself must restart (e.g. changed `ExecStart` args or env vars).
+>
+> **NOTE:** Zero-downtime reload works because `ExecStart` does NOT use `--preload`. If `--preload` is ever added, HUP no longer picks up code changes — a full `restart` would be required again.
 
 ---
 
@@ -66,12 +69,13 @@ goldventure-platform/
 
 ## CRITICAL: Two Scraping Systems
 
-| Function | File | Purpose | Strategies |
-|----------|------|---------|------------|
-| `crawl_news_releases()` | `website_crawler.py` | **Company news** (comprehensive) | NEWS-ENTRY, G2, WP-BLOCK, ELEMENTOR, UIKIT, ITEM, LINK, ASPX, WIX-*, JOOMLA, STRAPI, etc. |
-| `scrape_company_website()` | `company_scraper.py` | **Profile scraping** (limited news) | Basic article selectors only |
+| Function                   | File                 | Purpose                             | Strategies                                                                                 |
+| -------------------------- | -------------------- | ----------------------------------- | ------------------------------------------------------------------------------------------ |
+| `crawl_news_releases()`    | `website_crawler.py` | **Company news** (comprehensive)    | NEWS-ENTRY, G2, WP-BLOCK, ELEMENTOR, UIKIT, ITEM, LINK, ASPX, WIX-\*, JOOMLA, STRAPI, etc. |
+| `scrape_company_website()` | `company_scraper.py` | **Profile scraping** (limited news) | Basic article selectors only                                                               |
 
 **Rules:**
+
 - For company news: use `scrape_company_news_task` → `crawl_news_releases()`
 - Onboarding uses the LIMITED scraper — manually trigger `/api/companies/{id}/scrape-news/` if news is missing
 - Company news = press releases ONLY. Media coverage (Mining.com, Northern Miner, etc.) belongs in `NewsArticle` table (homepage). Blocked by `is_news_article_url()` in website_crawler.py
@@ -106,14 +110,14 @@ Single button click: scrape website → save to DB → scrape news → Claude-po
 
 ## Celery Beat Schedule
 
-| Task | Schedule |
-|------|----------|
-| `scrape_all_companies_news_task` | 7 AM ET |
-| `scrape_mining_news_task` | 8 AM, 1 PM, 6 PM ET |
-| `scrape_metals_prices_task` | 9 AM, 4 PM ET |
-| `fetch_stock_prices_task` | 4:30 PM ET (weekdays) |
-| `cleanup_stuck_jobs_task` | Every 15 min |
-| `auto_discover_and_process_documents_task` | Monday 2 AM |
+| Task                                       | Schedule              |
+| ------------------------------------------ | --------------------- |
+| `scrape_all_companies_news_task`           | 7 AM ET               |
+| `scrape_mining_news_task`                  | 8 AM, 1 PM, 6 PM ET   |
+| `scrape_metals_prices_task`                | 9 AM, 4 PM ET         |
+| `fetch_stock_prices_task`                  | 4:30 PM ET (weekdays) |
+| `cleanup_stuck_jobs_task`                  | Every 15 min          |
+| `auto_discover_and_process_documents_task` | Monday 2 AM           |
 
 Celery managed by systemd: `systemctl status celery-worker celery-beat`
 
@@ -121,14 +125,14 @@ Celery managed by systemd: `systemctl status celery-worker celery-beat`
 
 ## Key Models
 
-| Model | Purpose |
-|-------|---------|
-| `Company` | Mining company profiles |
-| `CompanyNews` / `NewsRelease` | Company news/press releases |
-| `NewsReleaseFlag` / `DismissedNewsURL` | Financing flags & dismissed false positives |
-| `Financing` | Investment rounds |
-| `ScrapingJob` / `DocumentProcessingJob` | Job tracking |
-| `NewsArticle` / `NewsScrapeJob` | Industry news (homepage) |
+| Model                                   | Purpose                                     |
+| --------------------------------------- | ------------------------------------------- |
+| `Company`                               | Mining company profiles                     |
+| `CompanyNews` / `NewsRelease`           | Company news/press releases                 |
+| `NewsReleaseFlag` / `DismissedNewsURL`  | Financing flags & dismissed false positives |
+| `Financing`                             | Investment rounds                           |
+| `ScrapingJob` / `DocumentProcessingJob` | Job tracking                                |
+| `NewsArticle` / `NewsScrapeJob`         | Industry news (homepage)                    |
 
 ---
 
@@ -154,14 +158,14 @@ curl -X POST "https://juniorminingintelligence.com/api/companies/{id}/scrape-new
 
 ## File Quick Reference
 
-| Need to... | Look at... |
-|------------|------------|
-| Add news scraping strategy | `mcp_servers/website_crawler.py` ~line 1640 |
-| Modify Celery schedule | `config/settings.py` CELERY_BEAT_SCHEDULE |
-| Add API endpoint | `core/urls.py` + `core/views/<domain>.py` |
-| Add database model | `core/models/<domain>.py` + `core/models/__init__.py` (re-export) |
-| Add serializer | `core/serializers/<domain>.py` + `core/serializers/__init__.py` (re-export) |
-| Fix financing detection | `core/tasks.py` ~lines 384, 810 |
+| Need to...                 | Look at...                                                                  |
+| -------------------------- | --------------------------------------------------------------------------- |
+| Add news scraping strategy | `mcp_servers/website_crawler.py` ~line 1640                                 |
+| Modify Celery schedule     | `config/settings.py` CELERY_BEAT_SCHEDULE                                   |
+| Add API endpoint           | `core/urls.py` + `core/views/<domain>.py`                                   |
+| Add database model         | `core/models/<domain>.py` + `core/models/__init__.py` (re-export)           |
+| Add serializer             | `core/serializers/<domain>.py` + `core/serializers/__init__.py` (re-export) |
+| Fix financing detection    | `core/tasks.py` ~lines 384, 810                                             |
 
 ---
 
@@ -194,6 +198,7 @@ curl -X POST "https://juniorminingintelligence.com/api/companies/{id}/scrape-new
 ## Key Lessons (Patterns to Remember)
 
 ### Scraping Patterns
+
 - Many sites organize news by year (`/news/YYYY/`). Always add year-based URL patterns including current and previous 2 years
 - Multilingual sites combine prefixes: `/en/investors/news/YYYY/`
 - Companies with custom news URLs: use `news_url` field on Company model
@@ -203,13 +208,15 @@ curl -X POST "https://juniorminingintelligence.com/api/companies/{id}/scrape-new
 - When slug deduplication fails: exclude generic filenames (default.aspx, index.html)
 
 ### Date Parsing
+
 - Strip ordinal suffixes (st/nd/rd/th) early in `parse_date_standalone()`
 - For ambiguous DD.MM vs MM.DD: check sibling dates on same page for context
 - Regex with single-letter groups like `(M)?` need negative lookahead `(?![a-zA-Z])`
 
 ### Deployment & Operations
+
 - Always restart Celery after deploying — worker keeps OLD code in memory
-- **Gunicorn is managed by systemd** — NEVER `pkill -f gunicorn` + `gunicorn --daemon`. This creates duplicate processes (systemd has `Restart=always`). Use `systemctl restart gunicorn` or `systemctl reload gunicorn` (graceful zero-downtime reload via HUP)
+- **Gunicorn is managed by systemd** — NEVER `pkill -f gunicorn` + `gunicorn --daemon`. This creates duplicate processes (systemd has `Restart=always`). Use `systemctl reload gunicorn` for code deploys (zero-downtime HUP via `ExecReload`, workers re-import new code); use `systemctl restart gunicorn` only when the master must restart (changed `ExecStart`/env). Reload depends on no `--preload` in `ExecStart`
 - When splitting/refactoring Python files, verify ALL runtime imports are present — `import` at module level in the original file may not carry to split files, causing 500s only on code paths that hit the missing name
 - Check if batch is already running before triggering manual scrapes (distributed lock exists)
 - `company_scraper.py` has its OWN news extraction separate from `website_crawler.py` — fixes must go to the correct file
@@ -217,6 +224,7 @@ curl -X POST "https://juniorminingintelligence.com/api/companies/{id}/scrape-new
 - Skip content processing during daily scrapes (only during onboarding) to avoid 500s+ per company
 
 ### Code Quality Rules
+
 - Investigate root cause before coding fixes
 - Read actual code/data/database before making claims
 - Test performance impact before deploying scheduled task changes
