@@ -145,7 +145,10 @@ export function HeroCards({ onLoginClick }: HeroCardsProps) {
   if (loading || error || !hasData) return null;
 
   return (
-    <section className="py-16 md:py-20 px-4 sm:px-6 lg:px-8">
+    <section
+      id="happening-now"
+      className="py-16 md:py-20 px-4 sm:px-6 lg:px-8 scroll-mt-24"
+    >
       <div className="max-w-7xl mx-auto">
         <div className="text-center mb-10">
           <Badge variant="gold" className="mb-4">

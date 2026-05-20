@@ -207,6 +207,16 @@ export default function HomeClient({ initialArticles }: HomeClientProps) {
     setTimeout(() => setIsVibrating(false), 1200);
   }, [isVibrating]);
 
+  const scrollToHappening = () => {
+    document
+      .getElementById("happening-now")
+      ?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  const scrollToNews = () => {
+    newsSectionRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
   // Close mobile menu on resize
   useEffect(() => {
     const handleResize = () => {
@@ -557,7 +567,7 @@ export default function HomeClient({ initialArticles }: HomeClientProps) {
         <div className="hero-particles"></div>
 
         <div className="relative max-w-7xl mx-auto">
-          <div className="grid lg:grid-cols-2 gap-8 lg:gap-10 items-center">
+          <div className="grid lg:grid-cols-2 gap-6 lg:gap-8 items-center">
             {/* Left: hero content */}
             <div className="text-center lg:text-left">
               <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold mb-4 text-gradient-gold animate-fade-in leading-tight pb-1">
@@ -638,7 +648,7 @@ export default function HomeClient({ initialArticles }: HomeClientProps) {
               </div>
 
               {/* Primary CTAs */}
-              <div className="flex flex-col sm:flex-row gap-3 justify-center lg:justify-start animate-slide-in-up">
+              <div className="flex flex-col sm:flex-row flex-wrap gap-3 justify-center lg:justify-start animate-slide-in-up">
                 <Link href="/companies">
                   <Button
                     variant="primary"
@@ -656,11 +666,27 @@ export default function HomeClient({ initialArticles }: HomeClientProps) {
                 >
                   AI Assistant
                 </Button>
+                <Button
+                  variant="ghost"
+                  size="lg"
+                  onClick={scrollToHappening}
+                  className="w-full sm:w-auto"
+                >
+                  Happening Now
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="lg"
+                  onClick={scrollToNews}
+                  className="w-full sm:w-auto"
+                >
+                  Mining News
+                </Button>
               </div>
             </div>
 
             {/* Right: Socrates mascot */}
-            <div className="flex justify-center lg:justify-end">
+            <div className="flex justify-center">
               <button
                 onClick={handleSocratesFart}
                 className="relative cursor-pointer bg-transparent border-0 p-0"
