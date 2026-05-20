@@ -74,8 +74,16 @@ const STEPS = [
   },
 ];
 
-/* ─── Feature cards ─── */
-const FEATURES = [
+/* ─── Feature cards ───
+   `badge: "Live"` marks the real-time, WebSocket-powered features so they
+   visibly stand out in the grid. */
+const FEATURES: {
+  title: string;
+  description: string;
+  icon: string;
+  href: string;
+  badge?: string;
+}[] = [
   {
     title: "Company Database",
     description:
@@ -84,18 +92,35 @@ const FEATURES = [
     href: "/companies",
   },
   {
+    title: "Live Company Forums",
+    badge: "Live",
+    description:
+      "Every company has a real-time discussion board. Investors and management talk directly, and new posts appear instantly — like a group chat.",
+    icon: "M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.86 9.86 0 01-4-.8L3 21l1.8-4A8.84 8.84 0 013 12c0-4.418 4.03-8 9-8s9 3.582 9 8z",
+    href: "/companies",
+  },
+  {
+    title: "Speaking Events",
+    badge: "Live",
+    description:
+      "Join live online presentations from company management. Watch by video, ask questions, upvote the best ones, and react in real time.",
+    icon: "M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z",
+    href: "/companies",
+  },
+  {
+    title: "Prospector's Exchange",
+    badge: "Live",
+    description:
+      "A marketplace of mineral properties for sale. Message owners directly through private, real-time chat to negotiate deals.",
+    icon: "M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z",
+    href: "/properties",
+  },
+  {
     title: "10 Investor Tools",
     description:
       "Screeners and calculators — rank companies by ore grade, compare them side by side, scan drill results, and more.",
     icon: "M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z",
     href: "/investor-tools",
-  },
-  {
-    title: "Prospector's Exchange",
-    description:
-      "A marketplace connecting mineral property owners with investors. Browse claims, exploration ground, and joint ventures.",
-    icon: "M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z",
-    href: "/properties",
   },
   {
     title: "Financing Tracker",
@@ -815,30 +840,44 @@ export default function HomeClient({ initialArticles }: HomeClientProps) {
               Everything You Need for Mining Research
             </h2>
             <p className="text-slate-300 text-lg max-w-2xl mx-auto">
-              From AI-powered analysis to real-time market data, our platform
-              gives you the edge in junior mining investment.
+              From AI research and live company forums to real-time market data,
+              our platform gives you the edge in junior mining investment.
             </p>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
             {FEATURES.map((feature, i) => (
               <Link key={i} href={feature.href} className="group block">
-                <div className="glass-card feature-card rounded-xl p-5 h-full">
-                  <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-gold-500/15 border border-gold-500/30 mb-4 feature-icon">
-                    <svg
-                      className="w-5 h-5 text-gold-400"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                      aria-hidden="true"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d={feature.icon}
-                      />
-                    </svg>
+                <div
+                  className={`glass-card feature-card rounded-xl p-5 h-full ${
+                    feature.badge
+                      ? "border-gold-500/40 ring-1 ring-gold-500/20"
+                      : ""
+                  }`}
+                >
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-gold-500/15 border border-gold-500/30 feature-icon">
+                      <svg
+                        className="w-5 h-5 text-gold-400"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                        aria-hidden="true"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d={feature.icon}
+                        />
+                      </svg>
+                    </div>
+                    {feature.badge && (
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-gold-500/15 border border-gold-500/40 text-xs font-semibold text-gold-400">
+                        <span className="w-1.5 h-1.5 bg-gold-400 rounded-full animate-pulse"></span>
+                        {feature.badge}
+                      </span>
+                    )}
                   </div>
                   <h3 className="text-lg font-semibold text-slate-200 group-hover:text-gold-400 transition-colors mb-2">
                     {feature.title}
