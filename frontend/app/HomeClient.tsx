@@ -216,6 +216,10 @@ export default function HomeClient({ initialArticles }: HomeClientProps) {
       ?.scrollIntoView({ behavior: "smooth" });
   };
 
+  const scrollToFeatures = () => {
+    document.getElementById("features")?.scrollIntoView({ behavior: "smooth" });
+  };
+
   const scrollToNews = () => {
     newsSectionRef.current?.scrollIntoView({ behavior: "smooth" });
   };
@@ -569,143 +573,142 @@ export default function HomeClient({ initialArticles }: HomeClientProps) {
         ></div>
         <div className="hero-particles"></div>
 
-        <div className="relative max-w-7xl mx-auto">
-          <div className="grid lg:grid-cols-2 gap-6 lg:gap-8 items-center">
-            {/* Left: hero content */}
-            <div className="text-center">
-              <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold mb-4 text-gradient-gold animate-fade-in leading-tight pb-1">
-                Research junior mining stocks in minutes, not hours
-              </h1>
-              <p className="text-base sm:text-lg text-slate-300 animate-slide-in-up mb-6">
-                Profiles, financials, and news for {stats.companies}+ small
-                gold, silver, and critical-minerals companies — plus an AI
-                assistant that answers your questions instantly.
-              </p>
+        <div className="relative max-w-3xl mx-auto text-center">
+          {/* Socrates mascot */}
+          <button
+            onClick={handleSocratesFart}
+            className="relative inline-block cursor-pointer bg-transparent border-0 p-0 mb-4"
+            aria-label="Click Socrates the mascot"
+          >
+            <div className="absolute inset-0 rounded-full bg-gold-500/10 blur-3xl scale-110"></div>
+            <Image
+              src="/images/socrates-miner.png"
+              alt="Socrates, the Junior Mining Intelligence mascot"
+              width={280}
+              height={280}
+              className={`relative w-32 sm:w-40 h-auto mx-auto opacity-90 hover:opacity-100 transition-opacity duration-300 drop-shadow-2xl ${isVibrating ? "animate-vibrate" : ""}`}
+              priority
+            />
+          </button>
 
-              {/* ── Search Bar ── */}
-              <div className="relative max-w-xl mx-auto mb-5 animate-slide-in-up">
-                <label htmlFor="company-search" className="sr-only">
-                  Search companies by name or ticker
-                </label>
-                <div className="relative">
-                  <svg
-                    className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                    aria-hidden="true"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-                    />
-                  </svg>
-                  <input
-                    id="company-search"
-                    type="text"
-                    value={searchQuery}
-                    onChange={(e) => handleSearchChange(e.target.value)}
-                    onFocus={() =>
-                      searchResults.length > 0 && setSearchOpen(true)
-                    }
-                    onBlur={() => setTimeout(() => setSearchOpen(false), 200)}
-                    placeholder="Search companies by name or ticker..."
-                    className="w-full pl-12 pr-4 py-4 rounded-xl bg-slate-800/80 border border-slate-600/50 text-white placeholder-slate-400 focus:outline-none focus:border-gold-500/50 focus:ring-1 focus:ring-gold-500/30 text-base backdrop-blur-sm"
-                  />
-                </div>
+          <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold mb-4 text-gradient-gold animate-fade-in leading-tight pb-1">
+            Research junior mining stocks in minutes, not hours
+          </h1>
+          <p className="text-base sm:text-lg text-slate-300 animate-slide-in-up mb-6">
+            Profiles, financials, and news for {stats.companies}+ small gold,
+            silver, and critical-minerals companies — plus an AI assistant that
+            answers your questions instantly.
+          </p>
 
-                {/* Search Dropdown */}
-                {searchOpen && searchResults.length > 0 && (
-                  <div className="absolute top-full left-0 right-0 mt-2 bg-slate-800/95 border border-slate-700/50 rounded-xl shadow-2xl backdrop-blur-sm z-20 overflow-hidden text-left">
-                    {searchResults.map((company) => (
-                      <button
-                        key={company.id}
-                        onMouseDown={() => handleSearchSelect(company)}
-                        className="w-full flex items-center justify-between px-4 py-3 hover:bg-gold-500/10 transition-colors text-left"
-                      >
-                        <div>
-                          <p className="text-sm font-medium text-white">
-                            {company.name}
-                          </p>
-                          <p className="text-xs text-slate-400">
-                            {company.ticker_symbol}
-                          </p>
-                        </div>
-                        {company.primary_commodity && (
-                          <span className="text-xs text-gold-400 bg-gold-500/10 px-2 py-0.5 rounded">
-                            {company.primary_commodity}
-                          </span>
-                        )}
-                      </button>
-                    ))}
-                    <Link
-                      href={`/companies?search=${encodeURIComponent(searchQuery)}`}
-                      className="block px-4 py-3 text-center text-sm text-gold-400 hover:bg-gold-500/10 border-t border-slate-700/50"
-                    >
-                      View all results →
-                    </Link>
-                  </div>
-                )}
-              </div>
-
-              {/* Primary CTAs */}
-              <div className="flex flex-col sm:flex-row flex-wrap gap-3 justify-center animate-slide-in-up">
-                <Link href="/companies">
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    className="w-full sm:w-auto"
-                  >
-                    Explore Companies
-                  </Button>
-                </Link>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={scrollToChat}
-                  className="w-full sm:w-auto"
-                >
-                  AI Assistant
-                </Button>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={scrollToHappening}
-                  className="w-full sm:w-auto"
-                >
-                  Happening Now
-                </Button>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={scrollToNews}
-                  className="w-full sm:w-auto"
-                >
-                  Mining News
-                </Button>
-              </div>
-            </div>
-
-            {/* Right: Socrates mascot */}
-            <div className="flex justify-center">
-              <button
-                onClick={handleSocratesFart}
-                className="relative cursor-pointer bg-transparent border-0 p-0"
-                aria-label="Click Socrates the mascot"
+          {/* ── Search Bar ── */}
+          <div className="relative max-w-xl mx-auto mb-5 animate-slide-in-up">
+            <label htmlFor="company-search" className="sr-only">
+              Search companies by name or ticker
+            </label>
+            <div className="relative">
+              <svg
+                className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+                aria-hidden="true"
               >
-                <div className="absolute inset-0 rounded-full bg-gold-500/10 blur-3xl scale-110"></div>
-                <Image
-                  src="/images/socrates-miner.png"
-                  alt="Socrates, the Junior Mining Intelligence mascot"
-                  width={280}
-                  height={280}
-                  className={`relative w-44 sm:w-52 lg:w-64 h-auto opacity-90 hover:opacity-100 transition-opacity duration-300 drop-shadow-2xl ${isVibrating ? "animate-vibrate" : ""}`}
-                  priority
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
                 />
-              </button>
+              </svg>
+              <input
+                id="company-search"
+                type="text"
+                value={searchQuery}
+                onChange={(e) => handleSearchChange(e.target.value)}
+                onFocus={() => searchResults.length > 0 && setSearchOpen(true)}
+                onBlur={() => setTimeout(() => setSearchOpen(false), 200)}
+                placeholder="Search companies by name or ticker..."
+                className="w-full pl-12 pr-4 py-4 rounded-xl bg-slate-800/80 border border-slate-600/50 text-white placeholder-slate-400 focus:outline-none focus:border-gold-500/50 focus:ring-1 focus:ring-gold-500/30 text-base backdrop-blur-sm"
+              />
             </div>
+
+            {/* Search Dropdown */}
+            {searchOpen && searchResults.length > 0 && (
+              <div className="absolute top-full left-0 right-0 mt-2 bg-slate-800/95 border border-slate-700/50 rounded-xl shadow-2xl backdrop-blur-sm z-20 overflow-hidden text-left">
+                {searchResults.map((company) => (
+                  <button
+                    key={company.id}
+                    onMouseDown={() => handleSearchSelect(company)}
+                    className="w-full flex items-center justify-between px-4 py-3 hover:bg-gold-500/10 transition-colors text-left"
+                  >
+                    <div>
+                      <p className="text-sm font-medium text-white">
+                        {company.name}
+                      </p>
+                      <p className="text-xs text-slate-400">
+                        {company.ticker_symbol}
+                      </p>
+                    </div>
+                    {company.primary_commodity && (
+                      <span className="text-xs text-gold-400 bg-gold-500/10 px-2 py-0.5 rounded">
+                        {company.primary_commodity}
+                      </span>
+                    )}
+                  </button>
+                ))}
+                <Link
+                  href={`/companies?search=${encodeURIComponent(searchQuery)}`}
+                  className="block px-4 py-3 text-center text-sm text-gold-400 hover:bg-gold-500/10 border-t border-slate-700/50"
+                >
+                  View all results →
+                </Link>
+              </div>
+            )}
+          </div>
+
+          {/* Primary CTAs */}
+          <div className="flex flex-col sm:flex-row flex-wrap gap-3 justify-center animate-slide-in-up">
+            <Button
+              variant="primary"
+              size="md"
+              onClick={scrollToFeatures}
+              className="cta-glow w-full sm:w-auto"
+            >
+              Platform Features
+            </Button>
+            <Link href="/companies">
+              <Button
+                variant="secondary"
+                size="sm"
+                className="w-full sm:w-auto"
+              >
+                Explore Companies
+              </Button>
+            </Link>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={scrollToChat}
+              className="w-full sm:w-auto"
+            >
+              AI Assistant
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={scrollToHappening}
+              className="w-full sm:w-auto"
+            >
+              Happening Now
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={scrollToNews}
+              className="w-full sm:w-auto"
+            >
+              Mining News
+            </Button>
           </div>
         </div>
       </section>
@@ -756,7 +759,10 @@ export default function HomeClient({ initialArticles }: HomeClientProps) {
       <div className="section-divider"></div>
 
       {/* ════════ Features Showcase ════════ */}
-      <section className="py-16 md:py-20 px-4 sm:px-6 lg:px-8">
+      <section
+        id="features"
+        className="py-16 md:py-20 px-4 sm:px-6 lg:px-8 scroll-mt-24"
+      >
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-12">
             <Badge variant="gold" className="mb-4">
