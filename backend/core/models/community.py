@@ -1054,6 +1054,9 @@ class PlatformSubscription(models.Model):
     @property
     def effective_tier(self):
         """Return the tier the user should be treated as right now."""
+        # Superusers always get the top tier — full access to every tool/feature.
+        if self.user_id and self.user.is_superuser:
+            return 'miner'
         if self.tier == 'explorer':
             return 'explorer'
         if self.is_active:

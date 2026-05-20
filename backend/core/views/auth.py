@@ -251,13 +251,7 @@ def login_user(request):
     user_full_name = f"{user.first_name} {user.last_name}".strip() or user.username
 
     # Get subscription tier
-    login_sub_data = {'tier': 'explorer', 'effective_tier': 'explorer'}
-    try:
-        from ..models import PlatformSubscription
-        sub = PlatformSubscription.objects.get(user=user)
-        login_sub_data = {'tier': sub.tier, 'effective_tier': sub.effective_tier, 'features': sub.features}
-    except Exception:
-        pass
+    login_sub_data = _subscription_payload(user)
 
     return Response({
         'user': {
@@ -275,6 +269,26 @@ def login_user(request):
     }, status=status.HTTP_200_OK)
 
 
+
+
+def _subscription_payload(user):
+    """Tier/features payload for a user.
+
+    Superusers always receive full (miner-tier) access, even if they have
+    no PlatformSubscription row. effective_tier on the model also enforces
+    this, so any code path that reads it stays consistent.
+    """
+    from ..models import PlatformSubscription
+    try:
+        sub = PlatformSubscription.objects.get(user=user)
+    except Exception:
+        tier = 'miner' if user.is_superuser else 'explorer'
+        sub = PlatformSubscription(user=user, tier=tier, status='active')
+    return {
+        'tier': sub.tier,
+        'effective_tier': sub.effective_tier,
+        'features': sub.features,
+    }
 
 
 @api_view(['GET'])
@@ -300,23 +314,7 @@ def get_current_user(request):
     user_full_name = f"{user.first_name} {user.last_name}".strip() or user.username
 
     # Get subscription tier
-    subscription_data = {'tier': 'explorer', 'effective_tier': 'explorer', 'features': {
-        'tier': 'explorer', 'daily_chat_limit': 5,
-        'investor_tools': ['grade-ranker', 'sector-pulse'],
-        'full_company_data': False, 'metals_history': False,
-        'financing_alerts': False, 'csv_export': False,
-        'api_access': False, 'ni43101_full_access': False, 'priority_chat': False,
-    }}
-    try:
-        from ..models import PlatformSubscription
-        sub = PlatformSubscription.objects.get(user=user)
-        subscription_data = {
-            'tier': sub.tier,
-            'effective_tier': sub.effective_tier,
-            'features': sub.features,
-        }
-    except Exception:
-        pass
+    subscription_data = _subscription_payload(user)
 
     return Response({
         'id': user.id,
