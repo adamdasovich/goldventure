@@ -1,17 +1,17 @@
-'use client';
+"use client";
 
-import { useState, useEffect, useRef } from 'react';
-import { useForumWebSocket } from '@/hooks/useForumWebSocket';
-import { ForumMessage } from './ForumMessage';
-import { MessageInput } from './MessageInput';
-import { OnlineUsers } from './OnlineUsers';
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
-import { Badge } from '@/components/ui/Badge';
-import { Button } from '@/components/ui/Button';
-import { useAuth } from '@/contexts/AuthContext';
-import { LoginModal, RegisterModal } from '@/components/auth';
+import { useState, useEffect, useRef } from "react";
+import { useForumWebSocket } from "@/hooks/useForumWebSocket";
+import { ForumMessage } from "./ForumMessage";
+import { MessageInput } from "./MessageInput";
+import { OnlineUsers } from "./OnlineUsers";
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/Card";
+import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
+import { useAuth } from "@/contexts/AuthContext";
+import { LoginModal, RegisterModal } from "@/components/auth";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api";
 
 interface CompanyForumProps {
   companyId: number;
@@ -21,13 +21,15 @@ interface CompanyForumProps {
 export function CompanyForum({ companyId, companyName }: CompanyForumProps) {
   const [error, setError] = useState<string | null>(null);
   const [currentUserId, setCurrentUserId] = useState<number | undefined>();
-  const [replyToMessageId, setReplyToMessageId] = useState<number | undefined>();
+  const [replyToMessageId, setReplyToMessageId] = useState<
+    number | undefined
+  >();
   const [replyToUserName, setReplyToUserName] = useState<string | undefined>();
   const [showLogin, setShowLogin] = useState(false);
   const [showRegister, setShowRegister] = useState(false);
   const [discussionId, setDiscussionId] = useState<number | null>(null);
   const [loadingDiscussion, setLoadingDiscussion] = useState(true);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
   const { user, accessToken } = useAuth();
 
   // Fetch the correct discussion ID for this company
@@ -39,20 +41,23 @@ export function CompanyForum({ companyId, companyName }: CompanyForumProps) {
       }
 
       try {
-        const response = await fetch(`${API_URL}/companies/${companyId}/discussion/`, {
-          headers: {
-            'Authorization': `Bearer ${accessToken}`,
+        const response = await fetch(
+          `${API_URL}/companies/${companyId}/discussion/`,
+          {
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+            },
           },
-        });
+        );
 
         if (response.ok) {
           const data = await response.json();
           setDiscussionId(data.discussion_id);
         } else {
-          console.error('Failed to fetch discussion');
+          console.error("Failed to fetch discussion");
         }
       } catch (err) {
-        console.error('Error fetching discussion:', err);
+        console.error("Error fetching discussion:", err);
       } finally {
         setLoadingDiscussion(false);
       }
@@ -73,17 +78,19 @@ export function CompanyForum({ companyId, companyName }: CompanyForumProps) {
     stopTyping,
   } = useForumWebSocket({
     discussionId: discussionId || 0,
-    token: accessToken || '',
+    token: accessToken || "",
     onError: setError,
   });
 
-  // Auto-scroll to bottom when new messages arrive (within the chat container only)
+  // Auto-scroll to bottom when new messages arrive — scroll the forum's own
+  // message container, NOT the window. scrollIntoView() would scroll every
+  // scrollable ancestor (including <html>), yanking the whole page down to
+  // the forum when message history loads after the company page mounts.
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({
-      behavior: 'smooth',
-      block: 'nearest',
-      inline: 'nearest'
-    });
+    const container = messagesContainerRef.current;
+    if (container) {
+      container.scrollTo({ top: container.scrollHeight, behavior: "smooth" });
+    }
   }, [messages]);
 
   // Clear error when connected
@@ -135,14 +142,25 @@ export function CompanyForum({ companyId, companyName }: CompanyForumProps) {
           <CardContent className="py-12">
             <div className="text-center max-w-md mx-auto">
               <div className="mb-6">
-                <svg className="w-20 h-20 mx-auto text-gold-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                <svg
+                  className="w-20 h-20 mx-auto text-gold-400 mb-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
+                  />
                 </svg>
                 <h3 className="text-xl font-bold text-white mb-3">
                   Login Required
                 </h3>
                 <p className="text-slate-300 mb-6">
-                  Please login or create an account to join the community discussion and connect with investors and analysts.
+                  Please login or create an account to join the community
+                  discussion and connect with investors and analysts.
                 </p>
               </div>
               <div className="flex items-center justify-center gap-3">
@@ -218,8 +236,18 @@ export function CompanyForum({ companyId, companyName }: CompanyForumProps) {
           <Card variant="glass-card" className="border-red-500/50">
             <CardContent className="py-4">
               <div className="flex items-center gap-3 text-red-400">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                <svg
+                  className="w-5 h-5"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                  />
                 </svg>
                 <span>{error}</span>
               </div>
@@ -230,11 +258,24 @@ export function CompanyForum({ companyId, companyName }: CompanyForumProps) {
         {/* Messages Area */}
         <Card variant="glass-card">
           <CardContent className="p-4">
-            <div className="space-y-3 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
+            <div
+              ref={messagesContainerRef}
+              className="space-y-3 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar"
+            >
               {messages.length === 0 ? (
                 <div className="text-center py-12">
-                  <svg className="w-16 h-16 mx-auto text-slate-600 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                  <svg
+                    className="w-16 h-16 mx-auto text-slate-600 mb-4"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
+                    />
                   </svg>
                   <p className="text-slate-400 text-sm">
                     No messages yet. Start the conversation!
@@ -247,13 +288,14 @@ export function CompanyForum({ companyId, companyName }: CompanyForumProps) {
                       key={message.id}
                       message={message}
                       currentUserId={currentUserId}
-                      isAdmin={user?.is_superuser || user?.user_type === 'admin'}
+                      isAdmin={
+                        user?.is_superuser || user?.user_type === "admin"
+                      }
                       onEdit={editMessage}
                       onDelete={deleteMessage}
                       onReply={handleReply}
                     />
                   ))}
-                  <div ref={messagesEndRef} />
                 </>
               )}
             </div>
