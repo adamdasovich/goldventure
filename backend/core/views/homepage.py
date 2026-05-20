@@ -142,14 +142,14 @@ def hero_section_data(request):
     from datetime import timedelta
 
     now = timezone.now()
-    seven_days_from_now = now + timedelta(days=7)
+    events_window_end = now + timedelta(days=14)
     one_hour_ago = now - timedelta(hours=1)
 
-    # Card 1: Upcoming Speaking Events (next 7 days)
-    # Show events scheduled within 7 days, remove events 1 hour after start
+    # Card 1: Upcoming Speaking Events (next 14 days)
+    # Show events scheduled within 14 days, remove events 1 hour after start
     upcoming_events = SpeakerEvent.objects.filter(
         Q(status='scheduled') | Q(status='live'),
-        scheduled_start__lte=seven_days_from_now,
+        scheduled_start__lte=events_window_end,
         scheduled_start__gte=one_hour_ago
     ).select_related('company').prefetch_related('speakers__user').order_by('scheduled_start')[:5]
 
