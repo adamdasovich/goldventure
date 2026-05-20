@@ -32,12 +32,12 @@ export default function CompanyChatbot({
     }
   }, [messages]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  // Core send logic - usable both from the input form and from a one-click
+  // suggested-prompt chip.
+  const sendMessage = async (text: string) => {
+    const userMessage = text.trim();
+    if (!userMessage || isLoading) return;
 
-    if (!input.trim() || isLoading) return;
-
-    const userMessage = input.trim();
     setInput("");
 
     // Add user message to chat
@@ -79,11 +79,19 @@ export default function CompanyChatbot({
     }
   };
 
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    sendMessage(input);
+  };
+
+  // Company-aware starter prompts that showcase the analytics tools.
   const suggestedQuestions = [
+    `How has ${companyName}'s gold resource grown over time?`,
+    `Does ${companyName}'s news actually move its stock price?`,
+    `Show unusual trading volume for ${companyName}`,
+    `What is ${companyName}'s dilution history?`,
+    `Key metallurgy and recovery results for ${companyName}`,
     "What are the latest news releases?",
-    "What projects does this company have?",
-    "What are the total resource estimates?",
-    "Tell me about recent financings",
   ];
 
   if (!isOpen) {
@@ -168,8 +176,9 @@ export default function CompanyChatbot({
                   {suggestedQuestions.map((question, index) => (
                     <button
                       key={index}
-                      onClick={() => setInput(question)}
-                      className="block w-full text-left px-3 py-2 rounded bg-slate-800/50 hover:bg-slate-700/50 text-sm text-slate-300 transition-colors"
+                      onClick={() => sendMessage(question)}
+                      disabled={isLoading}
+                      className="block w-full text-left px-3 py-2 rounded bg-slate-800/50 hover:bg-slate-700/50 hover:text-gold-400 text-sm text-slate-300 transition-colors disabled:opacity-50"
                     >
                       {question}
                     </button>

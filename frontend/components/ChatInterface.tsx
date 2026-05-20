@@ -18,10 +18,12 @@ import type { ChatMessage } from "@/types/api";
 import LogoIcon from "./LogoIcon";
 
 const EXAMPLE_PROMPTS = [
+  "Compare Aftermath Silver and Aston Bay stock over 6 months",
+  "How much capital has the mining sector raised this year?",
+  "Has Aston Bay's gold resource grown over time?",
+  "Does Aston Bay's news move its stock price?",
+  "Find unusual trading volume in Aftermath Silver",
   "What companies are exploring lithium?",
-  "Total gold resources across all companies?",
-  "Tell me about Aston Bay Holdings",
-  "Which projects are in production?",
 ];
 
 export default function ChatInterface() {
