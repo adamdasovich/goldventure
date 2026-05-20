@@ -20,14 +20,16 @@ export default function CompanyChatbot({
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
-
+  // Scroll the chat's own message container, NOT the window. scrollIntoView()
+  // scrolls every scrollable ancestor (including <html>), which would yank the
+  // whole page to the chatbot when messages change.
   useEffect(() => {
-    scrollToBottom();
+    const container = messagesContainerRef.current;
+    if (container) {
+      container.scrollTo({ top: container.scrollHeight, behavior: "smooth" });
+    }
   }, [messages]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -150,7 +152,10 @@ export default function CompanyChatbot({
 
         <CardContent className="p-0">
           {/* Chat Messages */}
-          <div className="h-96 overflow-y-auto px-4 py-2 space-y-3">
+          <div
+            ref={messagesContainerRef}
+            className="h-96 overflow-y-auto px-4 py-2 space-y-3"
+          >
             {messages.length === 0 && (
               <div className="text-center py-8">
                 <div className="text-slate-400 mb-4">
@@ -212,8 +217,6 @@ export default function CompanyChatbot({
                 </div>
               </div>
             )}
-
-            <div ref={messagesEndRef} />
           </div>
 
           {/* Input Form */}

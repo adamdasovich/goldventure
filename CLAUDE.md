@@ -19,6 +19,8 @@
 
 ## Deployment
 
+### Backend (Django / Celery / Gunicorn)
+
 ```bash
 # 1. Push locally
 git add -A && git commit -m "Description" && git push
@@ -32,6 +34,23 @@ systemctl restart celery-worker celery-beat
 
 # 4. Reload Gunicorn (zero-downtime, picks up new code)
 systemctl reload gunicorn
+```
+
+### Frontend (Next.js — pm2)
+
+The Next.js app runs under **pm2** as process `goldventure-frontend` (`next start`).
+A rebuild is required for any frontend change — `next start` serves the built
+output, so editing source without `npm run build` has no effect.
+
+```bash
+# After git pull on the server:
+cd /var/www/goldventure/frontend
+npm run build                       # ~2-4 min; serves from .next/
+pm2 restart goldventure-frontend    # picks up the new build
+
+# Useful:
+pm2 list                            # status / restart count
+pm2 logs goldventure-frontend       # tail logs (check after a deploy)
 ```
 
 > **CRITICAL:** Server path is `/var/www/goldventure` (NOT `/var/www/goldventure-platform`). Always deploy immediately after pushing — don't wait for the user to notice.
