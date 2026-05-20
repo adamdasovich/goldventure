@@ -22,6 +22,7 @@ interface ResourceCategory {
   gold_grade_gpt: number | null;
   gold_ounces: number | null;
   silver_ounces: number | null;
+  copper_grade_pct: number | null;
 }
 
 interface TimelineEntry {
@@ -29,15 +30,9 @@ interface TimelineEntry {
   standard: string;
   categories: ResourceCategory[];
   resource_gold_oz: number;
+  resource_silver_oz: number;
+  resource_tonnes: number;
   reserve_gold_oz: number;
-}
-
-interface Growth {
-  first_report: string;
-  latest_report: string;
-  first_oz: number;
-  latest_oz: number;
-  change_pct: number;
 }
 
 interface ProjectData {
@@ -46,7 +41,6 @@ interface ProjectData {
   primary_commodity: string;
   estimate_count: number;
   timeline: TimelineEntry[];
-  growth: Growth | null;
 }
 
 interface ResourceData {
@@ -57,7 +51,7 @@ interface ResourceData {
 
 /* ---------- helpers ---------- */
 
-function fmtOz(v: number | null | undefined): string {
+function fmtNum(v: number | null | undefined): string {
   if (!v) return "—";
   if (v >= 1_000_000) return `${(v / 1_000_000).toFixed(2)}M`;
   if (v >= 1_000) return `${(v / 1_000).toFixed(0)}K`;
@@ -69,6 +63,25 @@ function fmtDate(iso: string): string {
     month: "short",
     year: "numeric",
   });
+}
+
+/**
+ * Pick the resource metric to chart based on the project's commodity.
+ * Gold/silver projects chart contained ounces; everything else (copper,
+ * lithium, etc.) charts tonnage, since contained-metal figures for
+ * non-precious metals are not stored.
+ */
+function metricFor(commodity: string): {
+  key: "resource_gold_oz" | "resource_silver_oz" | "resource_tonnes";
+  label: string;
+  unit: string;
+} {
+  const c = (commodity || "").toLowerCase();
+  if (c.includes("gold"))
+    return { key: "resource_gold_oz", label: "Contained Gold", unit: "oz" };
+  if (c.includes("silver"))
+    return { key: "resource_silver_oz", label: "Contained Silver", unit: "oz" };
+  return { key: "resource_tonnes", label: "Resource Tonnage", unit: "t" };
 }
 
 /* ---------- page ---------- */
@@ -256,10 +269,22 @@ export default function ResourceGrowthPage() {
           {!loading &&
             data &&
             data.projects.map((project) => {
-              const maxOz = Math.max(
-                ...project.timeline.map((t) => t.resource_gold_oz),
-                1,
-              );
+              const metric = metricFor(project.primary_commodity);
+              const values = project.timeline.map((t) => t[metric.key]);
+              const maxVal = Math.max(...values, 1);
+              let growth: { first: number; last: number; pct: number } | null =
+                null;
+              if (values.length >= 2) {
+                const first = values[0];
+                const last = values[values.length - 1];
+                if (first && last) {
+                  growth = {
+                    first,
+                    last,
+                    pct: Math.round(((last - first) / first) * 1000) / 10,
+                  };
+                }
+              }
               return (
                 <div
                   key={project.project_id}
@@ -275,35 +300,39 @@ export default function ResourceGrowthPage() {
                         {project.primary_commodity.replace(/_/g, " ")}
                       </Badge>
                     </div>
-                    {project.growth && (
+                    {growth && (
                       <div className="text-sm text-slate-400">
                         <span
                           className={
-                            project.growth.change_pct >= 0
+                            growth.pct >= 0
                               ? "text-emerald-400 font-semibold"
                               : "text-red-400 font-semibold"
                           }
                         >
-                          {project.growth.change_pct >= 0 ? "+" : ""}
-                          {project.growth.change_pct}%
+                          {growth.pct >= 0 ? "+" : ""}
+                          {growth.pct}%
                         </span>{" "}
-                        contained gold ({fmtOz(project.growth.first_oz)} →{" "}
-                        {fmtOz(project.growth.latest_oz)} oz)
+                        {metric.label.toLowerCase()} ({fmtNum(growth.first)} →{" "}
+                        {fmtNum(growth.last)} {metric.unit})
                       </div>
                     )}
                   </div>
 
-                  {/* Bar chart: resource gold oz per report */}
+                  {/* Bar chart: primary resource metric per report */}
+                  <div className="text-xs text-slate-500 mb-2">
+                    {metric.label} ({metric.unit}) per NI 43-101 report
+                  </div>
                   <div className="flex items-end gap-3 h-48 mb-6">
                     {project.timeline.map((t) => {
-                      const pct = (t.resource_gold_oz / maxOz) * 100;
+                      const val = t[metric.key];
+                      const pct = (val / maxVal) * 100;
                       return (
                         <div
                           key={t.report_date}
                           className="flex-1 flex flex-col items-center gap-1 min-w-0"
                         >
                           <span className="text-[10px] text-slate-400">
-                            {fmtOz(t.resource_gold_oz)} oz
+                            {fmtNum(val)} {metric.unit}
                           </span>
                           <div
                             className="w-full flex justify-center"
@@ -312,7 +341,7 @@ export default function ResourceGrowthPage() {
                             <div
                               className="w-full max-w-[64px] rounded-t bg-gradient-to-t from-gold-600 to-gold-400 self-end transition-all duration-500"
                               style={{ height: `${Math.max(pct, 2)}%` }}
-                              title={`${fmtOz(t.resource_gold_oz)} oz contained gold`}
+                              title={`${fmtNum(val)} ${metric.unit} ${metric.label.toLowerCase()}`}
                             />
                           </div>
                           <span className="text-[10px] text-slate-500">
@@ -331,7 +360,7 @@ export default function ResourceGrowthPage() {
                           <th className="text-left pb-2 pr-4">Report Date</th>
                           <th className="text-left pb-2 pr-4">Category</th>
                           <th className="text-right pb-2 pr-4">Tonnes</th>
-                          <th className="text-right pb-2 pr-4">Grade (g/t)</th>
+                          <th className="text-right pb-2 pr-4">Grade</th>
                           <th className="text-right pb-2 pr-4">Gold (oz)</th>
                           <th className="text-right pb-2">Silver (oz)</th>
                         </tr>
@@ -372,14 +401,16 @@ export default function ResourceGrowthPage() {
                               </td>
                               <td className="py-2 pr-4 text-right text-slate-400">
                                 {c.gold_grade_gpt != null
-                                  ? c.gold_grade_gpt.toFixed(2)
-                                  : "—"}
+                                  ? `${c.gold_grade_gpt.toFixed(2)} g/t`
+                                  : c.copper_grade_pct != null
+                                    ? `${c.copper_grade_pct.toFixed(2)} %`
+                                    : "—"}
                               </td>
                               <td className="py-2 pr-4 text-right text-gold-400">
-                                {fmtOz(c.gold_ounces)}
+                                {fmtNum(c.gold_ounces)}
                               </td>
                               <td className="py-2 text-right text-slate-400">
-                                {fmtOz(c.silver_ounces)}
+                                {fmtNum(c.silver_ounces)}
                               </td>
                             </tr>
                           )),
@@ -388,10 +419,12 @@ export default function ResourceGrowthPage() {
                     </table>
                   </div>
                   <p className="text-xs text-slate-500 mt-3">
-                    Bars show contained gold from Inferred + Indicated +
-                    Measured categories. Measured &amp; Indicated (combined) and
-                    reserve categories are shown in the table but excluded from
-                    the bar total to avoid double-counting.
+                    Bars sum the Inferred + Indicated + Measured resource for
+                    the project&apos;s primary metal — contained gold or silver
+                    ounces, or tonnage for other commodities. Measured &amp;
+                    Indicated (combined) and reserve categories appear in the
+                    table but are excluded from the bar total to avoid
+                    double-counting.
                   </p>
                 </div>
               );

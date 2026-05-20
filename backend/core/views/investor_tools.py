@@ -1020,42 +1020,40 @@ def resource_growth(request):
         for report_date, rows in sorted(by_date.items()):
             categories = []
             additive_gold = 0.0
+            additive_silver = 0.0
+            additive_tonnes = 0.0
             reserve_gold = 0.0
             for r in rows:
                 gold_oz = float(r.gold_ounces or 0)
+                silver_oz = float(r.silver_ounces or 0)
+                tonnes = float(r.tonnes or 0)
                 if r.category in _ADDITIVE_RESOURCE_CATEGORIES:
                     additive_gold += gold_oz
+                    additive_silver += silver_oz
+                    additive_tonnes += tonnes
                 elif r.category in _RESERVE_CATEGORIES:
                     reserve_gold += gold_oz
                 categories.append({
                     'category': cat_display.get(r.category, r.category),
-                    'tonnes': float(r.tonnes or 0),
+                    'tonnes': tonnes,
                     'gold_grade_gpt': float(r.gold_grade_gpt) if r.gold_grade_gpt else None,
                     'gold_ounces': float(r.gold_ounces) if r.gold_ounces else None,
                     'silver_ounces': float(r.silver_ounces) if r.silver_ounces else None,
+                    'copper_grade_pct': (
+                        float(r.copper_grade_pct) if r.copper_grade_pct else None
+                    ),
                 })
             timeline.append({
                 'report_date': report_date,
                 'standard': rows[0].get_standard_display(),
                 'categories': categories,
+                # Per-metric resource totals (Inferred + Indicated + Measured).
+                # The frontend charts whichever metric suits the commodity.
                 'resource_gold_oz': round(additive_gold, 0),
+                'resource_silver_oz': round(additive_silver, 0),
+                'resource_tonnes': round(additive_tonnes, 0),
                 'reserve_gold_oz': round(reserve_gold, 0),
             })
-
-        growth = None
-        if len(timeline) >= 2:
-            first, last = timeline[0], timeline[-1]
-            if first['resource_gold_oz'] and last['resource_gold_oz']:
-                growth = {
-                    'first_report': first['report_date'],
-                    'latest_report': last['report_date'],
-                    'first_oz': first['resource_gold_oz'],
-                    'latest_oz': last['resource_gold_oz'],
-                    'change_pct': round(
-                        (last['resource_gold_oz'] - first['resource_gold_oz'])
-                        / first['resource_gold_oz'] * 100, 1,
-                    ),
-                }
 
         projects_out.append({
             'project_id': project.id,
@@ -1063,7 +1061,6 @@ def resource_growth(request):
             'primary_commodity': project.primary_commodity,
             'estimate_count': len(timeline),
             'timeline': timeline,
-            'growth': growth,
         })
 
     data = {
