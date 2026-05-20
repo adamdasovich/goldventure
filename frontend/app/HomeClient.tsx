@@ -52,28 +52,6 @@ const TOOLS_MENU = [
   },
 ];
 
-/* ─── How it works (3-step explainer) ─── */
-const STEPS = [
-  {
-    title: "Find a company",
-    description:
-      "Search 500+ junior miners by name, ticker, or the metal they're chasing.",
-    icon: "M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z",
-  },
-  {
-    title: "Ask the AI",
-    description:
-      "Get instant, plain-English answers on resources, projects, and financings.",
-    icon: "M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.86 9.86 0 01-4-.8L3 21l1.8-4A8.84 8.84 0 013 12c0-4.418 4.03-8 9-8s9 3.582 9 8z",
-  },
-  {
-    title: "Track what matters",
-    description:
-      "Follow financings, news, and company events as they happen across the sector.",
-    icon: "M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9",
-  },
-];
-
 /* ─── Feature cards ───
    `badge: "Live"` marks the real-time, WebSocket-powered features so they
    visibly stand out in the grid. */
@@ -749,58 +727,6 @@ export default function HomeClient({ initialArticles }: HomeClientProps) {
           </div>
         </div>
       </div>
-
-      {/* ════════ How It Works ════════ */}
-      <section className="py-16 md:py-20 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-5xl mx-auto">
-          <div className="text-center mb-12">
-            <Badge variant="gold" className="mb-4">
-              How It Works
-            </Badge>
-            <h2 className="text-3xl sm:text-4xl font-bold text-gradient-gold mb-4">
-              From Question to Insight in Three Steps
-            </h2>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {STEPS.map((step, i) => (
-              <div
-                key={i}
-                className="glass-card rounded-xl p-6 text-center h-full"
-              >
-                <div className="w-12 h-12 mx-auto rounded-full flex items-center justify-center bg-gold-500/15 border border-gold-500/30 mb-4">
-                  <svg
-                    className="w-6 h-6 text-gold-400"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                    aria-hidden="true"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d={step.icon}
-                    />
-                  </svg>
-                </div>
-                <p className="text-xs font-semibold uppercase tracking-wide text-gold-400 mb-2">
-                  Step {i + 1}
-                </p>
-                <h3 className="text-lg font-semibold text-slate-200 mb-2">
-                  {step.title}
-                </h3>
-                <p className="text-sm text-slate-400 leading-relaxed">
-                  {step.description}
-                </p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Section Divider */}
-      <div className="section-divider"></div>
 
       {/* ════════ AI Chat Interface Section ════════ */}
       <section
