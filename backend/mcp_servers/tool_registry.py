@@ -155,6 +155,22 @@ class ToolRegistry:
             "Extract economic data (NPV, IRR, capex, opex)",
             ["economics", "NPV", "IRR", "capex", "opex", "extract"])
 
+        # NI 43-101 report database-access tools
+        self._register_metadata("reports_vector_search", ToolCategory.DOCUMENTS,
+            "Semantic vector search over stored NI 43-101 technical reports",
+            ["NI 43-101", "vector", "semantic", "search", "report", "technical",
+             "resource", "drilling", "metallurgy", "relevance"])
+
+        self._register_metadata("reports_search_technical", ToolCategory.DOCUMENTS,
+            "Structured search of stored technical reports by company, project, date, commodity",
+            ["NI 43-101", "report", "technical", "find", "company", "project",
+             "commodity", "date", "list", "documents"])
+
+        self._register_metadata("reports_get_content", ToolCategory.DOCUMENTS,
+            "Fetch full content or accessible URL for a stored report by document_id",
+            ["NI 43-101", "report", "content", "fetch", "retrieve", "document",
+             "full text", "url", "document_id"])
+
         # Search/RAG tools
         self._register_metadata("search_documents", ToolCategory.SEARCH,
             "Semantic search across processed documents",
@@ -208,7 +224,9 @@ class ToolRegistry:
             keywords=keywords
         )
         # Map tool to server type based on prefix
-        if name.startswith("mining_"):
+        if name.startswith("reports_"):
+            self._tool_servers[name] = "ni43101_reports"
+        elif name.startswith("mining_"):
             self._tool_servers[name] = "mining"
         elif name.startswith("financial_"):
             self._tool_servers[name] = "financial"
@@ -333,6 +351,9 @@ class ToolRegistry:
             elif server_type == "document_search":
                 from mcp_servers.document_search import DocumentSearchServer
                 self._server_instances[cache_key] = DocumentSearchServer(company_id, user)
+            elif server_type == "ni43101_reports":
+                from mcp_servers.ni43101_reports import NI43101ReportsServer
+                self._server_instances[cache_key] = NI43101ReportsServer(company_id, user)
             elif server_type == "news_release":
                 from mcp_servers.news_release_server import NewsReleaseServer
                 self._server_instances[cache_key] = NewsReleaseServer(company_id, user)
