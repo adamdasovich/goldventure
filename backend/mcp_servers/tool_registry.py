@@ -171,6 +171,37 @@ class ToolRegistry:
             ["NI 43-101", "report", "content", "fetch", "retrieve", "document",
              "full text", "url", "document_id"])
 
+        # Insights / analytics tools (historical-data analysis)
+        self._register_metadata("insights_compare_stock_performance", ToolCategory.MARKET,
+            "Compare % stock price performance across multiple companies over a window",
+            ["compare", "stock", "performance", "price", "% change", "movement",
+             "versus", "vs", "ranking", "volatility", "best", "worst"])
+
+        self._register_metadata("insights_catalyst_impact", ToolCategory.MARKET,
+            "Event study: how a company's share price reacts to each type of news",
+            ["catalyst", "event study", "news impact", "price reaction", "drill",
+             "moves the stock", "news", "reaction"])
+
+        self._register_metadata("insights_project_due_diligence", ToolCategory.DOCUMENTS,
+            "RAG due-diligence Q&A across a company's NI 43-101 technical reports",
+            ["due diligence", "DD", "technical", "NI 43-101", "metallurgy",
+             "geology", "permitting", "report", "question"])
+
+        self._register_metadata("insights_resource_growth", ToolCategory.MINING,
+            "Track how a company's mineral resource estimates evolved over time",
+            ["resource", "growth", "estimate", "ounces", "grade", "tonnes",
+             "history", "trend", "NI 43-101"])
+
+        self._register_metadata("insights_economic_rerate", ToolCategory.MINING,
+            "Re-rate a project's PEA/PFS/FS economics at today's gold price",
+            ["economic", "rerate", "re-rate", "NPV", "PEA", "feasibility",
+             "gold price", "valuation", "study", "IRR"])
+
+        self._register_metadata("insights_daily_briefing", ToolCategory.NEWS,
+            "Digest of recent price, news, financing and document activity for a watchlist",
+            ["briefing", "watchlist", "digest", "summary", "recent", "daily",
+             "my companies", "update"])
+
         # Search/RAG tools
         self._register_metadata("search_documents", ToolCategory.SEARCH,
             "Semantic search across processed documents",
@@ -224,7 +255,9 @@ class ToolRegistry:
             keywords=keywords
         )
         # Map tool to server type based on prefix
-        if name.startswith("reports_"):
+        if name.startswith("insights_"):
+            self._tool_servers[name] = "insights"
+        elif name.startswith("reports_"):
             self._tool_servers[name] = "ni43101_reports"
         elif name.startswith("mining_"):
             self._tool_servers[name] = "mining"
@@ -354,6 +387,9 @@ class ToolRegistry:
             elif server_type == "ni43101_reports":
                 from mcp_servers.ni43101_reports import NI43101ReportsServer
                 self._server_instances[cache_key] = NI43101ReportsServer(company_id, user)
+            elif server_type == "insights":
+                from mcp_servers.insights_tools import InsightsToolsServer
+                self._server_instances[cache_key] = InsightsToolsServer(company_id, user)
             elif server_type == "news_release":
                 from mcp_servers.news_release_server import NewsReleaseServer
                 self._server_instances[cache_key] = NewsReleaseServer(company_id, user)

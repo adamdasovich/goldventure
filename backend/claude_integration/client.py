@@ -15,6 +15,7 @@ from mcp_servers.document_search import DocumentSearchServer
 from mcp_servers.news_release_server import NewsReleaseServer
 from mcp_servers.news_content_processor import NewsContentProcessor
 from mcp_servers.ni43101_reports import NI43101ReportsServer
+from mcp_servers.insights_tools import InsightsToolsServer
 
 
 class ClaudeClient:
@@ -46,10 +47,12 @@ class ClaudeClient:
         self.news_release_server = NewsReleaseServer(company_id, user)
         self.news_content_processor = NewsContentProcessor(company_id, user)
         self.ni43101_reports_server = NI43101ReportsServer(company_id, user)
+        self.insights_server = InsightsToolsServer(company_id, user)
 
         # Map tool name prefixes to servers
         self.server_map = {
             'reports_': self.ni43101_reports_server,
+            'insights_': self.insights_server,
             'mining_': self.mining_server,
             'financial_': self.financial_server,
             'alphavantage_': self.alpha_vantage_server,
@@ -77,6 +80,7 @@ class ClaudeClient:
         tools.extend(self.news_release_server.get_tool_definitions())
         tools.extend(self.news_content_processor.get_tool_definitions())
         tools.extend(self.ni43101_reports_server.get_tool_definitions())
+        tools.extend(self.insights_server.get_tool_definitions())
         return tools
 
     def _route_tool_call(self, tool_name: str, parameters: Dict) -> Any:

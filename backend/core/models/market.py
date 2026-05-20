@@ -139,6 +139,40 @@ class MetalPrice(models.Model):
         latest_prices = cls.objects.order_by('metal', '-scraped_at').distinct('metal')
         return {price.metal: price for price in latest_prices}
 
+    @classmethod
+    def get_history(cls, metal, days=180):
+        """
+        Return every MetalPrice row for one metal over the trailing `days`,
+        oldest first. Metals are scraped twice daily, so expect ~2 rows/day.
+        """
+        from datetime import timedelta
+        from django.utils import timezone
+
+        cutoff = timezone.now() - timedelta(days=days)
+        return cls.objects.filter(
+            metal=metal,
+            scraped_at__gte=cutoff,
+        ).order_by('scraped_at')
+
+    @classmethod
+    def get_daily_series(cls, metal, days=180):
+        """
+        Return one representative price per calendar day for a metal — the last
+        scrape of each day — oldest first. Use this for trend and correlation
+        analysis lined up against daily StockPrice data.
+        """
+        from datetime import timedelta
+        from django.utils import timezone
+        from django.db.models.functions import TruncDate
+
+        cutoff = timezone.now() - timedelta(days=days)
+        return list(
+            cls.objects.filter(metal=metal, scraped_at__gte=cutoff)
+            .annotate(day=TruncDate('scraped_at'))
+            .order_by('day', '-scraped_at')
+            .distinct('day')
+        )
+
 
 
 

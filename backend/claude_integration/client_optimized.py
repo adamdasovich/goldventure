@@ -81,6 +81,9 @@ class OptimizedClaudeClient:
             elif server_type == "ni43101_reports":
                 from mcp_servers.ni43101_reports import NI43101ReportsServer
                 self._servers[server_type] = NI43101ReportsServer(self.company_id, self.user)
+            elif server_type == "insights":
+                from mcp_servers.insights_tools import InsightsToolsServer
+                self._servers[server_type] = InsightsToolsServer(self.company_id, self.user)
             elif server_type == "news_release":
                 from mcp_servers.news_release_server import NewsReleaseServer
                 self._servers[server_type] = NewsReleaseServer(self.company_id, self.user)
@@ -196,7 +199,9 @@ class OptimizedClaudeClient:
         """Execute a tool on the appropriate server."""
         # Determine server type from tool name
         server_type = None
-        if tool_name.startswith("reports_"):
+        if tool_name.startswith("insights_"):
+            server_type = "insights"
+        elif tool_name.startswith("reports_"):
             server_type = "ni43101_reports"
         elif tool_name.startswith("mining_"):
             server_type = "mining"
