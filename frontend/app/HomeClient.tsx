@@ -2,7 +2,6 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import Link from "next/link";
-import Image from "next/image";
 import { useRouter } from "next/navigation";
 import ChatInterface from "@/components/ChatInterface";
 import NewsArticles from "@/components/NewsArticles";
@@ -16,57 +15,98 @@ import { CartButton } from "@/components/store";
 import MetalsTicker from "@/components/MetalsTicker";
 import { companyAPI } from "@/lib/api";
 
-/* ─── Nav link data ─── */
-const NAV_LINKS = [
-  { href: "/dashboard", label: "Dashboard" },
+/* ─── Navigation ───
+   Top-level nav is kept to four items. Secondary destinations live in the
+   "Tools" dropdown so a first-time visitor isn't faced with 11 choices. */
+const PRIMARY_NAV = [
   { href: "/companies", label: "Companies" },
-  { href: "/investor-tools", label: "Investor Tools" },
   { href: "/properties", label: "Prospector's Exchange" },
-  { href: "/metals", label: "Metals" },
-  { href: "/financial-hub", label: "Financial Hub" },
-  { href: "/store", label: "Store" },
 ];
 
-const FEATURES = [
+const TOOLS_MENU = [
   {
-    title: "AI Mining Assistant",
-    description:
-      "Ask Claude anything about companies, resources, projects, and financings. Powered by real-time MCP data access.",
-    icon: "M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z",
-    href: "#chat-section",
-  },
-  {
-    title: "10 Investor Tools",
-    description:
-      "Grade Ranker, Peer Comparison, Financing Flow, Drill Scanner, NI 43-101 Analyzer, and more.",
-    icon: "M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z",
     href: "/investor-tools",
+    label: "Investor Tools",
+    desc: "10 screeners & analyzers",
   },
+  {
+    href: "/metals",
+    label: "Metals Prices",
+    desc: "Live gold, silver & more",
+  },
+  {
+    href: "/closed-financings",
+    label: "Financing Tracker",
+    desc: "Private placements & deals",
+  },
+  {
+    href: "/financial-hub",
+    label: "Financial Hub",
+    desc: "Invest in private deals",
+  },
+  {
+    href: "/store",
+    label: "Store",
+    desc: "Reports & field gear",
+  },
+];
+
+/* ─── How it works (3-step explainer) ─── */
+const STEPS = [
+  {
+    title: "Find a company",
+    description:
+      "Search 500+ junior miners by name, ticker, or the metal they're chasing.",
+    icon: "M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z",
+  },
+  {
+    title: "Ask the AI",
+    description:
+      "Get instant, plain-English answers on resources, projects, and financings.",
+    icon: "M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.86 9.86 0 01-4-.8L3 21l1.8-4A8.84 8.84 0 013 12c0-4.418 4.03-8 9-8s9 3.582 9 8z",
+  },
+  {
+    title: "Track what matters",
+    description:
+      "Follow financings, news, and company events as they happen across the sector.",
+    icon: "M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9",
+  },
+];
+
+/* ─── Feature cards ─── */
+const FEATURES = [
   {
     title: "Company Database",
     description:
-      "500+ junior mining companies with profiles, projects, resource estimates, financings, and news releases.",
+      "Profiles for 500+ junior miners — projects, resource estimates, financing history, and news, all in one place.",
     icon: "M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4",
     href: "/companies",
   },
   {
+    title: "10 Investor Tools",
+    description:
+      "Screeners and calculators — rank companies by ore grade, compare them side by side, scan drill results, and more.",
+    icon: "M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z",
+    href: "/investor-tools",
+  },
+  {
     title: "Prospector's Exchange",
     description:
-      "Marketplace connecting property holders with investors. Browse mineral claims, exploration properties, and joint ventures.",
+      "A marketplace connecting mineral property owners with investors. Browse claims, exploration ground, and joint ventures.",
     icon: "M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z",
     href: "/properties",
   },
   {
     title: "Financing Tracker",
     description:
-      "Track active and closed private placements, bought deals, and flow-through financings across the sector.",
+      "See which companies are raising capital — active and recently closed private placements and deals across the sector.",
     icon: "M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z",
     href: "/closed-financings",
   },
   {
     title: "Real-Time Metals",
     description:
-      "Live pricing for gold, silver, platinum, palladium, and top-moving mining stocks with historical charts.",
+      "Live prices for gold, silver, platinum, and palladium, plus the day's top-moving mining stocks.",
     icon: "M13 7h8m0 0v8m0-8l-8 8-4-4-6 6",
     href: "/metals",
   },
@@ -87,9 +127,11 @@ export default function HomeClient({ initialArticles }: HomeClientProps) {
   const [showLogin, setShowLogin] = useState(false);
   const [showRegister, setShowRegister] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [toolsOpen, setToolsOpen] = useState(false);
   const { user, logout } = useAuth();
   const newsSectionRef = useRef<HTMLElement>(null);
   const chatSectionRef = useRef<HTMLElement>(null);
+  const toolsRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
 
   // Search state
@@ -148,10 +190,6 @@ export default function HomeClient({ initialArticles }: HomeClientProps) {
     chatSectionRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
-  const scrollToNews = () => {
-    newsSectionRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
-
   // Close mobile menu on resize
   useEffect(() => {
     const handleResize = () => {
@@ -168,6 +206,41 @@ export default function HomeClient({ initialArticles }: HomeClientProps) {
       document.body.style.overflow = "";
     };
   }, [mobileMenuOpen]);
+
+  // Close the Tools dropdown when clicking outside it
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (toolsRef.current && !toolsRef.current.contains(e.target as Node)) {
+        setToolsOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  // Hero stats — real numbers from the platform-stats endpoint, with honest
+  // fallbacks so a tile is never a fake metric. Always renders four tiles.
+  const heroStats = [
+    { value: `${stats.companies}+`, label: "Companies tracked" },
+    ...(stats.projects > 0
+      ? [
+          {
+            value: `${stats.projects.toLocaleString()}+`,
+            label: "Projects mapped",
+          },
+        ]
+      : []),
+    ...(stats.financings > 0
+      ? [
+          {
+            value: `${stats.financings.toLocaleString()}+`,
+            label: "Financings tracked",
+          },
+        ]
+      : []),
+    { value: "10", label: "Investor tools" },
+    { value: "3×/day", label: "News updates" },
+  ].slice(0, 4);
 
   return (
     <div className="min-h-screen">
@@ -188,18 +261,74 @@ export default function HomeClient({ initialArticles }: HomeClientProps) {
 
             {/* Desktop Nav */}
             <div className="hidden lg:flex items-center space-x-1">
-              {NAV_LINKS.map((link) => (
+              {PRIMARY_NAV.map((link) => (
                 <Link key={link.href} href={link.href}>
                   <Button variant="ghost" size="sm">
                     {link.label}
                   </Button>
                 </Link>
               ))}
+
+              {/* Tools dropdown */}
+              <div className="relative" ref={toolsRef}>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setToolsOpen((o) => !o)}
+                  aria-expanded={toolsOpen ? "true" : "false"}
+                  aria-haspopup="true"
+                >
+                  Tools
+                  <svg
+                    className={`w-4 h-4 ml-1 transition-transform ${
+                      toolsOpen ? "rotate-180" : ""
+                    }`}
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M19 9l-7 7-7-7"
+                    />
+                  </svg>
+                </Button>
+                {toolsOpen && (
+                  <div className="absolute left-0 mt-2 w-64 bg-slate-800/95 border border-slate-700/50 rounded-xl shadow-2xl backdrop-blur-sm overflow-hidden">
+                    {TOOLS_MENU.map((item) => (
+                      <Link
+                        key={item.href}
+                        href={item.href}
+                        onClick={() => setToolsOpen(false)}
+                        className="block px-4 py-3 hover:bg-gold-500/10 transition-colors"
+                      >
+                        <p className="text-sm font-medium text-slate-200">
+                          {item.label}
+                        </p>
+                        <p className="text-xs text-slate-400">{item.desc}</p>
+                      </Link>
+                    ))}
+                  </div>
+                )}
+              </div>
+
               <Link href="/pricing">
                 <Button variant="ghost" size="sm">
                   Pricing
                 </Button>
               </Link>
+
+              {user && (
+                <Link href="/dashboard">
+                  <Button variant="ghost" size="sm">
+                    Dashboard
+                  </Button>
+                </Link>
+              )}
+
               <CartButton />
 
               {user ? (
@@ -246,6 +375,7 @@ export default function HomeClient({ initialArticles }: HomeClientProps) {
                     fill="none"
                     stroke="currentColor"
                     viewBox="0 0 24 24"
+                    aria-hidden="true"
                   >
                     <path
                       strokeLinecap="round"
@@ -260,6 +390,7 @@ export default function HomeClient({ initialArticles }: HomeClientProps) {
                     fill="none"
                     stroke="currentColor"
                     viewBox="0 0 24 24"
+                    aria-hidden="true"
                   >
                     <path
                       strokeLinecap="round"
@@ -278,7 +409,7 @@ export default function HomeClient({ initialArticles }: HomeClientProps) {
         {mobileMenuOpen && (
           <div className="lg:hidden mobile-nav-overlay border-t border-slate-700/50 animate-slide-in-up">
             <div className="px-4 py-4 space-y-1">
-              {NAV_LINKS.map((link) => (
+              {PRIMARY_NAV.map((link) => (
                 <Link
                   key={link.href}
                   href={link.href}
@@ -288,13 +419,38 @@ export default function HomeClient({ initialArticles }: HomeClientProps) {
                   {link.label}
                 </Link>
               ))}
+
+              <p className="px-4 pt-3 pb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Tools
+              </p>
+              {TOOLS_MENU.map((item) => (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="block px-4 py-3 rounded-lg text-slate-300 hover:text-gold-400 hover:bg-slate-800/50 transition-colors"
+                >
+                  {item.label}
+                </Link>
+              ))}
+
               <Link
                 href="/pricing"
                 onClick={() => setMobileMenuOpen(false)}
-                className="block px-4 py-3 rounded-lg text-gold-400 hover:bg-slate-800/50 transition-colors"
+                className="block px-4 py-3 mt-1 rounded-lg text-gold-400 hover:bg-slate-800/50 transition-colors"
               >
                 Pricing
               </Link>
+              {user && (
+                <Link
+                  href="/dashboard"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="block px-4 py-3 rounded-lg text-slate-300 hover:text-gold-400 hover:bg-slate-800/50 transition-colors"
+                >
+                  Dashboard
+                </Link>
+              )}
+
               <div className="pt-3 mt-3 border-t border-slate-700/50 space-y-2">
                 {user ? (
                   <>
@@ -383,119 +539,116 @@ export default function HomeClient({ initialArticles }: HomeClientProps) {
         ></div>
         <div className="hero-particles"></div>
 
-        <div className="relative max-w-7xl mx-auto">
-          {/* Hero content */}
-          <div className="text-center max-w-3xl mx-auto mb-12">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-gold-500/10 border border-gold-500/20 mb-6 animate-fade-in">
-              <span className="w-2 h-2 bg-gold-400 rounded-full animate-pulse"></span>
-              <span className="text-sm text-gold-400 font-medium">
-                AI-Powered Mining Research
-              </span>
-            </div>
-
-            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold mb-6 text-gradient-gold animate-fade-in leading-tight pb-2">
-              Junior Mining Intelligence
-            </h1>
-            <p className="text-lg sm:text-xl text-slate-300 animate-slide-in-up mb-8">
-              Track {stats.companies}+ TSXV/TSX mining stocks with real-time
-              exploration data, NI 43-101 reports, resource estimates, and
-              AI-powered analytics.
-            </p>
-
-            {/* ── Search Bar ── */}
-            <div className="relative max-w-xl mx-auto mb-8 animate-slide-in-up">
-              <div className="relative">
-                <svg
-                  className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-                  />
-                </svg>
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => handleSearchChange(e.target.value)}
-                  onFocus={() =>
-                    searchResults.length > 0 && setSearchOpen(true)
-                  }
-                  onBlur={() => setTimeout(() => setSearchOpen(false), 200)}
-                  placeholder="Search companies by name or ticker..."
-                  className="w-full pl-12 pr-4 py-4 rounded-xl bg-slate-800/80 border border-slate-600/50 text-white placeholder-slate-400 focus:outline-none focus:border-gold-500/50 focus:ring-1 focus:ring-gold-500/30 text-base backdrop-blur-sm"
-                />
-              </div>
-
-              {/* Search Dropdown */}
-              {searchOpen && searchResults.length > 0 && (
-                <div className="absolute top-full left-0 right-0 mt-2 bg-slate-800/95 border border-slate-700/50 rounded-xl shadow-2xl backdrop-blur-sm z-20 overflow-hidden">
-                  {searchResults.map((company) => (
-                    <button
-                      key={company.id}
-                      onMouseDown={() => handleSearchSelect(company)}
-                      className="w-full flex items-center justify-between px-4 py-3 hover:bg-gold-500/10 transition-colors text-left"
-                    >
-                      <div>
-                        <p className="text-sm font-medium text-white">
-                          {company.name}
-                        </p>
-                        <p className="text-xs text-slate-400">
-                          {company.ticker_symbol}
-                        </p>
-                      </div>
-                      {company.primary_commodity && (
-                        <span className="text-xs text-gold-400 bg-gold-500/10 px-2 py-0.5 rounded">
-                          {company.primary_commodity}
-                        </span>
-                      )}
-                    </button>
-                  ))}
-                  <Link
-                    href={`/companies?search=${encodeURIComponent(searchQuery)}`}
-                    className="block px-4 py-3 text-center text-sm text-gold-400 hover:bg-gold-500/10 border-t border-slate-700/50"
-                  >
-                    View all results →
-                  </Link>
-                </div>
-              )}
-            </div>
-
-            {/* Primary CTAs */}
-            <div className="flex flex-col sm:flex-row gap-3 justify-center animate-slide-in-up">
-              <Link href="/companies">
-                <Button
-                  variant="primary"
-                  size="lg"
-                  className="cta-glow w-full sm:w-auto"
-                >
-                  Explore Companies
-                </Button>
-              </Link>
-              <Button
-                variant="secondary"
-                size="lg"
-                onClick={scrollToChat}
-                className="w-full sm:w-auto"
-              >
-                Ask the AI Assistant
-              </Button>
-            </div>
+        <div className="relative max-w-3xl mx-auto text-center">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-gold-500/10 border border-gold-500/20 mb-6 animate-fade-in">
+            <span className="w-2 h-2 bg-gold-400 rounded-full animate-pulse"></span>
+            <span className="text-sm text-gold-400 font-medium">
+              Live mining data + AI research
+            </span>
           </div>
 
-          {/* ── Stats Bar ── */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-12 animate-fade-in">
-            {[
-              { value: `${stats.companies}+`, label: "Companies Tracked" },
-              { value: "10", label: "Investor Tools" },
-              { value: "3x Daily", label: "News Updates" },
-              { value: "AI", label: "Powered by Claude" },
-            ].map((stat, i) => (
-              <div key={i} className="text-center stat-item py-3">
+          <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold mb-6 text-gradient-gold animate-fade-in leading-tight pb-2">
+            Research junior mining stocks in minutes, not hours
+          </h1>
+          <p className="text-lg sm:text-xl text-slate-300 animate-slide-in-up mb-8">
+            Profiles, financials, and news for {stats.companies}+ small gold,
+            silver, and critical-minerals companies — plus an AI assistant that
+            answers your questions instantly.
+          </p>
+
+          {/* ── Search Bar ── */}
+          <div className="relative max-w-xl mx-auto mb-6 animate-slide-in-up">
+            <label htmlFor="company-search" className="sr-only">
+              Search companies by name or ticker
+            </label>
+            <div className="relative">
+              <svg
+                className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+                aria-hidden="true"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                />
+              </svg>
+              <input
+                id="company-search"
+                type="text"
+                value={searchQuery}
+                onChange={(e) => handleSearchChange(e.target.value)}
+                onFocus={() => searchResults.length > 0 && setSearchOpen(true)}
+                onBlur={() => setTimeout(() => setSearchOpen(false), 200)}
+                placeholder="Search companies by name or ticker..."
+                className="w-full pl-12 pr-4 py-4 rounded-xl bg-slate-800/80 border border-slate-600/50 text-white placeholder-slate-400 focus:outline-none focus:border-gold-500/50 focus:ring-1 focus:ring-gold-500/30 text-base backdrop-blur-sm"
+              />
+            </div>
+
+            {/* Search Dropdown */}
+            {searchOpen && searchResults.length > 0 && (
+              <div className="absolute top-full left-0 right-0 mt-2 bg-slate-800/95 border border-slate-700/50 rounded-xl shadow-2xl backdrop-blur-sm z-20 overflow-hidden text-left">
+                {searchResults.map((company) => (
+                  <button
+                    key={company.id}
+                    onMouseDown={() => handleSearchSelect(company)}
+                    className="w-full flex items-center justify-between px-4 py-3 hover:bg-gold-500/10 transition-colors text-left"
+                  >
+                    <div>
+                      <p className="text-sm font-medium text-white">
+                        {company.name}
+                      </p>
+                      <p className="text-xs text-slate-400">
+                        {company.ticker_symbol}
+                      </p>
+                    </div>
+                    {company.primary_commodity && (
+                      <span className="text-xs text-gold-400 bg-gold-500/10 px-2 py-0.5 rounded">
+                        {company.primary_commodity}
+                      </span>
+                    )}
+                  </button>
+                ))}
+                <Link
+                  href={`/companies?search=${encodeURIComponent(searchQuery)}`}
+                  className="block px-4 py-3 text-center text-sm text-gold-400 hover:bg-gold-500/10 border-t border-slate-700/50"
+                >
+                  View all results →
+                </Link>
+              </div>
+            )}
+          </div>
+
+          {/* Primary CTA + secondary text link */}
+          <div className="flex flex-col items-center gap-3 animate-slide-in-up">
+            <Link href="/companies">
+              <Button
+                variant="primary"
+                size="lg"
+                className="cta-glow w-full sm:w-auto"
+              >
+                Explore Companies
+              </Button>
+            </Link>
+            <button
+              onClick={scrollToChat}
+              className="text-sm text-slate-400 hover:text-gold-400 transition-colors"
+            >
+              or try the AI assistant ↓
+            </button>
+          </div>
+        </div>
+      </section>
+
+      {/* ════════ Stats Band ════════ */}
+      <div className="bg-slate-900/60 border-y border-slate-700/30 px-4 sm:px-6 lg:px-8">
+        <div className="max-w-5xl mx-auto py-6">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {heroStats.map((stat, i) => (
+              <div key={i} className="text-center stat-item py-2">
                 <p className="text-2xl sm:text-3xl font-bold text-gradient-gold">
                   {stat.value}
                 </p>
@@ -505,22 +658,90 @@ export default function HomeClient({ initialArticles }: HomeClientProps) {
               </div>
             ))}
           </div>
+        </div>
+      </div>
 
-          {/* Gold accent line */}
-          <div className="accent-line-animated mb-12"></div>
+      {/* ════════ How It Works ════════ */}
+      <section className="py-16 md:py-20 px-4 sm:px-6 lg:px-8">
+        <div className="max-w-5xl mx-auto">
+          <div className="text-center mb-12">
+            <Badge variant="gold" className="mb-4">
+              How It Works
+            </Badge>
+            <h2 className="text-3xl sm:text-4xl font-bold text-gradient-gold mb-4">
+              From Question to Insight in Three Steps
+            </h2>
+          </div>
 
-          {/* Three Hero Cards */}
-          <div className="mb-12">
-            <HeroCards
-              onLoginClick={() => setShowLogin(true)}
-              onRegisterClick={() => setShowRegister(true)}
-            />
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {STEPS.map((step, i) => (
+              <div
+                key={i}
+                className="glass-card rounded-xl p-6 text-center h-full"
+              >
+                <div className="w-12 h-12 mx-auto rounded-full flex items-center justify-center bg-gold-500/15 border border-gold-500/30 mb-4">
+                  <svg
+                    className="w-6 h-6 text-gold-400"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d={step.icon}
+                    />
+                  </svg>
+                </div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-gold-400 mb-2">
+                  Step {i + 1}
+                </p>
+                <h3 className="text-lg font-semibold text-slate-200 mb-2">
+                  {step.title}
+                </h3>
+                <p className="text-sm text-slate-400 leading-relaxed">
+                  {step.description}
+                </p>
+              </div>
+            ))}
           </div>
         </div>
       </section>
 
+      {/* Section Divider */}
+      <div className="section-divider"></div>
+
+      {/* ════════ AI Chat Interface Section ════════ */}
+      <section
+        ref={chatSectionRef}
+        id="chat-section"
+        className="py-16 md:py-20 px-4 sm:px-6 lg:px-8 bg-gradient-slate"
+      >
+        <div className="max-w-7xl mx-auto">
+          <div className="text-center mb-12">
+            <Badge variant="gold" className="mb-4">
+              Powered by Claude AI
+            </Badge>
+            <h2 className="text-3xl sm:text-4xl font-bold text-gradient-gold mb-4">
+              Ask Anything About Mining Companies
+            </h2>
+            <p className="text-slate-300 text-lg max-w-2xl mx-auto">
+              Plain-English answers about exploration projects, resource
+              reports, property listings, and company financials.
+            </p>
+          </div>
+
+          <ChatInterface />
+        </div>
+      </section>
+
+      {/* Section Divider */}
+      <div className="section-divider"></div>
+
       {/* ════════ Features Showcase ════════ */}
-      <section className="py-16 md:py-20 px-4 sm:px-6 lg:px-8 bg-gradient-slate">
+      <section className="py-16 md:py-20 px-4 sm:px-6 lg:px-8">
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-12">
             <Badge variant="gold" className="mb-4">
@@ -545,6 +766,7 @@ export default function HomeClient({ initialArticles }: HomeClientProps) {
                       fill="none"
                       stroke="currentColor"
                       viewBox="0 0 24 24"
+                      aria-hidden="true"
                     >
                       <path
                         strokeLinecap="round"
@@ -564,50 +786,17 @@ export default function HomeClient({ initialArticles }: HomeClientProps) {
               </Link>
             ))}
           </div>
-
-          {/* Pricing CTA */}
-          <div className="text-center mt-10">
-            <p className="text-slate-400 mb-3">
-              Start free. Upgrade when you&apos;re ready.
-            </p>
-            <Link href="/pricing">
-              <Button variant="secondary" size="lg">
-                View Plans &amp; Pricing
-              </Button>
-            </Link>
-          </div>
         </div>
       </section>
 
       {/* Section Divider */}
       <div className="section-divider"></div>
 
-      {/* ════════ Chat Interface Section ════════ */}
-      <section
-        ref={chatSectionRef}
-        id="chat-section"
-        className="py-16 md:py-20 px-4 sm:px-6 lg:px-8"
-      >
-        <div className="max-w-7xl mx-auto">
-          <div className="text-center mb-12">
-            <Badge variant="gold" className="mb-4">
-              Powered by Claude AI
-            </Badge>
-            <h2 className="text-3xl sm:text-4xl font-bold text-gradient-gold mb-4">
-              Ask Anything About Mining Companies
-            </h2>
-            <p className="text-slate-300 text-lg max-w-2xl mx-auto">
-              Natural language access to exploration projects, NI 43-101
-              resources, prospector listings, and economic studies.
-            </p>
-          </div>
-
-          <ChatInterface />
-        </div>
-      </section>
-
-      {/* Section Divider */}
-      <div className="section-divider"></div>
+      {/* ════════ Live Platform Data (events / financings / property) ════════ */}
+      <HeroCards
+        onLoginClick={() => setShowLogin(true)}
+        onRegisterClick={() => setShowRegister(true)}
+      />
 
       {/* ════════ News Articles Section ════════ */}
       <section
@@ -624,9 +813,8 @@ export default function HomeClient({ initialArticles }: HomeClientProps) {
               Latest Mining News
             </h2>
             <p className="text-slate-300 text-lg max-w-2xl mx-auto">
-              Exploration discoveries, TSXV market updates, and industry
-              developments across gold, silver, lithium, copper &amp; critical
-              minerals.
+              Exploration discoveries, market updates, and industry developments
+              across gold, silver, lithium, copper &amp; critical minerals.
             </p>
           </div>
 
@@ -640,36 +828,39 @@ export default function HomeClient({ initialArticles }: HomeClientProps) {
         </div>
       </section>
 
+      {/* Section Divider */}
+      <div className="section-divider"></div>
+
       {/* ════════ Pricing CTA Section ════════ */}
-      <section className="py-12 md:py-16 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-4xl mx-auto text-center">
+      <section className="py-16 md:py-20 px-4 sm:px-6 lg:px-8">
+        <div className="max-w-2xl mx-auto text-center">
           <h2 className="text-2xl sm:text-3xl font-bold text-gradient-gold mb-4">
-            Ready for Unlimited Mining Intelligence?
+            Start Free — No Card Required
           </h2>
-          <p className="text-slate-300 mb-6 max-w-xl mx-auto">
-            Start free with 5 AI messages per day and 2 investor tools. Upgrade
-            for unlimited access, all tools, and full data.
+          <p className="text-slate-300 mb-6">
+            5 AI questions a day and 2 investor tools, free forever. Upgrade for
+            unlimited access, all 10 tools, and full data.
           </p>
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
-            <Link href="/pricing">
+            {!user && (
               <Button
                 variant="primary"
                 size="lg"
-                className="cta-glow w-full sm:w-auto"
-              >
-                View Plans &amp; Pricing
-              </Button>
-            </Link>
-            {!user && (
-              <Button
-                variant="secondary"
-                size="lg"
                 onClick={() => setShowRegister(true)}
-                className="w-full sm:w-auto"
+                className="cta-glow w-full sm:w-auto"
               >
                 Create Free Account
               </Button>
             )}
+            <Link href="/pricing">
+              <Button
+                variant={user ? "primary" : "secondary"}
+                size="lg"
+                className={`w-full sm:w-auto ${user ? "cta-glow" : ""}`}
+              >
+                View Plans &amp; Pricing
+              </Button>
+            </Link>
           </div>
         </div>
       </section>
@@ -684,7 +875,7 @@ export default function HomeClient({ initialArticles }: HomeClientProps) {
             </div>
 
             <div className="flex flex-wrap gap-4 justify-center">
-              {NAV_LINKS.map((link) => (
+              {[...PRIMARY_NAV, ...TOOLS_MENU].map((link) => (
                 <Link
                   key={link.href}
                   href={link.href}
