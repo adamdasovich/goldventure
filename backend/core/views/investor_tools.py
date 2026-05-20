@@ -3,6 +3,7 @@ Investor Tools API endpoints.
 Provides data for grade ranking, peer comparison, financing flow, and sector pulse.
 """
 import logging
+import statistics
 from datetime import timedelta
 from decimal import Decimal
 
@@ -827,3 +828,125 @@ def property_valuation(request):
             'countries': countries,
         },
     })
+
+
+# ============================================================================
+# STOCK PERFORMANCE COMPARATOR
+# ============================================================================
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def stock_comparison(request):
+    """
+    Compare normalized share-price performance of up to 10 companies.
+    GET /api/tools/stock-comparison/?company_ids=1,2,3&days=90
+
+    With no company_ids, returns just the available-companies list (those
+    that have price history) so the frontend can populate its picker.
+    Each series is normalized to its first day = 0% so curves are comparable
+    regardless of share price.
+    """
+    cached_key = f"stock_comparison_{request.GET.urlencode()}"
+    cached = cache.get(cached_key)
+    if cached:
+        return Response(cached)
+
+    days = max(7, min(int(request.GET.get('days', 90)), 400))
+    company_ids_raw = request.GET.get('company_ids', '')
+    company_ids = [
+        int(x) for x in company_ids_raw.split(',') if x.strip().isdigit()
+    ][:10]
+
+    # Companies that have price history - powers the frontend company picker.
+    priced_ids = StockPrice.objects.values_list('company_id', flat=True).distinct()
+    available_companies = [
+        {
+            'id': c.id,
+            'name': c.name,
+            'ticker': c.ticker_symbol,
+            'exchange': c.exchange,
+        }
+        for c in Company.objects.filter(
+            id__in=priced_ids, is_active=True
+        ).order_by('name')
+    ]
+
+    series = []
+    summary = []
+    start_date = timezone.now().date() - timedelta(days=days)
+
+    for cid in company_ids:
+        company = Company.objects.filter(id=cid, is_active=True).first()
+        if not company:
+            continue
+        prices = list(
+            StockPrice.objects.filter(
+                company=company, date__gte=start_date
+            ).order_by('date')
+        )
+        if len(prices) < 2:
+            summary.append({
+                'company_id': cid,
+                'company_name': company.name,
+                'ticker': company.ticker_symbol,
+                'error': 'Not enough price history in this window.',
+            })
+            continue
+
+        base = float(prices[0].close_price)
+        points = []
+        daily_returns = []
+        prev_close = None
+        for p in prices:
+            close = float(p.close_price)
+            points.append({
+                'date': p.date.isoformat(),
+                'close': round(close, 4),
+                'pct': round((close - base) / base * 100, 2) if base else 0,
+            })
+            if prev_close:
+                daily_returns.append((close - prev_close) / prev_close)
+            prev_close = close
+
+        first, last = prices[0], prices[-1]
+        end_close = float(last.close_price)
+        volatility = (
+            round(statistics.pstdev(daily_returns) * 100, 2)
+            if len(daily_returns) >= 2 else None
+        )
+
+        series.append({
+            'company_id': cid,
+            'company_name': company.name,
+            'ticker': company.ticker_symbol,
+            'currency': last.currency,
+            'points': points,
+        })
+        summary.append({
+            'company_id': cid,
+            'company_name': company.name,
+            'ticker': company.ticker_symbol,
+            'currency': last.currency,
+            'start_date': first.date.isoformat(),
+            'start_price': round(base, 4),
+            'end_date': last.date.isoformat(),
+            'end_price': round(end_close, 4),
+            'pct_change': round((end_close - base) / base * 100, 2) if base else 0,
+            'daily_volatility_pct': volatility,
+            'data_points': len(prices),
+        })
+
+    # Rank best-to-worst by % change; rows with errors sink to the bottom.
+    summary.sort(
+        key=lambda s: s['pct_change'] if s.get('pct_change') is not None else -9e9,
+        reverse=True,
+    )
+
+    data = {
+        'available_companies': available_companies,
+        'series': series,
+        'summary': summary,
+        'days': days,
+    }
+    cache.set(cached_key, data, 600)
+    return Response(data)

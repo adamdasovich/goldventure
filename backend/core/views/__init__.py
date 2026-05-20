@@ -157,6 +157,7 @@ from .investor_tools import (  # noqa: F401
     catalyst_calendar,
     portfolio_xray,
     property_valuation,
+    stock_comparison,
 )
 from .platform_subscriptions import (  # noqa: F401
     platform_subscription_tiers,

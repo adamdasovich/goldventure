@@ -349,6 +349,10 @@ export const toolsAPI = {
     const q = new URLSearchParams(params).toString();
     return apiFetch<any>(`/tools/property-valuation/${q ? `?${q}` : ""}`);
   },
+  stockComparison: (params: Record<string, string> = {}) => {
+    const q = new URLSearchParams(params).toString();
+    return apiFetch<any>(`/tools/stock-comparison/${q ? `?${q}` : ""}`);
+  },
 };
 
 // News Releases API

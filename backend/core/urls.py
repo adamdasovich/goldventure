@@ -83,6 +83,7 @@ urlpatterns = [
     path('tools/catalyst-calendar/', views.catalyst_calendar, name='catalyst_calendar'),
     path('tools/portfolio-xray/', views.portfolio_xray, name='portfolio_xray'),
     path('tools/property-valuation/', views.property_valuation, name='property_valuation'),
+    path('tools/stock-comparison/', views.stock_comparison, name='stock_comparison'),
 
     # Company Forum Discussion endpoint
     path('companies/<int:company_id>/discussion/', views.get_company_discussion, name='get_company_discussion'),

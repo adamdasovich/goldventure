@@ -12,6 +12,16 @@ const FREE_TOOL_SLUGS = ["grade-ranker", "sector-pulse"];
 
 const TOOLS = [
   {
+    title: "Stock Performance Comparator",
+    slug: "stock-comparator",
+    description:
+      "Compare the share-price performance of up to 10 companies side by side. Normalized return curves, rankings, and volatility over any window.",
+    href: "/investor-tools/stock-comparator",
+    badge: "Analysis",
+    icon: "M3 3v18h18M18.5 9.5l-5 5-3-3-4 4",
+    available: true,
+  },
+  {
     title: "Resource Grade Ranker",
     slug: "grade-ranker",
     description:
@@ -137,7 +147,7 @@ export default function InvestorToolsPage() {
       {showUpgrade && (
         <UpgradeModal
           onClose={() => setShowUpgrade(false)}
-          feature="All 10 Investor Tools"
+          feature="All 11 Investor Tools"
           requiredTier="prospector"
         />
       )}
@@ -190,7 +200,7 @@ export default function InvestorToolsPage() {
                   variant="slate"
                   className="cursor-pointer hover:border-gold-400/50"
                 >
-                  Free tier: 2 tools &middot; Upgrade for all 10
+                  Free tier: 2 tools &middot; Upgrade for all 11
                 </Badge>
               </Link>
             </div>
