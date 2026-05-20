@@ -5,7 +5,7 @@ const description =
   "Compare Junior Mining Intelligence plans. Start free with the Explorer tier, or upgrade to Prospector or Miner for unlimited AI research, all 10 investor tools, historical data, and API access.";
 
 export const metadata: Metadata = {
-  title: "Pricing - Junior Mining Intelligence Plans & Subscriptions",
+  title: "Pricing & Subscription Plans",
   description,
   keywords: [
     "junior mining intelligence pricing",
