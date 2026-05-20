@@ -651,32 +651,32 @@ export default function HomeClient({ initialArticles }: HomeClientProps) {
               <div className="flex flex-col sm:flex-row flex-wrap gap-3 justify-center lg:justify-start animate-slide-in-up">
                 <Link href="/companies">
                   <Button
-                    variant="primary"
-                    size="lg"
-                    className="cta-glow w-full sm:w-auto"
+                    variant="secondary"
+                    size="sm"
+                    className="w-full sm:w-auto"
                   >
                     Explore Companies
                   </Button>
                 </Link>
                 <Button
                   variant="secondary"
-                  size="lg"
+                  size="sm"
                   onClick={scrollToChat}
                   className="w-full sm:w-auto"
                 >
                   AI Assistant
                 </Button>
                 <Button
-                  variant="ghost"
-                  size="lg"
+                  variant="secondary"
+                  size="sm"
                   onClick={scrollToHappening}
                   className="w-full sm:w-auto"
                 >
                   Happening Now
                 </Button>
                 <Button
-                  variant="ghost"
-                  size="lg"
+                  variant="secondary"
+                  size="sm"
                   onClick={scrollToNews}
                   className="w-full sm:w-auto"
                 >
