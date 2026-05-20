@@ -105,9 +105,15 @@ class InsightsToolsServer(BaseMCPServer):
 
     @staticmethod
     def _ticker_display(company) -> str:
-        ticker = company.ticker_symbol or ""
+        ticker = (company.ticker_symbol or "").strip()
         exchange = (company.exchange or "").upper()
-        return f"{ticker}.{exchange}" if ticker and exchange else (ticker or company.name)
+        if not ticker:
+            return company.name
+        # Some tickers already carry an exchange suffix (e.g. 'ABA.V') - don't
+        # double it up into 'ABA.V.TSXV'.
+        if "." in ticker:
+            return ticker
+        return f"{ticker}.{exchange}" if exchange else ticker
 
     # ------------------------------------------------------------------ #
     # Tool definitions
