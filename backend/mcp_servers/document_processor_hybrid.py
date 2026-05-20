@@ -34,6 +34,67 @@ from core.security_utils import check_url_safety as is_safe_url
 from django.db.models import Q
 
 
+def _to_int(value):
+    """Best-effort int conversion; returns None on empty/invalid input."""
+    if value in (None, ''):
+        return None
+    try:
+        return int(float(value))
+    except (TypeError, ValueError):
+        return None
+
+
+def _econ_decimal(econ_data, *keys):
+    """Return the first present key from econ_data as a Decimal, else None."""
+    for key in keys:
+        value = econ_data.get(key)
+        if value not in (None, ''):
+            try:
+                return Decimal(str(value))
+            except Exception:
+                return None
+    return None
+
+
+def build_economic_study_kwargs(econ_data, project, doc_date):
+    """
+    Map an extracted 'economic_study' JSON object onto EconomicStudy model
+    fields. Returns kwargs ready for EconomicStudy.objects.create(), or None
+    when there is no usable NPV or no project to attach the study to.
+
+    IMPORTANT: npv_5_usd and initial_capex_usd are stored in USD MILLIONS, to
+    match the model field help_text. The extracted '*_millions' values are
+    used directly here - do NOT multiply by 1e6 (the old code did, with the
+    wrong field names, which is why no EconomicStudy rows were ever created).
+    """
+    if not econ_data or project is None:
+        return None
+    npv = _econ_decimal(econ_data, 'npv_usd_millions', 'npv_millions')
+    if npv is None:
+        return None
+
+    study_type = (econ_data.get('study_type') or 'pea').lower()
+    if study_type not in dict(EconomicStudy.STUDY_TYPES):
+        study_type = 'pea'
+
+    return {
+        'project': project,
+        'study_type': study_type,
+        'release_date': doc_date,
+        'npv_5_usd': npv,
+        'irr_percent': _econ_decimal(econ_data, 'irr_percent'),
+        'payback_years': _econ_decimal(econ_data, 'payback_period_years', 'payback_years'),
+        'mine_life_years': _econ_decimal(econ_data, 'mine_life_years'),
+        'initial_capex_usd': _econ_decimal(
+            econ_data, 'capex_initial_usd_millions', 'capex_initial_millions'),
+        'aisc_per_oz': _econ_decimal(econ_data, 'aisc_usd_per_oz', 'aisc_per_oz'),
+        'gold_price_assumption': _econ_decimal(
+            econ_data, 'gold_price_assumption_usd_per_oz', 'gold_price_assumption'),
+        'exchange_rate_assumption': _econ_decimal(econ_data, 'exchange_rate_assumption'),
+        'annual_production_oz': _to_int(econ_data.get('annual_production_oz')),
+    }
+
+
 class HybridDocumentProcessor(BaseMCPServer):
     """
     Hybrid MCP Server combining Docling (structure) + Claude (intelligence).
@@ -476,7 +537,10 @@ Extract ALL key data in JSON format:
     "capex_initial_usd_millions": <number>,
     "opex_per_tonne": <number>,
     "payback_period_years": <number>,
-    "mine_life_years": <number>
+    "mine_life_years": <number>,
+    "gold_price_assumption_usd_per_oz": <number>,
+    "aisc_usd_per_oz": <number>,
+    "annual_production_oz": <number>
   },
   "key_findings": {
     "executive_summary": "...",
@@ -600,19 +664,14 @@ EXTRACTED TABLES ({len(docling_data['tables'])} total tables, showing {len(filte
             # Store economic study
             econ_data = extracted_data.get('economic_study', {})
             econ_stored = False
-            if econ_data.get('npv_usd_millions'):
+            econ_kwargs = build_economic_study_kwargs(
+                econ_data,
+                project or Project.objects.filter(company=company).first(),
+                doc_date,
+            )
+            if econ_kwargs:
                 try:
-                    EconomicStudy.objects.create(
-                        project=project or Project.objects.filter(company=company).first(),
-                        study_type=econ_data.get('study_type', 'pea').lower(),
-                        study_date=doc_date,
-                        npv_usd=Decimal(str(econ_data['npv_usd_millions'])) * Decimal('1000000'),
-                        discount_rate=Decimal(str(econ_data.get('discount_rate', 5))),
-                        irr=Decimal(str(econ_data.get('irr_percent', 0))) if econ_data.get('irr_percent') else None,
-                        capex_initial=Decimal(str(econ_data.get('capex_initial_usd_millions', 0))) * Decimal('1000000'),
-                        payback_period_years=Decimal(str(econ_data.get('payback_period_years', 0))) if econ_data.get('payback_period_years') else None,
-                        mine_life_years=int(econ_data.get('mine_life_years', 0)) if econ_data.get('mine_life_years') else None
-                    )
+                    EconomicStudy.objects.create(**econ_kwargs)
                     econ_stored = True
                 except Exception as e:
                     logger.error(f"Error storing economics: {str(e)}")
@@ -987,20 +1046,14 @@ Structure:
             # Store economic study
             econ_data = extracted_data.get('economic_study', {})
             econ_stored = False
-            npv_value = econ_data.get('npv_usd_millions') or econ_data.get('npv_millions')
-            if npv_value:
+            econ_kwargs = build_economic_study_kwargs(
+                econ_data,
+                project or Project.objects.filter(company=company).first(),
+                doc_date,
+            )
+            if econ_kwargs:
                 try:
-                    EconomicStudy.objects.create(
-                        project=project or Project.objects.filter(company=company).first(),
-                        study_type=econ_data.get('study_type', 'pea').lower(),
-                        study_date=doc_date,
-                        npv_usd=Decimal(str(npv_value)) * Decimal('1000000'),
-                        discount_rate=Decimal(str(econ_data.get('discount_rate_percent') or econ_data.get('discount_rate', 5))),
-                        irr=Decimal(str(econ_data.get('irr_percent', 0))) if econ_data.get('irr_percent') else None,
-                        capex_initial=Decimal(str(econ_data.get('capex_initial_usd_millions', 0))) * Decimal('1000000') if econ_data.get('capex_initial_usd_millions') else None,
-                        payback_period_years=Decimal(str(econ_data.get('payback_period_years', 0))) if econ_data.get('payback_period_years') else None,
-                        mine_life_years=int(econ_data.get('mine_life_years', 0)) if econ_data.get('mine_life_years') else None
-                    )
+                    EconomicStudy.objects.create(**econ_kwargs)
                     econ_stored = True
                 except Exception as e:
                     logger.error(f"[RLM] Error storing economics: {str(e)}")
