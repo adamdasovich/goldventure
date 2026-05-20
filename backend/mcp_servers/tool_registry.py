@@ -202,6 +202,26 @@ class ToolRegistry:
             ["briefing", "watchlist", "digest", "summary", "recent", "daily",
              "my companies", "update"])
 
+        self._register_metadata("insights_unusual_activity", ToolCategory.MARKET,
+            "Detect unusual trading-volume spikes for a company and cross-reference news",
+            ["unusual", "volume", "spike", "abnormal", "accumulation",
+             "trading activity", "anomaly"])
+
+        self._register_metadata("insights_dilution_history", ToolCategory.FINANCIAL,
+            "Show a company's share-dilution history and warrant overhang from financings",
+            ["dilution", "shares issued", "warrant", "overhang", "financing",
+             "shareholders", "share count"])
+
+        self._register_metadata("insights_capital_flow", ToolCategory.FINANCIAL,
+            "Aggregate sector financing activity into monthly capital-flow trends",
+            ["capital flow", "financing trends", "sector", "raised", "monthly",
+             "capital raising", "money flowing"])
+
+        self._register_metadata("insights_peer_valuation", ToolCategory.MINING,
+            "Rank companies by market cap per contained resource ounce",
+            ["valuation", "peer", "cheap", "undervalued", "per ounce", "EV/oz",
+             "market cap per ounce", "screener", "comparison"])
+
         # Search/RAG tools
         self._register_metadata("search_documents", ToolCategory.SEARCH,
             "Semantic search across processed documents",

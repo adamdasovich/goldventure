@@ -115,6 +115,22 @@ class InsightsToolsServer(BaseMCPServer):
             return ticker
         return f"{ticker}.{exchange}" if exchange else ticker
 
+    @staticmethod
+    def _commodity_map(company_ids) -> Dict[int, str]:
+        """
+        Map company_id -> primary commodity in one query. The flagship
+        project's commodity is preferred; otherwise the first project's.
+        """
+        from core.models import Project
+
+        result: Dict[int, str] = {}
+        projects = Project.objects.filter(
+            company_id__in=list(company_ids)
+        ).order_by("company_id", "-is_flagship")
+        for p in projects:
+            result.setdefault(p.company_id, p.primary_commodity)
+        return result
+
     # ------------------------------------------------------------------ #
     # Tool definitions
     # ------------------------------------------------------------------ #
@@ -291,6 +307,116 @@ class InsightsToolsServer(BaseMCPServer):
                     "required": [],
                 },
             },
+            {
+                "name": "insights_unusual_activity",
+                "description": (
+                    "Detect days when a company's trading volume spiked far "
+                    "above its recent average, and cross-reference news to "
+                    "label each spike explained or unexplained. Use when the "
+                    "user asks about unusual volume, abnormal trading, or "
+                    "possible accumulation in a stock."
+                ),
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "company_name": {
+                            "type": "string",
+                            "description": "Company name or ticker.",
+                        },
+                        "days_back": {
+                            "type": "integer",
+                            "description": "Window of days to scan (default 90, max 365).",
+                            "default": 90,
+                        },
+                        "volume_multiple": {
+                            "type": "number",
+                            "description": (
+                                "Flag days with volume >= this multiple of the "
+                                "trailing 20-day average (default 2.5)."
+                            ),
+                            "default": 2.5,
+                        },
+                    },
+                    "required": ["company_name"],
+                },
+            },
+            {
+                "name": "insights_dilution_history",
+                "description": (
+                    "Show a company's share-dilution history from its financing "
+                    "record: shares issued per raise, cumulative issuance versus "
+                    "current shares outstanding, and outstanding warrant "
+                    "tranches. Use when the user asks how much a company has "
+                    "diluted shareholders or about warrant overhang."
+                ),
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "company_name": {
+                            "type": "string",
+                            "description": "Company name or ticker.",
+                        },
+                    },
+                    "required": ["company_name"],
+                },
+            },
+            {
+                "name": "insights_capital_flow",
+                "description": (
+                    "Aggregate sector-wide financing activity into monthly "
+                    "trends - total capital raised, deal count, average raise "
+                    "size, and breakdowns by financing type and commodity. Use "
+                    "when the user asks about sector capital raising, financing "
+                    "trends, or where investor money is flowing."
+                ),
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "days_back": {
+                            "type": "integer",
+                            "description": "Look-back window in days (default 365, max 1095).",
+                            "default": 365,
+                        },
+                        "commodity": {
+                            "type": "string",
+                            "description": (
+                                "Optional. Restrict to companies whose primary "
+                                "commodity matches (e.g. 'gold', 'silver')."
+                            ),
+                        },
+                    },
+                    "required": [],
+                },
+            },
+            {
+                "name": "insights_peer_valuation",
+                "description": (
+                    "Rank companies by market capitalization per contained "
+                    "resource ounce ('ounces in the ground' valuation) to find "
+                    "cheap and expensive peers. Filterable by commodity and "
+                    "country. Use when the user asks which companies look cheap "
+                    "or undervalued relative to their gold resources."
+                ),
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "commodity": {
+                            "type": "string",
+                            "description": "Optional. Primary-commodity filter (e.g. 'gold').",
+                        },
+                        "country": {
+                            "type": "string",
+                            "description": "Optional. Project-country filter.",
+                        },
+                        "limit": {
+                            "type": "integer",
+                            "description": "Max companies to return (default 25, max 100).",
+                            "default": 25,
+                        },
+                    },
+                    "required": [],
+                },
+            },
         ]
 
     # ------------------------------------------------------------------ #
@@ -305,6 +431,10 @@ class InsightsToolsServer(BaseMCPServer):
             "insights_resource_growth": self._resource_growth,
             "insights_economic_rerate": self._economic_rerate,
             "insights_daily_briefing": self._daily_briefing,
+            "insights_unusual_activity": self._unusual_activity,
+            "insights_dilution_history": self._dilution_history,
+            "insights_capital_flow": self._capital_flow,
+            "insights_peer_valuation": self._peer_valuation,
         }
         handler = handlers.get(tool_name)
         if handler is None:
@@ -886,5 +1016,347 @@ class InsightsToolsServer(BaseMCPServer):
                 "Write a concise briefing, one short paragraph per company, "
                 "leading with the companies that have the most activity. Note "
                 "companies with no activity only briefly."
+            ),
+        }
+
+    # ------------------------------------------------------------------ #
+    # Tool 3: Unusual trading-volume detector
+    # ------------------------------------------------------------------ #
+
+    def _unusual_activity(self, params: Dict) -> Dict:
+        from core.models import NewsRelease, StockPrice
+
+        company = self._resolve_company(params.get("company_name"))
+        if company is None:
+            return {"error": f"Company '{params.get('company_name')}' not found."}
+        days_back = max(30, min(int(params.get("days_back", 90)), 365))
+        multiple = max(1.5, float(params.get("volume_multiple", 2.5)))
+        trail = 20  # trailing trading days for the volume baseline
+
+        # Fetch extra history so early days in the window still have a baseline.
+        history = list(StockPrice.get_company_history(company, days=days_back + 45))
+        if len(history) < trail + 5:
+            return {
+                "company": company.name,
+                "found": False,
+                "message": "Not enough price history to assess unusual volume.",
+            }
+
+        news = list(
+            NewsRelease.objects.filter(
+                company=company, release_date__gte=history[0].date
+            ).order_by("release_date")
+        )
+
+        scan_start = timezone.now().date() - timedelta(days=days_back)
+        flagged = []
+        for i in range(trail, len(history)):
+            day = history[i]
+            if day.date < scan_start or not day.volume:
+                continue
+            window = [h.volume for h in history[i - trail:i] if h.volume]
+            if len(window) < 5:
+                continue
+            avg = sum(window) / len(window)
+            if avg <= 0:
+                continue
+            ratio = day.volume / avg
+            if ratio < multiple:
+                continue
+            related = [
+                n for n in news if abs((n.release_date - day.date).days) <= 2
+            ]
+            flagged.append({
+                "date": day.date.isoformat(),
+                "volume": day.volume,
+                "trailing_avg_volume": int(avg),
+                "volume_ratio": round(ratio, 1),
+                "price_change_pct": _f(day.change_percent),
+                "explained": bool(related),
+                "related_news": [
+                    {
+                        "title": n.title,
+                        "date": n.release_date.isoformat(),
+                        "type": n.get_release_type_display(),
+                    }
+                    for n in related[:3]
+                ],
+            })
+
+        flagged.sort(key=lambda d: d["volume_ratio"], reverse=True)
+        return {
+            "company": company.name,
+            "ticker": self._ticker_display(company),
+            "found": True,
+            "window_days": days_back,
+            "volume_multiple": multiple,
+            "unusual_days_found": len(flagged),
+            "unexplained_count": sum(1 for d in flagged if not d["explained"]),
+            "unusual_days": flagged,
+            "note": (
+                "Days with volume >= the threshold multiple of the trailing "
+                "20-day average. 'Unexplained' spikes (no news within +/-2 "
+                "days) can signal accumulation, information leaks, or a "
+                "sector-wide move."
+            ),
+        }
+
+    # ------------------------------------------------------------------ #
+    # Tool 4: Dilution history
+    # ------------------------------------------------------------------ #
+
+    def _dilution_history(self, params: Dict) -> Dict:
+        from core.models import Financing
+
+        company = self._resolve_company(params.get("company_name"))
+        if company is None:
+            return {"error": f"Company '{params.get('company_name')}' not found."}
+
+        financings = list(
+            Financing.objects.filter(
+                company=company, is_deleted=False
+            ).order_by("announced_date")
+        )
+        if not financings:
+            return {
+                "company": company.name,
+                "found": False,
+                "message": "No financing records on file for this company.",
+            }
+
+        today = timezone.now().date()
+        rows = []
+        total_shares = 0
+        total_raised = 0.0
+        active_warrant_tranches = 0
+
+        for f in financings:
+            total_shares += f.shares_issued or 0
+            total_raised += float(f.amount_raised_usd or 0)
+            warrant_active = bool(
+                f.has_warrants
+                and f.warrant_expiry_date
+                and f.warrant_expiry_date >= today
+            )
+            if warrant_active:
+                active_warrant_tranches += 1
+            rows.append({
+                "announced_date": f.announced_date.isoformat(),
+                "financing_type": f.get_financing_type_display(),
+                "status": f.get_status_display(),
+                "amount_raised_usd": _f(f.amount_raised_usd),
+                "shares_issued": f.shares_issued,
+                "price_per_share": _f(f.price_per_share),
+                "has_warrants": f.has_warrants,
+                "warrant_strike_price": _f(f.warrant_strike_price),
+                "warrant_expiry_date": (
+                    f.warrant_expiry_date.isoformat()
+                    if f.warrant_expiry_date else None
+                ),
+                "warrant_still_outstanding": warrant_active,
+            })
+
+        shares_outstanding = company.shares_outstanding
+        issued_pct = None
+        if shares_outstanding and total_shares:
+            issued_pct = round(total_shares / float(shares_outstanding) * 100, 1)
+
+        return {
+            "company": company.name,
+            "ticker": self._ticker_display(company),
+            "found": True,
+            "current_shares_outstanding": shares_outstanding,
+            "financing_count": len(rows),
+            "total_shares_issued_via_financings": total_shares or None,
+            "total_capital_raised_usd": round(total_raised, 0),
+            "issued_shares_pct_of_current": issued_pct,
+            "active_warrant_tranches": active_warrant_tranches,
+            "financings": rows,
+            "note": (
+                "'issued_shares_pct_of_current' is shares issued through "
+                "recorded financings as a % of current shares outstanding - an "
+                "approximate dilution gauge, not an exact float reconstruction. "
+                "Warrant share counts are not stored, so overhang is reported "
+                "as a count of tranches still within their expiry date."
+            ),
+        }
+
+    # ------------------------------------------------------------------ #
+    # Tool 5: Sector capital-flow monitor
+    # ------------------------------------------------------------------ #
+
+    def _capital_flow(self, params: Dict) -> Dict:
+        from collections import defaultdict
+
+        from core.models import Financing
+
+        days_back = max(30, min(int(params.get("days_back", 365)), 1095))
+        commodity = (params.get("commodity") or "").strip().lower()
+        cutoff = timezone.now().date() - timedelta(days=days_back)
+
+        financings = list(
+            Financing.objects.filter(
+                is_deleted=False, announced_date__gte=cutoff
+            ).select_related("company")
+        )
+        commodity_map = self._commodity_map({f.company_id for f in financings})
+
+        if commodity:
+            financings = [
+                f for f in financings
+                if commodity_map.get(f.company_id) == commodity
+            ]
+
+        if not financings:
+            scope = f" for {commodity}" if commodity else ""
+            return {
+                "found": False,
+                "message": f"No financings found in the last {days_back} days{scope}.",
+            }
+
+        months = defaultdict(lambda: {"total": 0.0, "count": 0})
+        by_type = defaultdict(lambda: {"total": 0.0, "count": 0})
+        by_commodity = defaultdict(lambda: {"total": 0.0, "count": 0})
+        grand_total = 0.0
+
+        for f in financings:
+            amount = float(f.amount_raised_usd or 0)
+            grand_total += amount
+
+            mkey = f.announced_date.strftime("%Y-%m")
+            months[mkey]["total"] += amount
+            months[mkey]["count"] += 1
+
+            tkey = f.get_financing_type_display()
+            by_type[tkey]["total"] += amount
+            by_type[tkey]["count"] += 1
+
+            ckey = commodity_map.get(f.company_id) or "unknown"
+            by_commodity[ckey]["total"] += amount
+            by_commodity[ckey]["count"] += 1
+
+        monthly_trend = [
+            {
+                "month": m,
+                "total_raised_usd": round(v["total"], 0),
+                "financing_count": v["count"],
+                "avg_raise_usd": (
+                    round(v["total"] / v["count"], 0) if v["count"] else None
+                ),
+            }
+            for m, v in sorted(months.items())
+        ]
+
+        def _ranked(bucket, key_name):
+            return [
+                {key_name: k, "total_usd": round(v["total"], 0), "count": v["count"]}
+                for k, v in sorted(bucket.items(), key=lambda x: -x[1]["total"])
+            ]
+
+        return {
+            "found": True,
+            "window_days": days_back,
+            "commodity_filter": commodity or None,
+            "total_raised_usd": round(grand_total, 0),
+            "total_financings": len(financings),
+            "avg_raise_usd": round(grand_total / len(financings), 0),
+            "monthly_trend": monthly_trend,
+            "by_financing_type": _ranked(by_type, "financing_type"),
+            "by_commodity": _ranked(by_commodity, "commodity"),
+        }
+
+    # ------------------------------------------------------------------ #
+    # Tool 10: Peer valuation screener (market cap per resource ounce)
+    # ------------------------------------------------------------------ #
+
+    def _peer_valuation(self, params: Dict) -> Dict:
+        from core.models import Company, Project, ResourceEstimate
+
+        commodity = (params.get("commodity") or "").strip().lower()
+        country = (params.get("country") or "").strip()
+        limit = max(1, min(int(params.get("limit", 25)), 100))
+
+        # Only companies that have both a market cap and a resource estimate
+        # are candidates - everything else can't be valued per ounce.
+        companies_with_resources = set(
+            ResourceEstimate.objects.values_list(
+                "project__company_id", flat=True
+            ).distinct()
+        )
+        companies = Company.objects.filter(
+            is_deleted=False, market_cap_usd__gt=0, id__in=companies_with_resources
+        )
+
+        if commodity or country:
+            proj_qs = Project.objects.all()
+            if commodity:
+                proj_qs = proj_qs.filter(primary_commodity=commodity)
+            if country:
+                proj_qs = proj_qs.filter(country__icontains=country)
+            companies = companies.filter(
+                id__in=set(proj_qs.values_list("company_id", flat=True))
+            )
+
+        companies = list(companies[:400])
+        if not companies:
+            return {"found": False, "message": "No companies matched the filters."}
+
+        results = []
+        for company in companies:
+            projects = list(Project.objects.filter(company=company))
+            total_oz = 0.0
+            for project in projects:
+                estimates = list(
+                    ResourceEstimate.objects.filter(project=project)
+                    .order_by("-report_date")
+                )
+                if not estimates:
+                    continue
+                # Sum only the most recent report's additive categories.
+                latest_date = estimates[0].report_date
+                for est in estimates:
+                    if (est.report_date == latest_date
+                            and est.category in ADDITIVE_RESOURCE_CATEGORIES):
+                        total_oz += float(est.gold_ounces or 0)
+
+            if total_oz <= 0:
+                continue
+            mcap = float(company.market_cap_usd)
+            results.append({
+                "company": company.name,
+                "ticker": self._ticker_display(company),
+                "market_cap_usd": round(mcap, 0),
+                "total_resource_gold_oz": round(total_oz, 0),
+                "market_cap_per_oz": round(mcap / total_oz, 2),
+                "project_count": len(projects),
+            })
+
+        if not results:
+            return {
+                "found": False,
+                "message": (
+                    "No companies with both a market cap and gold resource "
+                    "ounces matched the filters."
+                ),
+            }
+
+        results.sort(key=lambda r: r["market_cap_per_oz"])
+        per_oz_values = [r["market_cap_per_oz"] for r in results]
+
+        return {
+            "found": True,
+            "commodity_filter": commodity or "gold-bearing",
+            "country_filter": country or None,
+            "companies_ranked": len(results),
+            "median_market_cap_per_oz": round(statistics.median(per_oz_values), 2),
+            "cheapest": results[0],
+            "most_expensive": results[-1],
+            "results": results[:limit],
+            "note": (
+                "market_cap_per_oz = market cap / contained gold ounces from "
+                "each project's most recent resource estimate (Inferred + "
+                "Indicated + Measured). Lower = cheaper per ounce in the "
+                "ground. This uses market cap, not enterprise value (ignores "
+                "cash/debt), and counts gold only - no silver/copper credits."
             ),
         }
