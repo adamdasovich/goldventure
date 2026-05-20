@@ -22,6 +22,26 @@ const TOOLS = [
     available: true,
   },
   {
+    title: "Resource Growth Tracker",
+    slug: "resource-growth",
+    description:
+      "See how a company's mineral resource estimates have grown across successive NI 43-101 reports — contained ounces, grade, and tonnage over time.",
+    href: "/investor-tools/resource-growth",
+    badge: "Resource Analysis",
+    icon: "M3 17l6-6 4 4 8-8M17 7h4v4",
+    available: true,
+  },
+  {
+    title: "Dilution Tracker",
+    slug: "dilution-tracker",
+    description:
+      "Track a company's share dilution from its financing history — shares issued per raise, cumulative dilution, and outstanding warrant overhang.",
+    href: "/investor-tools/dilution-tracker",
+    badge: "Capital Structure",
+    icon: "M12 3l8 4-8 4-8-4 8-4zM4 11l8 4 8-4M4 15l8 4 8-4",
+    available: true,
+  },
+  {
     title: "Resource Grade Ranker",
     slug: "grade-ranker",
     description:
@@ -147,7 +167,7 @@ export default function InvestorToolsPage() {
       {showUpgrade && (
         <UpgradeModal
           onClose={() => setShowUpgrade(false)}
-          feature="All 11 Investor Tools"
+          feature="All 13 Investor Tools"
           requiredTier="prospector"
         />
       )}
@@ -200,7 +220,7 @@ export default function InvestorToolsPage() {
                   variant="slate"
                   className="cursor-pointer hover:border-gold-400/50"
                 >
-                  Free tier: 2 tools &middot; Upgrade for all 11
+                  Free tier: 2 tools &middot; Upgrade for all 13
                 </Badge>
               </Link>
             </div>

@@ -353,6 +353,14 @@ export const toolsAPI = {
     const q = new URLSearchParams(params).toString();
     return apiFetch<any>(`/tools/stock-comparison/${q ? `?${q}` : ""}`);
   },
+  resourceGrowth: (params: Record<string, string> = {}) => {
+    const q = new URLSearchParams(params).toString();
+    return apiFetch<any>(`/tools/resource-growth/${q ? `?${q}` : ""}`);
+  },
+  dilutionTracker: (params: Record<string, string> = {}) => {
+    const q = new URLSearchParams(params).toString();
+    return apiFetch<any>(`/tools/dilution-tracker/${q ? `?${q}` : ""}`);
+  },
 };
 
 // News Releases API

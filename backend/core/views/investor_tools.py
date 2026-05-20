@@ -950,3 +950,241 @@ def stock_comparison(request):
     }
     cache.set(cached_key, data, 600)
     return Response(data)
+
+
+# ============================================================================
+# RESOURCE GROWTH TRACKER
+# ============================================================================
+
+# Resource categories that can be summed without double-counting. 'mni'
+# (Measured & Indicated combined) and reserve categories overlap these.
+_ADDITIVE_RESOURCE_CATEGORIES = ['inferred', 'indicated', 'measured']
+_RESERVE_CATEGORIES = ['proven', 'probable']
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def resource_growth(request):
+    """
+    Show how a company's mineral resource estimates evolved over time.
+    GET /api/tools/resource-growth/?company_id=1
+
+    With no company_id, returns just the available-companies list (those that
+    have resource estimates on record) for the frontend picker.
+    """
+    cached_key = f"resource_growth_{request.GET.urlencode()}"
+    cached = cache.get(cached_key)
+    if cached:
+        return Response(cached)
+
+    # Companies that have resource estimates - powers the frontend picker.
+    res_company_ids = ResourceEstimate.objects.values_list(
+        'project__company_id', flat=True
+    ).distinct()
+    available_companies = [
+        {
+            'id': c.id,
+            'name': c.name,
+            'ticker': c.ticker_symbol,
+            'exchange': c.exchange,
+        }
+        for c in Company.objects.filter(
+            id__in=res_company_ids, is_active=True
+        ).order_by('name')
+    ]
+
+    company_id_raw = request.GET.get('company_id', '').strip()
+    if not company_id_raw.isdigit():
+        return Response({'available_companies': available_companies, 'projects': []})
+
+    company = Company.objects.filter(id=int(company_id_raw), is_active=True).first()
+    if not company:
+        return Response({'error': 'Company not found'}, status=404)
+
+    cat_display = dict(ResourceEstimate.RESOURCE_CATEGORIES)
+    projects_out = []
+
+    for project in Project.objects.filter(company=company):
+        estimates = ResourceEstimate.objects.filter(
+            project=project
+        ).order_by('report_date')
+
+        # Group estimate rows by report date (one report lists several categories).
+        by_date = {}
+        for est in estimates:
+            by_date.setdefault(est.report_date.isoformat(), []).append(est)
+        if not by_date:
+            continue
+
+        timeline = []
+        for report_date, rows in sorted(by_date.items()):
+            categories = []
+            additive_gold = 0.0
+            reserve_gold = 0.0
+            for r in rows:
+                gold_oz = float(r.gold_ounces or 0)
+                if r.category in _ADDITIVE_RESOURCE_CATEGORIES:
+                    additive_gold += gold_oz
+                elif r.category in _RESERVE_CATEGORIES:
+                    reserve_gold += gold_oz
+                categories.append({
+                    'category': cat_display.get(r.category, r.category),
+                    'tonnes': float(r.tonnes or 0),
+                    'gold_grade_gpt': float(r.gold_grade_gpt) if r.gold_grade_gpt else None,
+                    'gold_ounces': float(r.gold_ounces) if r.gold_ounces else None,
+                    'silver_ounces': float(r.silver_ounces) if r.silver_ounces else None,
+                })
+            timeline.append({
+                'report_date': report_date,
+                'standard': rows[0].get_standard_display(),
+                'categories': categories,
+                'resource_gold_oz': round(additive_gold, 0),
+                'reserve_gold_oz': round(reserve_gold, 0),
+            })
+
+        growth = None
+        if len(timeline) >= 2:
+            first, last = timeline[0], timeline[-1]
+            if first['resource_gold_oz'] and last['resource_gold_oz']:
+                growth = {
+                    'first_report': first['report_date'],
+                    'latest_report': last['report_date'],
+                    'first_oz': first['resource_gold_oz'],
+                    'latest_oz': last['resource_gold_oz'],
+                    'change_pct': round(
+                        (last['resource_gold_oz'] - first['resource_gold_oz'])
+                        / first['resource_gold_oz'] * 100, 1,
+                    ),
+                }
+
+        projects_out.append({
+            'project_id': project.id,
+            'project_name': project.name,
+            'primary_commodity': project.primary_commodity,
+            'estimate_count': len(timeline),
+            'timeline': timeline,
+            'growth': growth,
+        })
+
+    data = {
+        'available_companies': available_companies,
+        'company': {
+            'id': company.id,
+            'name': company.name,
+            'ticker': company.ticker_symbol,
+        },
+        'projects': projects_out,
+    }
+    cache.set(cached_key, data, 600)
+    return Response(data)
+
+
+# ============================================================================
+# DILUTION TRACKER
+# ============================================================================
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def dilution_tracker(request):
+    """
+    Show a company's share-dilution history from its financing record.
+    GET /api/tools/dilution-tracker/?company_id=1
+
+    With no company_id, returns just the available-companies list (those that
+    have financing records) for the frontend picker.
+    """
+    cached_key = f"dilution_tracker_{request.GET.urlencode()}"
+    cached = cache.get(cached_key)
+    if cached:
+        return Response(cached)
+
+    # Companies that have financing records - powers the frontend picker.
+    fin_company_ids = Financing.objects.filter(
+        is_deleted=False
+    ).values_list('company_id', flat=True).distinct()
+    available_companies = [
+        {
+            'id': c.id,
+            'name': c.name,
+            'ticker': c.ticker_symbol,
+            'exchange': c.exchange,
+        }
+        for c in Company.objects.filter(
+            id__in=fin_company_ids, is_active=True
+        ).order_by('name')
+    ]
+
+    company_id_raw = request.GET.get('company_id', '').strip()
+    if not company_id_raw.isdigit():
+        return Response({'available_companies': available_companies, 'financings': []})
+
+    company = Company.objects.filter(id=int(company_id_raw), is_active=True).first()
+    if not company:
+        return Response({'error': 'Company not found'}, status=404)
+
+    today = timezone.now().date()
+    financings = Financing.objects.filter(
+        company=company, is_deleted=False
+    ).order_by('announced_date')
+
+    rows = []
+    cumulative_shares = 0
+    total_shares = 0
+    total_raised = 0.0
+    active_warrant_tranches = 0
+
+    for f in financings:
+        shares = f.shares_issued or 0
+        cumulative_shares += shares
+        total_shares += shares
+        total_raised += float(f.amount_raised_usd or 0)
+        warrant_active = bool(
+            f.has_warrants
+            and f.warrant_expiry_date
+            and f.warrant_expiry_date >= today
+        )
+        if warrant_active:
+            active_warrant_tranches += 1
+        rows.append({
+            'id': f.id,
+            'announced_date': f.announced_date.isoformat(),
+            'financing_type': f.financing_type,
+            'status': f.status,
+            'amount_raised_usd': float(f.amount_raised_usd or 0),
+            'shares_issued': f.shares_issued,
+            'cumulative_shares': cumulative_shares,
+            'price_per_share': float(f.price_per_share) if f.price_per_share else None,
+            'has_warrants': f.has_warrants,
+            'warrant_strike_price': (
+                float(f.warrant_strike_price) if f.warrant_strike_price else None
+            ),
+            'warrant_expiry_date': (
+                f.warrant_expiry_date.isoformat() if f.warrant_expiry_date else None
+            ),
+            'warrant_active': warrant_active,
+        })
+
+    shares_outstanding = company.shares_outstanding
+    issued_pct = None
+    if shares_outstanding and total_shares:
+        issued_pct = round(total_shares / float(shares_outstanding) * 100, 1)
+
+    data = {
+        'available_companies': available_companies,
+        'company': {
+            'id': company.id,
+            'name': company.name,
+            'ticker': company.ticker_symbol,
+        },
+        'summary': {
+            'current_shares_outstanding': shares_outstanding,
+            'financing_count': len(rows),
+            'total_shares_issued': total_shares or None,
+            'total_capital_raised_usd': round(total_raised, 0),
+            'issued_shares_pct_of_current': issued_pct,
+            'active_warrant_tranches': active_warrant_tranches,
+        },
+        'financings': rows,
+    }
+    cache.set(cached_key, data, 600)
+    return Response(data)

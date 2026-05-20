@@ -158,6 +158,8 @@ from .investor_tools import (  # noqa: F401
     portfolio_xray,
     property_valuation,
     stock_comparison,
+    resource_growth,
+    dilution_tracker,
 )
 from .platform_subscriptions import (  # noqa: F401
     platform_subscription_tiers,
