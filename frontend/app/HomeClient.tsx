@@ -569,7 +569,7 @@ export default function HomeClient({ initialArticles }: HomeClientProps) {
         <div className="relative max-w-7xl mx-auto">
           <div className="grid lg:grid-cols-2 gap-6 lg:gap-8 items-center">
             {/* Left: hero content */}
-            <div className="text-center lg:text-left">
+            <div className="text-center">
               <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold mb-4 text-gradient-gold animate-fade-in leading-tight pb-1">
                 Research junior mining stocks in minutes, not hours
               </h1>
@@ -580,7 +580,7 @@ export default function HomeClient({ initialArticles }: HomeClientProps) {
               </p>
 
               {/* ── Search Bar ── */}
-              <div className="relative max-w-xl mx-auto lg:mx-0 mb-5 animate-slide-in-up">
+              <div className="relative max-w-xl mx-auto mb-5 animate-slide-in-up">
                 <label htmlFor="company-search" className="sr-only">
                   Search companies by name or ticker
                 </label>
@@ -648,7 +648,7 @@ export default function HomeClient({ initialArticles }: HomeClientProps) {
               </div>
 
               {/* Primary CTAs */}
-              <div className="flex flex-col sm:flex-row flex-wrap gap-3 justify-center lg:justify-start animate-slide-in-up">
+              <div className="flex flex-col sm:flex-row flex-wrap gap-3 justify-center animate-slide-in-up">
                 <Link href="/companies">
                   <Button
                     variant="secondary"
