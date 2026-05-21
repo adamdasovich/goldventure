@@ -113,9 +113,14 @@ class MetalPrice(models.Model):
     high_price = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
     low_price = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
 
+    # Quote unit: precious metals are USD/oz, base metals USD/lb, lithium USD/kg, etc.
+    unit = models.CharField(max_length=10, default='oz')
+
     # Source tracking
     source = models.CharField(max_length=50, default='Kitco')
-    scraped_at = models.DateTimeField(auto_now_add=True)
+    # default=timezone.now (not auto_now_add) so backfill jobs can set the
+    # real historical trading datetime instead of the moment of insertion.
+    scraped_at = models.DateTimeField(default=timezone.now)
 
     class Meta:
         db_table = 'metal_prices'

@@ -255,6 +255,8 @@ export interface MetalPrice {
   unit: string;
   currency: string;
   last_updated: string;
+  category?: "precious" | "base" | "critical";
+  source?: string;
   error?: string;
 }
 

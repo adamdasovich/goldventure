@@ -120,12 +120,20 @@ def metals_prices(request):
         cached_data['cached'] = True
         return Response(cached_data)
 
-    # Metal display info
+    # Metal display info. `category` lets the frontend group precious metals
+    # (the 4-card grid + gold/silver ratio) separately from base/critical
+    # minerals. `unit` here is a fallback; stored rows carry their own unit.
     metal_info = {
-        'XAU': {'name': 'Gold', 'unit': 'oz'},
-        'XAG': {'name': 'Silver', 'unit': 'oz'},
-        'XPT': {'name': 'Platinum', 'unit': 'oz'},
-        'XPD': {'name': 'Palladium', 'unit': 'oz'}
+        'XAU': {'name': 'Gold', 'unit': 'oz', 'category': 'precious'},
+        'XAG': {'name': 'Silver', 'unit': 'oz', 'category': 'precious'},
+        'XPT': {'name': 'Platinum', 'unit': 'oz', 'category': 'precious'},
+        'XPD': {'name': 'Palladium', 'unit': 'oz', 'category': 'precious'},
+        'CU': {'name': 'Copper', 'unit': 'lb', 'category': 'base'},
+        'NI': {'name': 'Nickel', 'unit': 'lb', 'category': 'base'},
+        'LI': {'name': 'Lithium', 'unit': 'kg', 'category': 'critical'},
+        'CO': {'name': 'Cobalt', 'unit': 'lb', 'category': 'critical'},
+        'REE': {'name': 'Rare Earth Elements', 'unit': 'kg', 'category': 'critical'},
+        'U': {'name': 'Uranium', 'unit': 'lb', 'category': 'critical'},
     }
 
     results = []
@@ -135,7 +143,7 @@ def metals_prices(request):
         kitco_prices = MetalPrice.get_latest_prices()
         if kitco_prices:
             for symbol, price_obj in kitco_prices.items():
-                info = metal_info.get(symbol, {'name': symbol, 'unit': 'oz'})
+                info = metal_info.get(symbol, {'name': symbol, 'unit': 'oz', 'category': 'base'})
                 results.append({
                     'metal': info['name'],
                     'symbol': symbol,
@@ -143,10 +151,11 @@ def metals_prices(request):
                     'ask_price': float(price_obj.ask_price),
                     'change_amount': float(price_obj.change_amount),
                     'change_percent': float(price_obj.change_percent),
-                    'unit': info['unit'],
+                    'unit': price_obj.unit or info['unit'],
+                    'category': info['category'],
                     'currency': 'USD',
                     'last_updated': price_obj.scraped_at.isoformat(),
-                    'source': 'Kitco'
+                    'source': price_obj.source
                 })
 
             if results:
@@ -293,13 +302,19 @@ def metals_prices(request):
 @permission_classes([AllowAny])
 def metal_historical(request, symbol):
     """
-    Get historical price data for a specific metal.
+    Get historical price data for a specific metal from stored MetalPrice rows.
 
     GET /api/metals/historical/<symbol>/?days=30
 
     symbol: XAU, XAG, XPT, XPD
     days: number of days of historical data (default: 30, max: 365)
+
+    Data comes from our own database (Kitco prices scraped twice daily and
+    saved to the MetalPrice model) — no external API call. One representative
+    point per calendar day (the last scrape of the day) is returned, oldest
+    first.
     """
+    from ..models import MetalPrice
 
     try:
         days = int(request.query_params.get('days', 30))
@@ -307,70 +322,50 @@ def metal_historical(request, symbol):
         return Response({'error': 'Invalid days parameter'}, status=status.HTTP_400_BAD_REQUEST)
     days = min(days, 365)  # Max 1 year
 
-    # Check cache
-    cache_key = f'metal_historical_{symbol}_{days}'
-    cached_data = cache.get(cache_key)
-    if cached_data:
-        return Response(cached_data)
-
-    api_key = getattr(settings, 'TWELVE_DATA_API_KEY', None)
-    if not api_key:
-        return Response(
-            {'error': 'Twelve Data API key not configured'},
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
-        )
-
-    valid_symbols = ['XAU', 'XAG', 'XPT', 'XPD']
+    valid_symbols = ['XAU', 'XAG', 'XPT', 'XPD', 'CU']
     if symbol not in valid_symbols:
         return Response(
             {'error': f'Invalid symbol. Must be one of: {", ".join(valid_symbols)}'},
             status=status.HTTP_400_BAD_REQUEST
         )
 
+    # Check cache
+    cache_key = f'metal_historical_{symbol}_{days}'
+    cached_data = cache.get(cache_key)
+    if cached_data:
+        return Response(cached_data)
+
     try:
-        # Twelve Data API for historical data
-        symbol_pair = f'{symbol}/USD'
-        url = "https://api.twelvedata.com/time_series"
-        params = {
-            'symbol': symbol_pair,
-            'interval': '1day',
-            'outputsize': days,
-            'apikey': api_key
+        # One representative price per calendar day from our stored data
+        daily_rows = MetalPrice.get_daily_series(symbol, days=days)
+
+        historical_data = []
+        for row in daily_rows:
+            close = float(row.bid_price)
+            # We store a daily high/low when available; otherwise fall back to
+            # the close so the chart still has consistent OHLC values.
+            high = float(row.high_price) if row.high_price is not None else close
+            low = float(row.low_price) if row.low_price is not None else close
+            historical_data.append({
+                'date': row.day.isoformat(),
+                'open': close,   # intraday open is not scraped; use the close
+                'high': round(high, 2),
+                'low': round(low, 2),
+                'close': round(close, 2),
+            })
+
+        response_data = {
+            'symbol': symbol,
+            'data': historical_data,
+            'days': len(historical_data),
+            'timestamp': datetime.now().isoformat(),
+            'source': 'GoldVenture (stored Kitco data)'
         }
 
-        response = requests.get(url, params=params, timeout=Timeouts.MEDIUM)
-        data = response.json()
+        # Cache for 1 hour
+        cache.set(cache_key, response_data, CacheTTL.LONG)
 
-        if 'values' in data and data['values']:
-            # Convert Twelve Data format to our format
-            historical_data = []
-            for item in reversed(data['values']):  # Reverse to get oldest first
-                historical_data.append({
-                    'date': item['datetime'],
-                    'open': round(float(item['open']), 2),
-                    'high': round(float(item['high']), 2),
-                    'low': round(float(item['low']), 2),
-                    'close': round(float(item['close']), 2)
-                })
-
-            response_data = {
-                'symbol': symbol,
-                'data': historical_data,
-                'days': len(historical_data),
-                'timestamp': datetime.now().isoformat(),
-                'source': 'Twelve Data'
-            }
-
-            # Cache for 1 hour
-            cache.set(cache_key, response_data, CacheTTL.LONG)
-
-            return Response(response_data)
-        else:
-            error_msg = data.get('message', data.get('note', 'No data available'))
-            return Response(
-                {'error': error_msg},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
+        return Response(response_data)
 
     except Exception as e:
         logger.error(f"metal_historical error for symbol {symbol}: {str(e)}")

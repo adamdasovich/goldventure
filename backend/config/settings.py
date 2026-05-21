@@ -381,6 +381,13 @@ CELERY_BEAT_SCHEDULE = {
         'schedule': crontab(hour=21, minute=30, day_of_week='mon-fri'),  # 4:30 PM ET, Mon-Fri
     },
 
+    # Fetch base / critical metals prices (copper from Yahoo Finance) after the
+    # COMEX copper close — 5:30 PM ET / 22:30 UTC, weekdays.
+    'fetch-base-metals-prices-daily': {
+        'task': 'core.tasks.fetch_base_metals_prices_task',
+        'schedule': crontab(hour=22, minute=30, day_of_week='mon-fri'),  # 5:30 PM ET, Mon-Fri
+    },
+
     # RECOMMENDED SCHEDULE ARCHITECTURE: Auto-discover and process documents
     # Conservative approach: 10 companies per week, focused on high-priority document types
     'auto-discover-documents-weekly': {

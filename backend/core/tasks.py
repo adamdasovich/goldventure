@@ -640,6 +640,39 @@ def scrape_metals_prices_task(self):
         }
 
 
+@shared_task(bind=True, max_retries=3, retry_backoff=True, retry_backoff_max=600, retry_jitter=True, time_limit=300, soft_time_limit=280, on_failure=log_task_failure)
+def fetch_base_metals_prices_task(self):
+    """
+    Scheduled task to fetch base / critical metals prices not covered by Kitco.
+
+    Currently fetches daily copper (CU) from Yahoo Finance. Runs once per
+    weekday after the COMEX copper market closes.
+
+    Returns:
+        dict: Status information about the fetch operation
+    """
+    try:
+        from mcp_servers.base_metals_scraper import fetch_daily_copper
+
+        result = fetch_daily_copper()
+
+        if result.get('success'):
+            logger.info(f"Stored daily copper price: ${result['price']}/lb ({result['date']})")
+            return result
+        else:
+            logger.error(f"Base metals fetch failed: {result.get('error', 'Unknown error')}")
+            raise Exception(result.get('error', 'Base metals fetch failed'))
+
+    except Exception as e:
+        logger.error(f"Error in base metals fetch task: {str(e)}")
+        self.retry(exc=e)
+
+        return {
+            'success': False,
+            'error': str(e)
+        }
+
+
 @shared_task(bind=True, max_retries=3, retry_backoff=True, retry_backoff_max=600, retry_jitter=True, time_limit=600, soft_time_limit=580, on_failure=log_task_failure)
 def fetch_stock_prices_task(self):
     """
