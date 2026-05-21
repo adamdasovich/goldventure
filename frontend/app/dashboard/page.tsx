@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/Badge";
 import LogoMono from "@/components/LogoMono";
 import { LoginModal, RegisterModal } from "@/components/auth";
 import { useAuth } from "@/contexts/AuthContext";
+import DailyBriefing from "@/components/dashboard/DailyBriefing";
 import { PropertyListingListItem } from "@/types/property";
 import { accessRequestAPI } from "@/lib/api";
 import type { CompanyAccessRequest } from "@/types/api";
