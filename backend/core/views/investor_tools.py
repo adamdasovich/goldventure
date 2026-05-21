@@ -1557,21 +1557,44 @@ def due_diligence(request):
             status=500,
         )
 
+    # Resolve each passage's real Document by exact chunk-text match. The
+    # hybrid search's BM25 branch returns thin metadata without document
+    # titles, so trusting result metadata alone yields "Unknown report".
+    texts = [r.get('text', '') for r in results if r.get('text')]
+    chunk_doc = {}
+    if texts:
+        for ch in DocumentChunk.objects.filter(
+            text__in=texts,
+        ).select_related('document'):
+            chunk_doc.setdefault(ch.text, ch.document)
+
     sections = []
     documents_seen = {}
     for idx, r in enumerate(results, 1):
+        text = r.get('text', '')
         meta = r.get('metadata', {}) or {}
-        doc_id = meta.get('document_id')
-        title = meta.get('document_title', 'Unknown report')
+        doc = chunk_doc.get(text)
+        if doc is not None:
+            doc_id = doc.id
+            title = doc.title
+            doc_date = (
+                doc.document_date.isoformat() if doc.document_date else None
+            )
+            doc_type = doc.document_type
+        else:
+            doc_id = meta.get('document_id')
+            title = meta.get('document_title') or 'Unknown report'
+            doc_date = meta.get('document_date')
+            doc_type = meta.get('document_type')
         if doc_id is not None:
             documents_seen.setdefault(doc_id, title)
         sections.append({
             'rank': idx,
-            'text': r.get('text', ''),
+            'text': text,
             'document_id': doc_id,
             'document_title': title,
-            'document_date': meta.get('document_date'),
-            'document_type': meta.get('document_type'),
+            'document_date': doc_date,
+            'document_type': doc_type,
         })
 
     data = {
