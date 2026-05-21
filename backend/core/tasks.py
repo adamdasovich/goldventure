@@ -645,23 +645,40 @@ def fetch_base_metals_prices_task(self):
     """
     Scheduled task to fetch base / critical metals prices not covered by Kitco.
 
-    Currently fetches daily copper (CU) from Yahoo Finance. Runs once per
-    weekday after the COMEX copper market closes.
+    Fetches daily copper (CU) from Yahoo Finance, plus Uranium, Cobalt
+    Hydroxide and Lithium from Trading Economics. Runs once per weekday.
+
+    A failure in one source does not block the other.
 
     Returns:
         dict: Status information about the fetch operation
     """
     try:
-        from mcp_servers.base_metals_scraper import fetch_daily_copper
+        from mcp_servers.base_metals_scraper import (
+            fetch_daily_copper, fetch_daily_tradingeconomics_metals,
+        )
 
-        result = fetch_daily_copper()
+        copper_result = fetch_daily_copper()
+        te_result = fetch_daily_tradingeconomics_metals()
 
-        if result.get('success'):
-            logger.info(f"Stored daily copper price: ${result['price']}/lb ({result['date']})")
-            return result
+        if copper_result.get('success'):
+            logger.info(f"Stored daily copper price: ${copper_result['price']}/lb "
+                        f"({copper_result['date']})")
         else:
-            logger.error(f"Base metals fetch failed: {result.get('error', 'Unknown error')}")
-            raise Exception(result.get('error', 'Base metals fetch failed'))
+            logger.error(f"Copper fetch failed: {copper_result.get('error', 'Unknown error')}")
+
+        if te_result.get('success'):
+            logger.info(f"Trading Economics: stored {len(te_result['saved'])} metals")
+        else:
+            logger.error(f"Trading Economics fetch failed: {te_result.get('error', 'Unknown error')}")
+        for err in te_result.get('errors', []):
+            logger.warning(f"Trading Economics: {err}")
+
+        # Retry only if BOTH sources failed (likely a transient network issue).
+        if not copper_result.get('success') and not te_result.get('success'):
+            raise Exception('All base-metal sources failed')
+
+        return {'success': True, 'copper': copper_result, 'trading_economics': te_result}
 
     except Exception as e:
         logger.error(f"Error in base metals fetch task: {str(e)}")

@@ -130,8 +130,8 @@ def metals_prices(request):
         'XPD': {'name': 'Palladium', 'unit': 'oz', 'category': 'precious'},
         'CU': {'name': 'Copper', 'unit': 'lb', 'category': 'base'},
         'NI': {'name': 'Nickel', 'unit': 'lb', 'category': 'base'},
-        'LI': {'name': 'Lithium', 'unit': 'kg', 'category': 'critical'},
-        'CO': {'name': 'Cobalt', 'unit': 'lb', 'category': 'critical'},
+        'LI': {'name': 'Lithium', 'unit': 'T', 'category': 'critical'},
+        'CO': {'name': 'Cobalt Hydroxide', 'unit': 'MT', 'category': 'critical'},
         'REE': {'name': 'Rare Earth Elements', 'unit': 'kg', 'category': 'critical'},
         'U': {'name': 'Uranium', 'unit': 'lb', 'category': 'critical'},
     }
@@ -322,7 +322,7 @@ def metal_historical(request, symbol):
         return Response({'error': 'Invalid days parameter'}, status=status.HTTP_400_BAD_REQUEST)
     days = min(days, 365)  # Max 1 year
 
-    valid_symbols = ['XAU', 'XAG', 'XPT', 'XPD', 'CU']
+    valid_symbols = ['XAU', 'XAG', 'XPT', 'XPD', 'CU', 'U', 'CO', 'LI']
     if symbol not in valid_symbols:
         return Response(
             {'error': f'Invalid symbol. Must be one of: {", ".join(valid_symbols)}'},
