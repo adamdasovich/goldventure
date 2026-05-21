@@ -559,7 +559,13 @@ class InsightsToolsServer(BaseMCPServer):
         by_type: Dict[str, Dict[str, List[float]]] = {}
         analyzed = 0
 
+        first_price_date = price_dates[0]
         for ev in events:
+            # Skip events that predate the price history - anchoring them to
+            # the first available day would yield a spurious, identical
+            # "reaction" for every such event.
+            if ev.release_date < first_price_date:
+                continue
             # First trading day on/after the release date.
             idx = next(
                 (i for i, d in enumerate(price_dates) if d >= ev.release_date), None

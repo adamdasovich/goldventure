@@ -1421,7 +1421,13 @@ def catalyst_impact(request):
     by_type = {}  # release_type -> {'1d': [...], '5d': [...], '20d': [...]}
     events = []
 
+    first_price_date = price_dates[0]
     for ev in news:
+        # Skip events that predate the price history - anchoring them to the
+        # first available day would yield a spurious, identical "reaction"
+        # for every such event.
+        if ev.release_date < first_price_date:
+            continue
         # First trading day on/after the release date.
         idx = next(
             (i for i, d in enumerate(price_dates) if d >= ev.release_date), None
