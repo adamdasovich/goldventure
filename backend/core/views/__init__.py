@@ -161,6 +161,7 @@ from .investor_tools import (  # noqa: F401
     resource_growth,
     dilution_tracker,
     unusual_activity,
+    catalyst_impact,
 )
 from .platform_subscriptions import (  # noqa: F401
     platform_subscription_tiers,

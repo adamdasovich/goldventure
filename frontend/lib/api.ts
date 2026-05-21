@@ -367,6 +367,10 @@ export const toolsAPI = {
     const q = new URLSearchParams(params).toString();
     return apiFetch<any>(`/tools/unusual-activity/${q ? `?${q}` : ""}`);
   },
+  catalystImpact: (params: Record<string, string> = {}) => {
+    const q = new URLSearchParams(params).toString();
+    return apiFetch<any>(`/tools/catalyst-impact/${q ? `?${q}` : ""}`);
+  },
 };
 
 // News Releases API

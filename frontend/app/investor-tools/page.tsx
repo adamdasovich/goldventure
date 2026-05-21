@@ -52,6 +52,16 @@ const TOOLS = [
     available: true,
   },
   {
+    title: "Catalyst Impact Analyzer",
+    slug: "catalyst-impact",
+    description:
+      "Event study: see how each type of news — drill results, financings, resource updates — has historically moved a company's share price.",
+    href: "/investor-tools/catalyst-impact",
+    badge: "Event Study",
+    icon: "M13 10V3L4 14h7v7l9-11h-7z",
+    available: true,
+  },
+  {
     title: "Resource Grade Ranker",
     slug: "grade-ranker",
     description:
@@ -177,7 +187,7 @@ export default function InvestorToolsPage() {
       {showUpgrade && (
         <UpgradeModal
           onClose={() => setShowUpgrade(false)}
-          feature="All 14 Investor Tools"
+          feature="All 15 Investor Tools"
           requiredTier="prospector"
         />
       )}
@@ -230,7 +240,7 @@ export default function InvestorToolsPage() {
                   variant="slate"
                   className="cursor-pointer hover:border-gold-400/50"
                 >
-                  Free tier: 2 tools &middot; Upgrade for all 14
+                  Free tier: 2 tools &middot; Upgrade for all 15
                 </Badge>
               </Link>
             </div>

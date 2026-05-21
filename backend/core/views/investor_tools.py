@@ -1332,3 +1332,156 @@ def unusual_activity(request):
     }
     cache.set(cached_key, data, 600)
     return Response(data)
+
+
+# ============================================================================
+# CATALYST IMPACT ANALYZER
+# ============================================================================
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def catalyst_impact(request):
+    """
+    Event study: how a company's share price historically reacted to each
+    TYPE of news, measured at 1, 5 and 20 trading days after the release.
+    GET /api/tools/catalyst-impact/?company_id=1&days=365
+
+    With no company_id, returns just the available-companies list (those with
+    price history) for the frontend picker.
+    """
+    cached_key = f"catalyst_impact_{request.GET.urlencode()}"
+    cached = cache.get(cached_key)
+    if cached:
+        return Response(cached)
+
+    # Companies that have price history - powers the frontend picker.
+    priced_ids = StockPrice.objects.values_list('company_id', flat=True).distinct()
+    available_companies = [
+        {
+            'id': c.id,
+            'name': c.name,
+            'ticker': c.ticker_symbol,
+            'exchange': c.exchange,
+        }
+        for c in Company.objects.filter(
+            id__in=priced_ids, is_active=True
+        ).order_by('name')
+    ]
+
+    company_id_raw = request.GET.get('company_id', '').strip()
+    if not company_id_raw.isdigit():
+        return Response({
+            'available_companies': available_companies,
+            'by_catalyst_type': [],
+            'events': [],
+        })
+
+    company = Company.objects.filter(id=int(company_id_raw), is_active=True).first()
+    if not company:
+        return Response({'error': 'Company not found'}, status=404)
+
+    days = max(90, min(int(request.GET.get('days', 365)), 1095))
+
+    # Full price history as an ordered list so we can step trading days.
+    prices = list(
+        StockPrice.objects.filter(company=company).order_by('date')
+    )
+    base = {
+        'available_companies': available_companies,
+        'company': {
+            'id': company.id,
+            'name': company.name,
+            'ticker': company.ticker_symbol,
+        },
+        'window_days': days,
+    }
+
+    if len(prices) < 22:
+        data = {
+            **base,
+            'total_events': 0,
+            'by_catalyst_type': [],
+            'events': [],
+            'message': (
+                'Not enough price history for an event study '
+                '(need 20+ trading days).'
+            ),
+        }
+        cache.set(cached_key, data, 600)
+        return Response(data)
+
+    price_dates = [p.date for p in prices]
+    cutoff = timezone.now().date() - timedelta(days=days)
+    news = NewsRelease.objects.filter(
+        company=company, release_date__gte=cutoff,
+    ).order_by('release_date')
+
+    horizons = [('1d', 1), ('5d', 5), ('20d', 20)]
+    type_display = dict(NewsRelease.RELEASE_TYPES)
+    by_type = {}  # release_type -> {'1d': [...], '5d': [...], '20d': [...]}
+    events = []
+
+    for ev in news:
+        # First trading day on/after the release date.
+        idx = next(
+            (i for i, d in enumerate(price_dates) if d >= ev.release_date), None
+        )
+        if idx is None:
+            continue
+        base_price = float(prices[idx].close_price or 0)
+        if base_price <= 0:
+            continue
+
+        reactions = {}
+        for label, offset in horizons:
+            tgt = idx + offset
+            if tgt < len(prices) and prices[tgt].close_price:
+                reactions[label] = round(
+                    (float(prices[tgt].close_price) - base_price)
+                    / base_price * 100, 2,
+                )
+            else:
+                reactions[label] = None
+
+        bucket = by_type.setdefault(
+            ev.release_type, {'1d': [], '5d': [], '20d': []}
+        )
+        for label, _ in horizons:
+            if reactions[label] is not None:
+                bucket[label].append(reactions[label])
+
+        events.append({
+            'date': ev.release_date.isoformat(),
+            'title': ev.title,
+            'release_type': type_display.get(ev.release_type, ev.release_type),
+            'url': ev.url,
+            'change_1d': reactions['1d'],
+            'change_5d': reactions['5d'],
+            'change_20d': reactions['20d'],
+        })
+
+    by_catalyst_type = []
+    for rtype, hd in by_type.items():
+        entry = {
+            'release_type': type_display.get(rtype, rtype),
+            'event_count': max(len(hd['1d']), len(hd['5d']), len(hd['20d'])),
+        }
+        for label, _ in horizons:
+            vals = hd[label]
+            entry[f'avg_{label}'] = (
+                round(sum(vals) / len(vals), 2) if vals else None
+            )
+            entry[f'sample_{label}'] = len(vals)
+        by_catalyst_type.append(entry)
+
+    by_catalyst_type.sort(key=lambda e: e['event_count'], reverse=True)
+    events.sort(key=lambda e: e['date'], reverse=True)
+
+    data = {
+        **base,
+        'total_events': len(events),
+        'by_catalyst_type': by_catalyst_type,
+        'events': events,
+    }
+    cache.set(cached_key, data, 600)
+    return Response(data)
