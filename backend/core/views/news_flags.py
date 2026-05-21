@@ -111,20 +111,22 @@ class NewsReleaseFlagViewSet(viewsets.ReadOnlyModelViewSet):
         if not self.request.user.is_superuser:
             return NewsReleaseFlag.objects.none()
 
-        # Filter by status if provided
-        status_filter = self.request.query_params.get('status', 'pending')
-        if status_filter:
-            return NewsReleaseFlag.objects.filter(status=status_filter).select_related(
-                'news_release__company',
-                'reviewed_by',
-                'created_financing'
-            )
-
-        return NewsReleaseFlag.objects.all().select_related(
+        queryset = NewsReleaseFlag.objects.all().select_related(
             'news_release__company',
             'reviewed_by',
             'created_financing'
         )
+
+        # The status filter only applies to the list view. Detail actions
+        # (mark-reviewed, dismiss, close-financing) must be able to look up a
+        # flag in ANY status — otherwise get_object() 404s on, e.g., a
+        # reviewed_financing flag because the default filter is 'pending'.
+        if self.action == 'list':
+            status_filter = self.request.query_params.get('status', 'pending')
+            if status_filter:
+                queryset = queryset.filter(status=status_filter)
+
+        return queryset
 
     def list(self, request, *args, **kwargs):
         """List all flagged news releases with filtering"""
