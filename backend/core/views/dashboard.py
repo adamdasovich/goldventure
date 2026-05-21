@@ -10,6 +10,9 @@ import logging
 from datetime import timedelta
 
 from django.core.cache import cache
+from django.core import signing
+from django.http import HttpResponse
+from django.views.decorators.http import require_GET
 from django.utils import timezone
 
 from rest_framework.decorators import api_view, permission_classes
@@ -242,37 +245,22 @@ def watchlist_toggle(request):
 # Daily briefing
 # --------------------------------------------------------------------------
 
-@api_view(['GET'])
-@permission_classes([IsAuthenticated])
-def daily_briefing(request):
+def build_briefing(user):
     """
-    GET /api/dashboard/daily-briefing/
-    Recent-activity digest across the user's watchlist: price moves, news,
-    financings and new documents, with a generated headline.
+    Build the watchlist-activity briefing for a user — price moves, news,
+    financings and new documents over the window, with a generated headline.
+
+    Pure computation: no request, no caching, no last-visit handling — so it
+    is shared by the dashboard view and the weekly briefing email task.
     """
-    # "Since your last visit" — capture the prior marker, then advance it.
-    last_visit = request.user.last_briefing_seen
-    last_visit_iso = last_visit.isoformat() if last_visit else None
-    User.objects.filter(pk=request.user.pk).update(
-        last_briefing_seen=timezone.now(),
-    )
-
-    cache_key = f'daily_briefing_{request.user.id}'
-    cached = cache.get(cache_key)
-    if cached:
-        # Reflect the live last-visit marker even on a cache hit.
-        cached = {**cached, 'last_visit': last_visit_iso}
-        return Response(cached)
-
-    watchlist = _get_default_watchlist(request.user)
+    watchlist = _get_default_watchlist(user)
     companies = list(watchlist.companies.filter(is_deleted=False))
     today = timezone.now().date()
 
     if not companies:
-        data = {
+        return {
             'has_watchlist': False,
             'date': today.isoformat(),
-            'last_visit': last_visit_iso,
             'watchlist_name': watchlist.name,
             'company_count': 0,
             'window_days': BRIEFING_WINDOW_DAYS,
@@ -280,8 +268,6 @@ def daily_briefing(request):
             'stats': {},
             'companies': [],
         }
-        cache.set(cache_key, data, BRIEFING_CACHE_SECONDS)
-        return Response(data)
 
     cutoff = today - timedelta(days=BRIEFING_WINDOW_DAYS)
     blocks = []
@@ -417,10 +403,9 @@ def daily_briefing(request):
     if not headline:
         headline = _build_headline(blocks, stats, len(companies))
 
-    data = {
+    return {
         'has_watchlist': True,
         'date': today.isoformat(),
-        'last_visit': last_visit_iso,
         'window_days': BRIEFING_WINDOW_DAYS,
         'watchlist_name': watchlist.name,
         'company_count': len(companies),
@@ -428,5 +413,88 @@ def daily_briefing(request):
         'stats': stats,
         'companies': blocks,
     }
-    cache.set(cache_key, data, BRIEFING_CACHE_SECONDS)
-    return Response(data)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def daily_briefing(request):
+    """
+    GET /api/dashboard/daily-briefing/
+    Recent-activity digest across the user's watchlist. Cached 30 min/user;
+    'last_visit' and 'email_briefing_enabled' are layered on per-request.
+    """
+    user = request.user
+
+    # "Since your last visit" — capture the prior marker, then advance it.
+    last_visit = user.last_briefing_seen
+    last_visit_iso = last_visit.isoformat() if last_visit else None
+    User.objects.filter(pk=user.pk).update(last_briefing_seen=timezone.now())
+
+    cache_key = f'daily_briefing_{user.id}'
+    data = cache.get(cache_key)
+    if data is None:
+        data = build_briefing(user)
+        cache.set(cache_key, data, BRIEFING_CACHE_SECONDS)
+
+    return Response({
+        **data,
+        'last_visit': last_visit_iso,
+        'email_briefing_enabled': user.email_briefing_enabled,
+    })
+
+
+# --------------------------------------------------------------------------
+# Weekly briefing email — opt-in toggle + unsubscribe
+# --------------------------------------------------------------------------
+
+_UNSUBSCRIBE_SALT = 'briefing-email-unsubscribe'
+
+
+def briefing_email_token(user):
+    """Signed, tamper-proof token identifying a user for one-click unsubscribe."""
+    return signing.dumps({'uid': user.id}, salt=_UNSUBSCRIBE_SALT)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def briefing_email_toggle(request):
+    """
+    POST /api/dashboard/briefing-email/  {"enabled": true|false}
+    Set the user's opt-in for the weekly briefing email.
+    """
+    enabled = bool(request.data.get('enabled'))
+    User.objects.filter(pk=request.user.pk).update(email_briefing_enabled=enabled)
+    return Response({'email_briefing_enabled': enabled})
+
+
+@require_GET
+def briefing_email_unsubscribe(request):
+    """
+    GET /api/briefing-email/unsubscribe/?token=...
+    One-click unsubscribe from a briefing email — no login required.
+    """
+    token = request.GET.get('token', '')
+    try:
+        payload = signing.loads(
+            token, salt=_UNSUBSCRIBE_SALT, max_age=60 * 60 * 24 * 365,
+        )
+        User.objects.filter(pk=payload['uid']).update(
+            email_briefing_enabled=False,
+        )
+        message = (
+            "You've been unsubscribed from the weekly GoldVenture briefing "
+            "email. You can re-enable it any time from your dashboard."
+        )
+    except Exception:
+        message = "This unsubscribe link is invalid or has expired."
+
+    html = f"""<!doctype html>
+<html><head><meta charset="utf-8"><title>Unsubscribe</title></head>
+<body style="font-family:system-ui,sans-serif;background:#0f172a;color:#e2e8f0;
+text-align:center;padding:80px 24px;">
+  <h2 style="color:#d4af37;margin-bottom:16px;">GoldVenture</h2>
+  <p style="font-size:16px;max-width:480px;margin:0 auto 24px;">{message}</p>
+  <a href="https://juniorminingintelligence.com/dashboard"
+     style="color:#d4af37;text-decoration:none;">→ Back to your dashboard</a>
+</body></html>"""
+    return HttpResponse(html)

@@ -177,4 +177,6 @@ from .dashboard import (  # noqa: F401
     watchlist_detail,
     watchlist_toggle,
     daily_briefing,
+    briefing_email_toggle,
+    briefing_email_unsubscribe,
 )

@@ -33,6 +33,8 @@ class User(AbstractUser):
     # When the user last opened their dashboard daily briefing — powers the
     # "since your last visit" framing.
     last_briefing_seen = models.DateTimeField(null=True, blank=True)
+    # Opt-in (default off) for the weekly briefing email.
+    email_briefing_enabled = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

@@ -397,6 +397,15 @@ export const dashboardAPI = {
     apiFetch<any>("/dashboard/daily-briefing/", {
       headers: { Authorization: `Bearer ${accessToken}` },
     }),
+  setBriefingEmail: (enabled: boolean, accessToken: string) =>
+    apiFetch<{ email_briefing_enabled: boolean }>(
+      "/dashboard/briefing-email/",
+      {
+        method: "POST",
+        headers: { Authorization: `Bearer ${accessToken}` },
+        body: JSON.stringify({ enabled }),
+      },
+    ),
 };
 
 // News Releases API

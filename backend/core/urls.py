@@ -94,6 +94,8 @@ urlpatterns = [
     path('watchlist/', views.watchlist_detail, name='watchlist_detail'),
     path('watchlist/toggle/', views.watchlist_toggle, name='watchlist_toggle'),
     path('dashboard/daily-briefing/', views.daily_briefing, name='daily_briefing'),
+    path('dashboard/briefing-email/', views.briefing_email_toggle, name='briefing_email_toggle'),
+    path('briefing-email/unsubscribe/', views.briefing_email_unsubscribe, name='briefing_email_unsubscribe'),
 
     # Company Forum Discussion endpoint
     path('companies/<int:company_id>/discussion/', views.get_company_discussion, name='get_company_discussion'),

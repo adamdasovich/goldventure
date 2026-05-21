@@ -1971,3 +1971,43 @@ def store_company_profile_in_rag_task(self, company_id: int):
     except Exception as e:
         logger.error(f"[RAG TASK] Error storing profile for {company_id}: {str(e)}")
         return {'status': 'error', 'error': str(e)}
+
+
+@shared_task
+def send_weekly_briefings_task():
+    """
+    Email the weekly watchlist briefing to every opted-in user (runs Mondays).
+    Skips users whose watchlist is empty.
+    """
+    from core.models import User
+    from core.views.dashboard import build_briefing, briefing_email_token
+    from core.email_service import EmailService
+
+    users = User.objects.filter(
+        email_briefing_enabled=True, is_active=True,
+    ).exclude(email='')
+
+    sent = skipped = failed = 0
+    for user in users:
+        try:
+            briefing = build_briefing(user)
+            if not briefing.get('has_watchlist'):
+                skipped += 1
+                continue
+            token = briefing_email_token(user)
+            unsubscribe_url = (
+                'https://juniorminingintelligence.com'
+                f'/api/briefing-email/unsubscribe/?token={token}'
+            )
+            if EmailService.send_weekly_briefing(user, briefing, unsubscribe_url):
+                sent += 1
+            else:
+                failed += 1
+        except Exception as e:
+            logger.error(f"Weekly briefing failed for user {user.id}: {str(e)}")
+            failed += 1
+
+    logger.info(
+        f"Weekly briefings: sent={sent} skipped={skipped} failed={failed}"
+    )
+    return {'sent': sent, 'skipped': skipped, 'failed': failed}

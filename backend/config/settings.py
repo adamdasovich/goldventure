@@ -437,6 +437,12 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'core.tasks.celery_worker_health_check_task',
         'schedule': crontab(minute='*/5'),
     },
+
+    # Weekly watchlist briefing email to opted-in users (Monday 7 AM ET)
+    'send-weekly-briefings': {
+        'task': 'core.tasks.send_weekly_briefings_task',
+        'schedule': crontab(hour=12, minute=0, day_of_week=1),  # Mon 7 AM ET
+    },
 }
 
 # ============================================================================

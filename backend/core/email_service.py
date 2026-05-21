@@ -628,3 +628,197 @@ class EmailService:
         except Exception as e:
             logger.error(f"Failed to send subscription confirmation email for company {company.id}: {str(e)}")
             return False
+
+    # ----------------------------------------------------------------------
+    # Weekly watchlist briefing
+    # ----------------------------------------------------------------------
+
+    @staticmethod
+    def send_weekly_briefing(user, briefing, unsubscribe_url):
+        """
+        Send the weekly watchlist briefing email.
+
+        Args:
+            user: the recipient User
+            briefing: the dict from core.views.dashboard.build_briefing()
+            unsubscribe_url: a one-click unsubscribe URL for this user
+        Returns True on success.
+        """
+        if not EmailService.is_configured():
+            logger.warning("Email not configured, skipping weekly briefing")
+            return False
+
+        recipient_email = getattr(user, 'email', None)
+        if not recipient_email:
+            logger.warning(f"No email address for user {getattr(user, 'id', '?')}")
+            return False
+
+        try:
+            from sendgrid import SendGridAPIClient
+            from sendgrid.helpers.mail import Mail, Email, To, Content, HtmlContent
+
+            html_content = EmailService._render_weekly_briefing_html(
+                user, briefing, unsubscribe_url,
+            )
+            text_content = strip_tags(html_content)
+
+            from_email_setting = getattr(
+                settings, 'DEFAULT_FROM_EMAIL',
+                'noreply@juniorminingintelligence.com',
+            )
+            if '<' in from_email_setting and '>' in from_email_setting:
+                from_email = from_email_setting.split('<')[1].split('>')[0].strip()
+                from_name = from_email_setting.split('<')[0].strip()
+            else:
+                from_email = from_email_setting
+                from_name = 'Junior Gold Mining Intelligence'
+
+            message = Mail(
+                from_email=Email(from_email, from_name),
+                to_emails=To(recipient_email),
+                subject="Your GoldVenture weekly briefing",
+                plain_text_content=Content("text/plain", text_content),
+                html_content=HtmlContent(html_content),
+            )
+
+            sg = SendGridAPIClient(_get_sendgrid_api_key())
+            response = sg.send(message)
+            logger.info(
+                f"Weekly briefing email sent to {recipient_email} "
+                f"(status: {response.status_code})"
+            )
+            return True
+
+        except Exception as e:
+            logger.error(
+                f"Failed to send weekly briefing to {recipient_email}: {str(e)}"
+            )
+            return False
+
+    @staticmethod
+    def _render_weekly_briefing_html(user, briefing, unsubscribe_url):
+        """Render the weekly briefing email as dark-themed, inline-styled HTML."""
+        from django.utils.html import escape
+
+        first_name = (
+            (user.get_full_name() or user.username or 'there').split(' ')[0]
+        )
+        stats = briefing.get('stats', {}) or {}
+        headline = briefing.get('headline') or ''
+        active = [
+            c for c in briefing.get('companies', []) if c.get('has_activity')
+        ][:8]
+        dash_url = 'https://juniorminingintelligence.com/dashboard'
+
+        # Stat line
+        stat_bits = [
+            f"{stats.get('movers_up', 0)} up",
+            f"{stats.get('movers_down', 0)} down",
+            f"{stats.get('news_count', 0)} news",
+        ]
+        if stats.get('financing_count'):
+            stat_bits.append(f"{stats['financing_count']} financings")
+
+        # Company rows
+        rows = ''
+        for c in active:
+            price = c.get('price') or {}
+            chg_html = ''
+            cp = price.get('change_pct')
+            if cp is not None:
+                color = '#34d399' if cp > 0 else '#f87171' if cp < 0 else '#94a3b8'
+                chg_html = (
+                    f'<span style="color:{color};font-weight:700;">'
+                    f'{"+" if cp > 0 else ""}{cp:.1f}%</span>'
+                )
+            news_html = ''.join(
+                f'<li style="margin:3px 0;color:#cbd5e1;font-size:13px;">'
+                f'{escape(n["title"])}</li>'
+                for n in c.get('news', [])[:3]
+            )
+            extras = []
+            if c.get('financings'):
+                extras.append(f'{len(c["financings"])} new financing(s)')
+            if c.get('documents'):
+                extras.append(f'{len(c["documents"])} new report(s)')
+            extra_html = (
+                f'<div style="color:#d4af37;font-size:12px;margin-top:5px;">'
+                f'{" · ".join(extras)}</div>' if extras else ''
+            )
+            rows += f'''
+            <tr><td style="padding:14px 0;border-bottom:1px solid #1e293b;">
+              <div style="font-size:15px;">
+                <a href="https://juniorminingintelligence.com/companies/{c["company_id"]}"
+                   style="color:#f8fafc;font-weight:600;text-decoration:none;">
+                   {escape(c["name"])}</a>
+                <span style="color:#64748b;font-size:13px;">&nbsp;{escape(c.get("ticker", ""))}</span>
+                &nbsp;&nbsp;{chg_html}
+              </div>
+              {f'<ul style="margin:6px 0 0;padding-left:20px;">{news_html}</ul>' if news_html else ''}
+              {extra_html}
+            </td></tr>'''
+
+        if not active:
+            rows = (
+                '<tr><td style="padding:16px 0;color:#94a3b8;font-size:14px;">'
+                'A quiet week across your watchlist — no major moves or news.'
+                '</td></tr>'
+            )
+
+        return f'''<!doctype html>
+<html><head><meta charset="utf-8"></head>
+<body style="margin:0;background:#0f172a;font-family:system-ui,-apple-system,sans-serif;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0"
+         style="background:#0f172a;padding:32px 16px;">
+    <tr><td align="center">
+      <table role="presentation" width="600" cellpadding="0" cellspacing="0"
+             style="max-width:600px;background:#111827;border:1px solid #1e293b;
+                    border-radius:16px;overflow:hidden;">
+        <!-- header -->
+        <tr><td style="padding:28px 32px 8px;">
+          <div style="color:#d4af37;font-size:12px;letter-spacing:2px;
+                      text-transform:uppercase;">Your Weekly Briefing</div>
+          <div style="color:#ffffff;font-size:22px;font-weight:700;margin-top:6px;">
+            Good morning, {escape(first_name)}.
+          </div>
+        </td></tr>
+        <!-- headline -->
+        <tr><td style="padding:8px 32px 16px;">
+          <p style="color:#e2e8f0;font-size:15px;line-height:1.6;margin:0;">
+            {escape(headline)}
+          </p>
+          <p style="color:#64748b;font-size:12px;margin:12px 0 0;">
+            {escape(' · '.join(stat_bits))} · across
+            {briefing.get('company_count', 0)} watched companies
+          </p>
+        </td></tr>
+        <!-- companies -->
+        <tr><td style="padding:8px 32px 16px;">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+            {rows}
+          </table>
+        </td></tr>
+        <!-- CTA -->
+        <tr><td style="padding:8px 32px 28px;" align="center">
+          <a href="{dash_url}"
+             style="display:inline-block;background:#d4af37;color:#0f172a;
+                    font-weight:700;font-size:14px;text-decoration:none;
+                    padding:12px 28px;border-radius:10px;">
+            Open your full dashboard →
+          </a>
+        </td></tr>
+        <!-- footer -->
+        <tr><td style="padding:20px 32px;background:#0c1322;
+                       border-top:1px solid #1e293b;">
+          <p style="color:#64748b;font-size:12px;margin:0;line-height:1.6;">
+            You're receiving this because you enabled the weekly briefing for
+            your GoldVenture watchlist.<br>
+            <a href="{unsubscribe_url}" style="color:#94a3b8;">Unsubscribe</a>
+            &nbsp;·&nbsp;
+            <a href="{dash_url}" style="color:#94a3b8;">Manage on your dashboard</a>
+          </p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body></html>'''
