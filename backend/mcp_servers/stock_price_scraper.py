@@ -305,6 +305,25 @@ class StockPriceScraper:
             # Determine currency based on exchange
             currency = 'CAD' if company.exchange in ['tsx', 'tsxv', 'cse'] else 'USD'
 
+            # Derive day-over-day change from our own previous stored close
+            # rather than the scraper's fragile positional HTML parse (which
+            # produced change_percent values unrelated to the close prices).
+            close = Decimal(str(quote['close']))
+            prev = (
+                StockPrice.objects
+                .filter(company=company, date__lt=trade_date)
+                .order_by('-date')
+                .first()
+            )
+            if prev and prev.close_price and prev.close_price > 0:
+                change_amount = (close - prev.close_price).quantize(Decimal('0.0001'))
+                change_percent = (
+                    (close - prev.close_price) / prev.close_price * Decimal('100')
+                ).quantize(Decimal('0.01'))
+            else:
+                change_amount = Decimal('0')
+                change_percent = Decimal('0')
+
             # Create or update the StockPrice record
             price_obj, created = StockPrice.objects.update_or_create(
                 company=company,
@@ -315,8 +334,8 @@ class StockPriceScraper:
                     'open_price': quote.get('open'),
                     'high_price': quote.get('high'),
                     'low_price': quote.get('low'),
-                    'change_amount': quote.get('change', Decimal('0')),
-                    'change_percent': quote.get('change_percent', Decimal('0')),
+                    'change_amount': change_amount,
+                    'change_percent': change_percent,
                     'currency': currency,
                     'source': quote.get('source', 'Unknown')
                 }
@@ -333,8 +352,8 @@ class StockPriceScraper:
                     'low_price': quote.get('low') or quote['close'],
                     'close_price': quote['close'],
                     'volume': quote.get('volume', 0),
-                    'change_amount': quote.get('change', Decimal('0')),
-                    'change_percent': quote.get('change_percent', Decimal('0')),
+                    'change_amount': change_amount,
+                    'change_percent': change_percent,
                     'currency': currency,
                     'source': quote.get('source', 'Unknown')
                 }
