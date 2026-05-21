@@ -8,7 +8,6 @@ import {
   CardDescription,
   CardContent,
 } from "@/components/ui/Card";
-import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { metalsAPI, type MetalPrice } from "@/lib/api";
 import MetalChart from "@/components/MetalChart";
@@ -182,37 +181,12 @@ export default function MetalsPage() {
         </div>
       </nav>
 
-      {/* Hero Section */}
-      <section className="relative py-20 px-4 sm:px-6 lg:px-8">
-        <div className="absolute inset-0 bg-linear-to-b from-slate-900 via-slate-900 to-slate-800 opacity-50"></div>
-        <div
-          className="absolute inset-0"
-          style={{
-            backgroundImage:
-              "radial-gradient(circle at 50% 50%, rgba(212, 161, 42, 0.1) 0%, transparent 50%)",
-          }}
-        ></div>
-
-        <div className="relative max-w-7xl mx-auto text-center">
-          <Badge variant="gold" className="mb-6">
-            Real-Time Market Data
-          </Badge>
-          <h1 className="text-5xl md:text-6xl font-bold mb-6 text-gradient-gold animate-fade-in leading-tight pb-2">
-            Precious Metals Prices
-          </h1>
-          <p className="text-xl text-slate-300 max-w-3xl mx-auto mb-12 animate-slide-in-up">
-            Track real-time and historical prices for gold, silver, and other
-            precious metals
-          </p>
-        </div>
-      </section>
-
       {/* Real-Time Prices Section */}
       <section className="py-16 px-4 sm:px-6 lg:px-8 bg-gradient-slate">
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-12">
-            <h2 className="text-4xl font-bold text-gold-400 mb-4">
-              Current Metal Prices
+            <h2 className="text-2xl font-bold text-gold-400 mb-4">
+              Precious Metal Prices
             </h2>
             <p className="text-slate-300 text-lg mb-2">
               Live pricing data updated in real-time
