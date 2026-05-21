@@ -9,6 +9,7 @@ from celery import shared_task
 from django.utils import timezone
 from datetime import datetime
 from .models import DocumentProcessingJob, Company, NewsRelease, Document
+from .news_classification import classify_release_type, VALID_RELEASE_TYPES
 from mcp_servers.document_processor_hybrid import HybridDocumentProcessor
 from mcp_servers.website_crawler import crawl_news_releases
 from django.db.models import Q
@@ -425,7 +426,11 @@ def scrape_company_news_task(self, company_id):
             title = news.get('title', '').strip()
             url = news.get('url', '').strip()
             date_str = news.get('date')
-            release_type = news.get('document_type', 'news_release')
+            doc_type = news.get('document_type')
+            release_type = (
+                doc_type if doc_type in VALID_RELEASE_TYPES
+                else classify_release_type(title)
+            )
 
             # Determine if this is a financial report
             is_financial = any(keyword in title.lower() for keyword in [
@@ -940,7 +945,11 @@ def scrape_single_company_news_task(self, company_id: int):
             title = news.get('title', '').strip()
             url = news.get('url', '').strip()
             date_str = news.get('date')
-            release_type = news.get('document_type', 'news_release')
+            doc_type = news.get('document_type')
+            release_type = (
+                doc_type if doc_type in VALID_RELEASE_TYPES
+                else classify_release_type(title)
+            )
 
             if not url:
                 continue

@@ -846,11 +846,18 @@ class GPUWorker:
                     )
                 company_id = row['id']
 
+                from core.news_classification import (
+                    classify_release_type, VALID_RELEASE_TYPES,
+                )
                 for news in news_releases:
                     title = news.get('title', '').strip()[:200]
                     url = news.get('url', '').strip()[:500]
                     date_str = news.get('date')
-                    release_type = news.get('document_type', 'news_release')
+                    doc_type = news.get('document_type')
+                    release_type = (
+                        doc_type if doc_type in VALID_RELEASE_TYPES
+                        else classify_release_type(title)
+                    )
 
                     if not url or not date_str:
                         continue
