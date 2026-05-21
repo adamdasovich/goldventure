@@ -252,30 +252,6 @@ export default function HomeClient({ initialArticles }: HomeClientProps) {
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
-  // Hero stats — real numbers from the platform-stats endpoint, with honest
-  // fallbacks so a tile is never a fake metric. Always renders four tiles.
-  const heroStats = [
-    { value: `${stats.companies}+`, label: "Companies tracked" },
-    ...(stats.projects > 0
-      ? [
-          {
-            value: `${stats.projects.toLocaleString()}+`,
-            label: "Projects mapped",
-          },
-        ]
-      : []),
-    ...(stats.financings > 0
-      ? [
-          {
-            value: `${stats.financings.toLocaleString()}+`,
-            label: "Financings tracked",
-          },
-        ]
-      : []),
-    { value: "10", label: "Investor tools" },
-    { value: "3×/day", label: "News updates" },
-  ].slice(0, 4);
-
   return (
     <div className="min-h-screen">
       {/* ════════ Navigation ════════ */}
@@ -712,24 +688,6 @@ export default function HomeClient({ initialArticles }: HomeClientProps) {
           </div>
         </div>
       </section>
-
-      {/* ════════ Stats Band ════════ */}
-      <div className="bg-slate-900/60 border-y border-slate-700/30 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-5xl mx-auto py-6">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {heroStats.map((stat, i) => (
-              <div key={i} className="text-center stat-item py-2">
-                <p className="text-2xl sm:text-3xl font-bold text-gradient-gold">
-                  {stat.value}
-                </p>
-                <p className="text-xs sm:text-sm text-slate-400 mt-1">
-                  {stat.label}
-                </p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
 
       {/* ════════ AI Chat Interface Section ════════ */}
       <section
