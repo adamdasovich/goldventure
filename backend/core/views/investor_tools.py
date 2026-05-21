@@ -27,13 +27,13 @@ logger = logging.getLogger(__name__)
 
 def _clean_doc_title(title):
     """
-    Strip scraped URL cache-busting cruft (e.g. '?v=011202?v=1733179390')
-    that some Document titles carry, for cleaner display.
+    Strip scraped URL query-string cruft (e.g. '?v=011202', '?2kjnty') that
+    some Document titles carry, for cleaner display. Document titles never
+    legitimately contain a '?', so everything from the first one is dropped.
     """
-    if not title:
+    if not title or '?' not in title:
         return title
-    idx = title.find('?v=')
-    return title[:idx].strip() if idx != -1 else title.strip()
+    return title.split('?', 1)[0].strip()
 
 
 # ============================================================================
