@@ -57,24 +57,29 @@ export default function MetalsPage() {
     return colors[symbol] || "#d4af37";
   };
 
-  // Precious metals fill the 4-card grid + the gold/silver ratio insight.
-  // Base/critical minerals (copper, etc.) render in their own section so
-  // those precious-metal-only calculations are unaffected.
+  // Precious metals fill the 4-card grid; base/critical minerals (copper,
+  // etc.) render in their own section.
   const preciousMetals = metals.filter(
     (m) => (m.category ?? "precious") === "precious",
   );
   const baseMetals = metals.filter(
     (m) => m.category && m.category !== "precious",
   );
-  const gold = metals.find((m) => m.symbol === "XAU");
-  const silver = metals.find((m) => m.symbol === "XAG");
+
+  const handleMetalClick = (symbol: string) => {
+    setSelectedMetal(symbol);
+    document
+      .getElementById("historical-data")
+      ?.scrollIntoView({ behavior: "smooth" });
+  };
 
   const renderMetalCard = (metal: MetalPrice, idx: number) => (
     <Card
       key={metal.symbol}
       variant="glass-card"
-      className="text-center animate-slide-in-up"
+      className="text-center animate-slide-in-up cursor-pointer transition-transform hover:scale-105"
       style={{ animationDelay: `${idx * 100}ms` }}
+      onClick={() => handleMetalClick(metal.symbol)}
     >
       <CardContent className="py-8">
         {/* Metal Icon/Circle */}
@@ -243,7 +248,7 @@ export default function MetalsPage() {
       </section>
 
       {/* Historical Data Section */}
-      <section className="py-16 px-4 sm:px-6 lg:px-8">
+      <section id="historical-data" className="py-16 px-4 sm:px-6 lg:px-8">
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-12">
             <h2 className="text-4xl font-bold text-gold-400 mb-4">
@@ -311,160 +316,6 @@ export default function MetalsPage() {
               </div>
             </CardContent>
           </Card>
-        </div>
-      </section>
-
-      {/* Market Insights Section */}
-      <section className="py-16 px-4 sm:px-6 lg:px-8 bg-gradient-slate">
-        <div className="max-w-7xl mx-auto">
-          <div className="text-center mb-12">
-            <h2 className="text-4xl font-bold text-gold-400 mb-4">
-              Market Insights
-            </h2>
-            <p className="text-slate-300 text-lg">
-              Key metrics and market information
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <Card variant="glass-card" className="text-center">
-              <CardContent className="py-8">
-                <div
-                  className="w-12 h-12 rounded-lg mx-auto mb-4 flex items-center justify-center"
-                  style={{
-                    backgroundColor: "rgba(212, 175, 55, 0.2)",
-                    border: "2px solid #d4af37",
-                  }}
-                >
-                  <svg
-                    className="w-6 h-6"
-                    style={{ color: "#d4af37" }}
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
-                    />
-                  </svg>
-                </div>
-                <h3 className="text-xl font-semibold text-gold-400 mb-2">
-                  Gold/Silver Ratio
-                </h3>
-                <p className="text-2xl text-white font-bold">
-                  {gold?.price && silver?.price
-                    ? (gold.price / silver.price).toFixed(2)
-                    : "---"}
-                </p>
-                <p className="text-sm text-slate-400 mt-2">
-                  Ounces of silver per ounce of gold
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card variant="glass-card" className="text-center">
-              <CardContent className="py-8">
-                <div
-                  className="w-12 h-12 rounded-lg mx-auto mb-4 flex items-center justify-center"
-                  style={{
-                    backgroundColor: "rgba(212, 175, 55, 0.2)",
-                    border: "2px solid #d4af37",
-                  }}
-                >
-                  <svg
-                    className="w-6 h-6"
-                    style={{ color: "#d4af37" }}
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z"
-                    />
-                  </svg>
-                </div>
-                <h3 className="text-xl font-semibold text-gold-400 mb-2">
-                  Total Market Value
-                </h3>
-                <p className="text-2xl text-white font-bold">
-                  {preciousMetals.length > 0 &&
-                  preciousMetals.every((m) => m.price)
-                    ? `$${preciousMetals.reduce((sum, m) => sum + (m.price || 0), 0).toLocaleString()}`
-                    : "---"}
-                </p>
-                <p className="text-sm text-slate-400 mt-2">
-                  Combined price per ounce (all 4 precious metals)
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card variant="glass-card" className="text-center">
-              <CardContent className="py-8">
-                <div
-                  className="w-12 h-12 rounded-lg mx-auto mb-4 flex items-center justify-center"
-                  style={{
-                    backgroundColor: "rgba(212, 175, 55, 0.2)",
-                    border: "2px solid #d4af37",
-                  }}
-                >
-                  <svg
-                    className="w-6 h-6"
-                    style={{ color: "#d4af37" }}
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"
-                    />
-                  </svg>
-                </div>
-                <h3 className="text-xl font-semibold text-gold-400 mb-2">
-                  Most Valuable
-                </h3>
-                <p className="text-2xl text-white font-bold">
-                  {preciousMetals.length > 0 &&
-                  preciousMetals.every((m) => m.price)
-                    ? preciousMetals.reduce(
-                        (max, m) =>
-                          (m.price || 0) > (max.price || 0) ? m : max,
-                        preciousMetals[0],
-                      ).metal
-                    : "---"}
-                </p>
-                <p className="text-sm text-slate-400 mt-2">
-                  Highest price per ounce
-                </p>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Additional Info */}
-          <div className="mt-12 text-center">
-            <Card variant="glass-card" className="max-w-2xl mx-auto">
-              <CardContent className="py-6">
-                <h4 className="text-lg font-semibold text-gold-400 mb-3">
-                  About These Prices
-                </h4>
-                <p className="text-slate-300 text-sm leading-relaxed">
-                  Precious metals prices are provided by Alpha Vantage and
-                  represent the spot price in USD per troy ounce. Prices are
-                  updated in real-time during market hours and cached for 5
-                  minutes to optimize API usage. Historical data includes up to
-                  1 year of daily closing prices.
-                </p>
-              </CardContent>
-            </Card>
-          </div>
         </div>
       </section>
     </div>
