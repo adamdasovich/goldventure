@@ -1491,3 +1491,101 @@ def catalyst_impact(request):
     }
     cache.set(cached_key, data, 600)
     return Response(data)
+
+
+# ============================================================================
+# PROJECT DUE-DILIGENCE RETRIEVAL
+# ============================================================================
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def due_diligence(request):
+    """
+    Structured due-diligence retrieval: ranked NI 43-101 report passages that
+    answer a question for one company (RAG hybrid search, no LLM synthesis).
+    GET /api/tools/due-diligence/?company_id=1&question=metallurgical recovery
+
+    With no company_id/question, returns just the available-companies list
+    (those that have processed documents) for the frontend picker.
+    """
+    from core.models import DocumentChunk
+
+    # Companies that have processed report content - powers the picker.
+    doc_company_ids = DocumentChunk.objects.values_list(
+        'document__company_id', flat=True,
+    ).distinct()
+    available_companies = [
+        {
+            'id': c.id,
+            'name': c.name,
+            'ticker': c.ticker_symbol,
+            'exchange': c.exchange,
+        }
+        for c in Company.objects.filter(
+            id__in=doc_company_ids, is_active=True,
+        ).order_by('name')
+    ]
+
+    company_id_raw = request.GET.get('company_id', '').strip()
+    question = request.GET.get('question', '').strip()
+    if not company_id_raw.isdigit() or not question:
+        return Response({
+            'available_companies': available_companies,
+            'sections': [],
+        })
+
+    company = Company.objects.filter(id=int(company_id_raw), is_active=True).first()
+    if not company:
+        return Response({'error': 'Company not found'}, status=404)
+
+    max_sections = max(1, min(int(request.GET.get('max_sections', 8)), 15))
+
+    cached_key = f"due_diligence_{request.GET.urlencode()}"
+    cached = cache.get(cached_key)
+    if cached:
+        return Response(cached)
+
+    try:
+        from mcp_servers.rag_utils import RAGManager
+        results = RAGManager().search_documents(
+            query=question, n_results=max_sections, filter_company=company.name,
+        )
+    except Exception as e:
+        logger.error(f"due_diligence RAG search failed: {e}")
+        return Response(
+            {'error': 'Document search failed. Please try again.'},
+            status=500,
+        )
+
+    sections = []
+    documents_seen = {}
+    for idx, r in enumerate(results, 1):
+        meta = r.get('metadata', {}) or {}
+        doc_id = meta.get('document_id')
+        title = meta.get('document_title', 'Unknown report')
+        if doc_id is not None:
+            documents_seen.setdefault(doc_id, title)
+        sections.append({
+            'rank': idx,
+            'text': r.get('text', ''),
+            'document_id': doc_id,
+            'document_title': title,
+            'document_date': meta.get('document_date'),
+            'document_type': meta.get('document_type'),
+        })
+
+    data = {
+        'available_companies': available_companies,
+        'company': {
+            'id': company.id,
+            'name': company.name,
+            'ticker': company.ticker_symbol,
+        },
+        'question': question,
+        'sections': sections,
+        'source_documents': [
+            {'document_id': k, 'title': v} for k, v in documents_seen.items()
+        ],
+    }
+    cache.set(cached_key, data, 600)
+    return Response(data)

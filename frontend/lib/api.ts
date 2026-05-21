@@ -371,6 +371,10 @@ export const toolsAPI = {
     const q = new URLSearchParams(params).toString();
     return apiFetch<any>(`/tools/catalyst-impact/${q ? `?${q}` : ""}`);
   },
+  dueDiligence: (params: Record<string, string> = {}) => {
+    const q = new URLSearchParams(params).toString();
+    return apiFetch<any>(`/tools/due-diligence/${q ? `?${q}` : ""}`);
+  },
 };
 
 // News Releases API

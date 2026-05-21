@@ -162,6 +162,7 @@ from .investor_tools import (  # noqa: F401
     dilution_tracker,
     unusual_activity,
     catalyst_impact,
+    due_diligence,
 )
 from .platform_subscriptions import (  # noqa: F401
     platform_subscription_tiers,

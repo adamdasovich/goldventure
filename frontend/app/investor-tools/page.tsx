@@ -62,6 +62,16 @@ const TOOLS = [
     available: true,
   },
   {
+    title: "Project Due-Diligence Assistant",
+    slug: "due-diligence",
+    description:
+      "Ask a due-diligence question about a company and get the exact NI 43-101 report passages that answer it — ranked by relevance, with citations.",
+    href: "/investor-tools/due-diligence",
+    badge: "Due Diligence",
+    icon: "M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z",
+    available: true,
+  },
+  {
     title: "Resource Grade Ranker",
     slug: "grade-ranker",
     description:
@@ -187,7 +197,7 @@ export default function InvestorToolsPage() {
       {showUpgrade && (
         <UpgradeModal
           onClose={() => setShowUpgrade(false)}
-          feature="All 15 Investor Tools"
+          feature="All 16 Investor Tools"
           requiredTier="prospector"
         />
       )}
@@ -240,7 +250,7 @@ export default function InvestorToolsPage() {
                   variant="slate"
                   className="cursor-pointer hover:border-gold-400/50"
                 >
-                  Free tier: 2 tools &middot; Upgrade for all 15
+                  Free tier: 2 tools &middot; Upgrade for all 16
                 </Badge>
               </Link>
             </div>
