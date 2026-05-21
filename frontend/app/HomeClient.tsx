@@ -697,9 +697,6 @@ export default function HomeClient({ initialArticles }: HomeClientProps) {
       >
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-12">
-            <Badge variant="gold" className="mb-4">
-              Powered by Claude AI
-            </Badge>
             <h2 className="text-3xl sm:text-4xl font-bold text-gradient-gold mb-4">
               Ask Anything About Mining Companies
             </h2>
