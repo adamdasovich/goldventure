@@ -363,6 +363,10 @@ export const toolsAPI = {
     const q = new URLSearchParams(params).toString();
     return apiFetch<any>(`/tools/dilution-tracker/${q ? `?${q}` : ""}`);
   },
+  unusualActivity: (params: Record<string, string> = {}) => {
+    const q = new URLSearchParams(params).toString();
+    return apiFetch<any>(`/tools/unusual-activity/${q ? `?${q}` : ""}`);
+  },
 };
 
 // News Releases API

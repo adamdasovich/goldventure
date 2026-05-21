@@ -86,6 +86,7 @@ urlpatterns = [
     path('tools/stock-comparison/', views.stock_comparison, name='stock_comparison'),
     path('tools/resource-growth/', views.resource_growth, name='resource_growth'),
     path('tools/dilution-tracker/', views.dilution_tracker, name='dilution_tracker'),
+    path('tools/unusual-activity/', views.unusual_activity, name='unusual_activity'),
 
     # Company Forum Discussion endpoint
     path('companies/<int:company_id>/discussion/', views.get_company_discussion, name='get_company_discussion'),

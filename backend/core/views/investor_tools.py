@@ -1185,3 +1185,150 @@ def dilution_tracker(request):
     }
     cache.set(cached_key, data, 600)
     return Response(data)
+
+
+# ============================================================================
+# UNUSUAL ACTIVITY DETECTOR
+# ============================================================================
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def unusual_activity(request):
+    """
+    Detect trading-volume spikes for a company and cross-reference news.
+    GET /api/tools/unusual-activity/?company_id=1&days=90&volume_multiple=2.5
+
+    With no company_id, returns just the available-companies list (those that
+    have price history) for the frontend picker.
+    """
+    cached_key = f"unusual_activity_{request.GET.urlencode()}"
+    cached = cache.get(cached_key)
+    if cached:
+        return Response(cached)
+
+    # Companies that have price history - powers the frontend picker.
+    priced_ids = StockPrice.objects.values_list('company_id', flat=True).distinct()
+    available_companies = [
+        {
+            'id': c.id,
+            'name': c.name,
+            'ticker': c.ticker_symbol,
+            'exchange': c.exchange,
+        }
+        for c in Company.objects.filter(
+            id__in=priced_ids, is_active=True
+        ).order_by('name')
+    ]
+
+    company_id_raw = request.GET.get('company_id', '').strip()
+    if not company_id_raw.isdigit():
+        return Response({
+            'available_companies': available_companies,
+            'series': [],
+            'flagged_days': [],
+        })
+
+    company = Company.objects.filter(id=int(company_id_raw), is_active=True).first()
+    if not company:
+        return Response({'error': 'Company not found'}, status=404)
+
+    days = max(30, min(int(request.GET.get('days', 90)), 365))
+    multiple = max(1.5, min(float(request.GET.get('volume_multiple', 2.5)), 10.0))
+    trail = 20  # trailing trading days for the volume baseline
+
+    # Over-fetch so the earliest days in the window still have a baseline.
+    history = list(
+        StockPrice.objects.filter(
+            company=company,
+            date__gte=timezone.now().date() - timedelta(days=days + 45),
+        ).order_by('date')
+    )
+
+    base = {
+        'available_companies': available_companies,
+        'company': {
+            'id': company.id,
+            'name': company.name,
+            'ticker': company.ticker_symbol,
+        },
+        'window_days': days,
+        'volume_multiple': multiple,
+    }
+
+    if len(history) < trail + 5:
+        data = {
+            **base,
+            'series': [],
+            'flagged_days': [],
+            'summary': {'trading_days': 0, 'unusual_days': 0, 'unexplained_days': 0},
+            'message': 'Not enough price history to assess unusual volume.',
+        }
+        cache.set(cached_key, data, 600)
+        return Response(data)
+
+    news = list(
+        NewsRelease.objects.filter(
+            company=company, release_date__gte=history[0].date,
+        ).order_by('release_date')
+    )
+
+    scan_start = timezone.now().date() - timedelta(days=days)
+    series = []
+    flagged_days = []
+
+    for i in range(trail, len(history)):
+        day = history[i]
+        if day.date < scan_start or not day.volume:
+            continue
+        window = [h.volume for h in history[i - trail:i] if h.volume]
+        if len(window) < 5:
+            continue
+        avg = sum(window) / len(window)
+        if avg <= 0:
+            continue
+        ratio = day.volume / avg
+        flagged = ratio >= multiple
+        series.append({
+            'date': day.date.isoformat(),
+            'volume': day.volume,
+            'trailing_avg_volume': int(avg),
+            'volume_ratio': round(ratio, 2),
+            'price_change_pct': float(day.change_percent or 0),
+            'flagged': flagged,
+        })
+        if flagged:
+            related = [
+                n for n in news if abs((n.release_date - day.date).days) <= 2
+            ]
+            flagged_days.append({
+                'date': day.date.isoformat(),
+                'volume': day.volume,
+                'trailing_avg_volume': int(avg),
+                'volume_ratio': round(ratio, 1),
+                'price_change_pct': float(day.change_percent or 0),
+                'explained': bool(related),
+                'related_news': [
+                    {
+                        'title': n.title,
+                        'date': n.release_date.isoformat(),
+                        'type': n.get_release_type_display(),
+                        'url': n.url,
+                    }
+                    for n in related[:3]
+                ],
+            })
+
+    flagged_days.sort(key=lambda d: d['volume_ratio'], reverse=True)
+
+    data = {
+        **base,
+        'series': series,
+        'flagged_days': flagged_days,
+        'summary': {
+            'trading_days': len(series),
+            'unusual_days': len(flagged_days),
+            'unexplained_days': sum(1 for d in flagged_days if not d['explained']),
+        },
+    }
+    cache.set(cached_key, data, 600)
+    return Response(data)

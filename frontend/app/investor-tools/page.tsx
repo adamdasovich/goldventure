@@ -42,6 +42,16 @@ const TOOLS = [
     available: true,
   },
   {
+    title: "Unusual Activity Detector",
+    slug: "unusual-activity",
+    description:
+      "Spot trading-volume spikes far above a stock's recent average, and cross-reference news to tell explained moves from quiet accumulation.",
+    href: "/investor-tools/unusual-activity",
+    badge: "Market Intel",
+    icon: "M3 12h4l3 8 4-16 3 8h4",
+    available: true,
+  },
+  {
     title: "Resource Grade Ranker",
     slug: "grade-ranker",
     description:
@@ -167,7 +177,7 @@ export default function InvestorToolsPage() {
       {showUpgrade && (
         <UpgradeModal
           onClose={() => setShowUpgrade(false)}
-          feature="All 13 Investor Tools"
+          feature="All 14 Investor Tools"
           requiredTier="prospector"
         />
       )}
@@ -220,7 +230,7 @@ export default function InvestorToolsPage() {
                   variant="slate"
                   className="cursor-pointer hover:border-gold-400/50"
                 >
-                  Free tier: 2 tools &middot; Upgrade for all 13
+                  Free tier: 2 tools &middot; Upgrade for all 14
                 </Badge>
               </Link>
             </div>

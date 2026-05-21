@@ -160,6 +160,7 @@ from .investor_tools import (  # noqa: F401
     stock_comparison,
     resource_growth,
     dilution_tracker,
+    unusual_activity,
 )
 from .platform_subscriptions import (  # noqa: F401
     platform_subscription_tiers,
