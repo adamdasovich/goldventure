@@ -28,7 +28,10 @@ _CLASSIFICATION_RULES = [
         'assay', 'intercept', 'intersects', 'intersection', 'metres of',
         'meters of', 'g/t gold', 'g/t au', 'high-grade', 'high grade',
         'channel sample', 'step-out', 'step out', 'drilling commences',
-        'drill results', 'exploration results',
+        'drill results', 'exploration results', 'exploration update',
+        'commences drilling', 'commences exploration', 'expands drill',
+        'extends mineralization', 'trenching', 'soil sampling',
+        'geophysical', 'ip survey', 'discovers', 'discovery',
     ]),
     ('resource_update', [
         'resource estimate', 'mineral resource', 'resource update',
@@ -70,6 +73,11 @@ _CLASSIFICATION_RULES = [
         'name change', 'share consolidation', 'voting results',
         'financial results', 'annual report', 'year-end results',
         'quarterly results', 'corporate presentation', 'listing',
+        'to present at', 'present at', 'conference', 'webinar',
+        'investor', 'provides update', 'provides an update',
+        'operational update', 'operations update', 'business update',
+        'project update', 'company update', 'awarded', 'receives permit',
+        'permitting', 'environmental',
     ]),
 ]
 
