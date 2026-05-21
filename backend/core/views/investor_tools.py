@@ -25,6 +25,17 @@ from ..models import (
 logger = logging.getLogger(__name__)
 
 
+def _clean_doc_title(title):
+    """
+    Strip scraped URL cache-busting cruft (e.g. '?v=011202?v=1733179390')
+    that some Document titles carry, for cleaner display.
+    """
+    if not title:
+        return title
+    idx = title.find('?v=')
+    return title[:idx].strip() if idx != -1 else title.strip()
+
+
 # ============================================================================
 # RESOURCE GRADE RANKER
 # ============================================================================
@@ -1576,14 +1587,14 @@ def due_diligence(request):
         doc = chunk_doc.get(text)
         if doc is not None:
             doc_id = doc.id
-            title = doc.title
+            title = _clean_doc_title(doc.title)
             doc_date = (
                 doc.document_date.isoformat() if doc.document_date else None
             )
             doc_type = doc.document_type
         else:
             doc_id = meta.get('document_id')
-            title = meta.get('document_title') or 'Unknown report'
+            title = _clean_doc_title(meta.get('document_title')) or 'Unknown report'
             doc_date = meta.get('document_date')
             doc_type = meta.get('document_type')
         if doc_id is not None:
