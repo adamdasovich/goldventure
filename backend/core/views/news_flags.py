@@ -125,6 +125,11 @@ class NewsReleaseFlagViewSet(viewsets.ReadOnlyModelViewSet):
             status_filter = self.request.query_params.get('status', 'pending')
             if status_filter:
                 queryset = queryset.filter(status=status_filter)
+            # The "Reviewed Financing" tab is a work queue of confirmed
+            # financings that are still open. Once a financing is closed it
+            # belongs on /closed-financings, so drop its flag from the queue.
+            if status_filter == 'reviewed_financing':
+                queryset = queryset.exclude(created_financing__is_closed=True)
 
         return queryset
 
