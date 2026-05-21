@@ -1,10 +1,10 @@
-'use client';
+"use client";
 
-import React, { useState, useEffect } from 'react';
-import { useAuth } from '@/contexts/AuthContext';
-import { Button } from '@/components/ui/Button';
-import { CreateFinancingModal } from '@/components/company/CreateFinancingModal';
-import { CreateClosedFinancingModal } from '@/components/company/CreateClosedFinancingModal';
+import React, { useState, useEffect } from "react";
+import { useAuth } from "@/contexts/AuthContext";
+import { Button } from "@/components/ui/Button";
+import { CreateFinancingModal } from "@/components/company/CreateFinancingModal";
+import { CreateClosedFinancingModal } from "@/components/company/CreateClosedFinancingModal";
 
 interface NewsReleaseFlag {
   id: number;
@@ -28,17 +28,21 @@ export default function NewsFlagsPage() {
   const [flags, setFlags] = useState<NewsReleaseFlag[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [statusFilter, setStatusFilter] = useState<string>('pending');
-  const [selectedFlag, setSelectedFlag] = useState<NewsReleaseFlag | null>(null);
+  const [statusFilter, setStatusFilter] = useState<string>("pending");
+  const [selectedFlag, setSelectedFlag] = useState<NewsReleaseFlag | null>(
+    null,
+  );
   const [showFinancingModal, setShowFinancingModal] = useState(false);
-  const [showClosedFinancingModal, setShowClosedFinancingModal] = useState(false);
+  const [showClosedFinancingModal, setShowClosedFinancingModal] =
+    useState(false);
   const [showDismissModal, setShowDismissModal] = useState(false);
-  const [dismissNotes, setDismissNotes] = useState('');
+  const [dismissNotes, setDismissNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [showCloseFinancingModal, setShowCloseFinancingModal] = useState(false);
-  const [closingDate, setClosingDate] = useState('');
+  const [closingDate, setClosingDate] = useState("");
 
-  const accessToken = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null;
+  const accessToken =
+    typeof window !== "undefined" ? localStorage.getItem("accessToken") : null;
 
   useEffect(() => {
     fetchFlags();
@@ -51,12 +55,12 @@ export default function NewsFlagsPage() {
         `${process.env.NEXT_PUBLIC_API_URL}/news-flags/?status=${statusFilter}`,
         {
           headers: {
-            'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
-          }
-        }
+            Authorization: `Bearer ${localStorage.getItem("accessToken")}`,
+          },
+        },
       );
 
-      if (!response.ok) throw new Error('Failed to fetch news flags');
+      if (!response.ok) throw new Error("Failed to fetch news flags");
 
       const data = await response.json();
       setFlags(data);
@@ -77,24 +81,28 @@ export default function NewsFlagsPage() {
     setShowClosedFinancingModal(true);
   };
 
-  const handleFinancingCreated = async () => {
-    // After financing is created via CreateFinancingModal, mark the flag as reviewed
+  const handleFinancingCreated = async (financingId?: number) => {
+    // After financing is created via CreateFinancingModal, mark the flag as
+    // reviewed AND link the created financing so it can later be closed.
     if (selectedFlag) {
       try {
-        // Mark the flag as reviewed_financing
+        // Mark the flag as reviewed_financing and link the financing record
         await fetch(
           `${process.env.NEXT_PUBLIC_API_URL}/news-flags/${selectedFlag.id}/mark-reviewed/`,
           {
-            method: 'POST',
+            method: "POST",
             headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${localStorage.getItem("accessToken")}`,
             },
-            body: JSON.stringify({ notes: 'Financing created from news flag' })
-          }
+            body: JSON.stringify({
+              notes: "Financing created from news flag",
+              financing_id: financingId,
+            }),
+          },
         );
       } catch (err) {
-        console.error('Failed to mark flag as reviewed:', err);
+        console.error("Failed to mark flag as reviewed:", err);
       }
     }
 
@@ -127,24 +135,24 @@ export default function NewsFlagsPage() {
       const response = await fetch(
         `${process.env.NEXT_PUBLIC_API_URL}/news-flags/${selectedFlag.id}/dismiss/`,
         {
-          method: 'POST',
+          method: "POST",
           headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${localStorage.getItem("accessToken")}`,
           },
-          body: JSON.stringify({ notes: dismissNotes })
-        }
+          body: JSON.stringify({ notes: dismissNotes }),
+        },
       );
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to dismiss flag');
+        throw new Error(errorData.error || "Failed to dismiss flag");
       }
 
-      alert('Flag dismissed successfully!');
+      alert("Flag dismissed successfully!");
       setShowDismissModal(false);
       setSelectedFlag(null);
-      setDismissNotes('');
+      setDismissNotes("");
       fetchFlags();
     } catch (err: any) {
       alert(`Error: ${err.message}`);
@@ -161,27 +169,29 @@ export default function NewsFlagsPage() {
       const response = await fetch(
         `${process.env.NEXT_PUBLIC_API_URL}/news-flags/${selectedFlag.id}/close-financing/`,
         {
-          method: 'POST',
+          method: "POST",
           headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${localStorage.getItem("accessToken")}`,
           },
           body: JSON.stringify({
-            closing_date: closingDate || undefined
-          })
-        }
+            closing_date: closingDate || undefined,
+          }),
+        },
       );
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to close financing');
+        throw new Error(errorData.error || "Failed to close financing");
       }
 
       const data = await response.json();
-      alert(`Financing closed successfully! ${data.financing?.company_name || ''}`);
+      alert(
+        `Financing closed successfully! ${data.financing?.company_name || ""}`,
+      );
       setShowCloseFinancingModal(false);
       setSelectedFlag(null);
-      setClosingDate('');
+      setClosingDate("");
       fetchFlags();
     } catch (err: any) {
       alert(`Error: ${err.message}`);
@@ -193,7 +203,9 @@ export default function NewsFlagsPage() {
   if (!user?.is_superuser) {
     return (
       <div className="text-center py-12">
-        <h1 className="text-2xl font-bold text-slate-100 mb-4">Access Denied</h1>
+        <h1 className="text-2xl font-bold text-slate-100 mb-4">
+          Access Denied
+        </h1>
         <p className="text-slate-400">Only superusers can access this page.</p>
       </div>
     );
@@ -212,19 +224,23 @@ export default function NewsFlagsPage() {
 
       {/* Status Filter */}
       <div className="mb-6 flex gap-2">
-        {['pending', 'reviewed_financing', 'reviewed_false_positive'].map((status) => (
-          <button
-            key={status}
-            onClick={() => setStatusFilter(status)}
-            className={`px-4 py-2 rounded-lg transition-colors ${
-              statusFilter === status
-                ? 'bg-gold-500 text-slate-900'
-                : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
-            }`}
-          >
-            {status.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}
-          </button>
-        ))}
+        {["pending", "reviewed_financing", "reviewed_false_positive"].map(
+          (status) => (
+            <button
+              key={status}
+              onClick={() => setStatusFilter(status)}
+              className={`px-4 py-2 rounded-lg transition-colors ${
+                statusFilter === status
+                  ? "bg-gold-500 text-slate-900"
+                  : "bg-slate-800 text-slate-400 hover:bg-slate-700"
+              }`}
+            >
+              {status
+                .replace("_", " ")
+                .replace(/\b\w/g, (l) => l.toUpperCase())}
+            </button>
+          ),
+        )}
       </div>
 
       {/* Loading/Error States */}
@@ -261,11 +277,16 @@ export default function NewsFlagsPage() {
                   </h3>
                   <p className="text-slate-300 mb-2">{flag.news_title}</p>
                   <div className="flex items-center gap-4 text-sm text-slate-400">
-                    <span>Release Date: {new Date(flag.news_date).toLocaleDateString()}</span>
-                    <span>Flagged: {new Date(flag.flagged_at).toLocaleDateString()}</span>
+                    <span>
+                      Release Date:{" "}
+                      {new Date(flag.news_date).toLocaleDateString()}
+                    </span>
+                    <span>
+                      Flagged: {new Date(flag.flagged_at).toLocaleDateString()}
+                    </span>
                   </div>
                 </div>
-                {flag.status === 'pending' && (
+                {flag.status === "pending" && (
                   <div className="flex gap-2 flex-wrap">
                     <Button
                       variant="primary"
@@ -294,25 +315,28 @@ export default function NewsFlagsPage() {
                     </Button>
                   </div>
                 )}
-                {flag.status === 'reviewed_financing' && flag.created_financing_id && (
-                  <div className="flex gap-2">
-                    <Button
-                      variant="primary"
-                      onClick={() => {
-                        setSelectedFlag(flag);
-                        setShowCloseFinancingModal(true);
-                      }}
-                      size="sm"
-                    >
-                      Close Financing
-                    </Button>
-                  </div>
-                )}
+                {flag.status === "reviewed_financing" &&
+                  flag.created_financing_id && (
+                    <div className="flex gap-2">
+                      <Button
+                        variant="primary"
+                        onClick={() => {
+                          setSelectedFlag(flag);
+                          setShowCloseFinancingModal(true);
+                        }}
+                        size="sm"
+                      >
+                        Close Financing
+                      </Button>
+                    </div>
+                  )}
               </div>
 
               {/* Detected Keywords */}
               <div className="mb-4">
-                <p className="text-sm text-slate-500 mb-2">Detected Keywords:</p>
+                <p className="text-sm text-slate-500 mb-2">
+                  Detected Keywords:
+                </p>
                 <div className="flex flex-wrap gap-2">
                   {flag.detected_keywords.map((keyword, idx) => (
                     <span
@@ -336,14 +360,17 @@ export default function NewsFlagsPage() {
               </a>
 
               {/* Review Info */}
-              {flag.status !== 'pending' && (
+              {flag.status !== "pending" && (
                 <div className="mt-4 pt-4 border-t border-slate-700">
                   <p className="text-sm text-slate-400">
-                    Reviewed by {flag.reviewed_by} on{' '}
-                    {flag.reviewed_at && new Date(flag.reviewed_at).toLocaleDateString()}
+                    Reviewed by {flag.reviewed_by} on{" "}
+                    {flag.reviewed_at &&
+                      new Date(flag.reviewed_at).toLocaleDateString()}
                   </p>
                   {flag.review_notes && (
-                    <p className="text-sm text-slate-500 mt-1">{flag.review_notes}</p>
+                    <p className="text-sm text-slate-500 mt-1">
+                      {flag.review_notes}
+                    </p>
                   )}
                 </div>
               )}
@@ -402,14 +429,14 @@ export default function NewsFlagsPage() {
                 disabled={submitting}
                 className="flex-1"
               >
-                {submitting ? 'Dismissing...' : 'Dismiss Flag'}
+                {submitting ? "Dismissing..." : "Dismiss Flag"}
               </Button>
               <Button
                 variant="primary"
                 onClick={() => {
                   setShowDismissModal(false);
                   setSelectedFlag(null);
-                  setDismissNotes('');
+                  setDismissNotes("");
                 }}
                 disabled={submitting}
               >
@@ -428,19 +455,24 @@ export default function NewsFlagsPage() {
               Close Financing
             </h2>
             <p className="text-slate-400 mb-4">
-              Mark this financing as closed. This will add it to the Closed Financings page
-              and remove it from the news-flags queue.
+              Mark this financing as closed. This will add it to the Closed
+              Financings page and remove it from the news-flags queue.
             </p>
             <div className="mb-4 p-3 bg-slate-900 rounded-lg">
               <p className="text-sm text-slate-300">
-                <span className="text-slate-500">Company:</span> {selectedFlag.company_name}
+                <span className="text-slate-500">Company:</span>{" "}
+                {selectedFlag.company_name}
               </p>
               <p className="text-sm text-slate-300 mt-1">
-                <span className="text-slate-500">News:</span> {selectedFlag.news_title}
+                <span className="text-slate-500">News:</span>{" "}
+                {selectedFlag.news_title}
               </p>
             </div>
             <div className="mb-4">
-              <label htmlFor="closing-date" className="block text-sm font-medium text-slate-300 mb-1">
+              <label
+                htmlFor="closing-date"
+                className="block text-sm font-medium text-slate-300 mb-1"
+              >
                 Closing Date (optional)
               </label>
               <input
@@ -462,14 +494,14 @@ export default function NewsFlagsPage() {
                 disabled={submitting}
                 className="flex-1"
               >
-                {submitting ? 'Closing...' : 'Close Financing'}
+                {submitting ? "Closing..." : "Close Financing"}
               </Button>
               <Button
                 variant="secondary"
                 onClick={() => {
                   setShowCloseFinancingModal(false);
                   setSelectedFlag(null);
-                  setClosingDate('');
+                  setClosingDate("");
                 }}
                 disabled={submitting}
               >

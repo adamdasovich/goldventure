@@ -268,18 +268,39 @@ class NewsReleaseFlagViewSet(viewsets.ReadOnlyModelViewSet):
             )
 
         notes = request.data.get('notes', 'Financing created from news flag')
+        financing_id = request.data.get('financing_id')
 
         try:
-            # Mark as reviewed (without linking specific financing since it was created separately)
+            # Mark as reviewed and link the created financing record so the
+            # flag <-> financing relationship matches the company-page flow.
+            # Without this link the "Close Financing" action cannot find the
+            # financing, leaving it stuck on the homepage Financing Opportunities.
             flag.status = 'reviewed_financing'
             flag.reviewed_by = request.user
             flag.reviewed_at = timezone.now()
             flag.review_notes = notes
+
+            if financing_id:
+                from core.models import Financing
+                try:
+                    financing = Financing.objects.get(id=financing_id)
+                    flag.created_financing = financing
+                    # Back-link the source flag on the financing too, so the
+                    # closed-financings page can surface the source news.
+                    if not financing.source_news_flag:
+                        financing.source_news_flag = flag
+                        financing.save(update_fields=['source_news_flag'])
+                except Financing.DoesNotExist:
+                    logger.warning(
+                        f"Financing {financing_id} not found when marking flag {flag.id} reviewed"
+                    )
+
             flag.save()
 
             return Response({
                 'message': 'Flag marked as reviewed',
-                'flag_id': flag.id
+                'flag_id': flag.id,
+                'created_financing_id': flag.created_financing.id if flag.created_financing else None
             }, status=status.HTTP_200_OK)
 
         except Exception as e:
