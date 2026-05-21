@@ -90,6 +90,11 @@ urlpatterns = [
     path('tools/catalyst-impact/', views.catalyst_impact, name='catalyst_impact'),
     path('tools/due-diligence/', views.due_diligence, name='due_diligence'),
 
+    # User dashboard - watchlist + daily briefing
+    path('watchlist/', views.watchlist_detail, name='watchlist_detail'),
+    path('watchlist/toggle/', views.watchlist_toggle, name='watchlist_toggle'),
+    path('dashboard/daily-briefing/', views.daily_briefing, name='daily_briefing'),
+
     # Company Forum Discussion endpoint
     path('companies/<int:company_id>/discussion/', views.get_company_discussion, name='get_company_discussion'),
 

@@ -173,3 +173,8 @@ from .platform_subscriptions import (  # noqa: F401
     platform_reactivate_subscription,
     platform_stripe_webhook,
 )
+from .dashboard import (  # noqa: F401
+    watchlist_detail,
+    watchlist_toggle,
+    daily_briefing,
+)

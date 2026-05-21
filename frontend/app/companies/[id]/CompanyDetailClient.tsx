@@ -31,6 +31,7 @@ import CompanyChatbot from "@/components/CompanyChatbot";
 import { CompanyForum } from "@/components/forum";
 import { EventBanner } from "@/components/events";
 import { LoginModal, RegisterModal } from "@/components/auth";
+import WatchButton from "@/components/WatchButton";
 import {
   CompanyRepRegistrationModal,
   CompanyResourceUploadModal,
@@ -1085,6 +1086,10 @@ export default function CompanyDetailClient({
                     <span className="text-xl font-mono text-gold-400 font-semibold">
                       {company.exchange.toUpperCase()}:{company.ticker_symbol}
                     </span>
+                    <WatchButton
+                      companyId={company.id}
+                      onRequireLogin={() => setShowLogin(true)}
+                    />
                   </div>
                   {/* Editable Description */}
                   {isEditingDescription ? (

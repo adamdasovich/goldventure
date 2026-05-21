@@ -377,6 +377,28 @@ export const toolsAPI = {
   },
 };
 
+// Watchlist API (company watchlist powering the dashboard daily briefing)
+export const watchlistAPI = {
+  get: (accessToken: string) =>
+    apiFetch<any>("/watchlist/", {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    }),
+  toggle: (companyId: number, accessToken: string) =>
+    apiFetch<{ company_id: number; watched: boolean }>("/watchlist/toggle/", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${accessToken}` },
+      body: JSON.stringify({ company_id: companyId }),
+    }),
+};
+
+// Dashboard API
+export const dashboardAPI = {
+  dailyBriefing: (accessToken: string) =>
+    apiFetch<any>("/dashboard/daily-briefing/", {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    }),
+};
+
 // News Releases API
 export interface NewsRelease {
   id: number;
