@@ -87,6 +87,17 @@ class Document(models.Model):
         db_table = 'documents'
         ordering = ['-document_date']
 
+    def save(self, *args, **kwargs):
+        # Normalize the title on every save: scrapers sometimes derive a title
+        # from a source URL and leave its query string attached
+        # (e.g. 'corporate presentation?v=020506'). Titles never legitimately
+        # contain a '?', so trim everything from the first one. This is the
+        # single chokepoint that keeps URL cruft out of titles regardless of
+        # which code path creates the Document.
+        if self.title and '?' in self.title:
+            self.title = self.title.split('?', 1)[0].strip()
+        super().save(*args, **kwargs)
+
 
 
 
