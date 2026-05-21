@@ -30,6 +30,9 @@ class User(AbstractUser):
     phone = models.CharField(max_length=20, blank=True)
     linkedin_url = models.URLField(blank=True)
     bio = models.TextField(blank=True)
+    # When the user last opened their dashboard daily briefing — powers the
+    # "since your last visit" framing.
+    last_briefing_seen = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

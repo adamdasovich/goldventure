@@ -18,7 +18,7 @@ from rest_framework.response import Response
 from rest_framework import status as http_status
 
 from ..models import (
-    Company, Watchlist, StockPrice, NewsRelease, Financing, Document,
+    Company, Watchlist, StockPrice, NewsRelease, Financing, Document, User,
 )
 
 logger = logging.getLogger(__name__)
@@ -128,6 +128,65 @@ def _build_headline(blocks, stats, company_count):
     return ' '.join(parts)
 
 
+def _generate_ai_briefing(blocks, stats, company_count):
+    """
+    Write a short, engaging briefing narrative with Claude (Haiku — fast and
+    cheap). Returns None on any failure so the caller falls back to the
+    deterministic template. Only runs on a briefing cache miss.
+    """
+    from django.conf import settings
+    import anthropic
+
+    facts = [f"Watchlist: {company_count} junior-mining companies."]
+    if stats.get('top_gainer'):
+        g = stats['top_gainer']
+        facts.append(f"Top gainer (1 week): {g['ticker']} {g['change_pct']:+.1f}%.")
+    if stats.get('top_loser'):
+        ls = stats['top_loser']
+        facts.append(f"Top decliner (1 week): {ls['ticker']} {ls['change_pct']:+.1f}%.")
+    facts.append(
+        f"Price moves: {stats['movers_up']} up, {stats['movers_down']} down."
+    )
+    facts.append(
+        f"This week: {stats['news_count']} news releases, "
+        f"{stats['financing_count']} financings, "
+        f"{stats['document_count']} new technical reports."
+    )
+    headlines = []
+    for c in blocks:
+        for n in c['news']:
+            tag = ' [material]' if n['is_material'] else ''
+            headlines.append(f"- {c['ticker']}: {n['title']}{tag}")
+            if len(headlines) >= 6:
+                break
+        if len(headlines) >= 6:
+            break
+    if headlines:
+        facts.append("Recent headlines:")
+        facts.extend(headlines)
+
+    prompt = (
+        "You are writing the opening of a junior-mining investor's personal "
+        "daily briefing. Using ONLY the facts below, write 2-3 short, engaging "
+        "sentences in second person (\"your watchlist\"). Lead with the most "
+        "interesting development. Be specific with tickers and numbers. "
+        "Professional but warm. Output only the sentences — no preamble, "
+        "bullet points, or headers.\n\n"
+        f"FACTS:\n{chr(10).join(facts)}"
+    )
+
+    client = anthropic.Anthropic(api_key=settings.ANTHROPIC_API_KEY)
+    response = client.messages.create(
+        model='claude-haiku-4-5-20251001',
+        max_tokens=240,
+        messages=[{'role': 'user', 'content': prompt}],
+    )
+    text = ''.join(
+        b.text for b in response.content if hasattr(b, 'text')
+    ).strip()
+    return text or None
+
+
 # --------------------------------------------------------------------------
 # Watchlist endpoints
 # --------------------------------------------------------------------------
@@ -191,9 +250,18 @@ def daily_briefing(request):
     Recent-activity digest across the user's watchlist: price moves, news,
     financings and new documents, with a generated headline.
     """
+    # "Since your last visit" — capture the prior marker, then advance it.
+    last_visit = request.user.last_briefing_seen
+    last_visit_iso = last_visit.isoformat() if last_visit else None
+    User.objects.filter(pk=request.user.pk).update(
+        last_briefing_seen=timezone.now(),
+    )
+
     cache_key = f'daily_briefing_{request.user.id}'
     cached = cache.get(cache_key)
     if cached:
+        # Reflect the live last-visit marker even on a cache hit.
+        cached = {**cached, 'last_visit': last_visit_iso}
         return Response(cached)
 
     watchlist = _get_default_watchlist(request.user)
@@ -204,6 +272,7 @@ def daily_briefing(request):
         data = {
             'has_watchlist': False,
             'date': today.isoformat(),
+            'last_visit': last_visit_iso,
             'watchlist_name': watchlist.name,
             'company_count': 0,
             'window_days': BRIEFING_WINDOW_DAYS,
@@ -339,13 +408,23 @@ def daily_briefing(request):
         ),
     }
 
+    # Prefer an AI-written narrative; fall back to the deterministic template.
+    try:
+        headline = _generate_ai_briefing(blocks, stats, len(companies))
+    except Exception as e:
+        logger.warning("AI briefing generation failed (%s) — using template.", e)
+        headline = None
+    if not headline:
+        headline = _build_headline(blocks, stats, len(companies))
+
     data = {
         'has_watchlist': True,
         'date': today.isoformat(),
+        'last_visit': last_visit_iso,
         'window_days': BRIEFING_WINDOW_DAYS,
         'watchlist_name': watchlist.name,
         'company_count': len(companies),
-        'headline': _build_headline(blocks, stats, len(companies)),
+        'headline': headline,
         'stats': stats,
         'companies': blocks,
     }

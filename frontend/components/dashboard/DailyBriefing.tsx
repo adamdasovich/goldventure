@@ -62,6 +62,7 @@ interface Stats {
 interface Briefing {
   has_watchlist: boolean;
   date: string;
+  last_visit: string | null;
   window_days: number;
   watchlist_name: string;
   company_count: number;
@@ -92,6 +93,17 @@ function longDate(iso: string): string {
     month: "long",
     day: "numeric",
   });
+}
+
+function sinceLastVisit(iso: string): string {
+  const mins = Math.round((Date.now() - new Date(iso).getTime()) / 60_000);
+  if (mins < 55) return "earlier today";
+  const hours = Math.round(mins / 60);
+  if (hours < 24) return `${hours} hour${hours > 1 ? "s" : ""} ago`;
+  const days = Math.round(hours / 24);
+  if (days === 1) return "yesterday";
+  if (days < 30) return `${days} days ago`;
+  return "a while back";
 }
 
 function relativeDate(iso: string): string {
@@ -411,6 +423,12 @@ export default function DailyBriefing() {
           <h2 className="text-2xl font-bold text-white">
             {greeting()}, {firstName}.
           </h2>
+          {briefing.last_visit && (
+            <p className="text-sm text-slate-400 mt-0.5">
+              Welcome back — your last briefing was{" "}
+              {sinceLastVisit(briefing.last_visit)}.
+            </p>
+          )}
         </div>
         <button
           type="button"
