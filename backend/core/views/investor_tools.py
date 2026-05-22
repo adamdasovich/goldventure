@@ -492,7 +492,7 @@ def sector_pulse(request):
 
     # 5. News activity
     recent_news_count = NewsRelease.objects.filter(
-        published_date__gte=today - timedelta(days=7)
+        release_date__gte=today - timedelta(days=7)
     ).count()
     recent_articles_count = NewsArticle.objects.filter(
         published_at__gte=timezone.now() - timedelta(days=7)
@@ -538,7 +538,7 @@ def drill_scanner(request):
         'sampling', 'trench', 'channel sample',
     ]
 
-    q_filter = Q(published_date__gte=start_date)
+    q_filter = Q(release_date__gte=start_date)
     keyword_q = Q()
     for kw in DRILL_KEYWORDS:
         keyword_q |= Q(title__icontains=kw)
@@ -553,7 +553,7 @@ def drill_scanner(request):
         ).values_list('company_id', flat=True)
         q_filter &= Q(company_id__in=commodity_companies)
 
-    releases = NewsRelease.objects.filter(q_filter).select_related('company').order_by('-published_date')[:50]
+    releases = NewsRelease.objects.filter(q_filter).select_related('company').order_by('-release_date')[:50]
 
     results = [{
         'id': nr.id,
@@ -561,7 +561,7 @@ def drill_scanner(request):
         'company_name': nr.company.name,
         'ticker': nr.company.ticker_symbol,
         'title': nr.title,
-        'published_date': nr.published_date.isoformat() if nr.published_date else None,
+        'published_date': nr.release_date.isoformat() if nr.release_date else None,
         'url': nr.url,
     } for nr in releases]
 
@@ -600,7 +600,7 @@ def catalyst_calendar(request):
     start_date = timezone.now().date() - timedelta(days=days)
 
     releases_qs = NewsRelease.objects.filter(
-        published_date__gte=start_date,
+        release_date__gte=start_date,
         company__is_active=True,
     ).select_related('company')
 
@@ -612,7 +612,7 @@ def catalyst_calendar(request):
 
     # Group by company with counts and last release date
     company_data = {}
-    for nr in releases_qs.order_by('-published_date'):
+    for nr in releases_qs.order_by('-release_date'):
         cid = nr.company_id
         if cid not in company_data:
             company_data[cid] = {
@@ -626,7 +626,7 @@ def catalyst_calendar(request):
             }
         cd = company_data[cid]
         cd['count'] += 1
-        pub = nr.published_date.isoformat() if nr.published_date else None
+        pub = nr.release_date.isoformat() if nr.release_date else None
         if pub:
             if not cd['latest_date'] or pub > cd['latest_date']:
                 cd['latest_date'] = pub
@@ -663,7 +663,7 @@ def catalyst_calendar(request):
 
     # Weekly news volume
     weekly = releases_qs.annotate(
-        week=TruncWeek('published_date')
+        week=TruncWeek('release_date')
     ).values('week').annotate(count=Count('id')).order_by('week')
 
     return Response({
