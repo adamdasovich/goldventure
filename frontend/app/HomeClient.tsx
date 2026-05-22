@@ -3,7 +3,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { useRouter } from "next/navigation";
 import ChatInterface from "@/components/ChatInterface";
 import NewsArticles from "@/components/NewsArticles";
 import { Button } from "@/components/ui/Button";
@@ -14,7 +13,6 @@ import { LoginModal, RegisterModal } from "@/components/auth";
 import { useAuth } from "@/contexts/AuthContext";
 import { CartButton } from "@/components/store";
 import MetalsTicker from "@/components/MetalsTicker";
-import { companyAPI } from "@/lib/api";
 
 /* ─── Navigation ───
    Top-level nav is kept to four items. Secondary destinations live in the
@@ -116,13 +114,6 @@ const FEATURES: {
   },
 ];
 
-interface SearchResult {
-  id: number;
-  name: string;
-  ticker_symbol: string;
-  primary_commodity: string;
-}
-
 interface HomeClientProps {
   initialArticles?: any[];
 }
@@ -137,13 +128,6 @@ export default function HomeClient({ initialArticles }: HomeClientProps) {
   const newsSectionRef = useRef<HTMLElement>(null);
   const chatSectionRef = useRef<HTMLElement>(null);
   const toolsRef = useRef<HTMLDivElement>(null);
-  const router = useRouter();
-
-  // Search state
-  const [searchQuery, setSearchQuery] = useState("");
-  const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
-  const [searchOpen, setSearchOpen] = useState(false);
-  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Platform stats
   const [stats, setStats] = useState({
@@ -161,35 +145,6 @@ export default function HomeClient({ initialArticles }: HomeClientProps) {
       .then((data) => data && setStats(data))
       .catch(() => {});
   }, []);
-
-  // Debounced company search
-  const handleSearchChange = useCallback((value: string) => {
-    setSearchQuery(value);
-    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
-    if (value.trim().length < 2) {
-      setSearchResults([]);
-      setSearchOpen(false);
-      return;
-    }
-    searchTimeoutRef.current = setTimeout(async () => {
-      try {
-        const res = await companyAPI.getAll({
-          search: value.trim(),
-          page_size: 6,
-        });
-        setSearchResults(res.results as any);
-        setSearchOpen(true);
-      } catch {
-        setSearchResults([]);
-      }
-    }, 300);
-  }, []);
-
-  const handleSearchSelect = (company: SearchResult) => {
-    setSearchQuery("");
-    setSearchOpen(false);
-    router.push(`/companies/${company.id}`);
-  };
 
   const scrollToChat = () => {
     chatSectionRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -576,72 +531,6 @@ export default function HomeClient({ initialArticles }: HomeClientProps) {
             answers your questions instantly.
           </p>
 
-          {/* ── Search Bar ── */}
-          <div className="relative max-w-xl mx-auto mb-5 animate-slide-in-up">
-            <label htmlFor="company-search" className="sr-only">
-              Search companies by name or ticker
-            </label>
-            <div className="relative">
-              <svg
-                className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-                aria-hidden="true"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-                />
-              </svg>
-              <input
-                id="company-search"
-                type="text"
-                value={searchQuery}
-                onChange={(e) => handleSearchChange(e.target.value)}
-                onFocus={() => searchResults.length > 0 && setSearchOpen(true)}
-                onBlur={() => setTimeout(() => setSearchOpen(false), 200)}
-                placeholder="Search companies by name or ticker..."
-                className="w-full pl-12 pr-4 py-4 rounded-xl bg-slate-800/80 border border-slate-600/50 text-white placeholder-slate-400 focus:outline-none focus:border-gold-500/50 focus:ring-1 focus:ring-gold-500/30 text-base backdrop-blur-sm"
-              />
-            </div>
-
-            {/* Search Dropdown */}
-            {searchOpen && searchResults.length > 0 && (
-              <div className="absolute top-full left-0 right-0 mt-2 bg-slate-800/95 border border-slate-700/50 rounded-xl shadow-2xl backdrop-blur-sm z-20 overflow-hidden text-left">
-                {searchResults.map((company) => (
-                  <button
-                    key={company.id}
-                    onMouseDown={() => handleSearchSelect(company)}
-                    className="w-full flex items-center justify-between px-4 py-3 hover:bg-gold-500/10 transition-colors text-left"
-                  >
-                    <div>
-                      <p className="text-sm font-medium text-white">
-                        {company.name}
-                      </p>
-                      <p className="text-xs text-slate-400">
-                        {company.ticker_symbol}
-                      </p>
-                    </div>
-                    {company.primary_commodity && (
-                      <span className="text-xs text-gold-400 bg-gold-500/10 px-2 py-0.5 rounded">
-                        {company.primary_commodity}
-                      </span>
-                    )}
-                  </button>
-                ))}
-                <Link
-                  href={`/companies?search=${encodeURIComponent(searchQuery)}`}
-                  className="block px-4 py-3 text-center text-sm text-gold-400 hover:bg-gold-500/10 border-t border-slate-700/50"
-                >
-                  View all results →
-                </Link>
-              </div>
-            )}
-          </div>
-
           {/* Primary CTAs */}
           <div className="flex flex-col sm:flex-row flex-wrap gap-3 justify-center animate-slide-in-up">
             <Button
@@ -685,6 +574,15 @@ export default function HomeClient({ initialArticles }: HomeClientProps) {
             >
               Mining News
             </Button>
+            <Link href="/closed-financings">
+              <Button
+                variant="secondary"
+                size="sm"
+                className="w-full sm:w-auto"
+              >
+                Closed Financings
+              </Button>
+            </Link>
           </div>
         </div>
       </section>
