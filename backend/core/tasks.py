@@ -144,12 +144,15 @@ def _detect_report_keywords(title_lower: str):
     return [kw for kw in REPORT_KEYWORDS if kw in title_lower]
 
 
-def _maybe_flag_report(news_release_obj, company, title, url, release_date, is_new_company):
+def _maybe_flag_report(news_release_obj, company, title, url, release_date, is_new_company, cutoff_days=None):
     """
     Flag a news release as a potential technical report if its title contains
     report keywords, the release is recent, and it hasn't been dismissed under
     the report scope. Mirrors the financing-flag logic but writes to
     NewsReportFlag and uses the 'report_false_positive' dismissal scope.
+
+    `cutoff_days` overrides the default age cutoff. Used by the backfill
+    management command (e.g. 120 days) to flag historical releases.
     """
     from datetime import timedelta
     from core.models import NewsReportFlag, DismissedNewsURL
@@ -162,7 +165,8 @@ def _maybe_flag_report(news_release_obj, company, title, url, release_date, is_n
     if not detected:
         return
 
-    cutoff_days = NEWS_FLAG_DAYS_ONBOARDING if is_new_company else NEWS_FLAG_DAYS_DAILY
+    if cutoff_days is None:
+        cutoff_days = NEWS_FLAG_DAYS_ONBOARDING if is_new_company else NEWS_FLAG_DAYS_DAILY
     cutoff_date = datetime.now().date() - timedelta(days=cutoff_days)
     if release_date < cutoff_date:
         logger.info(f"  [SKIP report] Old news (not flagging): {title[:50]}... (date: {release_date})")
