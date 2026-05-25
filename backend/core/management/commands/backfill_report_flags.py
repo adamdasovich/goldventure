@@ -23,7 +23,11 @@ from core.models import (
     DismissedNewsURL,
     Company,
 )
-from core.tasks import REPORT_KEYWORDS, NEWS_SIMILARITY_THRESHOLD
+from core.tasks import (
+    REPORT_KEYWORDS,  # noqa: F401 (kept for backwards-compat / readability)
+    NEWS_SIMILARITY_THRESHOLD,
+    _detect_report_keywords,
+)
 
 
 class Command(BaseCommand):
@@ -78,7 +82,7 @@ class Command(BaseCommand):
 
             title = news.title or ''
             title_lower = title.lower()
-            detected = [kw for kw in REPORT_KEYWORDS if kw in title_lower]
+            detected = _detect_report_keywords(title_lower)
             if not detected:
                 continue
 
