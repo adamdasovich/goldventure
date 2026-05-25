@@ -139,9 +139,21 @@ REPORT_KEYWORDS = [
 ]
 
 
+import re as _re
+
+# Pre-compile a regex per report keyword with word boundaries so short acronyms
+# like 'pea', 'mre', 'pfs', 'dfs' don't substring-match unrelated words
+# (e.g. 'Peak', 'more', 'before'). Longer phrases work fine either way but the
+# uniform regex keeps the logic single-path.
+_REPORT_KEYWORD_PATTERNS = [
+    (kw, _re.compile(r'(?<![a-z0-9])' + _re.escape(kw) + r'(?![a-z0-9])', _re.IGNORECASE))
+    for kw in REPORT_KEYWORDS
+]
+
+
 def _detect_report_keywords(title_lower: str):
-    """Return list of REPORT_KEYWORDS present in the (already-lowercased) title."""
-    return [kw for kw in REPORT_KEYWORDS if kw in title_lower]
+    """Return list of REPORT_KEYWORDS that appear as standalone tokens in the title."""
+    return [kw for kw, pat in _REPORT_KEYWORD_PATTERNS if pat.search(title_lower)]
 
 
 def _maybe_flag_report(news_release_obj, company, title, url, release_date, is_new_company, cutoff_days=None):
