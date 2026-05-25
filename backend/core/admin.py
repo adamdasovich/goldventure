@@ -1056,3 +1056,22 @@ class PlatformSubscriptionAdmin(admin.ModelAdmin):
     def revoke_to_explorer(self, request, queryset):
         n = queryset.update(tier='explorer', status='active')
         self.message_user(request, f'{n} subscription(s) reverted to Explorer.')
+
+
+from .models import NewsReportFlag
+
+@admin.register(NewsReportFlag)
+class NewsReportFlagAdmin(admin.ModelAdmin):
+    list_display = ["id", "_company", "_title", "status", "report_type", "flagged_at"]
+    list_filter = ["status", "report_type"]
+    search_fields = ["news_release__title", "news_release__company__name"]
+    readonly_fields = ["flagged_at", "reviewed_at"]
+    list_select_related = ["news_release__company", "reviewed_by", "processing_job"]
+
+    def _company(self, obj):
+        return obj.news_release.company.name
+    _company.short_description = "Company"
+
+    def _title(self, obj):
+        return obj.news_release.title[:80]
+    _title.short_description = "News title"

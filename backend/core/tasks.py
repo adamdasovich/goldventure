@@ -115,6 +115,81 @@ MAJOR_MINERS = [
 # Combined keywords for news flagging
 ALL_FINANCING_KEYWORDS = FINANCING_KEYWORDS + STRATEGIC_KEYWORDS + MAJOR_MINERS
 
+# Technical-report detection keywords. Matched (case-insensitive) against news
+# release titles to flag releases that announce NI 43-101 / PEA / PFS / DFS /
+# MRE / other technical reports. The superuser then submits the report PDF URL
+# from /admin/news-flags-reports and the existing docling GPU pipeline ingests it.
+REPORT_KEYWORDS = [
+    'ni 43-101',
+    'ni43-101',
+    '43-101',
+    'preliminary economic assessment',
+    'pea',
+    'prefeasibility study',
+    'pre-feasibility study',
+    'pfs',
+    'feasibility study',
+    'definitive feasibility',
+    'dfs',
+    'mineral resource estimate',
+    'resource estimate',
+    'mre',
+    'technical report',
+    'scoping study',
+]
+
+
+def _detect_report_keywords(title_lower: str):
+    """Return list of REPORT_KEYWORDS present in the (already-lowercased) title."""
+    return [kw for kw in REPORT_KEYWORDS if kw in title_lower]
+
+
+def _maybe_flag_report(news_release_obj, company, title, url, release_date, is_new_company):
+    """
+    Flag a news release as a potential technical report if its title contains
+    report keywords, the release is recent, and it hasn't been dismissed under
+    the report scope. Mirrors the financing-flag logic but writes to
+    NewsReportFlag and uses the 'report_false_positive' dismissal scope.
+    """
+    from datetime import timedelta
+    from core.models import NewsReportFlag, DismissedNewsURL
+
+    if not release_date:
+        return
+
+    title_lower = (title or '').lower()
+    detected = _detect_report_keywords(title_lower)
+    if not detected:
+        return
+
+    cutoff_days = NEWS_FLAG_DAYS_ONBOARDING if is_new_company else NEWS_FLAG_DAYS_DAILY
+    cutoff_date = datetime.now().date() - timedelta(days=cutoff_days)
+    if release_date < cutoff_date:
+        logger.info(f"  [SKIP report] Old news (not flagging): {title[:50]}... (date: {release_date})")
+        return
+
+    is_similar, _matched = DismissedNewsURL.is_similar_to_dismissed(
+        company=company,
+        url=url,
+        title=title,
+        similarity_threshold=NEWS_SIMILARITY_THRESHOLD,
+        reason='report_false_positive',
+    )
+    if is_similar:
+        logger.info(f"  [SKIP report] Similar to previously dismissed: {title[:50]}...")
+        return
+
+    flag, created = NewsReportFlag.objects.get_or_create(
+        news_release=news_release_obj,
+        defaults={
+            'detected_keywords': detected,
+            'status': 'pending',
+        }
+    )
+    if created:
+        logger.info(f"   Flagged technical-report news: {title[:60]}...")
+        logger.info(f"     Keywords: {', '.join(detected)}")
+
 # News scraping configuration
 NEWS_SCRAPE_MONTHS_ONBOARDING = 48  # Months to look back for new companies
 NEWS_SCRAPE_MONTHS_DAILY = 3  # Months to look back for daily scrapes
@@ -500,6 +575,21 @@ def scrape_company_news_task(self, company_id):
 
             if created:
                 created_count += 1
+
+                # TECHNICAL-REPORT DETECTION: flag releases that mention
+                # NI 43-101, PEA, PFS, DFS, MRE, etc. Runs independently of
+                # financing detection — a single release may produce both flags.
+                try:
+                    _maybe_flag_report(
+                        news_release_obj=obj,
+                        company=company,
+                        title=title,
+                        url=url,
+                        release_date=release_date,
+                        is_new_company=is_new_company,
+                    )
+                except Exception as e:
+                    logger.warning(f"Report-flag detection error for {title[:50]}: {e}")
 
                 # FINANCING DETECTION: Check for financing keywords in title
                 # Uses centralized constants from top of file
@@ -983,6 +1073,20 @@ def scrape_single_company_news_task(self, company_id: int):
 
             if created:
                 created_count += 1
+
+                # TECHNICAL-REPORT DETECTION: flag releases that mention
+                # NI 43-101, PEA, PFS, DFS, MRE, etc. Independent of financing.
+                try:
+                    _maybe_flag_report(
+                        news_release_obj=obj,
+                        company=company,
+                        title=title,
+                        url=url,
+                        release_date=release_date,
+                        is_new_company=False,
+                    )
+                except Exception as e:
+                    logger.warning(f"Report-flag detection error for {title[:50]}: {e}")
 
                 # Check for financing keywords and flag
                 # Uses centralized constants from top of file (ALL_FINANCING_KEYWORDS)

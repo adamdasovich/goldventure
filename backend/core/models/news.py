@@ -505,10 +505,10 @@ class NewsReleaseFlag(models.Model):
 
             dismissed, created = DismissedNewsURL.objects.get_or_create(
                 url=url,
+                reason='false_positive',
                 defaults={
                     'company': self.news_release.company,
                     'dismissed_by': reviewer,
-                    'reason': 'false_positive',
                     'title': title,
                     'normalized_url': DismissedNewsURL.normalize_url(url),
                     'normalized_title': DismissedNewsURL.normalize_title(title),
@@ -521,10 +521,133 @@ class NewsReleaseFlag(models.Model):
                 dismissed.save()
 
 
+class NewsReportFlag(models.Model):
+    """
+    Tracks news releases flagged for potential technical reports
+    (NI 43-101, PEA, PFS, DFS, MRE, etc.).
+    Superusers review these, submit the report PDF URL, and the existing
+    docling GPU pipeline ingests the document into the vector DB.
+    """
+    STATUS_CHOICES = [
+        ('pending', 'Pending Review'),
+        ('reviewed_processed', 'Submitted for Processing'),
+        ('reviewed_false_positive', 'False Positive - Dismissed'),
+    ]
+
+    REPORT_TYPE_CHOICES = [
+        ('ni43101', 'NI 43-101 Technical Report'),
+        ('pea', 'Preliminary Economic Assessment'),
+        ('pfs', 'Prefeasibility Study'),
+        ('dfs', 'Definitive Feasibility Study'),
+        ('mre', 'Mineral Resource Estimate'),
+        ('other', 'Other Technical Report'),
+    ]
+
+    news_release = models.OneToOneField(
+        NewsRelease,
+        on_delete=models.CASCADE,
+        related_name='report_flag'
+    )
+
+    flagged_at = models.DateTimeField(auto_now_add=True)
+    detected_keywords = models.JSONField(
+        default=list,
+        help_text="List of technical-report keywords that triggered the flag"
+    )
+
+    status = models.CharField(
+        max_length=30,
+        choices=STATUS_CHOICES,
+        default='pending'
+    )
+    reviewed_by = models.ForeignKey(
+        'User',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='reviewed_report_flags'
+    )
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+
+    # Set when the superuser submits the report PDF URL for docling processing
+    report_url = models.URLField(max_length=2000, blank=True, default='')
+    report_type = models.CharField(
+        max_length=20,
+        choices=REPORT_TYPE_CHOICES,
+        blank=True,
+        default=''
+    )
+    processing_job = models.ForeignKey(
+        'DocumentProcessingJob',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='source_report_flags'
+    )
+
+    review_notes = models.TextField(blank=True)
+
+    class Meta:
+        db_table = 'news_report_flags'
+        ordering = ['-flagged_at']
+        indexes = [
+            models.Index(fields=['status', '-flagged_at']),
+        ]
+
+    def __str__(self):
+        return f"ReportFlag: {self.news_release.company.name} - {self.news_release.title[:50]}"
+
+    def mark_as_processed(self, reviewer, job, report_url, report_type, notes=''):
+        """Mark as submitted for docling processing and link the job."""
+        from django.utils import timezone
+
+        self.status = 'reviewed_processed'
+        self.reviewed_by = reviewer
+        self.reviewed_at = timezone.now()
+        self.processing_job = job
+        self.report_url = report_url
+        self.report_type = report_type
+        self.review_notes = notes
+        self.save()
+
+    def dismiss_as_false_positive(self, reviewer, notes=''):
+        """Dismiss as false positive (separate dismissal scope from financing flags)."""
+        from django.utils import timezone
+
+        self.status = 'reviewed_false_positive'
+        self.reviewed_by = reviewer
+        self.reviewed_at = timezone.now()
+        self.review_notes = notes
+        self.save()
+
+        # Record URL/title as dismissed under the 'report_false_positive' scope
+        # so it does NOT suppress financing flags on the same URL (and vice versa).
+        if self.news_release and self.news_release.url:
+            url = self.news_release.url
+            title = self.news_release.title or ''
+
+            dismissed, created = DismissedNewsURL.objects.get_or_create(
+                url=url,
+                reason='report_false_positive',
+                defaults={
+                    'company': self.news_release.company,
+                    'dismissed_by': reviewer,
+                    'title': title,
+                    'normalized_url': DismissedNewsURL.normalize_url(url),
+                    'normalized_title': DismissedNewsURL.normalize_title(title),
+                }
+            )
+            if not created and not dismissed.title and title:
+                dismissed.title = title
+                dismissed.normalized_title = DismissedNewsURL.normalize_title(title)
+                dismissed.save()
 
 
 class DismissedNewsURL(models.Model):
-    url = models.URLField(max_length=2000, unique=True)
+    # Unique per (url, reason) so the same URL can be dismissed independently
+    # under the financing-flag scope ('false_positive') and the technical-report
+    # scope ('report_false_positive') without one suppressing the other.
+    url = models.URLField(max_length=2000, db_index=True)
     normalized_url = models.CharField(max_length=500, blank=True, db_index=True)
     title = models.CharField(max_length=500, blank=True)
     normalized_title = models.CharField(max_length=500, blank=True, db_index=True)
@@ -535,6 +658,9 @@ class DismissedNewsURL(models.Model):
 
     class Meta:
         db_table = "dismissed_news_urls"
+        constraints = [
+            models.UniqueConstraint(fields=['url', 'reason'], name='uniq_dismissed_url_reason'),
+        ]
 
     def __str__(self):
         return self.url
@@ -593,22 +719,28 @@ class DismissedNewsURL(models.Model):
         return normalized
 
     @classmethod
-    def is_similar_to_dismissed(cls, company, url=None, title=None, similarity_threshold=0.85):
+    def is_similar_to_dismissed(cls, company, url=None, title=None, similarity_threshold=0.85, reason='false_positive'):
         """
-        Check if a URL or title is similar to any dismissed news for this company.
+        Check if a URL or title is similar to any dismissed news for this company,
+        within the given dismissal `reason` scope. Financing-flag dismissals
+        (reason='false_positive') and report-flag dismissals
+        (reason='report_false_positive') are tracked independently.
         Returns (is_similar, matched_dismissed_record) tuple.
         """
         from difflib import SequenceMatcher
 
+        base_qs = cls.objects.filter(reason=reason)
+
         # Check exact URL match first
         if url:
-            if cls.objects.filter(url=url).exists():
-                return True, cls.objects.filter(url=url).first()
+            exact = base_qs.filter(url=url).first()
+            if exact:
+                return True, exact
 
             # Check normalized URL match
             normalized_url = cls.normalize_url(url)
             if normalized_url:
-                match = cls.objects.filter(
+                match = base_qs.filter(
                     company=company,
                     normalized_url=normalized_url
                 ).first()
@@ -619,8 +751,8 @@ class DismissedNewsURL(models.Model):
         if title:
             normalized_title = cls.normalize_title(title)
             if normalized_title:
-                # Get all dismissed titles for this company
-                dismissed_titles = cls.objects.filter(
+                # Get all dismissed titles for this company within this reason scope
+                dismissed_titles = base_qs.filter(
                     company=company,
                     normalized_title__isnull=False
                 ).exclude(normalized_title='').values_list('normalized_title', 'id')

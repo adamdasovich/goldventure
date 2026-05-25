@@ -33,6 +33,7 @@ from .news import (  # noqa: F401
     NewsArticle,
     NewsScrapeJob,
     NewsReleaseFlag,
+    NewsReportFlag,
     DismissedNewsURL,
     CompanyPerson,
     CompanyDocument,

@@ -58,6 +58,9 @@ router.register(r'glossary', views.GlossaryTermViewSet, basename='glossary')
 # News Release Financing Flags ViewSet
 router.register(r'news-flags', views.NewsReleaseFlagViewSet, basename='news-flag')
 
+# News Release Technical-Report Flags ViewSet (NI 43-101 / PEA / PFS / DFS / MRE)
+router.register(r'news-flags-reports', views.NewsReportFlagViewSet, basename='news-flag-report')
+
 urlpatterns = [
     # Authentication endpoints
     path('auth/register/', views.register_user, name='register_user'),
