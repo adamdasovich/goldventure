@@ -1687,6 +1687,16 @@ def metal_correlation(request):
     # scraped price. Cheaper than instantiating model objects for the metal
     # list — we only need the labels.
     priced_ids = StockPrice.objects.values_list('company_id', flat=True).distinct()
+
+    # Bulk-map company_id → flagship primary_commodity in a single query so
+    # the per-company `suggested_metal` lookup isn't N+1 (~500 companies
+    # used to push this endpoint above 60s on a cold cache).
+    company_commodity = {}
+    for p in Project.objects.filter(
+        company_id__in=priced_ids, is_active=True,
+    ).order_by('company_id', '-is_flagship').values('company_id', 'primary_commodity'):
+        company_commodity.setdefault(p['company_id'], p['primary_commodity'])
+
     available_companies = [
         {
             'id': c.id,
@@ -1696,12 +1706,7 @@ def metal_correlation(request):
             # Closest metal symbol based on flagship/primary project's commodity.
             # Lets the frontend pre-select a sensible default per company.
             'suggested_metal': _COMMODITY_TO_METAL.get(
-                Project.objects.filter(
-                    company_id=c.id, is_active=True,
-                ).order_by('-is_flagship').values_list(
-                    'primary_commodity', flat=True,
-                ).first() or '',
-                None,
+                company_commodity.get(c.id) or '', None,
             ),
         }
         for c in Company.objects.filter(
