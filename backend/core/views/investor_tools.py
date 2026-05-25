@@ -1623,3 +1623,361 @@ def due_diligence(request):
     }
     cache.set(cached_key, data, 600)
     return Response(data)
+
+
+# ============================================================================
+# METAL LEVERAGE ANALYZER  (Stock-Metal Price Correlation)
+# ============================================================================
+
+# Maps a Project.primary_commodity to its closest MetalPrice symbol so the
+# frontend can pre-select a sensible default for a chosen company.
+_COMMODITY_TO_METAL = {
+    'gold': 'XAU',
+    'silver': 'XAG',
+    'platinum': 'XPT',
+    'palladium': 'XPD',
+    'copper': 'CU',
+    'nickel': 'NI',
+    'lithium': 'LI',
+    'cobalt': 'CO',
+    'rare_earths': 'REE',
+    'uranium': 'U',
+}
+
+
+def _pearson(xs, ys):
+    """Pearson correlation of two equal-length numeric sequences."""
+    n = len(xs)
+    if n < 3:
+        return None
+    mx = sum(xs) / n
+    my = sum(ys) / n
+    num = sum((x - mx) * (y - my) for x, y in zip(xs, ys))
+    dx = sum((x - mx) ** 2 for x in xs)
+    dy = sum((y - my) ** 2 for y in ys)
+    denom = (dx * dy) ** 0.5
+    if denom == 0:
+        return None
+    return num / denom
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def metal_correlation(request):
+    """
+    Stock-metal price correlation analytics.
+
+    For each selected company, computes daily-return correlation, beta
+    (sensitivity), R-squared, and a volatility-based leverage ratio against
+    a chosen metal's daily price series over a configurable window. Returns
+    normalized price series for chart overlay and a pairwise correlation
+    matrix for the heatmap.
+
+    GET /api/tools/metal-correlation/?metal=XAU&company_ids=1,2,3&days=180
+
+    With no params, returns the available metals + companies that have at
+    least one stock-price record, so the frontend can render the picker.
+    """
+    cached_key = f"metal_correlation_{request.GET.urlencode()}"
+    cached = cache.get(cached_key)
+    if cached:
+        return Response(cached)
+
+    # Pickers: every company with any price history, every metal with any
+    # scraped price. Cheaper than instantiating model objects for the metal
+    # list — we only need the labels.
+    priced_ids = StockPrice.objects.values_list('company_id', flat=True).distinct()
+    available_companies = [
+        {
+            'id': c.id,
+            'name': c.name,
+            'ticker': c.ticker_symbol,
+            'exchange': c.exchange,
+            # Closest metal symbol based on flagship/primary project's commodity.
+            # Lets the frontend pre-select a sensible default per company.
+            'suggested_metal': _COMMODITY_TO_METAL.get(
+                Project.objects.filter(
+                    company_id=c.id, is_active=True,
+                ).order_by('-is_flagship').values_list(
+                    'primary_commodity', flat=True,
+                ).first() or '',
+                None,
+            ),
+        }
+        for c in Company.objects.filter(
+            id__in=priced_ids, is_active=True,
+        ).order_by('name')
+    ]
+    metals_with_data = set(
+        MetalPrice.objects.values_list('metal', flat=True).distinct()
+    )
+    available_metals = [
+        {'symbol': sym, 'name': name}
+        for sym, name in MetalPrice.METAL_CHOICES
+        if sym in metals_with_data
+    ]
+
+    metal = request.GET.get('metal', '').strip().upper()
+    company_ids_raw = request.GET.get('company_ids', '')
+    company_ids = [
+        int(x) for x in company_ids_raw.split(',') if x.strip().isdigit()
+    ][:10]
+
+    base_payload = {
+        'available_companies': available_companies,
+        'available_metals': available_metals,
+    }
+
+    if not metal or not company_ids:
+        return Response({**base_payload, 'companies': [], 'metal_series': []})
+
+    if metal not in dict(MetalPrice.METAL_CHOICES):
+        return Response({'error': f'Unknown metal symbol: {metal}'}, status=400)
+
+    days = max(30, min(int(request.GET.get('days', 180)), 730))
+    start_date = timezone.now().date() - timedelta(days=days)
+
+    # One representative metal price per calendar day. Metals are scraped
+    # twice daily so we collapse to the latest scrape of each day.
+    metal_rows = MetalPrice.get_daily_series(metal, days=days)
+    metal_by_date = {}
+    metal_series_out = []
+    base_metal_price = None
+    for mr in metal_rows:
+        day = mr.scraped_at.date()
+        if day < start_date:
+            continue
+        price = float(mr.bid_price)
+        metal_by_date[day] = price
+        if base_metal_price is None and price > 0:
+            base_metal_price = price
+        metal_series_out.append({
+            'date': day.isoformat(),
+            'price': round(price, 2),
+            'pct': round(
+                (price - base_metal_price) / base_metal_price * 100, 2,
+            ) if base_metal_price else 0,
+        })
+
+    metal_display = dict(MetalPrice.METAL_CHOICES).get(metal, metal)
+    metal_unit = next(
+        (mr.unit for mr in metal_rows if mr.unit), 'oz',
+    )
+
+    if len(metal_by_date) < 5:
+        data = {
+            **base_payload,
+            'metal': {
+                'symbol': metal,
+                'name': metal_display,
+                'unit': metal_unit,
+            },
+            'metal_series': metal_series_out,
+            'companies': [],
+            'days': days,
+            'message': (
+                f'Not enough {metal_display} price history in the window. '
+                'Try a longer window.'
+            ),
+        }
+        cache.set(cached_key, data, 600)
+        return Response(data)
+
+    # Daily metal returns indexed by date, used to compute correlations and
+    # beta against each stock's overlapping return stream.
+    metal_dates_sorted = sorted(metal_by_date.keys())
+    metal_returns_by_date = {}
+    for i in range(1, len(metal_dates_sorted)):
+        prev_d = metal_dates_sorted[i - 1]
+        cur_d = metal_dates_sorted[i]
+        p0 = metal_by_date[prev_d]
+        p1 = metal_by_date[cur_d]
+        if p0 > 0:
+            metal_returns_by_date[cur_d] = (p1 - p0) / p0
+
+    companies_out = []
+    # Stock return streams keyed by date — collected so we can build a
+    # pairwise correlation matrix (stocks + metal) for the heatmap.
+    stock_returns_map = {}
+
+    for cid in company_ids:
+        company = Company.objects.filter(id=cid, is_active=True).first()
+        if not company:
+            continue
+        prices = list(
+            StockPrice.objects.filter(
+                company=company, date__gte=start_date,
+            ).order_by('date')
+        )
+        if len(prices) < 5:
+            companies_out.append({
+                'company_id': cid,
+                'company_name': company.name,
+                'ticker': company.ticker_symbol,
+                'error': 'Not enough stock price history in this window.',
+            })
+            continue
+
+        base_stock = float(prices[0].close_price)
+        stock_series = []
+        stock_returns_by_date = {}
+        prev_close = None
+        prev_date = None
+        for p in prices:
+            close = float(p.close_price)
+            stock_series.append({
+                'date': p.date.isoformat(),
+                'close': round(close, 4),
+                'pct': round(
+                    (close - base_stock) / base_stock * 100, 2,
+                ) if base_stock else 0,
+            })
+            if prev_close and prev_close > 0:
+                stock_returns_by_date[p.date] = (close - prev_close) / prev_close
+            prev_close = close
+            prev_date = p.date
+
+        # Inner-join stock & metal daily returns on shared dates. With
+        # weekend / holiday gaps we generally get the trading-day subset.
+        shared_dates = sorted(
+            set(stock_returns_by_date) & set(metal_returns_by_date)
+        )
+        stock_rets = [stock_returns_by_date[d] for d in shared_dates]
+        metal_rets = [metal_returns_by_date[d] for d in shared_dates]
+
+        n_pairs = len(stock_rets)
+        correlation = _pearson(stock_rets, metal_rets) if n_pairs >= 5 else None
+
+        # Beta = Cov(stock, metal) / Var(metal). Captures sensitivity:
+        # beta > 1 means the stock has historically amplified metal moves.
+        beta = None
+        if n_pairs >= 5:
+            mm = sum(metal_rets) / n_pairs
+            sm = sum(stock_rets) / n_pairs
+            var_m = sum((m - mm) ** 2 for m in metal_rets) / n_pairs
+            cov = sum(
+                (s - sm) * (m - mm) for s, m in zip(stock_rets, metal_rets)
+            ) / n_pairs
+            beta = (cov / var_m) if var_m > 0 else None
+
+        stock_vol = (
+            statistics.pstdev(stock_rets) * 100 if n_pairs >= 2 else None
+        )
+        metal_vol = (
+            statistics.pstdev(metal_rets) * 100 if n_pairs >= 2 else None
+        )
+        leverage = (
+            round(stock_vol / metal_vol, 2)
+            if stock_vol is not None and metal_vol and metal_vol > 0
+            else None
+        )
+
+        # Two-tailed t-test on Pearson r: t = r * sqrt(n-2) / sqrt(1-r^2).
+        # |t| > 1.96 ~= 95% confidence the correlation isn't zero.
+        t_stat = None
+        significant = False
+        if correlation is not None and n_pairs > 2 and abs(correlation) < 1:
+            t_stat = correlation * ((n_pairs - 2) ** 0.5) / (
+                (1 - correlation ** 2) ** 0.5
+            )
+            significant = abs(t_stat) >= 1.96
+
+        first, last = prices[0], prices[-1]
+        end_close = float(last.close_price)
+
+        companies_out.append({
+            'company_id': cid,
+            'company_name': company.name,
+            'ticker': company.ticker_symbol,
+            'currency': last.currency,
+            'stock_series': stock_series,
+            'start_date': first.date.isoformat(),
+            'end_date': last.date.isoformat(),
+            'start_price': round(base_stock, 4),
+            'end_price': round(end_close, 4),
+            'stock_pct_change': round(
+                (end_close - base_stock) / base_stock * 100, 2,
+            ) if base_stock else 0,
+            'correlation': round(correlation, 3) if correlation is not None else None,
+            'r_squared': round(correlation ** 2, 3) if correlation is not None else None,
+            'beta': round(beta, 3) if beta is not None else None,
+            'stock_volatility_pct': round(stock_vol, 2) if stock_vol is not None else None,
+            'metal_volatility_pct': round(metal_vol, 2) if metal_vol is not None else None,
+            'leverage_ratio': leverage,
+            't_stat': round(t_stat, 2) if t_stat is not None else None,
+            'significant': significant,
+            'data_points': n_pairs,
+        })
+        stock_returns_map[cid] = stock_returns_by_date
+
+    # Metal-window change for the summary header.
+    metal_pct_change = None
+    if len(metal_dates_sorted) >= 2:
+        first_p = metal_by_date[metal_dates_sorted[0]]
+        last_p = metal_by_date[metal_dates_sorted[-1]]
+        if first_p > 0:
+            metal_pct_change = round(
+                (last_p - first_p) / first_p * 100, 2,
+            )
+
+    # Pairwise correlation matrix: every selected stock + the metal itself.
+    # Ordered to match `companies_out` so the heatmap labels line up.
+    heatmap_labels = []
+    heatmap_ids = []
+    for c in companies_out:
+        if c.get('correlation') is None:
+            continue
+        heatmap_labels.append(c['ticker'] or c['company_name'])
+        heatmap_ids.append(c['company_id'])
+    heatmap_labels.append(metal_display)
+
+    returns_lookup = {cid: stock_returns_map[cid] for cid in heatmap_ids}
+    returns_lookup['__metal__'] = metal_returns_by_date
+    matrix_keys = heatmap_ids + ['__metal__']
+
+    heatmap = []
+    for a in matrix_keys:
+        row = []
+        for b in matrix_keys:
+            if a == b:
+                row.append(1.0)
+                continue
+            shared = sorted(set(returns_lookup[a]) & set(returns_lookup[b]))
+            if len(shared) < 5:
+                row.append(None)
+                continue
+            xs = [returns_lookup[a][d] for d in shared]
+            ys = [returns_lookup[b][d] for d in shared]
+            r = _pearson(xs, ys)
+            row.append(round(r, 3) if r is not None else None)
+        heatmap.append(row)
+
+    # Sort companies by |correlation| desc so the table leads with the
+    # most-leveraged names; errors sink to the bottom.
+    companies_out.sort(
+        key=lambda c: abs(c['correlation']) if c.get('correlation') is not None else -1,
+        reverse=True,
+    )
+
+    data = {
+        **base_payload,
+        'metal': {
+            'symbol': metal,
+            'name': metal_display,
+            'unit': metal_unit,
+            'pct_change': metal_pct_change,
+            'volatility_pct': (
+                round(statistics.pstdev(list(metal_returns_by_date.values())) * 100, 2)
+                if len(metal_returns_by_date) >= 2 else None
+            ),
+        },
+        'metal_series': metal_series_out,
+        'companies': companies_out,
+        'heatmap': {
+            'labels': heatmap_labels,
+            'matrix': heatmap,
+        },
+        'days': days,
+    }
+    cache.set(cached_key, data, 600)
+    return Response(data)

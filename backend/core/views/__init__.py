@@ -166,6 +166,7 @@ from .investor_tools import (  # noqa: F401
     unusual_activity,
     catalyst_impact,
     due_diligence,
+    metal_correlation,
 )
 from .platform_subscriptions import (  # noqa: F401
     platform_subscription_tiers,

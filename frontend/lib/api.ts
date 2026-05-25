@@ -375,6 +375,10 @@ export const toolsAPI = {
     const q = new URLSearchParams(params).toString();
     return apiFetch<any>(`/tools/due-diligence/${q ? `?${q}` : ""}`);
   },
+  metalCorrelation: (params: Record<string, string> = {}) => {
+    const q = new URLSearchParams(params).toString();
+    return apiFetch<any>(`/tools/metal-correlation/${q ? `?${q}` : ""}`);
+  },
 };
 
 // Watchlist API (company watchlist powering the dashboard daily briefing)

@@ -22,6 +22,16 @@ const TOOLS = [
     available: true,
   },
   {
+    title: "Metal Leverage Analyzer",
+    slug: "metal-correlation",
+    description:
+      "Measure how tightly each stock tracks a chosen metal and how much it amplifies moves. Correlation, beta, R², and a volatility leverage ratio across up to 10 companies.",
+    href: "/investor-tools/metal-correlation",
+    badge: "Commodity Leverage",
+    icon: "M3 12h3l3-9 4 18 3-9h5",
+    available: true,
+  },
+  {
     title: "Resource Growth Tracker",
     slug: "resource-growth",
     description:
