@@ -86,19 +86,6 @@ export default async function CompanyDetailPage({ params }: Props) {
         ...(newsPayload?.results || []),
         ...(newsPayload?.news_releases || []),
       ];
-  if (numericId === 2) {
-    console.log(
-      "[news-debug] id=2",
-      JSON.stringify({
-        newsResOk: newsRes.ok,
-        newsResStatus: newsRes.status,
-        payloadKeys: newsPayload ? Object.keys(newsPayload) : null,
-        financialCount: newsPayload?.financial?.length,
-        nonFinancialCount: newsPayload?.non_financial?.length,
-        mergedCount: newsReleases.length,
-      }),
-    );
-  }
   // Sort most-recent first so the 10 chosen for JSON-LD are the freshest.
   newsReleases.sort(
     (a, b) =>
@@ -160,19 +147,24 @@ export default async function CompanyDetailPage({ params }: Props) {
     ],
   };
 
+  // Bundle BreadcrumbList + all NewsArticle nodes into a single @graph
+  // document. In Next.js 16, separate sibling <script> JSX nodes inside a
+  // Fragment alongside a Client Component are streamed into the RSC payload
+  // instead of emitted as DOM script elements — a single combined script
+  // renders reliably.
+  const graphJsonLd = {
+    "@context": "https://schema.org",
+    "@graph": [breadcrumbJsonLd, ...newsArticleJsonLd].map(
+      ({ "@context": _ctx, ...rest }) => rest,
+    ),
+  };
+
   return (
     <>
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }}
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(graphJsonLd) }}
       />
-      {newsArticleJsonLd.map((article, i) => (
-        <script
-          key={i}
-          type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(article) }}
-        />
-      ))}
       <CompanyDetailClient
         initialCompany={company}
         initialProjects={
