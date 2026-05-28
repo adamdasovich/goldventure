@@ -54,7 +54,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     ? [`https://juniorminingintelligence.com${property.hero_image}`]
     : property.media?.[0]?.file_url
       ? [`https://juniorminingintelligence.com${property.media[0].file_url}`]
-      : [`/api/og/property/${slug}`];
+      : [`/og/property/${slug}`];
 
   return {
     title,

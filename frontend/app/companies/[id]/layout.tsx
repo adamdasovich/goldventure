@@ -87,7 +87,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
         siteName: "Junior Mining Intelligence",
         images: [
           {
-            url: `/api/og/company/${rawSegment}`,
+            url: `/og/company/${rawSegment}`,
             width: 1200,
             height: 630,
             alt: `${company.name} Company Profile`,
@@ -98,7 +98,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
         card: "summary_large_image",
         title,
         description,
-        images: [`/api/og/company/${rawSegment}`],
+        images: [`/og/company/${rawSegment}`],
       },
       alternates: {
         canonical: canonicalUrl,
