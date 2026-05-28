@@ -72,6 +72,7 @@ export default function CompanyDetailClient({
   // survives refresh / back-forward navigation.
   const TAB_IDS = [
     "overview",
+    "events",
     "news",
     "financings",
     "resources",
@@ -1400,7 +1401,6 @@ export default function CompanyDetailClient({
                   </CardContent>
                 </Card>
               </div>
-
             </div>
           </section>
 
@@ -1418,6 +1418,7 @@ export default function CompanyDetailClient({
                 {(
                   [
                     { id: "overview", label: "Overview" },
+                    { id: "events", label: "Events" },
                     { id: "news", label: "News" },
                     { id: "financings", label: "Financings" },
                     { id: "resources", label: "Resources" },
@@ -1452,12 +1453,17 @@ export default function CompanyDetailClient({
                 })}
               </div>
 
-              {/* Speaking Events & Active Financing Section — Overview tab
-                  only. Other tabs have their own dedicated content (the
-                  Financings tab supersedes the right-column financing panel)
-                  so this hero banner doesn't need to persist everywhere. */}
-              {activeTab === "overview" && (
-                <div className="mt-8 grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-6">
+              {/* Speaking Events & Active Financing — Events tab. The Events
+                  tab pairs upcoming speaker events with currently-open
+                  financing rounds (which have richer investment-interest
+                  stats than the comprehensive list on the Financings tab). */}
+              {activeTab === "events" && (
+                <div
+                  id="tab-panel-events"
+                  role="tabpanel"
+                  aria-labelledby="tab-events"
+                  className="grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-6 mb-12"
+                >
                   {/* Speaking Events - Left Column (wider) */}
                   <div className="min-w-0">
                     <EventBanner companyId={parseInt(companyId)} />
