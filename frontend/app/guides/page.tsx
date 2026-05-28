@@ -53,6 +53,15 @@ const guides = [
     featured: true,
   },
   {
+    title: "Gold Grade Explained",
+    slug: "gold-grade-explained",
+    description:
+      "What g/t, oz/t, and ppm actually mean. What 'high grade' looks like by mining method (heap leach, open-pit, underground, narrow-vein). Why a 30 g/t deposit can be worth less than a 1 g/t deposit.",
+    readTime: "9 min read",
+    category: "Exploration",
+    featured: true,
+  },
+  {
     title: "The Complete Guide to Junior Gold Mining Companies",
     slug: "junior-gold-mining-companies-guide",
     description:
@@ -140,8 +149,8 @@ export default function GuidesPage() {
             {[
               {
                 title:
-                  "Gold Grade Explained: g/t, oz/t, ppm, and What's 'High Grade'?",
-                category: "Exploration",
+                  "Reserves vs Resources: Why Reserves Can Shrink at Lower Metal Prices",
+                category: "Technical Analysis",
               },
               {
                 title:

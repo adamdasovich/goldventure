@@ -577,7 +577,16 @@ export default function DrillResultsGuide() {
                 Grade thresholds are deposit-type and method dependent. The
                 tiers below are rules of thumb for typical deposits at current
                 metal prices — useful for first-pass assessment of a press
-                release.
+                release. For a deeper-dive on gold grade specifically —
+                including unit conversions, historical context, and why a 30 g/t
+                deposit can be worth less than a 1 g/t deposit — see{" "}
+                <Link
+                  href="/guides/gold-grade-explained"
+                  className="text-gold-400 hover:underline"
+                >
+                  Gold Grade Explained
+                </Link>
+                .
               </p>
 
               <h3 className="text-2xl font-semibold text-slate-200 mb-3 mt-8">

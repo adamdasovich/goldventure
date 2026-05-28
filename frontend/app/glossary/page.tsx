@@ -96,7 +96,11 @@ const fallbackGlossaryTerms: GlossaryTerm[] = [
     category: "geology",
     relatedLinks: [
       {
-        text: "Grade Tiers by Metal — What Counts as 'High Grade' (Guide)",
+        text: "Gold Grade Explained — g/t, oz/t & 'High Grade' (Guide)",
+        url: "/guides/gold-grade-explained",
+      },
+      {
+        text: "Grade Tiers by Metal (Pillar Guide)",
         url: "/guides/how-to-interpret-mining-drill-results#grade-tiers",
       },
     ],
