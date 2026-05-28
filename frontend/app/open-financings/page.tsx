@@ -257,6 +257,17 @@ export default function OpenFinancingsPage() {
             Junior mining companies currently raising capital — private
             placements, bought deals, flow-through offerings, and more.
           </p>
+          <p className="text-sm text-slate-400 max-w-2xl mx-auto mt-3 mb-2">
+            New to mining financings?{" "}
+            <Link
+              href="/guides/how-junior-mining-companies-raise-money"
+              className="text-gold-400 hover:underline"
+            >
+              Read our complete guide
+            </Link>{" "}
+            — covers placement structures, flow-through, warrants, and the
+            dilution math you should run before participating.
+          </p>
           {data && (
             <p className="text-sm text-slate-500">
               {data.total_count} open financing

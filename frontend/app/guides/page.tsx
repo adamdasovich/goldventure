@@ -62,6 +62,15 @@ const guides = [
     featured: true,
   },
   {
+    title: "How Junior Mining Companies Raise Money",
+    slug: "how-junior-mining-companies-raise-money",
+    description:
+      "The complete guide to junior mining financing: private placements, bought deals, flow-through shares, warrants, ATMs, streams, and royalties — with the dilution math worked out and 10 red flags.",
+    readTime: "22 min read",
+    category: "Financing",
+    featured: true,
+  },
+  {
     title: "The Complete Guide to Junior Gold Mining Companies",
     slug: "junior-gold-mining-companies-guide",
     description:
@@ -154,7 +163,7 @@ export default function GuidesPage() {
               },
               {
                 title:
-                  "How Junior Mining Companies Get Funded: Private Placements, Flow-Through Shares & Bought Deals",
+                  "Flow-Through Shares: A Canadian Investor's Complete Guide",
                 category: "Financing",
               },
               {

@@ -258,6 +258,12 @@ const fallbackGlossaryTerms: GlossaryTerm[] = [
     definition:
       "A Canadian tax incentive that allows mining exploration companies to transfer tax deductions for exploration expenses to investors. Flow-through financing is a common method for junior miners to raise capital for exploration programs.",
     category: "finance",
+    relatedLinks: [
+      {
+        text: "Flow-Through Shares & Other Financings (Pillar Guide)",
+        url: "/guides/how-junior-mining-companies-raise-money#flow-through",
+      },
+    ],
   },
   {
     term: "Private Placement",
@@ -266,7 +272,11 @@ const fallbackGlossaryTerms: GlossaryTerm[] = [
     category: "finance",
     relatedLinks: [
       {
-        text: "Learn About Private Placements",
+        text: "How Junior Miners Raise Money (Pillar Guide)",
+        url: "/guides/how-junior-mining-companies-raise-money",
+      },
+      {
+        text: "Private Placements Deep Dive",
         url: "/financial-hub/private-placements-guide",
       },
     ],
