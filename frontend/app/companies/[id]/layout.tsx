@@ -115,6 +115,107 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   }
 }
 
-export default function CompanyLayout({ children }: Props) {
-  return <>{children}</>;
+// Emit BreadcrumbList + NewsArticle JSON-LD from the layout (not the page) —
+// in Next.js 16, sibling <script> nodes inside a page's Fragment-return alongside
+// a Client Component get streamed into RSC chunks instead of being emitted as
+// DOM elements. Layout-level <script> tags render reliably.
+export default async function CompanyLayout({ children, params }: Props) {
+  const { id: rawSegment } = await params;
+  const numericId = parseCompanyIdParam(rawSegment);
+  if (numericId === null) return <>{children}</>;
+
+  let company: any = null;
+  let newsReleases: any[] = [];
+  try {
+    const [cRes, nRes] = await Promise.all([
+      fetch(`${API_BASE_URL}/companies/${numericId}/`, {
+        next: { revalidate: 3600 },
+      }),
+      fetch(`${API_BASE_URL}/companies/${numericId}/news-releases/`, {
+        next: { revalidate: 1800 },
+      }),
+    ]);
+    if (cRes.ok) company = await cRes.json();
+    if (nRes.ok) {
+      const np = await nRes.json().catch(() => null);
+      newsReleases = Array.isArray(np)
+        ? np
+        : [
+            ...(np?.financial || []),
+            ...(np?.non_financial || []),
+            ...(np?.results || []),
+            ...(np?.news_releases || []),
+          ];
+      newsReleases.sort(
+        (a, b) =>
+          new Date(b.release_date || 0).getTime() -
+          new Date(a.release_date || 0).getTime(),
+      );
+    }
+  } catch {
+    return <>{children}</>;
+  }
+
+  if (!company) return <>{children}</>;
+
+  const canonicalUrl = `https://juniorminingintelligence.com${companyHref(company)}`;
+
+  const breadcrumbJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: [
+      {
+        "@type": "ListItem",
+        position: 1,
+        name: "Home",
+        item: "https://juniorminingintelligence.com",
+      },
+      {
+        "@type": "ListItem",
+        position: 2,
+        name: "Companies",
+        item: "https://juniorminingintelligence.com/companies",
+      },
+      {
+        "@type": "ListItem",
+        position: 3,
+        name: company.name,
+        item: canonicalUrl,
+      },
+    ],
+  };
+
+  const newsArticleJsonLd = newsReleases.slice(0, 10).map((nr: any) => ({
+    "@context": "https://schema.org",
+    "@type": "NewsArticle",
+    headline: nr.title,
+    datePublished: nr.release_date,
+    dateModified: nr.updated_at || nr.release_date,
+    url: nr.url || canonicalUrl,
+    publisher: {
+      "@type": "Organization",
+      name: company.name,
+      ...(company.website && { url: company.website }),
+    },
+    author: { "@type": "Organization", name: company.name },
+    ...(nr.summary && { description: nr.summary.slice(0, 280) }),
+    mainEntityOfPage: { "@type": "WebPage", "@id": canonicalUrl },
+  }));
+
+  return (
+    <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }}
+      />
+      {newsArticleJsonLd.map((article, i) => (
+        <script
+          key={i}
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(article) }}
+        />
+      ))}
+      {children}
+    </>
+  );
 }

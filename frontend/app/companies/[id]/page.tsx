@@ -42,29 +42,22 @@ export async function generateStaticParams() {
   }
 }
 
-export const revalidate = 3600; // ISR: revalidate every hour
+export const revalidate = 3600;
 
 export default async function CompanyDetailPage({ params }: Props) {
   const { id: rawSegment } = await params;
   const numericId = parseCompanyIdParam(rawSegment);
   if (numericId === null) notFound();
 
-  // Fetch company + projects + news. notFound() throws NEXT_NOT_FOUND, which
-  // must propagate out of any try/catch — so do the fetch outside try, and
-  // only guard against genuine network errors.
   let companyRes: Response;
   let projectsRes: Response;
-  let newsRes: Response;
   try {
-    [companyRes, projectsRes, newsRes] = await Promise.all([
+    [companyRes, projectsRes] = await Promise.all([
       fetch(`${API_BASE_URL}/companies/${numericId}/`, {
         next: { revalidate: 3600 },
       }),
       fetch(`${API_BASE_URL}/companies/${numericId}/projects/`, {
         next: { revalidate: 3600 },
-      }),
-      fetch(`${API_BASE_URL}/companies/${numericId}/news-releases/`, {
-        next: { revalidate: 1800 },
       }),
     ]);
   } catch {
@@ -75,102 +68,16 @@ export default async function CompanyDetailPage({ params }: Props) {
 
   const company = await companyRes.json();
   const projects = projectsRes.ok ? await projectsRes.json() : [];
-  const newsPayload = newsRes.ok
-    ? await newsRes.json().catch(() => null)
-    : null;
-  const newsReleases: any[] = Array.isArray(newsPayload)
-    ? newsPayload
-    : [
-        ...(newsPayload?.financial || []),
-        ...(newsPayload?.non_financial || []),
-        ...(newsPayload?.results || []),
-        ...(newsPayload?.news_releases || []),
-      ];
-  // Sort most-recent first so the 10 chosen for JSON-LD are the freshest.
-  newsReleases.sort(
-    (a, b) =>
-      new Date(b.release_date || 0).getTime() -
-      new Date(a.release_date || 0).getTime(),
-  );
 
-  // Emit NewsArticle JSON-LD for the 10 most recent press releases so they
-  // become eligible for Google's Article rich result + Top Stories indexing.
-  const canonicalUrl = `https://juniorminingintelligence.com/companies/${company.id}${company.slug ? `-${company.slug}` : ""}`;
-  const newsArticleJsonLd = newsReleases.slice(0, 10).map((nr: any) => ({
-    "@context": "https://schema.org",
-    "@type": "NewsArticle",
-    headline: nr.title,
-    datePublished: nr.release_date,
-    dateModified: nr.updated_at || nr.release_date,
-    url: nr.url || canonicalUrl,
-    publisher: {
-      "@type": "Organization",
-      name: company.name,
-      ...(company.website && { url: company.website }),
-    },
-    author: {
-      "@type": "Organization",
-      name: company.name,
-    },
-    ...(nr.summary && { description: nr.summary.slice(0, 280) }),
-    mainEntityOfPage: {
-      "@type": "WebPage",
-      "@id": canonicalUrl,
-    },
-  }));
-
-  // Canonical URL consolidation happens via <link rel="canonical"> in
-  // layout.tsx generateMetadata; HTTP 308 to slug form happens in middleware.ts.
-
-  const breadcrumbJsonLd = {
-    "@context": "https://schema.org",
-    "@type": "BreadcrumbList",
-    itemListElement: [
-      {
-        "@type": "ListItem",
-        position: 1,
-        name: "Home",
-        item: "https://juniorminingintelligence.com",
-      },
-      {
-        "@type": "ListItem",
-        position: 2,
-        name: "Companies",
-        item: "https://juniorminingintelligence.com/companies",
-      },
-      {
-        "@type": "ListItem",
-        position: 3,
-        name: company.name,
-        item: canonicalUrl,
-      },
-    ],
-  };
-
-  // Bundle BreadcrumbList + all NewsArticle nodes into a single @graph
-  // document. In Next.js 16, separate sibling <script> JSX nodes inside a
-  // Fragment alongside a Client Component are streamed into the RSC payload
-  // instead of emitted as DOM script elements — a single combined script
-  // renders reliably.
-  const graphJsonLd = {
-    "@context": "https://schema.org",
-    "@graph": [breadcrumbJsonLd, ...newsArticleJsonLd].map(
-      ({ "@context": _ctx, ...rest }) => rest,
-    ),
-  };
+  // BreadcrumbList + NewsArticle JSON-LD are emitted from layout.tsx —
+  // see comment there for the Next.js 16 RSC streaming caveat.
 
   return (
-    <>
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(graphJsonLd) }}
-      />
-      <CompanyDetailClient
-        initialCompany={company}
-        initialProjects={
-          Array.isArray(projects) ? projects : projects.results || []
-        }
-      />
-    </>
+    <CompanyDetailClient
+      initialCompany={company}
+      initialProjects={
+        Array.isArray(projects) ? projects : projects.results || []
+      }
+    />
   );
 }
