@@ -126,54 +126,19 @@ export function CompanyForum({ companyId, companyName }: CompanyForumProps) {
     setReplyToUserName(undefined);
   };
 
-  // Show login prompt if user is not authenticated
+  // Show login prompt if user is not authenticated. Instead of a hard wall,
+  // render a read-only preview of the most recent messages so visitors can
+  // see the forum is alive — proof-of-life beats "Login Required" empty
+  // states for conversion.
   if (!user || !accessToken) {
     return (
       <>
-        <Card variant="glass-card" className="border-gold-500/30">
-          <CardHeader>
-            <CardTitle className="text-2xl text-gold-400 mb-2">
-              {companyName} Community Forum
-            </CardTitle>
-            <p className="text-slate-400 text-sm">
-              Real-time discussion with investors and analysts
-            </p>
-          </CardHeader>
-          <CardContent className="py-12">
-            <div className="text-center max-w-md mx-auto">
-              <div className="mb-6">
-                <svg
-                  className="w-20 h-20 mx-auto text-gold-400 mb-4"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
-                  />
-                </svg>
-                <h3 className="text-xl font-bold text-white mb-3">
-                  Login Required
-                </h3>
-                <p className="text-slate-300 mb-6">
-                  Please login or create an account to join the community
-                  discussion and connect with investors and analysts.
-                </p>
-              </div>
-              <div className="flex items-center justify-center gap-3">
-                <Button variant="ghost" onClick={() => setShowLogin(true)}>
-                  Login
-                </Button>
-                <Button variant="primary" onClick={() => setShowRegister(true)}>
-                  Create Account
-                </Button>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+        <LoggedOutForumPreview
+          companyId={companyId}
+          companyName={companyName}
+          onLoginClick={() => setShowLogin(true)}
+          onRegisterClick={() => setShowRegister(true)}
+        />
 
         {/* Auth Modals */}
         {showLogin && (
@@ -337,5 +302,172 @@ export function CompanyForum({ companyId, companyName }: CompanyForumProps) {
         }
       `}</style>
     </div>
+  );
+}
+
+interface ForumPreviewData {
+  has_discussion: boolean;
+  message_count: number;
+  participant_count: number;
+  last_message_at: string | null;
+  recent_messages: {
+    id: number;
+    initials: string;
+    content: string;
+    created_at: string;
+    is_pinned: boolean;
+  }[];
+}
+
+function LoggedOutForumPreview({
+  companyId,
+  companyName,
+  onLoginClick,
+  onRegisterClick,
+}: {
+  companyId: number;
+  companyName: string;
+  onLoginClick: () => void;
+  onRegisterClick: () => void;
+}) {
+  const [data, setData] = useState<ForumPreviewData | null>(null);
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`${API_URL}/companies/${companyId}/forum-preview/`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((json) => {
+        if (cancelled) return;
+        setData(json);
+        setLoaded(true);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setLoaded(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [companyId]);
+
+  const formatRelative = (iso: string) => {
+    const diffMs = Date.now() - new Date(iso).getTime();
+    const mins = Math.floor(diffMs / 60000);
+    if (mins < 1) return "just now";
+    if (mins < 60) return `${mins}m ago`;
+    const hours = Math.floor(mins / 60);
+    if (hours < 24) return `${hours}h ago`;
+    const days = Math.floor(hours / 24);
+    return `${days}d ago`;
+  };
+
+  const hasActivity =
+    !!data && data.has_discussion && data.recent_messages.length > 0;
+
+  return (
+    <Card variant="glass-card" className="border-gold-500/30">
+      <CardContent className="p-6 md:p-8">
+        {/* Activity strip — only render when there's real activity to advertise.
+            An empty room with "0 messages" is worse than no strip at all. */}
+        {hasActivity && (
+          <div className="flex items-center gap-4 mb-6 pb-4 border-b border-slate-700/50 text-sm text-slate-300 flex-wrap">
+            <span className="inline-flex items-center gap-2">
+              <span
+                className="w-2 h-2 rounded-full bg-green-400 motion-safe:animate-pulse"
+                aria-hidden="true"
+              />
+              <span className="font-semibold text-white">
+                {data!.message_count}
+              </span>{" "}
+              message{data!.message_count !== 1 ? "s" : ""}
+            </span>
+            {data!.participant_count > 0 && (
+              <span>
+                <span className="font-semibold text-white">
+                  {data!.participant_count}
+                </span>{" "}
+                participant{data!.participant_count !== 1 ? "s" : ""}
+              </span>
+            )}
+            {data!.last_message_at && (
+              <span className="text-slate-400">
+                last activity {formatRelative(data!.last_message_at)}
+              </span>
+            )}
+          </div>
+        )}
+
+        {/* Read-only preview messages — exists primarily to prove the forum
+            is alive. Usernames are reduced to initials server-side so
+            anonymous visitors can't scrape participant identity. */}
+        {loaded && hasActivity ? (
+          <div className="space-y-3 mb-6">
+            {data!.recent_messages.map((msg) => (
+              <div
+                key={msg.id}
+                className="flex items-start gap-3 p-3 rounded-lg bg-slate-800/40 border border-slate-700/40"
+              >
+                <div className="w-9 h-9 rounded-full bg-gradient-to-br from-gold-500/30 to-copper-500/30 border border-gold-500/40 flex items-center justify-center flex-shrink-0">
+                  <span className="text-xs font-semibold text-gold-300">
+                    {msg.initials}
+                  </span>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span
+                      className="text-sm font-medium text-slate-400 select-none"
+                      style={{ filter: "blur(3px)" }}
+                      aria-label="Member name hidden"
+                    >
+                      Member name
+                    </span>
+                    <span className="text-xs text-slate-500">
+                      {formatRelative(msg.created_at)}
+                    </span>
+                  </div>
+                  <p className="text-sm text-slate-200 break-words">
+                    {msg.content}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : loaded ? (
+          <div className="text-center py-8 mb-6 text-slate-400">
+            <p className="text-sm">
+              Be the first to start the discussion about {companyName}.
+            </p>
+          </div>
+        ) : (
+          <div className="text-center py-8 mb-6 text-slate-500">
+            <p className="text-sm">Loading discussion preview…</p>
+          </div>
+        )}
+
+        {/* Conversion CTA */}
+        <div className="rounded-xl bg-gradient-to-r from-gold-500/10 via-copper-500/10 to-gold-500/10 border border-gold-500/30 p-5 text-center">
+          <h3 className="text-lg font-bold text-white mb-2">
+            {hasActivity
+              ? `Join ${data!.participant_count > 0 ? data!.participant_count : "the"} investor${
+                  data!.participant_count === 1 ? "" : "s"
+                } discussing ${companyName}`
+              : `Start the conversation about ${companyName}`}
+          </h3>
+          <p className="text-sm text-slate-300 mb-4">
+            Create a free account to read full discussions, reply to other
+            investors, and see who&apos;s online in real time.
+          </p>
+          <div className="flex items-center justify-center gap-3 flex-wrap">
+            <Button variant="ghost" onClick={onLoginClick}>
+              Login
+            </Button>
+            <Button variant="primary" onClick={onRegisterClick}>
+              Create free account
+            </Button>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
   );
 }

@@ -108,6 +108,7 @@ from .store import (  # noqa: F401
     store_ticker,
     user_store_badges,
     get_company_discussion,
+    get_company_forum_preview,
     store_checkout,
     store_webhook,
 )

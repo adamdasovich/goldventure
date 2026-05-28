@@ -103,6 +103,8 @@ urlpatterns = [
 
     # Company Forum Discussion endpoint
     path('companies/<int:company_id>/discussion/', views.get_company_discussion, name='get_company_discussion'),
+    # Public read-only preview of the company forum (no auth required)
+    path('companies/<int:company_id>/forum-preview/', views.get_company_forum_preview, name='get_company_forum_preview'),
 
     # Claude Chat endpoints
     path('claude/chat/', views.claude_chat, name='claude_chat'),

@@ -527,6 +527,80 @@ def get_company_discussion(request, company_id):
     })
 
 
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def get_company_forum_preview(request, company_id):
+    """
+    Public read-only preview of the company forum.
+
+    GET /api/companies/<company_id>/forum-preview/
+
+    Returns the most recent non-deleted messages so anonymous visitors can
+    see that the forum is alive before they sign up. No write access; no
+    real-time updates; intentionally lightweight so it can be called on every
+    company-page load without auth.
+    """
+    from core.models import Company, ForumDiscussion, ForumMessage
+
+    try:
+        company = Company.objects.get(id=company_id)
+    except Company.DoesNotExist:
+        return Response(
+            {'error': 'Company not found'},
+            status=status.HTTP_404_NOT_FOUND
+        )
+
+    discussion = ForumDiscussion.objects.filter(
+        company=company,
+        is_archived=False,
+    ).order_by('-is_pinned', '-updated_at').first()
+
+    if not discussion:
+        return Response({
+            'has_discussion': False,
+            'message_count': 0,
+            'participant_count': 0,
+            'recent_messages': [],
+        })
+
+    preview_limit = 3
+    recent_qs = (
+        ForumMessage.objects
+        .filter(discussion=discussion, is_deleted=False)
+        .select_related('user')
+        .order_by('-created_at')[:preview_limit]
+    )
+    # Oldest -> newest so the UI reads top-down like the live forum.
+    recent = list(reversed(list(recent_qs)))
+
+    recent_payload = []
+    for msg in recent:
+        # Initials only — never leak real names to anonymous visitors. They
+        # see proof of life (timestamp, content) but have to sign up for
+        # author identity.
+        full_name = msg.user.get_full_name() or msg.user.username or ''
+        initials = ''.join(
+            part[0] for part in full_name.split() if part
+        )[:2].upper() or 'A'
+        recent_payload.append({
+            'id': msg.id,
+            'initials': initials,
+            'content': msg.content,
+            'created_at': msg.created_at.isoformat(),
+            'is_pinned': msg.is_pinned,
+        })
+
+    return Response({
+        'has_discussion': True,
+        'message_count': discussion.message_count,
+        'participant_count': discussion.participant_count,
+        'last_message_at': discussion.last_message_at.isoformat() if discussion.last_message_at else None,
+        'recent_messages': recent_payload,
+        'preview_limit': preview_limit,
+    })
+
+
+
 
 
 @api_view(['POST'])
