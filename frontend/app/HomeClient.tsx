@@ -20,6 +20,7 @@ import MetalsTicker from "@/components/MetalsTicker";
 const PRIMARY_NAV = [
   { href: "/companies", label: "Companies" },
   { href: "/properties", label: "Prospector's Exchange" },
+  { href: "/guides", label: "Guides" },
 ];
 
 const TOOLS_MENU = [

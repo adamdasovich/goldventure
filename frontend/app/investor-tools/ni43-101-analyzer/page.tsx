@@ -56,10 +56,21 @@ export default function NI43101AnalyzerPage() {
           <h1 className="text-3xl sm:text-4xl font-bold text-gradient-gold mb-3">
             NI 43-101 Report Analyzer
           </h1>
-          <p className="text-slate-300 max-w-xl mx-auto">
+          <p className="text-slate-300 max-w-xl mx-auto mb-4">
             Ask Claude to analyze any technical report in the database. Get
             structured summaries, extract resource data, and compare economics —
             all powered by RAG search across processed documents.
+          </p>
+          <p className="text-sm text-slate-400 max-w-xl mx-auto">
+            New to NI 43-101? Read our{" "}
+            <Link
+              href="/guides/how-to-read-ni-43-101-report"
+              className="text-gold-400 hover:underline"
+            >
+              plain-English guide to reading an NI 43-101 report
+            </Link>{" "}
+            — covers the five sections that matter, resource categories, and 10
+            red flags to spot a weak report.
           </p>
         </div>
       </section>
