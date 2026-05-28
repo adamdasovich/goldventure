@@ -574,6 +574,15 @@ export default function HomeClient({ initialArticles }: HomeClientProps) {
             >
               Mining News
             </Button>
+            <Link href="/open-financings">
+              <Button
+                variant="secondary"
+                size="sm"
+                className="w-full sm:w-auto"
+              >
+                Open Financings
+              </Button>
+            </Link>
             <Link href="/closed-financings">
               <Button
                 variant="secondary"
