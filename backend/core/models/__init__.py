@@ -97,6 +97,9 @@ from .financial_hub import (  # noqa: F401
     InvestmentInterest,
     InvestmentInterestAggregate,
 )
+from .reports import (  # noqa: F401
+    WeeklyIndustryReport,
+)
 from .store import (  # noqa: F401
     StoreCategory,
     StoreProduct,
