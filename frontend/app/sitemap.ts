@@ -1,24 +1,37 @@
 import { MetadataRoute } from "next";
 import { companyHref } from "@/lib/companyUrl";
 
-const API_BASE_URL =
-  process.env.API_BASE_URL ||
-  process.env.NEXT_PUBLIC_API_URL ||
-  "http://localhost:8000/api";
+const RESOLVED_API_BASE_URL =
+  process.env.API_BASE_URL || process.env.NEXT_PUBLIC_API_URL;
+
+if (process.env.NODE_ENV === "production" && !RESOLVED_API_BASE_URL) {
+  // Fail loudly in prod rather than silently emit a static-only sitemap
+  // (which would happen if the localhost fallback rejected the connection).
+  throw new Error(
+    "API_BASE_URL (or NEXT_PUBLIC_API_URL) must be set in production for sitemap generation",
+  );
+}
+
+const API_BASE_URL = RESOLVED_API_BASE_URL || "http://localhost:8000/api";
+
+// Cache the sitemap itself for 1 hour — a busy Googlebot crawl shouldn't
+// fan out into 20+ API calls per fetch.
+export const revalidate = 3600;
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const baseUrl = "https://juniorminingintelligence.com";
 
-  // Fetch ALL companies using pagination (API returns 25 per page)
+  // Fetch ALL companies using pagination (page_size=100 to cut request count)
   let companies: any[] = [];
   let page = 1;
   let hasMore = true;
 
   while (hasMore) {
     try {
-      const response = await fetch(`${API_BASE_URL}/companies/?page=${page}`, {
-        cache: "no-store",
-      });
+      const response = await fetch(
+        `${API_BASE_URL}/companies/?page=${page}&page_size=100`,
+        { next: { revalidate: 3600 } },
+      );
       if (response.ok) {
         const data = await response.json();
         const results = data.results || [];
@@ -48,10 +61,8 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   while (hasMoreProps) {
     try {
       const response = await fetch(
-        `${API_BASE_URL}/properties/listings/?status=active&page=${propPage}`,
-        {
-          cache: "no-store",
-        },
+        `${API_BASE_URL}/properties/listings/?status=active&page=${propPage}&page_size=100`,
+        { next: { revalidate: 3600 } },
       );
       if (response.ok) {
         const data = await response.json();

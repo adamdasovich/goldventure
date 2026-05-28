@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
 // CSP is stricter in production - no unsafe-eval
-const isDev = process.env.NODE_ENV === 'development';
+const isDev = process.env.NODE_ENV === "development";
 const scriptSrc = isDev
   ? "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.googletagmanager.com https://www.google-analytics.com"
   : "script-src 'self' 'unsafe-inline' https://www.googletagmanager.com https://www.google-analytics.com";
@@ -12,25 +12,25 @@ const nextConfig: NextConfig = {
 
   // Image optimization
   images: {
-    formats: ['image/avif', 'image/webp'],
+    formats: ["image/avif", "image/webp"],
     dangerouslyAllowSVG: true,
     contentSecurityPolicy: "default-src 'self'; script-src 'none'; sandbox;",
     remotePatterns: [
       {
-        protocol: 'https',
-        hostname: 'placehold.co',
+        protocol: "https",
+        hostname: "placehold.co",
       },
       {
-        protocol: 'https',
-        hostname: '*.amazonaws.com',
+        protocol: "https",
+        hostname: "*.amazonaws.com",
       },
       {
-        protocol: 'https',
-        hostname: 'juniorminingintelligence.com',
+        protocol: "https",
+        hostname: "juniorminingintelligence.com",
       },
       {
-        protocol: 'https',
-        hostname: 'api.juniorminingintelligence.com',
+        protocol: "https",
+        hostname: "api.juniorminingintelligence.com",
       },
     ],
   },
@@ -48,26 +48,26 @@ const nextConfig: NextConfig = {
   async headers() {
     return [
       {
-        source: '/:path*',
+        source: "/:path*",
         headers: [
           {
-            key: 'X-DNS-Prefetch-Control',
-            value: 'on'
+            key: "X-DNS-Prefetch-Control",
+            value: "on",
           },
           {
-            key: 'X-Frame-Options',
-            value: 'SAMEORIGIN'
+            key: "X-Frame-Options",
+            value: "SAMEORIGIN",
           },
           {
-            key: 'X-Content-Type-Options',
-            value: 'nosniff'
+            key: "X-Content-Type-Options",
+            value: "nosniff",
           },
           {
-            key: 'Referrer-Policy',
-            value: 'origin-when-cross-origin'
+            key: "Referrer-Policy",
+            value: "origin-when-cross-origin",
           },
           {
-            key: 'Content-Security-Policy',
+            key: "Content-Security-Policy",
             value: [
               "default-src 'self'",
               scriptSrc,
@@ -79,51 +79,55 @@ const nextConfig: NextConfig = {
               "base-uri 'self'",
               "form-action 'self'",
               "object-src 'none'",
-            ].join('; ')
+            ].join("; "),
           },
           {
-            key: 'Permissions-Policy',
-            value: 'camera=(), microphone=(), geolocation=(), payment=(), usb=(), magnetometer=(), gyroscope=(), accelerometer=()'
+            key: "Permissions-Policy",
+            value:
+              "camera=(), microphone=(), geolocation=(), payment=(), usb=(), magnetometer=(), gyroscope=(), accelerometer=()",
           },
         ],
       },
       {
         // Cache static assets (images, fonts, etc.) for 1 year
-        source: '/static/:path*',
+        source: "/static/:path*",
         headers: [
           {
-            key: 'Cache-Control',
-            value: 'public, max-age=31536000, immutable',
+            key: "Cache-Control",
+            value: "public, max-age=31536000, immutable",
           },
         ],
       },
       {
         // Cache images for 1 week with revalidation
-        source: '/:path*\\.(png|jpg|jpeg|gif|webp|svg|ico|avif)',
+        source: "/:path*\\.(png|jpg|jpeg|gif|webp|svg|ico|avif)",
         headers: [
           {
-            key: 'Cache-Control',
-            value: 'public, max-age=604800, stale-while-revalidate=86400',
+            key: "Cache-Control",
+            value: "public, max-age=604800, stale-while-revalidate=86400",
           },
         ],
       },
       {
         // Cache fonts for 1 year
-        source: '/:path*\\.(woff|woff2|ttf|otf|eot)',
+        source: "/:path*\\.(woff|woff2|ttf|otf|eot)",
         headers: [
           {
-            key: 'Cache-Control',
-            value: 'public, max-age=31536000, immutable',
+            key: "Cache-Control",
+            value: "public, max-age=31536000, immutable",
           },
         ],
       },
       {
-        // Cache API responses for 5 minutes with stale-while-revalidate
-        source: '/api/:path*',
+        // API responses MUST NOT be publicly cached — most carry per-user data
+        // (auth headers, watchlist, inquiry inbox, etc.). Public caching here
+        // can leak one user's data to another via shared intermediate caches.
+        // Routes that want caching should set their own headers.
+        source: "/api/:path*",
         headers: [
           {
-            key: 'Cache-Control',
-            value: 'public, max-age=300, stale-while-revalidate=60',
+            key: "Cache-Control",
+            value: "private, no-store, max-age=0, must-revalidate",
           },
         ],
       },
