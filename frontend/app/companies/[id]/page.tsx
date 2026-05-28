@@ -49,8 +49,13 @@ export default async function CompanyDetailPage({ params }: Props) {
   const numericId = parseCompanyIdParam(rawSegment);
   if (numericId === null) notFound();
 
+  // Fetch company + projects. notFound() throws NEXT_NOT_FOUND, which must
+  // propagate out of any try/catch — so do the fetch outside try, and only
+  // guard against genuine network errors.
+  let companyRes: Response;
+  let projectsRes: Response;
   try {
-    const [companyRes, projectsRes] = await Promise.all([
+    [companyRes, projectsRes] = await Promise.all([
       fetch(`${API_BASE_URL}/companies/${numericId}/`, {
         next: { revalidate: 3600 },
       }),
@@ -58,36 +63,31 @@ export default async function CompanyDetailPage({ params }: Props) {
         next: { revalidate: 3600 },
       }),
     ]);
-
-    if (!companyRes.ok) {
-      notFound();
-    }
-
-    const company = await companyRes.json();
-    const projects = projectsRes.ok ? await projectsRes.json() : [];
-
-    // 301 redirect to the canonical slug URL if the URL segment doesn't match.
-    const canonicalSegment = company.slug
-      ? `${company.id}-${company.slug}`
-      : `${company.id}`;
-    if (rawSegment !== canonicalSegment) {
-      permanentRedirect(companyHref(company));
-    }
-
-    return (
-      <CompanyDetailClient
-        initialCompany={company}
-        initialProjects={
-          Array.isArray(projects) ? projects : projects.results || []
-        }
-      />
-    );
-  } catch (err) {
-    // permanentRedirect throws a special NEXT_REDIRECT error — re-throw so the
-    // framework can handle it. Anything else means the fetch genuinely failed.
-    if (err && typeof err === "object" && "digest" in err) {
-      throw err;
-    }
+  } catch {
     notFound();
   }
+
+  if (!companyRes.ok) notFound();
+
+  const company = await companyRes.json();
+  const projects = projectsRes.ok ? await projectsRes.json() : [];
+
+  // 301 redirect to the canonical slug URL if the URL segment doesn't match.
+  // Must be called outside any try/catch — permanentRedirect throws an error
+  // the framework consumes to emit the 308 response.
+  const canonicalSegment = company.slug
+    ? `${company.id}-${company.slug}`
+    : `${company.id}`;
+  if (rawSegment !== canonicalSegment) {
+    permanentRedirect(companyHref(company));
+  }
+
+  return (
+    <CompanyDetailClient
+      initialCompany={company}
+      initialProjects={
+        Array.isArray(projects) ? projects : projects.results || []
+      }
+    />
+  );
 }
