@@ -387,6 +387,12 @@ def create_closed_financing(request):
             source_news_flag.review_notes = f'Closed financing created directly from flag (Amount: ${amount_raised:,.2f})'
             source_news_flag.save()
 
+        # Duplicate 'announced' financings may have been removed, and the new
+        # record is created as already-closed — either way, the homepage open
+        # count is now stale.
+        from django.core.cache import cache
+        cache.delete('hero_section_data')
+
         return Response({
             'message': 'Closed financing created successfully',
             'financing': {

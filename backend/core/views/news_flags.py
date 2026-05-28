@@ -3,6 +3,7 @@ API Views for GoldVenture Platform
 """
 
 import logging
+from django.core.cache import cache
 from django.utils import timezone
 
 from rest_framework import viewsets, status, permissions
@@ -210,6 +211,9 @@ class NewsReleaseFlagViewSet(viewsets.ReadOnlyModelViewSet):
                 notes=financing_data.get('review_notes', 'Financing created from flagged news release')
             )
 
+            # New open financing -> homepage teaser count is now stale.
+            cache.delete('hero_section_data')
+
             return Response({
                 'message': 'Financing created successfully',
                 'financing_id': financing.id,
@@ -304,6 +308,10 @@ class NewsReleaseFlagViewSet(viewsets.ReadOnlyModelViewSet):
 
             flag.save()
 
+            # An externally-created financing was linked through this path;
+            # the homepage card may have missed it on the previous tick.
+            cache.delete('hero_section_data')
+
             return Response({
                 'message': 'Flag marked as reviewed',
                 'flag_id': flag.id,
@@ -360,6 +368,9 @@ class NewsReleaseFlagViewSet(viewsets.ReadOnlyModelViewSet):
             if notes:
                 flag.review_notes = (flag.review_notes or '') + f'\n[Closed] {notes}'
                 flag.save()
+
+            # Financing left the open set -> homepage teaser count is now stale.
+            cache.delete('hero_section_data')
 
             return Response({
                 'message': 'Financing marked as closed successfully',

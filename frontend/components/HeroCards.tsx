@@ -53,6 +53,7 @@ interface FeaturedProperty {
 interface HeroData {
   upcoming_events: UpcomingEvent[];
   active_financings: ActiveFinancing[];
+  total_open_financings?: number;
   featured_property: FeaturedProperty | null;
 }
 
@@ -303,47 +304,60 @@ export function HeroCards({ onLoginClick }: HeroCardsProps) {
             </CardHeader>
             <CardContent className="pt-2">
               {data?.active_financings && data.active_financings.length > 0 ? (
-                <div className="max-h-[280px] overflow-y-auto space-y-3 pr-1">
-                  {data.active_financings.map((financing) => (
-                    <Link
-                      key={financing.id}
-                      href={`/companies/${financing.company_id}/financing`}
-                      onClick={(e) => handleCardClick(e, true)}
-                      className="block"
-                    >
-                      <div className="p-3 rounded-lg bg-slate-800/50 hover:bg-slate-700/50 transition-all">
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="flex-1 min-w-0">
-                            <h4 className="text-sm font-medium text-white truncate">
-                              {financing.company_name}
-                            </h4>
-                            <p className="text-xs text-slate-400 mt-1">
-                              {financing.company_ticker}
-                            </p>
+                <>
+                  <div className="max-h-[280px] overflow-y-auto space-y-3 pr-1">
+                    {data.active_financings.map((financing) => (
+                      <Link
+                        key={financing.id}
+                        href={`/companies/${financing.company_id}/financing`}
+                        onClick={(e) => handleCardClick(e, true)}
+                        className="block"
+                      >
+                        <div className="p-3 rounded-lg bg-slate-800/50 hover:bg-slate-700/50 transition-all">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex-1 min-w-0">
+                              <h4 className="text-sm font-medium text-white truncate">
+                                {financing.company_name}
+                              </h4>
+                              <p className="text-xs text-slate-400 mt-1">
+                                {financing.company_ticker}
+                              </p>
+                            </div>
+                            <Badge
+                              variant="copper"
+                              className="text-xs flex-shrink-0"
+                            >
+                              {financing.financing_type_display}
+                            </Badge>
                           </div>
-                          <Badge
-                            variant="copper"
-                            className="text-xs flex-shrink-0"
-                          >
-                            {financing.financing_type_display}
-                          </Badge>
+                          <div className="flex items-center justify-between mt-2">
+                            {financing.amount_raised_usd && (
+                              <span className="text-sm font-semibold text-gold-400">
+                                {formatCurrency(financing.amount_raised_usd)}
+                              </span>
+                            )}
+                            {financing.closing_date && (
+                              <span className="text-xs text-slate-500">
+                                Closes: {formatDate(financing.closing_date)}
+                              </span>
+                            )}
+                          </div>
                         </div>
-                        <div className="flex items-center justify-between mt-2">
-                          {financing.amount_raised_usd && (
-                            <span className="text-sm font-semibold text-gold-400">
-                              {formatCurrency(financing.amount_raised_usd)}
-                            </span>
-                          )}
-                          {financing.closing_date && (
-                            <span className="text-xs text-slate-500">
-                              Closes: {formatDate(financing.closing_date)}
-                            </span>
-                          )}
-                        </div>
-                      </div>
+                      </Link>
+                    ))}
+                  </div>
+                  <div className="mt-3 pt-3 border-t border-slate-800 text-center">
+                    <Link
+                      href="/open-financings"
+                      className="text-xs text-gold-400 hover:text-gold-300 hover:underline"
+                    >
+                      {data.total_open_financings &&
+                      data.total_open_financings > data.active_financings.length
+                        ? `Showing ${data.active_financings.length} of ${data.total_open_financings} open financings — View all →`
+                        : "View all open financings →"}
                     </Link>
-                  ))}
-                </div>
+                  </div>
+                </>
               ) : (
                 <div className="text-center py-8 text-slate-500">
                   <svg

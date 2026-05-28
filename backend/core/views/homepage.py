@@ -173,9 +173,13 @@ def hero_section_data(request):
         })
 
     # Card 2: Active Financing Opportunities
-    active_financings = Financing.objects.filter(
-        status__in=['announced', 'closing']
-    ).select_related('company').order_by('-announced_date')[:5]
+    # Match the admin "Reviewed Financing" definition: any financing that hasn't
+    # been explicitly closed. The status enum (announced/closing/closed/cancelled)
+    # is independent of the is_closed flag — a curator may flip is_closed without
+    # touching status, so is_closed is the source of truth for "still open".
+    open_financings_qs = Financing.objects.filter(is_closed=False)
+    total_open_count = open_financings_qs.count()
+    active_financings = open_financings_qs.select_related('company').order_by('-announced_date')[:5]
 
     financings_data = []
     for financing in active_financings:
@@ -243,6 +247,7 @@ def hero_section_data(request):
     response_data = {
         'upcoming_events': events_data,
         'active_financings': financings_data,
+        'total_open_financings': total_open_count,
         'featured_property': featured_property,
     }
     cache.set('hero_section_data', response_data, 120)  # 2 minutes

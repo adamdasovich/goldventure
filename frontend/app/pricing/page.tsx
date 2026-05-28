@@ -37,9 +37,9 @@ const FEATURE_ROWS = [
   },
   {
     label: "Financing Tracker",
-    explorer: "View only",
-    prospector: "View + email alerts",
-    miner: "View + alerts + API",
+    explorer: "5 latest only",
+    prospector: "All open + email alerts",
+    miner: "All open + alerts + API",
   },
   {
     label: "NI 43-101 Reports",

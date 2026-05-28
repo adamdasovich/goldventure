@@ -181,6 +181,9 @@ urlpatterns = [
     path('closed-financings/create/', views.create_closed_financing, name='create_closed_financing'),
     path('closed-financings/<int:financing_id>/update/', views.update_closed_financing, name='update_closed_financing'),
 
+    # Open Financings (public page; first 5 in full + locked stubs for free users)
+    path('open-financings/', views.open_financings_list, name='open_financings_list'),
+
     # ViewSet routes
     path('', include(router.urls)),
 ]
