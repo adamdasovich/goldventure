@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { companyHref, parseCompanyIdParam } from "@/lib/companyUrl";
 
 const API_BASE_URL =
   process.env.API_BASE_URL ||
@@ -11,11 +12,20 @@ type Props = {
 };
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const { id } = await params;
+  const { id: rawSegment } = await params;
+  const numericId = parseCompanyIdParam(rawSegment);
+
+  if (numericId === null) {
+    return {
+      title: "Company Not Found",
+      alternates: {
+        canonical: `https://juniorminingintelligence.com/companies/${rawSegment}`,
+      },
+    };
+  }
 
   try {
-    // Fetch company data for metadata
-    const response = await fetch(`${API_BASE_URL}/companies/${id}/`, {
+    const response = await fetch(`${API_BASE_URL}/companies/${numericId}/`, {
       next: { revalidate: 3600 },
     });
 
@@ -23,12 +33,14 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       return {
         title: "Company Not Found",
         alternates: {
-          canonical: `https://juniorminingintelligence.com/companies/${id}`,
+          canonical: `https://juniorminingintelligence.com${companyHref({ id: numericId })}`,
         },
       };
     }
 
     const company = await response.json();
+    const canonicalPath = companyHref(company);
+    const canonicalUrl = `https://juniorminingintelligence.com${canonicalPath}`;
 
     const title = `${company.name} (${company.ticker_symbol}) - Gold Mining Company Analysis`;
     const description = company.description
@@ -52,8 +64,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
         title,
         description,
         type: "website",
-        url: `https://juniorminingintelligence.com/companies/${id}`,
-        siteName: "Junior Gold Mining Intelligence",
+        url: canonicalUrl,
+        siteName: "Junior Mining Intelligence",
         images: [
           {
             url: "/og-image.png",
@@ -70,7 +82,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
         images: ["/og-image.png"],
       },
       alternates: {
-        canonical: `https://juniorminingintelligence.com/companies/${id}`,
+        canonical: canonicalUrl,
       },
     };
   } catch (error) {
@@ -78,7 +90,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     return {
       title: "Company Profile",
       alternates: {
-        canonical: `https://juniorminingintelligence.com/companies/${id}`,
+        canonical: `https://juniorminingintelligence.com${companyHref({ id: numericId })}`,
       },
     };
   }

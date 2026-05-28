@@ -2,6 +2,7 @@ from django.db import models
 from django.contrib.auth.models import AbstractUser
 from django.core.validators import MinValueValidator, MaxValueValidator
 from django.utils import timezone
+from django.utils.text import slugify
 from decimal import Decimal
 
 
@@ -79,6 +80,12 @@ class Company(models.Model):
     ]
 
     name = models.CharField(max_length=200)
+    slug = models.SlugField(
+        max_length=220,
+        blank=True,
+        default='',
+        help_text="URL-friendly slug derived from name; used in /companies/{id}-{slug}",
+    )
     legal_name = models.CharField(max_length=200, blank=True)
     ticker_symbol = models.CharField(max_length=10, blank=True)
     exchange = models.CharField(max_length=20, choices=EXCHANGE_CHOICES, blank=True)
@@ -196,6 +203,14 @@ class Company(models.Model):
 
     def __str__(self):
         return f"{self.name} ({self.ticker_symbol})" if self.ticker_symbol else self.name
+
+    def save(self, *args, **kwargs):
+        # Keep slug in sync with name. Truncated to 220 to leave room in the URL.
+        if self.name:
+            expected = slugify(self.name)[:220]
+            if self.slug != expected:
+                self.slug = expected
+        super().save(*args, **kwargs)
 
     def calculate_completeness_score(self):
         """Calculate data completeness score based on filled fields"""

@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/Button";
 import { companyAPI, type Company } from "@/lib/api";
 import LogoMono from "@/components/LogoMono";
 import { useAuth } from "@/contexts/AuthContext";
+import { companyHref } from "@/lib/companyUrl";
 
 // Commodity filter options grouped by category
 const COMMODITY_GROUPS = {
@@ -527,7 +528,7 @@ export default function CompaniesClient({
                     className="animate-slide-in-up hover:scale-105 transition-transform cursor-pointer"
                     style={{ animationDelay: `${idx * 50}ms` }}
                     onClick={() =>
-                      (window.location.href = `/companies/${company.id}`)
+                      (window.location.href = companyHref(company))
                     }
                   >
                     <CardHeader>
@@ -681,7 +682,7 @@ export default function CompaniesClient({
                             key={company.id}
                             className="border-b border-slate-800 hover:bg-slate-800/50 transition-colors cursor-pointer"
                             onClick={() =>
-                              (window.location.href = `/companies/${company.id}`)
+                              (window.location.href = companyHref(company))
                             }
                           >
                             <td className="py-4 px-6 text-white font-medium">

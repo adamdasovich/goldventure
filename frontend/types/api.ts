@@ -2,6 +2,7 @@
 export interface Company {
   id: number;
   name: string;
+  slug?: string;
   ticker_symbol: string;
   exchange: string;
   description: string;
@@ -49,7 +50,7 @@ export interface ResourceEstimate {
   id: number;
   project: number;
   project_name?: string;
-  category: 'measured' | 'indicated' | 'inferred';
+  category: "measured" | "indicated" | "inferred";
   commodity: string;
   tonnage: number;
   grade: number;
@@ -67,7 +68,7 @@ export interface EconomicStudy {
   id: number;
   project: number;
   project_name?: string;
-  study_type: 'scoping' | 'pea' | 'prefeasibility' | 'feasibility';
+  study_type: "scoping" | "pea" | "prefeasibility" | "feasibility";
   date_published: string;
   npv_5: number;
   npv_8: number;
@@ -87,7 +88,12 @@ export interface Financing {
   id: number;
   company: number;
   company_name?: string;
-  financing_type: 'private_placement' | 'public_offering' | 'debt' | 'royalty' | 'other';
+  financing_type:
+    | "private_placement"
+    | "public_offering"
+    | "debt"
+    | "royalty"
+    | "other";
   amount_raised: number;
   currency: string;
   price_per_share: number;
@@ -112,7 +118,7 @@ export interface MarketData {
 
 // Claude Chat Types
 export interface ChatMessage {
-  role: 'user' | 'assistant';
+  role: "user" | "assistant";
   content: string;
 }
 
@@ -145,8 +151,22 @@ export interface CompanyResource {
   company_name?: string;
   project?: number;
   project_name?: string;
-  resource_type: 'image' | 'video' | 'document' | 'presentation' | 'spreadsheet' | 'other';
-  category: 'hero' | 'gallery' | 'investor_presentation' | 'technical_report' | 'map' | 'logo' | 'news_image' | 'other';
+  resource_type:
+    | "image"
+    | "video"
+    | "document"
+    | "presentation"
+    | "spreadsheet"
+    | "other";
+  category:
+    | "hero"
+    | "gallery"
+    | "investor_presentation"
+    | "technical_report"
+    | "map"
+    | "logo"
+    | "news_image"
+    | "other";
   title: string;
   description?: string;
   file?: string;
@@ -169,7 +189,15 @@ export interface SpeakingEvent {
   id: number;
   company: number;
   company_name?: string;
-  event_type: 'conference' | 'webinar' | 'investor_day' | 'site_visit' | 'earnings_call' | 'presentation' | 'interview' | 'other';
+  event_type:
+    | "conference"
+    | "webinar"
+    | "investor_day"
+    | "site_visit"
+    | "earnings_call"
+    | "presentation"
+    | "interview"
+    | "other";
   title: string;
   description?: string;
   event_date: string;
@@ -190,7 +218,15 @@ export interface SpeakingEvent {
   updated_at: string;
 }
 
-export type SubscriptionStatus = 'trialing' | 'active' | 'past_due' | 'canceled' | 'unpaid' | 'incomplete' | 'incomplete_expired' | 'paused';
+export type SubscriptionStatus =
+  | "trialing"
+  | "active"
+  | "past_due"
+  | "canceled"
+  | "unpaid"
+  | "incomplete"
+  | "incomplete_expired"
+  | "paused";
 
 export interface CompanySubscription {
   id: number;
@@ -218,7 +254,7 @@ export interface SubscriptionInvoice {
   amount_due: number;
   amount_paid: number;
   currency: string;
-  status: 'draft' | 'open' | 'paid' | 'uncollectible' | 'void';
+  status: "draft" | "open" | "paid" | "uncollectible" | "void";
   invoice_date: string;
   due_date?: string;
   paid_at?: string;
@@ -237,8 +273,18 @@ export interface BillingPortalResponse {
 }
 
 // Company Access Request Types
-export type AccessRequestStatus = 'pending' | 'approved' | 'rejected' | 'cancelled';
-export type AccessRequestRole = 'ir_manager' | 'ceo' | 'cfo' | 'marketing' | 'communications' | 'other';
+export type AccessRequestStatus =
+  | "pending"
+  | "approved"
+  | "rejected"
+  | "cancelled";
+export type AccessRequestRole =
+  | "ir_manager"
+  | "ceo"
+  | "cfo"
+  | "marketing"
+  | "communications"
+  | "other";
 
 export interface CompanyAccessRequest {
   id: number;
@@ -318,7 +364,12 @@ export interface StoreProductVariant {
   effective_price_dollars: number;
 }
 
-export type ProductBadge = 'rare' | 'limited_edition' | 'community_favorite' | 'new_arrival' | 'instant_download';
+export type ProductBadge =
+  | "rare"
+  | "limited_edition"
+  | "community_favorite"
+  | "new_arrival"
+  | "instant_download";
 
 export interface StoreProductList {
   id: number;
@@ -329,7 +380,7 @@ export interface StoreProductList {
   price_dollars: number;
   compare_at_price_cents: number | null;
   compare_at_price_dollars: number | null;
-  product_type: 'physical' | 'digital';
+  product_type: "physical" | "digital";
   inventory_count: number;
   is_featured: boolean;
   badges: ProductBadge[];
@@ -394,7 +445,14 @@ export interface StoreOrderItem {
   download_expires_at: string | null;
 }
 
-export type OrderStatus = 'pending' | 'paid' | 'processing' | 'shipped' | 'delivered' | 'refunded' | 'cancelled';
+export type OrderStatus =
+  | "pending"
+  | "paid"
+  | "processing"
+  | "shipped"
+  | "delivered"
+  | "refunded"
+  | "cancelled";
 
 export interface StoreOrder {
   id: number;
@@ -458,12 +516,17 @@ export interface StoreProductShare {
   username: string;
   product: number;
   product_name: string;
-  shared_to: 'forum' | 'inquiry' | 'direct_message';
+  shared_to: "forum" | "inquiry" | "direct_message";
   destination_id: string;
   created_at: string;
 }
 
-export type InquiryStatus = 'new' | 'contacted' | 'negotiating' | 'sold' | 'closed';
+export type InquiryStatus =
+  | "new"
+  | "contacted"
+  | "negotiating"
+  | "sold"
+  | "closed";
 
 export interface StoreProductInquiry {
   id: number;
@@ -475,12 +538,16 @@ export interface StoreProductInquiry {
   status_display: string;
   message: string;
   phone: string;
-  preferred_contact: 'email' | 'phone';
+  preferred_contact: "email" | "phone";
   created_at: string;
   updated_at: string;
 }
 
-export type StoreBadgeType = 'founder' | 'bronze_collector' | 'silver_prospector' | 'gold_miner';
+export type StoreBadgeType =
+  | "founder"
+  | "bronze_collector"
+  | "silver_prospector"
+  | "gold_miner";
 
 export interface UserStoreBadge {
   id: number;

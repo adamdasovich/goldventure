@@ -308,37 +308,6 @@ const financeServiceJsonLd = {
   serviceType: ["Investment Research", "Market Analysis", "Investor Education"],
 };
 
-const breadcrumbJsonLd = {
-  "@context": "https://schema.org",
-  "@type": "BreadcrumbList",
-  itemListElement: [
-    {
-      "@type": "ListItem",
-      position: 1,
-      name: "Home",
-      item: "https://juniorminingintelligence.com",
-    },
-    {
-      "@type": "ListItem",
-      position: 2,
-      name: "Companies",
-      item: "https://juniorminingintelligence.com/companies",
-    },
-    {
-      "@type": "ListItem",
-      position: 3,
-      name: "Properties",
-      item: "https://juniorminingintelligence.com/properties",
-    },
-    {
-      "@type": "ListItem",
-      position: 4,
-      name: "Glossary",
-      item: "https://juniorminingintelligence.com/glossary",
-    },
-  ],
-};
-
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -381,10 +350,6 @@ export default function RootLayout({
           dangerouslySetInnerHTML={{
             __html: JSON.stringify(financeServiceJsonLd),
           }}
-        />
-        <script
-          type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }}
         />
         {gaId && <GoogleAnalytics measurementId={gaId} />}
       </head>

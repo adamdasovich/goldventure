@@ -1,14 +1,24 @@
-'use client';
+"use client";
 
-import { useState, useEffect } from 'react';
-import { useRouter, useParams } from 'next/navigation';
-import { ArrowLeft, Calendar, Clock, Users, Video, MessageSquare, Plus, X, Save } from 'lucide-react';
-import { Button } from '@/components/ui/Button';
-import { Badge } from '@/components/ui/Badge';
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
-import LogoMono from '@/components/LogoMono';
-import { LoginModal, RegisterModal } from '@/components/auth';
-import { useAuth } from '@/contexts/AuthContext';
+import { useState, useEffect } from "react";
+import { useRouter, useParams } from "next/navigation";
+import {
+  ArrowLeft,
+  Calendar,
+  Clock,
+  Users,
+  Video,
+  MessageSquare,
+  Plus,
+  X,
+  Save,
+} from "lucide-react";
+import { Button } from "@/components/ui/Button";
+import { Badge } from "@/components/ui/Badge";
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/Card";
+import LogoMono from "@/components/LogoMono";
+import { LoginModal, RegisterModal } from "@/components/auth";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface Company {
   id: number;
@@ -26,6 +36,8 @@ interface Speaker {
 export default function CreateEventPage() {
   const router = useRouter();
   const params = useParams();
+  // params.id may be `{numericId}-{slug}` — strip to numeric for API lookups.
+  const companyId = ((params.id as string) || "").split("-")[0];
   const { user, logout } = useAuth();
   const [company, setCompany] = useState<Company | null>(null);
   const [loading, setLoading] = useState(true);
@@ -35,15 +47,15 @@ export default function CreateEventPage() {
 
   // Form state
   const [formData, setFormData] = useState({
-    title: '',
-    description: '',
-    topic: '',
-    agenda: '',
-    scheduled_start: '',
-    scheduled_end: '',
-    timezone: 'America/Toronto',
+    title: "",
+    description: "",
+    topic: "",
+    agenda: "",
+    scheduled_start: "",
+    scheduled_end: "",
+    timezone: "America/Toronto",
     duration_minutes: 60,
-    format: 'video' as 'video' | 'text',
+    format: "video" as "video" | "text",
     max_participants: 500,
     is_recorded: true,
   });
@@ -51,9 +63,9 @@ export default function CreateEventPage() {
   const [speakers, setSpeakers] = useState<Speaker[]>([]);
   const [showAddSpeaker, setShowAddSpeaker] = useState(false);
   const [newSpeaker, setNewSpeaker] = useState<Speaker>({
-    name: '',
-    title: '',
-    bio: '',
+    name: "",
+    title: "",
+    bio: "",
     is_primary: false,
   });
 
@@ -67,44 +79,51 @@ export default function CreateEventPage() {
 
   const fetchCompany = async () => {
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || '/api'}/companies/${params.id}/`);
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL || "/api"}/companies/${companyId}/`,
+      );
       if (response.ok) {
         const data = await response.json();
         setCompany(data);
       }
     } catch (error) {
-      console.error('Error fetching company:', error);
+      console.error("Error fetching company:", error);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+  const handleInputChange = (
+    e: React.ChangeEvent<
+      HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
+    >,
+  ) => {
     const { name, value, type } = e.target;
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
-      [name]: type === 'checkbox' ? (e.target as HTMLInputElement).checked : value,
+      [name]:
+        type === "checkbox" ? (e.target as HTMLInputElement).checked : value,
     }));
   };
 
   const handleAddSpeaker = () => {
-    console.log('handleAddSpeaker called, newSpeaker:', newSpeaker);
+    console.log("handleAddSpeaker called, newSpeaker:", newSpeaker);
 
     if (!newSpeaker.name || !newSpeaker.title || !newSpeaker.bio) {
       const missing = [];
-      if (!newSpeaker.name) missing.push('Speaker Name');
-      if (!newSpeaker.title) missing.push('Title/Role');
-      if (!newSpeaker.bio) missing.push('Bio');
+      if (!newSpeaker.name) missing.push("Speaker Name");
+      if (!newSpeaker.title) missing.push("Title/Role");
+      if (!newSpeaker.bio) missing.push("Bio");
 
-      alert(`Please fill in all required fields:\n${missing.join(', ')}`);
+      alert(`Please fill in all required fields:\n${missing.join(", ")}`);
       return;
     }
 
     setSpeakers([...speakers, newSpeaker]);
     setNewSpeaker({
-      name: '',
-      title: '',
-      bio: '',
+      name: "",
+      title: "",
+      bio: "",
       is_primary: false,
     });
     setShowAddSpeaker(false);
@@ -119,29 +138,32 @@ export default function CreateEventPage() {
     setSubmitting(true);
 
     try {
-      const token = localStorage.getItem('accessToken');
+      const token = localStorage.getItem("accessToken");
 
       // Create the event
-      const eventResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL || '/api'}/events/`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
+      const eventResponse = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL || "/api"}/events/`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            ...formData,
+            company: companyId,
+            status: "scheduled",
+            speakers: speakers, // Include speakers in the event creation payload
+          }),
         },
-        body: JSON.stringify({
-          ...formData,
-          company: params.id,
-          status: 'scheduled',
-          speakers: speakers,  // Include speakers in the event creation payload
-        }),
-      });
+      );
 
       if (!eventResponse.ok) {
         const errorData = await eventResponse.json().catch(() => null);
         const errorMessage = errorData
           ? JSON.stringify(errorData, null, 2)
           : `HTTP ${eventResponse.status}: ${eventResponse.statusText}`;
-        console.error('Event creation failed:', errorMessage);
+        console.error("Event creation failed:", errorMessage);
         throw new Error(`Failed to create event: ${errorMessage}`);
       }
 
@@ -150,9 +172,12 @@ export default function CreateEventPage() {
       // Redirect to the event page
       router.push(`/companies/${params.id}/events/${event.id}`);
     } catch (error) {
-      console.error('Error creating event:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-      alert(`Failed to create event:\n\n${errorMessage}\n\nCheck the browser console for more details.`);
+      console.error("Error creating event:", error);
+      const errorMessage =
+        error instanceof Error ? error.message : "Unknown error occurred";
+      alert(
+        `Failed to create event:\n\n${errorMessage}\n\nCheck the browser console for more details.`,
+      );
     } finally {
       setSubmitting(false);
     }
@@ -183,14 +208,41 @@ export default function CreateEventPage() {
       <nav className="glass-nav sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-24">
-            <div className="flex items-center space-x-3 cursor-pointer" onClick={() => router.push('/')}>
+            <div
+              className="flex items-center space-x-3 cursor-pointer"
+              onClick={() => router.push("/")}
+            >
               <LogoMono className="h-18" />
             </div>
             <div className="flex items-center space-x-4">
-              <Button variant="ghost" size="sm" onClick={() => router.push('/')}>Dashboard</Button>
-              <Button variant="ghost" size="sm" onClick={() => router.push('/companies')}>Companies</Button>
-              <Button variant="ghost" size="sm" onClick={() => router.push('/metals')}>Metals</Button>
-              <Button variant="ghost" size="sm" onClick={() => router.push('/financial-hub')}>Financial Hub</Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => router.push("/")}
+              >
+                Dashboard
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => router.push("/companies")}
+              >
+                Companies
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => router.push("/metals")}
+              >
+                Metals
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => router.push("/financial-hub")}
+              >
+                Financial Hub
+              </Button>
 
               {user ? (
                 <div className="flex items-center space-x-3">
@@ -203,10 +255,18 @@ export default function CreateEventPage() {
                 </div>
               ) : (
                 <>
-                  <Button variant="ghost" size="sm" onClick={() => setShowLogin(true)}>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setShowLogin(true)}
+                  >
                     Login
                   </Button>
-                  <Button variant="ghost" size="sm" onClick={() => setShowRegister(true)}>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setShowRegister(true)}
+                  >
                     Register
                   </Button>
                 </>
@@ -248,8 +308,13 @@ export default function CreateEventPage() {
           </button>
 
           <div className="mb-8">
-            <h1 className="text-4xl font-bold text-white mb-2">Create Speaker Event</h1>
-            <p className="text-slate-300">Create a new speaking event for {company.name} ({company.ticker_symbol})</p>
+            <h1 className="text-4xl font-bold text-white mb-2">
+              Create Speaker Event
+            </h1>
+            <p className="text-slate-300">
+              Create a new speaking event for {company.name} (
+              {company.ticker_symbol})
+            </p>
           </div>
         </div>
       </section>
@@ -263,7 +328,9 @@ export default function CreateEventPage() {
               {/* Basic Information */}
               <Card variant="glass-card">
                 <CardHeader>
-                  <CardTitle className="text-gold-400">Basic Information</CardTitle>
+                  <CardTitle className="text-gold-400">
+                    Basic Information
+                  </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div>
@@ -323,7 +390,9 @@ export default function CreateEventPage() {
                       className="w-full px-4 py-2 bg-slate-800/50 border border-slate-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-gold-400 font-mono text-sm"
                       placeholder="**Event Agenda:**&#10;&#10;1. Introduction (5 min)&#10;2. Main Presentation (20 min)&#10;3. Q&A Session (20 min)"
                     />
-                    <p className="text-xs text-slate-400 mt-1">Supports Markdown formatting</p>
+                    <p className="text-xs text-slate-400 mt-1">
+                      Supports Markdown formatting
+                    </p>
                   </div>
                 </CardContent>
               </Card>
@@ -394,12 +463,24 @@ export default function CreateEventPage() {
                         onChange={handleInputChange}
                         className="w-full px-4 py-2 bg-slate-800/50 border border-slate-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-gold-400"
                       >
-                        <option value="America/Toronto">America/Toronto (EST/EDT)</option>
-                        <option value="America/Vancouver">America/Vancouver (PST/PDT)</option>
-                        <option value="America/New_York">America/New_York (EST/EDT)</option>
-                        <option value="America/Chicago">America/Chicago (CST/CDT)</option>
-                        <option value="America/Denver">America/Denver (MST/MDT)</option>
-                        <option value="America/Los_Angeles">America/Los_Angeles (PST/PDT)</option>
+                        <option value="America/Toronto">
+                          America/Toronto (EST/EDT)
+                        </option>
+                        <option value="America/Vancouver">
+                          America/Vancouver (PST/PDT)
+                        </option>
+                        <option value="America/New_York">
+                          America/New_York (EST/EDT)
+                        </option>
+                        <option value="America/Chicago">
+                          America/Chicago (CST/CDT)
+                        </option>
+                        <option value="America/Denver">
+                          America/Denver (MST/MDT)
+                        </option>
+                        <option value="America/Los_Angeles">
+                          America/Los_Angeles (PST/PDT)
+                        </option>
                         <option value="UTC">UTC</option>
                       </select>
                     </div>
@@ -429,35 +510,42 @@ export default function CreateEventPage() {
                 <CardContent>
                   {speakers.length === 0 ? (
                     <p className="text-slate-400 text-center py-8">
-                      No speakers added yet. Click "Add Speaker" to add speakers.
+                      No speakers added yet. Click "Add Speaker" to add
+                      speakers.
                     </p>
                   ) : (
                     <div className="space-y-4">
                       {speakers.map((speaker, index) => (
-                          <div
-                            key={index}
-                            className="flex items-start justify-between p-4 bg-slate-800/50 border border-slate-700 rounded-lg"
-                          >
-                            <div className="flex-1">
-                              <div className="flex items-center gap-2 mb-1">
-                                <h4 className="font-semibold text-white">
-                                  {speaker.name}
-                                </h4>
-                                {speaker.is_primary && (
-                                  <Badge variant="gold" className="text-xs">Primary</Badge>
-                                )}
-                              </div>
-                              <p className="text-sm text-gold-400 mb-2">{speaker.title}</p>
-                              <p className="text-sm text-slate-300 line-clamp-2">{speaker.bio}</p>
+                        <div
+                          key={index}
+                          className="flex items-start justify-between p-4 bg-slate-800/50 border border-slate-700 rounded-lg"
+                        >
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-1">
+                              <h4 className="font-semibold text-white">
+                                {speaker.name}
+                              </h4>
+                              {speaker.is_primary && (
+                                <Badge variant="gold" className="text-xs">
+                                  Primary
+                                </Badge>
+                              )}
                             </div>
-                            <button
-                              type="button"
-                              onClick={() => handleRemoveSpeaker(index)}
-                              className="text-red-400 hover:text-red-300 transition-colors ml-4"
-                            >
-                              <X className="w-5 h-5" />
-                            </button>
+                            <p className="text-sm text-gold-400 mb-2">
+                              {speaker.title}
+                            </p>
+                            <p className="text-sm text-slate-300 line-clamp-2">
+                              {speaker.bio}
+                            </p>
                           </div>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveSpeaker(index)}
+                            className="text-red-400 hover:text-red-300 transition-colors ml-4"
+                          >
+                            <X className="w-5 h-5" />
+                          </button>
+                        </div>
                       ))}
                     </div>
                   )}
@@ -465,7 +553,9 @@ export default function CreateEventPage() {
                   {/* Add Speaker Form */}
                   {showAddSpeaker && (
                     <div className="mt-4 p-4 bg-slate-900/50 border border-gold-400/30 rounded-lg space-y-4">
-                      <h4 className="font-semibold text-white mb-3">Add New Speaker</h4>
+                      <h4 className="font-semibold text-white mb-3">
+                        Add New Speaker
+                      </h4>
 
                       <div>
                         <label className="block text-sm font-medium text-slate-300 mb-2">
@@ -474,7 +564,12 @@ export default function CreateEventPage() {
                         <input
                           type="text"
                           value={newSpeaker.name}
-                          onChange={(e) => setNewSpeaker({...newSpeaker, name: e.target.value})}
+                          onChange={(e) =>
+                            setNewSpeaker({
+                              ...newSpeaker,
+                              name: e.target.value,
+                            })
+                          }
                           className="w-full px-4 py-2 bg-slate-800/50 border border-slate-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-gold-400"
                           placeholder="John Smith"
                         />
@@ -487,7 +582,12 @@ export default function CreateEventPage() {
                         <input
                           type="text"
                           value={newSpeaker.title}
-                          onChange={(e) => setNewSpeaker({...newSpeaker, title: e.target.value})}
+                          onChange={(e) =>
+                            setNewSpeaker({
+                              ...newSpeaker,
+                              title: e.target.value,
+                            })
+                          }
                           className="w-full px-4 py-2 bg-slate-800/50 border border-slate-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-gold-400"
                           placeholder="Chief Executive Officer"
                         />
@@ -499,7 +599,12 @@ export default function CreateEventPage() {
                         </label>
                         <textarea
                           value={newSpeaker.bio}
-                          onChange={(e) => setNewSpeaker({...newSpeaker, bio: e.target.value})}
+                          onChange={(e) =>
+                            setNewSpeaker({
+                              ...newSpeaker,
+                              bio: e.target.value,
+                            })
+                          }
                           rows={3}
                           className="w-full px-4 py-2 bg-slate-800/50 border border-slate-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-gold-400"
                           placeholder="Brief biography of the speaker..."
@@ -511,10 +616,18 @@ export default function CreateEventPage() {
                           type="checkbox"
                           id="is_primary"
                           checked={newSpeaker.is_primary}
-                          onChange={(e) => setNewSpeaker({...newSpeaker, is_primary: e.target.checked})}
+                          onChange={(e) =>
+                            setNewSpeaker({
+                              ...newSpeaker,
+                              is_primary: e.target.checked,
+                            })
+                          }
                           className="w-4 h-4 text-gold-400 bg-slate-800 border-slate-700 rounded focus:ring-gold-400"
                         />
-                        <label htmlFor="is_primary" className="ml-2 text-sm text-slate-300">
+                        <label
+                          htmlFor="is_primary"
+                          className="ml-2 text-sm text-slate-300"
+                        >
                           Primary Speaker
                         </label>
                       </div>
@@ -535,9 +648,9 @@ export default function CreateEventPage() {
                           onClick={() => {
                             setShowAddSpeaker(false);
                             setNewSpeaker({
-                              name: '',
-                              title: '',
-                              bio: '',
+                              name: "",
+                              title: "",
+                              bio: "",
                               is_primary: false,
                             });
                           }}
@@ -556,7 +669,9 @@ export default function CreateEventPage() {
               {/* Event Settings */}
               <Card variant="glass-card">
                 <CardHeader>
-                  <CardTitle className="text-gold-400">Event Settings</CardTitle>
+                  <CardTitle className="text-gold-400">
+                    Event Settings
+                  </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div>
@@ -586,7 +701,9 @@ export default function CreateEventPage() {
                       min="0"
                       className="w-full px-4 py-2 bg-slate-800/50 border border-slate-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-gold-400"
                     />
-                    <p className="text-xs text-slate-400 mt-1">Leave as 0 for unlimited</p>
+                    <p className="text-xs text-slate-400 mt-1">
+                      Leave as 0 for unlimited
+                    </p>
                   </div>
 
                   <div className="flex items-center">
@@ -598,7 +715,10 @@ export default function CreateEventPage() {
                       onChange={handleInputChange}
                       className="w-4 h-4 text-gold-400 bg-slate-800 border-slate-700 rounded focus:ring-gold-400"
                     />
-                    <label htmlFor="is_recorded" className="ml-2 text-sm text-slate-300">
+                    <label
+                      htmlFor="is_recorded"
+                      className="ml-2 text-sm text-slate-300"
+                    >
                       Record this event
                     </label>
                   </div>

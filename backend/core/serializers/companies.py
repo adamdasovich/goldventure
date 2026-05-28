@@ -42,7 +42,7 @@ class CompanySerializer(serializers.ModelSerializer):
     class Meta:
         model = Company
         fields = [
-            'id', 'name', 'legal_name', 'ticker_symbol', 'exchange', 'status',
+            'id', 'name', 'slug', 'legal_name', 'ticker_symbol', 'exchange', 'status',
             'incorporation_date', 'jurisdiction', 'website', 'news_url',
             'headquarters_city', 'headquarters_country',
             'ceo_name', 'cfo_name', 'ir_contact_name', 'ir_contact_email', 'ir_contact_phone',
@@ -56,7 +56,7 @@ class CompanySerializer(serializers.ModelSerializer):
             'brief_description', 'is_user_submitted',
             'created_at', 'updated_at', 'project_count',
         ]
-        read_only_fields = ['id', 'created_at', 'updated_at', 'data_completeness_score']
+        read_only_fields = ['id', 'slug', 'created_at', 'updated_at', 'data_completeness_score']
         extra_kwargs = {
             'status': {'required': False},  # Make status optional for user submissions
         }
@@ -296,7 +296,7 @@ class CompanyDetailSerializer(serializers.ModelSerializer):
     class Meta:
         model = Company
         fields = [
-            'id', 'name', 'legal_name', 'ticker_symbol', 'exchange', 'status',
+            'id', 'name', 'slug', 'legal_name', 'ticker_symbol', 'exchange', 'status',
             'incorporation_date', 'jurisdiction', 'website', 'news_url',
             'headquarters_city', 'headquarters_country',
             'ceo_name', 'cfo_name', 'ir_contact_name', 'ir_contact_email', 'ir_contact_phone',
@@ -314,7 +314,7 @@ class CompanyDetailSerializer(serializers.ModelSerializer):
             # Method fields
             'presentation_url', 'fact_sheet_url', 'technical_report_url',
         ]
-        read_only_fields = ['id', 'created_at', 'updated_at', 'data_completeness_score']
+        read_only_fields = ['id', 'slug', 'created_at', 'updated_at', 'data_completeness_score']
 
     def get_presentation_url(self, obj):
         """Get the latest corporate presentation URL"""

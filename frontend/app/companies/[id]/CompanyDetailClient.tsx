@@ -64,7 +64,10 @@ export default function CompanyDetailClient({
   const params = useParams();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const companyId = params.id as string;
+  // params.id may be `{numericId}-{slug}` — strip everything after the leading
+  // integer for API lookups. The internal API only knows numeric ids.
+  const rawIdSegment = params.id as string;
+  const companyId = (rawIdSegment || "").split("-")[0];
   const { user, accessToken, logout } = useAuth();
 
   // Tab state — kept in the URL (?tab=forum) so the discovery pill, FAB,

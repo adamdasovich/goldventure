@@ -1,15 +1,21 @@
-'use client';
+"use client";
 
-import { useEffect, useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
-import Link from 'next/link';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/Card';
-import { Badge } from '@/components/ui/Badge';
-import { Button } from '@/components/ui/Button';
-import LogoMono from '@/components/LogoMono';
-import { LoginModal, RegisterModal } from '@/components/auth';
-import { InvestmentInterestModal } from '@/components/financing';
-import { useAuth } from '@/contexts/AuthContext';
+import { useEffect, useState } from "react";
+import { useParams, useRouter } from "next/navigation";
+import Link from "next/link";
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+  CardContent,
+} from "@/components/ui/Card";
+import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
+import LogoMono from "@/components/LogoMono";
+import { LoginModal, RegisterModal } from "@/components/auth";
+import { InvestmentInterestModal } from "@/components/financing";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface Company {
   id: number;
@@ -59,18 +65,22 @@ interface FinancingAggregate {
   total_shares_allocated: number;
 }
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api";
 
 export default function CompanyFinancingPage() {
   const params = useParams();
   const router = useRouter();
-  const companyId = params.id as string;
+  // params.id may be `{numericId}-{slug}` — strip to numeric for API lookups.
+  const companyId = ((params.id as string) || "").split("-")[0];
   const { user, logout } = useAuth();
-  const accessToken = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null;
+  const accessToken =
+    typeof window !== "undefined" ? localStorage.getItem("accessToken") : null;
 
   const [company, setCompany] = useState<Company | null>(null);
   const [financings, setFinancings] = useState<Financing[]>([]);
-  const [selectedFinancing, setSelectedFinancing] = useState<Financing | null>(null);
+  const [selectedFinancing, setSelectedFinancing] = useState<Financing | null>(
+    null,
+  );
   const [aggregate, setAggregate] = useState<FinancingAggregate | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -91,7 +101,7 @@ export default function CompanyFinancingPage() {
     percentage_filled: string;
   } | null>(null);
   const [isEditing, setIsEditing] = useState(false);
-  const [editAmount, setEditAmount] = useState('');
+  const [editAmount, setEditAmount] = useState("");
   const [isUpdating, setIsUpdating] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
   const [stockQuote, setStockQuote] = useState<StockQuote | null>(null);
@@ -120,7 +130,7 @@ export default function CompanyFinancingPage() {
         setStockQuote(data);
       }
     } catch (err) {
-      console.error('Failed to fetch stock quote:', err);
+      console.error("Failed to fetch stock quote:", err);
     } finally {
       setStockLoading(false);
     }
@@ -132,20 +142,22 @@ export default function CompanyFinancingPage() {
 
       // Fetch company details
       const companyRes = await fetch(`${API_URL}/companies/${companyId}/`);
-      if (!companyRes.ok) throw new Error('Failed to fetch company');
+      if (!companyRes.ok) throw new Error("Failed to fetch company");
       const companyData = await companyRes.json();
       setCompany(companyData);
 
       // Fetch company financings
-      const financingsRes = await fetch(`${API_URL}/financings/?company=${companyId}`);
-      if (!financingsRes.ok) throw new Error('Failed to fetch financings');
+      const financingsRes = await fetch(
+        `${API_URL}/financings/?company=${companyId}`,
+      );
+      if (!financingsRes.ok) throw new Error("Failed to fetch financings");
       const financingsData = await financingsRes.json();
       const financingsList = financingsData.results || financingsData;
       setFinancings(financingsList);
 
       // Select the first active financing if available
       const activeFinancing = financingsList.find(
-        (f: Financing) => f.status === 'announced' || f.status === 'closing'
+        (f: Financing) => f.status === "announced" || f.status === "closing",
       );
       if (activeFinancing) {
         setSelectedFinancing(activeFinancing);
@@ -154,7 +166,9 @@ export default function CompanyFinancingPage() {
         setSelectedFinancing(financingsList[0]);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load financing data');
+      setError(
+        err instanceof Error ? err.message : "Failed to load financing data",
+      );
     } finally {
       setLoading(false);
     }
@@ -164,11 +178,14 @@ export default function CompanyFinancingPage() {
     try {
       const headers: Record<string, string> = {};
       if (accessToken) {
-        headers['Authorization'] = `Bearer ${accessToken}`;
+        headers["Authorization"] = `Bearer ${accessToken}`;
       }
-      const res = await fetch(`${API_URL}/investments/aggregates/?financing=${financingId}`, {
-        headers,
-      });
+      const res = await fetch(
+        `${API_URL}/investments/aggregates/?financing=${financingId}`,
+        {
+          headers,
+        },
+      );
       if (res.ok) {
         const data = await res.json();
         const aggregates = data.results || data;
@@ -177,36 +194,41 @@ export default function CompanyFinancingPage() {
         }
       }
     } catch (err) {
-      console.error('Failed to fetch aggregate:', err);
+      console.error("Failed to fetch aggregate:", err);
     }
   };
 
   const fetchMyInterestStatus = async (financingId: number) => {
     if (!accessToken) return;
     try {
-      const res = await fetch(`${API_URL}/investment-interest/my-interest/${financingId}/`, {
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
+      const res = await fetch(
+        `${API_URL}/investment-interest/my-interest/${financingId}/`,
+        {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+          },
         },
-      });
+      );
       if (res.ok) {
         const data = await res.json();
         setInterestStatus(data);
       }
     } catch (err) {
-      console.error('Failed to fetch interest status:', err);
+      console.error("Failed to fetch interest status:", err);
     }
   };
 
   const fetchInterestAggregate = async (financingId: number) => {
     try {
-      const res = await fetch(`${API_URL}/investment-interest/aggregate/${financingId}/`);
+      const res = await fetch(
+        `${API_URL}/investment-interest/aggregate/${financingId}/`,
+      );
       if (res.ok) {
         const data = await res.json();
         setInterestAggregate(data);
       }
     } catch (err) {
-      console.error('Failed to fetch interest aggregate:', err);
+      console.error("Failed to fetch interest aggregate:", err);
     }
   };
 
@@ -239,18 +261,25 @@ export default function CompanyFinancingPage() {
   const handleCancelInterest = async () => {
     if (!interestStatus?.interest_id || !accessToken) return;
 
-    if (!confirm('Are you sure you want to cancel your interest in this financing?')) {
+    if (
+      !confirm(
+        "Are you sure you want to cancel your interest in this financing?",
+      )
+    ) {
       return;
     }
 
     setIsCancelling(true);
     try {
-      const res = await fetch(`${API_URL}/investment-interest/${interestStatus.interest_id}/withdraw/`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
+      const res = await fetch(
+        `${API_URL}/investment-interest/${interestStatus.interest_id}/withdraw/`,
+        {
+          method: "DELETE",
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+          },
         },
-      });
+      );
 
       if (res.ok) {
         // Reset interest status
@@ -267,52 +296,57 @@ export default function CompanyFinancingPage() {
         }
       } else {
         const data = await res.json();
-        alert(data.error || 'Failed to cancel interest');
+        alert(data.error || "Failed to cancel interest");
       }
     } catch (err) {
-      console.error('Failed to cancel interest:', err);
-      alert('Failed to cancel interest');
+      console.error("Failed to cancel interest:", err);
+      alert("Failed to cancel interest");
     } finally {
       setIsCancelling(false);
     }
   };
 
   const handleStartEdit = () => {
-    setEditAmount(interestStatus?.investment_amount || '');
+    setEditAmount(interestStatus?.investment_amount || "");
     setIsEditing(true);
   };
 
   const handleCancelEdit = () => {
     setIsEditing(false);
-    setEditAmount('');
+    setEditAmount("");
   };
 
   const handleUpdateInterest = async () => {
-    if (!interestStatus?.interest_id || !accessToken || !selectedFinancing) return;
+    if (!interestStatus?.interest_id || !accessToken || !selectedFinancing)
+      return;
 
     const amount = parseFloat(editAmount);
     if (isNaN(amount) || amount <= 0) {
-      alert('Please enter a valid amount');
+      alert("Please enter a valid amount");
       return;
     }
 
     // Calculate shares based on price per share
     const pricePerShare = selectedFinancing.price_per_share || 0;
-    const sharesRequested = pricePerShare > 0 ? Math.floor(amount / pricePerShare) : 0;
+    const sharesRequested =
+      pricePerShare > 0 ? Math.floor(amount / pricePerShare) : 0;
 
     setIsUpdating(true);
     try {
-      const res = await fetch(`${API_URL}/investment-interest/${interestStatus.interest_id}/update/`, {
-        method: 'PATCH',
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
+      const res = await fetch(
+        `${API_URL}/investment-interest/${interestStatus.interest_id}/update/`,
+        {
+          method: "PATCH",
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            investment_amount: amount,
+            shares_requested: sharesRequested,
+          }),
         },
-        body: JSON.stringify({
-          investment_amount: amount,
-          shares_requested: sharesRequested,
-        }),
-      });
+      );
 
       if (res.ok) {
         const data = await res.json();
@@ -327,19 +361,19 @@ export default function CompanyFinancingPage() {
         fetchInterestAggregate(selectedFinancing.id);
       } else {
         const data = await res.json();
-        alert(data.error || 'Failed to update interest');
+        alert(data.error || "Failed to update interest");
       }
     } catch (err) {
-      console.error('Failed to update interest:', err);
-      alert('Failed to update interest');
+      console.error("Failed to update interest:", err);
+      alert("Failed to update interest");
     } finally {
       setIsUpdating(false);
     }
   };
 
-  const formatCurrency = (amount: number, currency: string = 'CAD') => {
-    return new Intl.NumberFormat('en-CA', {
-      style: 'currency',
+  const formatCurrency = (amount: number, currency: string = "CAD") => {
+    return new Intl.NumberFormat("en-CA", {
+      style: "currency",
       currency: currency,
       minimumFractionDigits: 0,
       maximumFractionDigits: 0,
@@ -347,21 +381,23 @@ export default function CompanyFinancingPage() {
   };
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      month: 'long',
-      day: 'numeric',
-      year: 'numeric',
+    return new Date(dateString).toLocaleDateString("en-US", {
+      month: "long",
+      day: "numeric",
+      year: "numeric",
     });
   };
 
-  const getStatusBadgeVariant = (status: string): 'gold' | 'copper' | 'slate' => {
+  const getStatusBadgeVariant = (
+    status: string,
+  ): "gold" | "copper" | "slate" => {
     switch (status) {
-      case 'announced':
-        return 'gold';
-      case 'closing':
-        return 'copper';
+      case "announced":
+        return "gold";
+      case "closing":
+        return "copper";
       default:
-        return 'slate';
+        return "slate";
     }
   };
 
@@ -398,10 +434,18 @@ export default function CompanyFinancingPage() {
               <LogoMono className="h-10" />
             </Link>
             <div className="flex items-center space-x-4">
-              <Button variant="ghost" size="sm" onClick={() => router.push('/companies')}>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => router.push("/companies")}
+              >
                 Companies
               </Button>
-              <Button variant="ghost" size="sm" onClick={() => router.push('/financial-hub')}>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => router.push("/financial-hub")}
+              >
                 Financial Hub
               </Button>
               {user ? (
@@ -415,10 +459,18 @@ export default function CompanyFinancingPage() {
                 </div>
               ) : (
                 <>
-                  <Button variant="ghost" size="sm" onClick={() => setShowLogin(true)}>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setShowLogin(true)}
+                  >
                     Login
                   </Button>
-                  <Button variant="primary" size="sm" onClick={() => setShowRegister(true)}>
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    onClick={() => setShowRegister(true)}
+                  >
                     Register
                   </Button>
                 </>
@@ -477,7 +529,9 @@ export default function CompanyFinancingPage() {
             )}
             <div className="flex-1">
               <div className="flex items-center gap-3">
-                <h1 className="text-2xl font-bold text-white">{company?.name}</h1>
+                <h1 className="text-2xl font-bold text-white">
+                  {company?.name}
+                </h1>
                 <Badge variant="copper">
                   {company?.exchange}:{company?.ticker_symbol}
                 </Badge>
@@ -493,12 +547,21 @@ export default function CompanyFinancingPage() {
             <div className="text-right">
               <div className="text-sm text-slate-400 mb-1">Stock Price</div>
               {stockLoading ? (
-                <div className="text-2xl font-bold text-slate-500 animate-pulse">---</div>
+                <div className="text-2xl font-bold text-slate-500 animate-pulse">
+                  ---
+                </div>
               ) : stockQuote ? (
                 <div>
-                  <div className="text-2xl font-bold text-gold-400">${stockQuote.price.toFixed(3)}</div>
-                  <div className={`text-sm font-medium ${stockQuote.change >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                    {stockQuote.change >= 0 ? '+' : ''}{stockQuote.change.toFixed(3)} ({stockQuote.change_percent >= 0 ? '+' : ''}{stockQuote.change_percent.toFixed(2)}%)
+                  <div className="text-2xl font-bold text-gold-400">
+                    ${stockQuote.price.toFixed(3)}
+                  </div>
+                  <div
+                    className={`text-sm font-medium ${stockQuote.change >= 0 ? "text-green-400" : "text-red-400"}`}
+                  >
+                    {stockQuote.change >= 0 ? "+" : ""}
+                    {stockQuote.change.toFixed(3)} (
+                    {stockQuote.change_percent >= 0 ? "+" : ""}
+                    {stockQuote.change_percent.toFixed(2)}%)
                   </div>
                 </div>
               ) : (
@@ -513,14 +576,30 @@ export default function CompanyFinancingPage() {
         {financings.length === 0 ? (
           <Card variant="glass-card">
             <CardContent className="p-12 text-center">
-              <svg className="w-16 h-16 mx-auto text-slate-600 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              <svg
+                className="w-16 h-16 mx-auto text-slate-600 mb-4"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={1.5}
+                  d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                />
               </svg>
-              <h2 className="text-xl font-semibold text-white mb-2">No Active Financing</h2>
+              <h2 className="text-xl font-semibold text-white mb-2">
+                No Active Financing
+              </h2>
               <p className="text-slate-400 mb-6">
-                {company?.name} does not have any active financing rounds at this time.
+                {company?.name} does not have any active financing rounds at
+                this time.
               </p>
-              <Button variant="secondary" onClick={() => router.push(`/companies/${companyId}`)}>
+              <Button
+                variant="secondary"
+                onClick={() => router.push(`/companies/${companyId}`)}
+              >
                 View Company Profile
               </Button>
             </CardContent>
@@ -533,12 +612,20 @@ export default function CompanyFinancingPage() {
               <Card variant="glass-card">
                 <CardHeader>
                   <div className="flex items-center justify-between">
-                    <CardTitle className="text-xl text-gold-400">Financing Overview</CardTitle>
+                    <CardTitle className="text-xl text-gold-400">
+                      Financing Overview
+                    </CardTitle>
                     {selectedFinancing && (
-                      <Badge variant={getStatusBadgeVariant(selectedFinancing.status)}>
-                        {selectedFinancing.status === 'announced' ? 'Open' :
-                         selectedFinancing.status === 'closing' ? 'Closing Soon' :
-                         selectedFinancing.status}
+                      <Badge
+                        variant={getStatusBadgeVariant(
+                          selectedFinancing.status,
+                        )}
+                      >
+                        {selectedFinancing.status === "announced"
+                          ? "Open"
+                          : selectedFinancing.status === "closing"
+                            ? "Closing Soon"
+                            : selectedFinancing.status}
                       </Badge>
                     )}
                   </div>
@@ -554,22 +641,33 @@ export default function CompanyFinancingPage() {
                       {/* Key Metrics */}
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                         <div className="bg-slate-800/50 rounded-lg p-4">
-                          <p className="text-sm text-slate-400 mb-1">Target Raise</p>
+                          <p className="text-sm text-slate-400 mb-1">
+                            Target Raise
+                          </p>
                           <p className="text-xl font-bold text-gold-400">
-                            {formatCurrency(selectedFinancing.amount_raised_usd)}
+                            {formatCurrency(
+                              selectedFinancing.amount_raised_usd,
+                            )}
                           </p>
                         </div>
                         {selectedFinancing.price_per_share && (
                           <div className="bg-slate-800/50 rounded-lg p-4">
-                            <p className="text-sm text-slate-400 mb-1">Price per Share</p>
+                            <p className="text-sm text-slate-400 mb-1">
+                              Price per Share
+                            </p>
                             <p className="text-xl font-bold text-white">
-                              ${Number(selectedFinancing.price_per_share).toFixed(3)}
+                              $
+                              {Number(
+                                selectedFinancing.price_per_share,
+                              ).toFixed(3)}
                             </p>
                           </div>
                         )}
                         {selectedFinancing.closing_date && (
                           <div className="bg-slate-800/50 rounded-lg p-4">
-                            <p className="text-sm text-slate-400 mb-1">Closing Date</p>
+                            <p className="text-sm text-slate-400 mb-1">
+                              Closing Date
+                            </p>
                             <p className="text-xl font-bold text-white">
                               {formatDate(selectedFinancing.closing_date)}
                             </p>
@@ -577,7 +675,9 @@ export default function CompanyFinancingPage() {
                         )}
                         {selectedFinancing.shares_issued && (
                           <div className="bg-slate-800/50 rounded-lg p-4">
-                            <p className="text-sm text-slate-400 mb-1">Shares Offered</p>
+                            <p className="text-sm text-slate-400 mb-1">
+                              Shares Offered
+                            </p>
                             <p className="text-xl font-bold text-white">
                               {selectedFinancing.shares_issued.toLocaleString()}
                             </p>
@@ -589,22 +689,43 @@ export default function CompanyFinancingPage() {
                       {selectedFinancing.has_warrants && (
                         <div className="bg-slate-800/30 rounded-lg p-4 border border-slate-700">
                           <h4 className="font-semibold text-white mb-2 flex items-center gap-2">
-                            <svg className="w-5 h-5 text-gold-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            <svg
+                              className="w-5 h-5 text-gold-400"
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                              />
                             </svg>
                             Includes Warrants
                           </h4>
                           <div className="grid grid-cols-2 gap-4 text-sm">
                             {selectedFinancing.warrant_strike_price && (
                               <div>
-                                <span className="text-slate-400">Strike Price:</span>
-                                <span className="text-white ml-2">${Number(selectedFinancing.warrant_strike_price).toFixed(3)}</span>
+                                <span className="text-slate-400">
+                                  Strike Price:
+                                </span>
+                                <span className="text-white ml-2">
+                                  $
+                                  {Number(
+                                    selectedFinancing.warrant_strike_price,
+                                  ).toFixed(3)}
+                                </span>
                               </div>
                             )}
                             {selectedFinancing.warrant_expiry_date && (
                               <div>
                                 <span className="text-slate-400">Expiry:</span>
-                                <span className="text-white ml-2">{formatDate(selectedFinancing.warrant_expiry_date)}</span>
+                                <span className="text-white ml-2">
+                                  {formatDate(
+                                    selectedFinancing.warrant_expiry_date,
+                                  )}
+                                </span>
                               </div>
                             )}
                           </div>
@@ -614,7 +735,9 @@ export default function CompanyFinancingPage() {
                       {/* Use of Proceeds */}
                       {selectedFinancing.use_of_proceeds && (
                         <div>
-                          <h4 className="font-semibold text-white mb-2">Use of Proceeds</h4>
+                          <h4 className="font-semibold text-white mb-2">
+                            Use of Proceeds
+                          </h4>
                           <p className="text-slate-300 text-sm leading-relaxed">
                             {selectedFinancing.use_of_proceeds}
                           </p>
@@ -624,8 +747,12 @@ export default function CompanyFinancingPage() {
                       {/* Lead Agent */}
                       {selectedFinancing.lead_agent && (
                         <div>
-                          <h4 className="font-semibold text-white mb-2">Lead Agent</h4>
-                          <p className="text-slate-300">{selectedFinancing.lead_agent}</p>
+                          <h4 className="font-semibold text-white mb-2">
+                            Lead Agent
+                          </h4>
+                          <p className="text-slate-300">
+                            {selectedFinancing.lead_agent}
+                          </p>
                         </div>
                       )}
 
@@ -637,8 +764,18 @@ export default function CompanyFinancingPage() {
                           rel="noopener noreferrer"
                           className="inline-flex items-center gap-2 text-gold-400 hover:text-gold-300 transition-colors"
                         >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                          <svg
+                            className="w-4 h-4"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+                            />
                           </svg>
                           View Press Release
                         </a>
@@ -654,24 +791,36 @@ export default function CompanyFinancingPage() {
               {interestAggregate && (
                 <Card variant="glass-card">
                   <CardHeader>
-                    <CardTitle className="text-lg text-gold-400">Investor Interest</CardTitle>
-                    <CardDescription>Real-time investment interest from platform users</CardDescription>
+                    <CardTitle className="text-lg text-gold-400">
+                      Investor Interest
+                    </CardTitle>
+                    <CardDescription>
+                      Real-time investment interest from platform users
+                    </CardDescription>
                   </CardHeader>
                   <CardContent>
                     <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                       <div className="bg-slate-800/50 rounded-lg p-4 text-center">
-                        <p className="text-3xl font-bold text-gold-400">{interestAggregate.total_interest_count}</p>
-                        <p className="text-sm text-slate-400">Interested Investors</p>
+                        <p className="text-3xl font-bold text-gold-400">
+                          {interestAggregate.total_interest_count}
+                        </p>
+                        <p className="text-sm text-slate-400">
+                          Interested Investors
+                        </p>
                       </div>
                       <div className="bg-slate-800/50 rounded-lg p-4 text-center">
                         <p className="text-3xl font-bold text-white">
                           {interestAggregate.total_shares_requested.toLocaleString()}
                         </p>
-                        <p className="text-sm text-slate-400">Shares Requested</p>
+                        <p className="text-sm text-slate-400">
+                          Shares Requested
+                        </p>
                       </div>
                       <div className="bg-slate-800/50 rounded-lg p-4 text-center">
                         <p className="text-3xl font-bold text-white">
-                          {formatCurrency(Number(interestAggregate.total_amount_interested))}
+                          {formatCurrency(
+                            Number(interestAggregate.total_amount_interested),
+                          )}
                         </p>
                         <p className="text-sm text-slate-400">Total Interest</p>
                       </div>
@@ -683,14 +832,17 @@ export default function CompanyFinancingPage() {
                         <div className="flex justify-between text-sm mb-2">
                           <span className="text-slate-400">Interest Level</span>
                           <span className="text-gold-400">
-                            {Number(interestAggregate.percentage_filled).toFixed(1)}%
+                            {Number(
+                              interestAggregate.percentage_filled,
+                            ).toFixed(1)}
+                            %
                           </span>
                         </div>
                         <div className="h-3 bg-slate-700 rounded-full overflow-hidden">
                           <div
                             className="h-full bg-gradient-to-r from-gold-500 to-copper-500 rounded-full transition-all duration-500"
                             style={{
-                              width: `${Math.min(Number(interestAggregate.percentage_filled), 100)}%`
+                              width: `${Math.min(Number(interestAggregate.percentage_filled), 100)}%`,
                             }}
                           ></div>
                         </div>
@@ -703,18 +855,34 @@ export default function CompanyFinancingPage() {
               {/* Documents Section */}
               <Card variant="glass-card">
                 <CardHeader>
-                  <CardTitle className="text-lg text-gold-400">Documents & Forms</CardTitle>
-                  <CardDescription>Required documents for participating in this financing</CardDescription>
+                  <CardTitle className="text-lg text-gold-400">
+                    Documents & Forms
+                  </CardTitle>
+                  <CardDescription>
+                    Required documents for participating in this financing
+                  </CardDescription>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-3">
                     <div className="flex items-center justify-between p-3 bg-slate-800/50 rounded-lg">
                       <div className="flex items-center gap-3">
-                        <svg className="w-8 h-8 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                        <svg
+                          className="w-8 h-8 text-red-400"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={1.5}
+                            d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"
+                          />
                         </svg>
                         <div>
-                          <p className="font-medium text-white">Private Placement Memorandum</p>
+                          <p className="font-medium text-white">
+                            Private Placement Memorandum
+                          </p>
                           <p className="text-sm text-slate-400">PDF Document</p>
                         </div>
                       </div>
@@ -724,11 +892,23 @@ export default function CompanyFinancingPage() {
                     </div>
                     <div className="flex items-center justify-between p-3 bg-slate-800/50 rounded-lg">
                       <div className="flex items-center gap-3">
-                        <svg className="w-8 h-8 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        <svg
+                          className="w-8 h-8 text-blue-400"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={1.5}
+                            d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                          />
                         </svg>
                         <div>
-                          <p className="font-medium text-white">Subscription Agreement</p>
+                          <p className="font-medium text-white">
+                            Subscription Agreement
+                          </p>
                           <p className="text-sm text-slate-400">PDF Form</p>
                         </div>
                       </div>
@@ -738,11 +918,23 @@ export default function CompanyFinancingPage() {
                     </div>
                     <div className="flex items-center justify-between p-3 bg-slate-800/50 rounded-lg">
                       <div className="flex items-center gap-3">
-                        <svg className="w-8 h-8 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        <svg
+                          className="w-8 h-8 text-green-400"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={1.5}
+                            d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                          />
                         </svg>
                         <div>
-                          <p className="font-medium text-white">Accredited Investor Questionnaire</p>
+                          <p className="font-medium text-white">
+                            Accredited Investor Questionnaire
+                          </p>
                           <p className="text-sm text-slate-400">PDF Form</p>
                         </div>
                       </div>
@@ -760,17 +952,28 @@ export default function CompanyFinancingPage() {
               {/* CTA Card */}
               <Card variant="glass-card" className="border-gold-500/30">
                 <CardContent className="p-6">
-                  <h3 className="text-lg font-semibold text-white mb-4">Participate in this Financing</h3>
+                  <h3 className="text-lg font-semibold text-white mb-4">
+                    Participate in this Financing
+                  </h3>
 
                   {!user ? (
                     <div className="space-y-4">
                       <p className="text-sm text-slate-400">
-                        Sign in to express interest and access investment documents.
+                        Sign in to express interest and access investment
+                        documents.
                       </p>
-                      <Button variant="primary" className="w-full" onClick={() => setShowLogin(true)}>
+                      <Button
+                        variant="primary"
+                        className="w-full"
+                        onClick={() => setShowLogin(true)}
+                      >
                         Sign In to Continue
                       </Button>
-                      <Button variant="secondary" className="w-full" onClick={() => setShowRegister(true)}>
+                      <Button
+                        variant="secondary"
+                        className="w-full"
+                        onClick={() => setShowRegister(true)}
+                      >
                         Create Account
                       </Button>
                     </div>
@@ -778,19 +981,35 @@ export default function CompanyFinancingPage() {
                     <div className="space-y-4">
                       <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-4">
                         <div className="text-center">
-                          <svg className="w-12 h-12 mx-auto text-green-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          <svg
+                            className="w-12 h-12 mx-auto text-green-400 mb-2"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                            />
                           </svg>
-                          <p className="text-green-400 font-medium">Interest Registered!</p>
+                          <p className="text-green-400 font-medium">
+                            Interest Registered!
+                          </p>
 
                           {isEditing ? (
                             <div className="mt-3 space-y-3">
                               <div>
-                                <label className="block text-sm text-slate-400 mb-1">Investment Amount (CAD)</label>
+                                <label className="block text-sm text-slate-400 mb-1">
+                                  Investment Amount (CAD)
+                                </label>
                                 <input
                                   type="number"
                                   value={editAmount}
-                                  onChange={(e) => setEditAmount(e.target.value)}
+                                  onChange={(e) =>
+                                    setEditAmount(e.target.value)
+                                  }
                                   className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white text-center focus:outline-none focus:border-gold-400"
                                   placeholder="Enter amount"
                                   min="0"
@@ -805,7 +1024,7 @@ export default function CompanyFinancingPage() {
                                   onClick={handleUpdateInterest}
                                   disabled={isUpdating}
                                 >
-                                  {isUpdating ? 'Saving...' : 'Save'}
+                                  {isUpdating ? "Saving..." : "Save"}
                                 </Button>
                                 <Button
                                   variant="ghost"
@@ -821,17 +1040,25 @@ export default function CompanyFinancingPage() {
                           ) : (
                             <>
                               <p className="text-sm text-slate-400 mt-1">
-                                {interestStatus.shares_requested?.toLocaleString()} shares ({formatCurrency(Number(interestStatus.investment_amount) || 0)})
+                                {interestStatus.shares_requested?.toLocaleString()}{" "}
+                                shares (
+                                {formatCurrency(
+                                  Number(interestStatus.investment_amount) || 0,
+                                )}
+                                )
                               </p>
                               <p className="text-xs text-slate-500 mt-2">
-                                Status: {interestStatus.status === 'pending' ? 'Pending Review' : interestStatus.status}
+                                Status:{" "}
+                                {interestStatus.status === "pending"
+                                  ? "Pending Review"
+                                  : interestStatus.status}
                               </p>
                             </>
                           )}
                         </div>
 
                         {/* Edit and Cancel buttons - only show if status is pending and not editing */}
-                        {interestStatus.status === 'pending' && !isEditing && (
+                        {interestStatus.status === "pending" && !isEditing && (
                           <div className="flex gap-2 mt-4 pt-4 border-t border-green-500/20">
                             <Button
                               variant="ghost"
@@ -839,8 +1066,18 @@ export default function CompanyFinancingPage() {
                               className="flex-1 text-slate-300 hover:text-white"
                               onClick={handleStartEdit}
                             >
-                              <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                              <svg
+                                className="w-4 h-4 mr-1"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2}
+                                  d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                                />
                               </svg>
                               Edit Amount
                             </Button>
@@ -852,11 +1089,21 @@ export default function CompanyFinancingPage() {
                               disabled={isCancelling}
                             >
                               {isCancelling ? (
-                                'Cancelling...'
+                                "Cancelling..."
                               ) : (
                                 <>
-                                  <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                  <svg
+                                    className="w-4 h-4 mr-1"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    viewBox="0 0 24 24"
+                                  >
+                                    <path
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      strokeWidth={2}
+                                      d="M6 18L18 6M6 6l12 12"
+                                    />
                                   </svg>
                                   Cancel Interest
                                 </>
@@ -877,7 +1124,8 @@ export default function CompanyFinancingPage() {
                         Participate in this Financing
                       </Button>
                       <p className="text-xs text-slate-500 text-center">
-                        Register your interest to receive investment documents and next steps.
+                        Register your interest to receive investment documents
+                        and next steps.
                       </p>
                     </div>
                   )}
@@ -887,15 +1135,17 @@ export default function CompanyFinancingPage() {
               {/* Learn More */}
               <Card variant="glass-card">
                 <CardContent className="p-6">
-                  <h3 className="text-lg font-semibold text-white mb-4">Learn About Private Placements</h3>
+                  <h3 className="text-lg font-semibold text-white mb-4">
+                    Learn About Private Placements
+                  </h3>
                   <p className="text-sm text-slate-400 mb-4">
-                    New to private placements? Visit our Financial Hub to learn about the process,
-                    requirements, and what to expect.
+                    New to private placements? Visit our Financial Hub to learn
+                    about the process, requirements, and what to expect.
                   </p>
                   <Button
                     variant="secondary"
                     className="w-full"
-                    onClick={() => router.push('/financial-hub')}
+                    onClick={() => router.push("/financial-hub")}
                   >
                     Visit Financial Hub
                   </Button>
@@ -906,14 +1156,16 @@ export default function CompanyFinancingPage() {
               {financings.length > 1 && (
                 <Card variant="glass-card">
                   <CardHeader>
-                    <CardTitle className="text-sm text-slate-400">Other Financing Rounds</CardTitle>
+                    <CardTitle className="text-sm text-slate-400">
+                      Other Financing Rounds
+                    </CardTitle>
                   </CardHeader>
                   <CardContent>
                     <div className="space-y-2">
                       {financings
-                        .filter(f => f.id !== selectedFinancing?.id)
+                        .filter((f) => f.id !== selectedFinancing?.id)
                         .slice(0, 3)
-                        .map(financing => (
+                        .map((financing) => (
                           <button
                             key={financing.id}
                             onClick={() => {
@@ -923,7 +1175,9 @@ export default function CompanyFinancingPage() {
                             className="w-full text-left p-3 bg-slate-800/30 hover:bg-slate-800/50 rounded-lg transition-all"
                           >
                             <div className="flex items-center justify-between">
-                              <span className="text-sm text-white">{financing.financing_type_display}</span>
+                              <span className="text-sm text-white">
+                                {financing.financing_type_display}
+                              </span>
                               <Badge variant="slate" className="text-xs">
                                 {financing.status}
                               </Badge>
@@ -945,7 +1199,9 @@ export default function CompanyFinancingPage() {
       {/* Footer */}
       <footer className="py-8 px-4 border-t border-slate-800 mt-12">
         <div className="max-w-7xl mx-auto text-center text-slate-400 text-sm">
-          <p>&copy; {new Date().getFullYear()} GoldVenture. All rights reserved.</p>
+          <p>
+            &copy; {new Date().getFullYear()} GoldVenture. All rights reserved.
+          </p>
         </div>
       </footer>
     </div>

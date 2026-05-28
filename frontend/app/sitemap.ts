@@ -1,4 +1,5 @@
 import { MetadataRoute } from "next";
+import { companyHref } from "@/lib/companyUrl";
 
 const API_BASE_URL =
   process.env.API_BASE_URL ||
@@ -256,7 +257,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
         company.name && (company.description || company.brief_description),
     )
     .map((company) => ({
-      url: `${baseUrl}/companies/${company.id}`,
+      url: `${baseUrl}${companyHref(company)}`,
       lastModified: new Date(company.updated_at || new Date()),
       changeFrequency: "weekly" as const,
       priority: 0.8,

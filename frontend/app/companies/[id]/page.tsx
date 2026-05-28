@@ -1,5 +1,6 @@
-import { notFound } from "next/navigation";
+import { notFound, permanentRedirect } from "next/navigation";
 import CompanyDetailClient from "./CompanyDetailClient";
+import { companyHref, parseCompanyIdParam } from "@/lib/companyUrl";
 
 const API_BASE_URL =
   process.env.API_BASE_URL ||
@@ -12,7 +13,7 @@ type Props = {
 
 export async function generateStaticParams() {
   try {
-    let allIds: { id: string }[] = [];
+    let allParams: { id: string }[] = [];
     let page = 1;
     let hasMore = true;
 
@@ -23,17 +24,19 @@ export async function generateStaticParams() {
       if (!res.ok) break;
       const data = await res.json();
       const results = data.results || [];
-      allIds = [
-        ...allIds,
+      allParams = [
+        ...allParams,
         ...results
           .filter((c: any) => c.name && (c.description || c.brief_description))
-          .map((c: any) => ({ id: String(c.id) })),
+          .map((c: any) => ({
+            id: c.slug ? `${c.id}-${c.slug}` : String(c.id),
+          })),
       ];
       hasMore = !!data.next;
       page++;
     }
 
-    return allIds;
+    return allParams;
   } catch {
     return [];
   }
@@ -42,14 +45,16 @@ export async function generateStaticParams() {
 export const revalidate = 3600; // ISR: revalidate every hour
 
 export default async function CompanyDetailPage({ params }: Props) {
-  const { id } = await params;
+  const { id: rawSegment } = await params;
+  const numericId = parseCompanyIdParam(rawSegment);
+  if (numericId === null) notFound();
 
   try {
     const [companyRes, projectsRes] = await Promise.all([
-      fetch(`${API_BASE_URL}/companies/${id}/`, {
+      fetch(`${API_BASE_URL}/companies/${numericId}/`, {
         next: { revalidate: 3600 },
       }),
-      fetch(`${API_BASE_URL}/companies/${id}/projects/`, {
+      fetch(`${API_BASE_URL}/companies/${numericId}/projects/`, {
         next: { revalidate: 3600 },
       }),
     ]);
@@ -61,6 +66,14 @@ export default async function CompanyDetailPage({ params }: Props) {
     const company = await companyRes.json();
     const projects = projectsRes.ok ? await projectsRes.json() : [];
 
+    // 301 redirect to the canonical slug URL if the URL segment doesn't match.
+    const canonicalSegment = company.slug
+      ? `${company.id}-${company.slug}`
+      : `${company.id}`;
+    if (rawSegment !== canonicalSegment) {
+      permanentRedirect(companyHref(company));
+    }
+
     return (
       <CompanyDetailClient
         initialCompany={company}
@@ -69,7 +82,12 @@ export default async function CompanyDetailPage({ params }: Props) {
         }
       />
     );
-  } catch {
+  } catch (err) {
+    // permanentRedirect throws a special NEXT_REDIRECT error — re-throw so the
+    // framework can handle it. Anything else means the fetch genuinely failed.
+    if (err && typeof err === "object" && "digest" in err) {
+      throw err;
+    }
     notFound();
   }
 }
