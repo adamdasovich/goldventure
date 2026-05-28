@@ -3,69 +3,46 @@
 import { useEffect, useState } from "react";
 
 interface FloatingForumButtonProps {
-  /** ID of the forum section element to scroll to and observe. */
-  targetId?: string;
+  /** Called when the user clicks the FAB. Parent decides what jumping means
+   *  (tab switch, scrollIntoView, etc). */
+  onClick: () => void;
+  /** Hard-hide the FAB regardless of scroll position. Use this when the user
+   *  is already viewing the forum, so we don't show "jump to the thing you're
+   *  already looking at." */
+  hidden?: boolean;
+  /** Scroll threshold (px) before the FAB fades in. Defaults to 600 so it
+   *  only appears once the user is past the company hero, leaving the header
+   *  pill as the primary entry point above the fold. */
+  scrollThreshold?: number;
 }
 
 /**
- * Persistent chat-style FAB that scrolls to the company's community forum.
- *
- * Auto-hides while the forum section is in view (no point showing a "jump to
- * the thing you're already looking at" button) and while the user is at the
- * top of the page where the header pill is already visible.
+ * Persistent chat-style FAB that surfaces the company forum from anywhere on
+ * the company page. Fades in once the user has scrolled past the hero and
+ * stays out of the way otherwise.
  */
 export function FloatingForumButton({
-  targetId = "community-forum",
+  onClick,
+  hidden = false,
+  scrollThreshold = 600,
 }: FloatingForumButtonProps) {
-  const [visible, setVisible] = useState(false);
+  const [scrolledPast, setScrolledPast] = useState(false);
 
   useEffect(() => {
-    const target = document.getElementById(targetId);
-    if (!target) return;
-
-    let forumInView = false;
-    let scrolledPastHero = false;
-
-    const updateVisibility = () => {
-      // Only show once the user has scrolled meaningfully past the header
-      // (where the discovery pill lives) AND the forum itself is not on
-      // screen yet. Otherwise we're just being noisy.
-      setVisible(scrolledPastHero && !forumInView);
-    };
-
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        forumInView = entry.isIntersecting;
-        updateVisibility();
-      },
-      { rootMargin: "-80px 0px -80px 0px" },
-    );
-    observer.observe(target);
-
     const onScroll = () => {
-      scrolledPastHero = window.scrollY > 600;
-      updateVisibility();
+      setScrolledPast(window.scrollY > scrollThreshold);
     };
     onScroll();
     window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, [scrollThreshold]);
 
-    return () => {
-      observer.disconnect();
-      window.removeEventListener("scroll", onScroll);
-    };
-  }, [targetId]);
-
-  const handleClick = () => {
-    const target = document.getElementById(targetId);
-    if (target) {
-      target.scrollIntoView({ behavior: "smooth", block: "start" });
-    }
-  };
+  const visible = scrolledPast && !hidden;
 
   return (
     <button
       type="button"
-      onClick={handleClick}
+      onClick={onClick}
       aria-label="Open community forum"
       className={`fixed bottom-6 left-6 z-40 flex items-center gap-2 rounded-full bg-gradient-to-br from-slate-700 to-slate-800 border border-gold-500/40 px-5 py-3 text-sm font-semibold text-gold-300 shadow-lg shadow-slate-900/60 hover:border-gold-400 hover:text-gold-200 hover:scale-105 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-gold-300 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 ${
         visible

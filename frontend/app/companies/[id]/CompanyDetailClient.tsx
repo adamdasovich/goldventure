@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useCallback, useEffect, useState } from "react";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import {
   Card,
   CardHeader,
@@ -62,8 +62,54 @@ export default function CompanyDetailClient({
   initialProjects,
 }: CompanyDetailClientProps) {
   const params = useParams();
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const companyId = params.id as string;
   const { user, accessToken, logout } = useAuth();
+
+  // Tab state — kept in the URL (?tab=forum) so the discovery pill, FAB,
+  // and external links can deep-link straight into a tab and the choice
+  // survives refresh / back-forward navigation.
+  const TAB_IDS = [
+    "overview",
+    "news",
+    "financings",
+    "resources",
+    "forum",
+  ] as const;
+  type TabId = (typeof TAB_IDS)[number];
+  const urlTab = searchParams?.get("tab") as TabId | null;
+  const activeTab: TabId =
+    urlTab && (TAB_IDS as readonly string[]).includes(urlTab)
+      ? urlTab
+      : "overview";
+
+  const setActiveTab = useCallback(
+    (tab: TabId, opts?: { scrollIntoView?: string }) => {
+      const next = new URLSearchParams(searchParams?.toString() || "");
+      if (tab === "overview") {
+        next.delete("tab");
+      } else {
+        next.set("tab", tab);
+      }
+      const qs = next.toString();
+      router.replace(`/companies/${companyId}${qs ? `?${qs}` : ""}`, {
+        scroll: false,
+      });
+      if (opts?.scrollIntoView) {
+        // Wait one frame so the newly-mounted target exists in the DOM.
+        requestAnimationFrame(() => {
+          const el = document.getElementById(opts.scrollIntoView!);
+          if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+        });
+      }
+    },
+    [companyId, router, searchParams],
+  );
+
+  const jumpToForum = useCallback(() => {
+    setActiveTab("forum", { scrollIntoView: "community-forum" });
+  }, [setActiveTab]);
 
   const [company, setCompany] = useState<Company | null>(
     initialCompany || null,
@@ -1093,8 +1139,9 @@ export default function CompanyDetailClient({
                     {/* Forum discovery pill — surfaces the Community Forum
                         above the fold so users don't have to scroll the page
                         to discover it exists. */}
-                    <a
-                      href="#community-forum"
+                    <button
+                      type="button"
+                      onClick={jumpToForum}
                       aria-label="Jump to community forum"
                       className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-gold-500/10 hover:bg-gold-500/20 border border-gold-500/40 text-sm font-medium text-gold-300 hover:text-gold-200 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-gold-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
                     >
@@ -1117,7 +1164,7 @@ export default function CompanyDetailClient({
                         />
                       </svg>
                       <span>Join the discussion</span>
-                    </a>
+                    </button>
                   </div>
                   {/* Editable Description */}
                   {isEditingDescription ? (
@@ -1598,257 +1645,617 @@ export default function CompanyDetailClient({
           {/* Company Details Tabs */}
           <section className="py-12 px-4 sm:px-6 lg:px-8">
             <div className="max-w-7xl mx-auto">
-              {/* Projects Section */}
-              <div className="mb-12">
-                <div className="flex items-center justify-between mb-6">
-                  <div>
-                    <h2 className="text-3xl font-bold text-gold-400 mb-2">
-                      Projects
-                    </h2>
-                    <p className="text-slate-400">
-                      Active mining projects and exploration sites
-                    </p>
-                  </div>
-                  {canEditCompany && (
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => setShowAddProject(true)}
+              {/* Tab navigation — sticky below the global nav so users can
+                  switch sections without scrolling back. Horizontally
+                  scrollable on narrow screens. */}
+              <div
+                role="tablist"
+                aria-label="Company sections"
+                className="sticky top-16 z-30 -mx-4 sm:mx-0 mb-8 flex gap-1 overflow-x-auto bg-slate-900/85 backdrop-blur supports-[backdrop-filter]:bg-slate-900/70 border-b border-slate-800 px-4 sm:px-0 sm:rounded-xl sm:border sm:border-slate-800 sm:bg-slate-900/60 sm:p-1"
+              >
+                {(
+                  [
+                    { id: "overview", label: "Overview" },
+                    { id: "news", label: "News" },
+                    { id: "financings", label: "Financings" },
+                    { id: "resources", label: "Resources" },
+                    { id: "forum", label: "Community Forum" },
+                  ] as { id: TabId; label: string }[]
+                ).map((tab) => {
+                  const isActive = activeTab === tab.id;
+                  return (
+                    <button
+                      key={tab.id}
+                      role="tab"
+                      type="button"
+                      {...{ "aria-selected": isActive }}
+                      aria-controls={`tab-panel-${tab.id}`}
+                      id={`tab-${tab.id}`}
+                      onClick={() => setActiveTab(tab.id)}
+                      className={`whitespace-nowrap px-4 py-2.5 text-sm font-medium rounded-lg transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-gold-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 ${
+                        isActive
+                          ? "bg-gold-500/15 text-gold-300 border border-gold-500/40"
+                          : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 border border-transparent"
+                      }`}
                     >
-                      + Add Project
-                    </Button>
+                      {tab.label}
+                      {tab.id === "forum" && (
+                        <span
+                          className="inline-block ml-2 w-2 h-2 rounded-full bg-green-400 motion-safe:animate-pulse align-middle"
+                          aria-hidden="true"
+                        />
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Projects Section — Overview tab */}
+              {activeTab === "overview" && (
+                <div
+                  id="tab-panel-overview"
+                  role="tabpanel"
+                  aria-labelledby="tab-overview"
+                  className="mb-12"
+                >
+                  <div className="flex items-center justify-between mb-6">
+                    <div>
+                      <h2 className="text-3xl font-bold text-gold-400 mb-2">
+                        Projects
+                      </h2>
+                      <p className="text-slate-400">
+                        Active mining projects and exploration sites
+                      </p>
+                    </div>
+                    {canEditCompany && (
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => setShowAddProject(true)}
+                      >
+                        + Add Project
+                      </Button>
+                    )}
+                  </div>
+
+                  {/* Add Project Form */}
+                  {showAddProject && canEditCompany && (
+                    <Card variant="glass-card" className="mb-6">
+                      <CardHeader>
+                        <CardTitle className="text-xl text-gold-400">
+                          Add New Project
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="space-y-4">
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                              <label className="block text-sm text-slate-400 mb-1">
+                                Project Name *
+                              </label>
+                              <input
+                                type="text"
+                                value={newProject.name}
+                                onChange={(e) =>
+                                  setNewProject({
+                                    ...newProject,
+                                    name: e.target.value,
+                                  })
+                                }
+                                className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-gold-400"
+                                placeholder="e.g., Gold Mountain Project"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-sm text-slate-400 mb-1">
+                                Country *
+                              </label>
+                              <input
+                                type="text"
+                                value={newProject.country}
+                                onChange={(e) =>
+                                  setNewProject({
+                                    ...newProject,
+                                    country: e.target.value,
+                                  })
+                                }
+                                className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-gold-400"
+                                placeholder="e.g., Canada"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-sm text-slate-400 mb-1">
+                                Province/State
+                              </label>
+                              <input
+                                type="text"
+                                value={newProject.province_state}
+                                onChange={(e) =>
+                                  setNewProject({
+                                    ...newProject,
+                                    province_state: e.target.value,
+                                  })
+                                }
+                                className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-gold-400"
+                                placeholder="e.g., Ontario"
+                              />
+                            </div>
+                            <div>
+                              <label
+                                htmlFor="primary_commodity"
+                                className="block text-sm text-slate-400 mb-1"
+                              >
+                                Primary Commodity *
+                              </label>
+                              <select
+                                id="primary_commodity"
+                                title="Primary Commodity"
+                                value={newProject.primary_commodity}
+                                onChange={(e) =>
+                                  setNewProject({
+                                    ...newProject,
+                                    primary_commodity: e.target.value,
+                                  })
+                                }
+                                className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-gold-400"
+                              >
+                                <option value="gold">Gold</option>
+                                <option value="silver">Silver</option>
+                                <option value="copper">Copper</option>
+                                <option value="lithium">Lithium</option>
+                                <option value="nickel">Nickel</option>
+                                <option value="cobalt">Cobalt</option>
+                                <option value="rare_earths">
+                                  Rare Earth Elements
+                                </option>
+                                <option value="zinc">Zinc</option>
+                                <option value="uranium">Uranium</option>
+                                <option value="multi_metal">Multi-Metal</option>
+                                <option value="other">Other</option>
+                              </select>
+                            </div>
+                            <div>
+                              <label
+                                htmlFor="project_stage"
+                                className="block text-sm text-slate-400 mb-1"
+                              >
+                                Project Stage *
+                              </label>
+                              <select
+                                id="project_stage"
+                                title="Project Stage"
+                                value={newProject.project_stage}
+                                onChange={(e) =>
+                                  setNewProject({
+                                    ...newProject,
+                                    project_stage: e.target.value,
+                                  })
+                                }
+                                className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-gold-400"
+                              >
+                                <option value="grassroots">
+                                  Grassroots Exploration
+                                </option>
+                                <option value="early_exploration">
+                                  Early Stage Exploration
+                                </option>
+                                <option value="advanced_exploration">
+                                  Advanced Exploration
+                                </option>
+                                <option value="resource">Resource Stage</option>
+                                <option value="pea">PEA Completed</option>
+                                <option value="pfs">PFS Completed</option>
+                                <option value="fs">Feasibility Study</option>
+                                <option value="permitting">Permitting</option>
+                                <option value="development">Development</option>
+                                <option value="production">Production</option>
+                              </select>
+                            </div>
+                          </div>
+                          <div>
+                            <label className="block text-sm text-slate-400 mb-1">
+                              Description
+                            </label>
+                            <textarea
+                              value={newProject.description}
+                              onChange={(e) =>
+                                setNewProject({
+                                  ...newProject,
+                                  description: e.target.value,
+                                })
+                              }
+                              className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-gold-400 h-24"
+                              placeholder="Brief description of the project..."
+                            />
+                          </div>
+                          {projectError && (
+                            <div className="text-red-400 text-sm">
+                              {projectError}
+                            </div>
+                          )}
+                          <div className="flex gap-2">
+                            <Button
+                              variant="primary"
+                              size="sm"
+                              onClick={handleAddProject}
+                              disabled={
+                                savingProject ||
+                                !newProject.name ||
+                                !newProject.country
+                              }
+                            >
+                              {savingProject ? "Adding..." : "Add Project"}
+                            </Button>
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              onClick={() => {
+                                setShowAddProject(false);
+                                setProjectError(null);
+                              }}
+                            >
+                              Cancel
+                            </Button>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  {projects.length > 0 ? (
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                      {projects.map((project) => (
+                        <Card
+                          key={project.id}
+                          variant="glass-card"
+                          className="hover:scale-105 transition-transform relative"
+                        >
+                          {/* Edit and Delete buttons for admins */}
+                          {canEditCompany && (
+                            <div className="absolute top-3 right-3 flex gap-2 z-20">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleEditProject(project);
+                                }}
+                                className="p-2 bg-gold-500/30 hover:bg-gold-500/50 rounded-lg text-gold-400 hover:text-gold-300 transition-colors"
+                                title="Edit project"
+                              >
+                                <svg
+                                  className="w-4 h-4"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  viewBox="0 0 24 24"
+                                >
+                                  <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth={2}
+                                    d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                                  />
+                                </svg>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDeleteProject(project.id);
+                                }}
+                                disabled={deletingProjectId === project.id}
+                                className="p-2 bg-red-500/30 hover:bg-red-500/50 rounded-lg text-red-400 hover:text-red-300 transition-colors"
+                                title="Delete project"
+                              >
+                                {deletingProjectId === project.id ? (
+                                  <svg
+                                    className="w-4 h-4 animate-spin"
+                                    fill="none"
+                                    viewBox="0 0 24 24"
+                                  >
+                                    <circle
+                                      className="opacity-25"
+                                      cx="12"
+                                      cy="12"
+                                      r="10"
+                                      stroke="currentColor"
+                                      strokeWidth="4"
+                                    ></circle>
+                                    <path
+                                      className="opacity-75"
+                                      fill="currentColor"
+                                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                                    ></path>
+                                  </svg>
+                                ) : (
+                                  <svg
+                                    className="w-4 h-4"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    viewBox="0 0 24 24"
+                                  >
+                                    <path
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      strokeWidth={2}
+                                      d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                                    />
+                                  </svg>
+                                )}
+                              </button>
+                            </div>
+                          )}
+                          <CardHeader>
+                            <div className="flex items-start justify-between mb-2">
+                              <CardTitle className="text-xl text-gold-400">
+                                {project.name}
+                              </CardTitle>
+                              {project.is_flagship && (
+                                <Badge variant="gold">Flagship</Badge>
+                              )}
+                            </div>
+                            {(project.country || project.province_state) && (
+                              <div className="flex items-center gap-2 text-sm text-slate-400 mb-2">
+                                <svg
+                                  className="w-4 h-4"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  viewBox="0 0 24 24"
+                                >
+                                  <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth={2}
+                                    d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
+                                  />
+                                  <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth={2}
+                                    d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"
+                                  />
+                                </svg>
+                                <span>
+                                  {[project.province_state, project.country]
+                                    .filter(Boolean)
+                                    .join(", ")}
+                                </span>
+                              </div>
+                            )}
+                            <CardDescription className="line-clamp-2">
+                              {project.description ||
+                                "Gold exploration and development project"}
+                            </CardDescription>
+                          </CardHeader>
+                          <CardContent>
+                            <div className="space-y-3">
+                              <div className="flex items-center justify-between text-sm">
+                                <span className="text-slate-400">
+                                  Primary Commodity
+                                </span>
+                                <span className="text-white font-semibold">
+                                  {project.primary_commodity || "Gold"}
+                                </span>
+                              </div>
+                              {project.project_stage && (
+                                <div className="flex items-center justify-between text-sm">
+                                  <span className="text-slate-400">Stage</span>
+                                  <Badge variant="copper">
+                                    {project.project_stage}
+                                  </Badge>
+                                </div>
+                              )}
+                              {project.total_resources_oz && (
+                                <div className="pt-3 border-t border-slate-700">
+                                  <div className="text-xs text-slate-400 mb-1">
+                                    Total Resources
+                                  </div>
+                                  <div className="text-lg font-bold text-gold-400">
+                                    {formatNumber(project.total_resources_oz)}{" "}
+                                    oz Au
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+                  ) : (
+                    <Card variant="glass-card">
+                      <CardContent className="py-12 text-center">
+                        <div className="text-slate-400">
+                          No projects data available
+                        </div>
+                      </CardContent>
+                    </Card>
                   )}
                 </div>
+              )}
 
-                {/* Add Project Form */}
-                {showAddProject && canEditCompany && (
-                  <Card variant="glass-card" className="mb-6">
-                    <CardHeader>
-                      <CardTitle className="text-xl text-gold-400">
-                        Add New Project
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="space-y-4">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <div>
-                            <label className="block text-sm text-slate-400 mb-1">
-                              Project Name *
-                            </label>
-                            <input
-                              type="text"
-                              value={newProject.name}
-                              onChange={(e) =>
-                                setNewProject({
-                                  ...newProject,
-                                  name: e.target.value,
-                                })
-                              }
-                              className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-gold-400"
-                              placeholder="e.g., Gold Mountain Project"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-sm text-slate-400 mb-1">
-                              Country *
-                            </label>
-                            <input
-                              type="text"
-                              value={newProject.country}
-                              onChange={(e) =>
-                                setNewProject({
-                                  ...newProject,
-                                  country: e.target.value,
-                                })
-                              }
-                              className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-gold-400"
-                              placeholder="e.g., Canada"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-sm text-slate-400 mb-1">
-                              Province/State
-                            </label>
-                            <input
-                              type="text"
-                              value={newProject.province_state}
-                              onChange={(e) =>
-                                setNewProject({
-                                  ...newProject,
-                                  province_state: e.target.value,
-                                })
-                              }
-                              className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-gold-400"
-                              placeholder="e.g., Ontario"
-                            />
-                          </div>
-                          <div>
-                            <label
-                              htmlFor="primary_commodity"
-                              className="block text-sm text-slate-400 mb-1"
-                            >
-                              Primary Commodity *
-                            </label>
-                            <select
-                              id="primary_commodity"
-                              title="Primary Commodity"
-                              value={newProject.primary_commodity}
-                              onChange={(e) =>
-                                setNewProject({
-                                  ...newProject,
-                                  primary_commodity: e.target.value,
-                                })
-                              }
-                              className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-gold-400"
-                            >
-                              <option value="gold">Gold</option>
-                              <option value="silver">Silver</option>
-                              <option value="copper">Copper</option>
-                              <option value="lithium">Lithium</option>
-                              <option value="nickel">Nickel</option>
-                              <option value="cobalt">Cobalt</option>
-                              <option value="rare_earths">
-                                Rare Earth Elements
-                              </option>
-                              <option value="zinc">Zinc</option>
-                              <option value="uranium">Uranium</option>
-                              <option value="multi_metal">Multi-Metal</option>
-                              <option value="other">Other</option>
-                            </select>
-                          </div>
-                          <div>
-                            <label
-                              htmlFor="project_stage"
-                              className="block text-sm text-slate-400 mb-1"
-                            >
-                              Project Stage *
-                            </label>
-                            <select
-                              id="project_stage"
-                              title="Project Stage"
-                              value={newProject.project_stage}
-                              onChange={(e) =>
-                                setNewProject({
-                                  ...newProject,
-                                  project_stage: e.target.value,
-                                })
-                              }
-                              className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-gold-400"
-                            >
-                              <option value="grassroots">
-                                Grassroots Exploration
-                              </option>
-                              <option value="early_exploration">
-                                Early Stage Exploration
-                              </option>
-                              <option value="advanced_exploration">
-                                Advanced Exploration
-                              </option>
-                              <option value="resource">Resource Stage</option>
-                              <option value="pea">PEA Completed</option>
-                              <option value="pfs">PFS Completed</option>
-                              <option value="fs">Feasibility Study</option>
-                              <option value="permitting">Permitting</option>
-                              <option value="development">Development</option>
-                              <option value="production">Production</option>
-                            </select>
-                          </div>
-                        </div>
-                        <div>
-                          <label className="block text-sm text-slate-400 mb-1">
-                            Description
-                          </label>
-                          <textarea
-                            value={newProject.description}
-                            onChange={(e) =>
-                              setNewProject({
-                                ...newProject,
-                                description: e.target.value,
-                              })
-                            }
-                            className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-gold-400 h-24"
-                            placeholder="Brief description of the project..."
-                          />
-                        </div>
-                        {projectError && (
-                          <div className="text-red-400 text-sm">
-                            {projectError}
-                          </div>
-                        )}
-                        <div className="flex gap-2">
-                          <Button
-                            variant="primary"
-                            size="sm"
-                            onClick={handleAddProject}
-                            disabled={
-                              savingProject ||
-                              !newProject.name ||
-                              !newProject.country
-                            }
-                          >
-                            {savingProject ? "Adding..." : "Add Project"}
-                          </Button>
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            onClick={() => {
-                              setShowAddProject(false);
-                              setProjectError(null);
-                            }}
-                          >
-                            Cancel
-                          </Button>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                )}
-
-                {projects.length > 0 ? (
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    {projects.map((project) => (
-                      <Card
-                        key={project.id}
-                        variant="glass-card"
-                        className="hover:scale-105 transition-transform relative"
+              {/* Resources & Documents Section — Resources tab */}
+              {activeTab === "resources" && (
+                <div
+                  id="tab-panel-resources"
+                  role="tabpanel"
+                  aria-labelledby="tab-resources"
+                  className="mb-12"
+                >
+                  <div className="flex items-center justify-between mb-6">
+                    <div>
+                      <h2 className="text-3xl font-bold text-gold-400 mb-2">
+                        Resources & Documents
+                      </h2>
+                      <p className="text-slate-400">
+                        Investor presentations, technical reports, and company
+                        documents
+                      </p>
+                    </div>
+                    {isCompanyRep && (
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => setShowResourceUpload(true)}
                       >
-                        {/* Edit and Delete buttons for admins */}
-                        {canEditCompany && (
-                          <div className="absolute top-3 right-3 flex gap-2 z-20">
+                        + Add Resource
+                      </Button>
+                    )}
+                  </div>
+
+                  {resourcesLoading ? (
+                    <Card variant="glass-card">
+                      <CardContent className="py-12 text-center">
+                        <div className="text-slate-400">
+                          Loading resources...
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ) : companyResources.length > 0 ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {companyResources.map((resource) => (
+                        <div key={resource.id} className="group relative">
+                          <a
+                            href={
+                              resource.file_url || resource.external_url || "#"
+                            }
+                            target="_blank"
+                            rel="noopener noreferrer"
+                          >
+                            <Card
+                              variant="glass-card"
+                              className="h-full hover:border-gold-500/50 transition-colors"
+                            >
+                              <CardContent className="p-4">
+                                <div className="flex items-start gap-3">
+                                  <div className="w-10 h-10 rounded-lg bg-slate-700 flex items-center justify-center flex-shrink-0">
+                                    {resource.resource_type === "document" ||
+                                    resource.category === "technical_report" ? (
+                                      <svg
+                                        className="w-5 h-5 text-gold-500"
+                                        fill="none"
+                                        viewBox="0 0 24 24"
+                                        stroke="currentColor"
+                                      >
+                                        <path
+                                          strokeLinecap="round"
+                                          strokeLinejoin="round"
+                                          strokeWidth={2}
+                                          d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                                        />
+                                      </svg>
+                                    ) : resource.resource_type ===
+                                        "presentation" ||
+                                      resource.category ===
+                                        "investor_presentation" ? (
+                                      <svg
+                                        className="w-5 h-5 text-gold-500"
+                                        fill="none"
+                                        viewBox="0 0 24 24"
+                                        stroke="currentColor"
+                                      >
+                                        <path
+                                          strokeLinecap="round"
+                                          strokeLinejoin="round"
+                                          strokeWidth={2}
+                                          d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"
+                                        />
+                                      </svg>
+                                    ) : resource.category === "map" ? (
+                                      <svg
+                                        className="w-5 h-5 text-gold-500"
+                                        fill="none"
+                                        viewBox="0 0 24 24"
+                                        stroke="currentColor"
+                                      >
+                                        <path
+                                          strokeLinecap="round"
+                                          strokeLinejoin="round"
+                                          strokeWidth={2}
+                                          d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"
+                                        />
+                                      </svg>
+                                    ) : resource.resource_type === "image" ? (
+                                      <svg
+                                        className="w-5 h-5 text-gold-500"
+                                        fill="none"
+                                        viewBox="0 0 24 24"
+                                        stroke="currentColor"
+                                      >
+                                        <path
+                                          strokeLinecap="round"
+                                          strokeLinejoin="round"
+                                          strokeWidth={2}
+                                          d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+                                        />
+                                      </svg>
+                                    ) : (
+                                      <svg
+                                        className="w-5 h-5 text-gold-500"
+                                        fill="none"
+                                        viewBox="0 0 24 24"
+                                        stroke="currentColor"
+                                      >
+                                        <path
+                                          strokeLinecap="round"
+                                          strokeLinejoin="round"
+                                          strokeWidth={2}
+                                          d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                                        />
+                                      </svg>
+                                    )}
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-white font-medium truncate group-hover:text-gold-400 transition-colors">
+                                      {resource.title}
+                                    </p>
+                                    {resource.description && (
+                                      <p className="text-sm text-slate-400 truncate">
+                                        {resource.description}
+                                      </p>
+                                    )}
+                                    <div className="flex items-center gap-2 mt-1">
+                                      <Badge
+                                        variant="slate"
+                                        className="text-xs"
+                                      >
+                                        {resource.category.replace(/_/g, " ")}
+                                      </Badge>
+                                      {resource.file_format && (
+                                        <span className="text-xs text-slate-500">
+                                          {resource.file_format.toUpperCase()}
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+                                  <svg
+                                    className="w-5 h-5 text-slate-500 group-hover:text-gold-400 transition-colors flex-shrink-0"
+                                    fill="none"
+                                    viewBox="0 0 24 24"
+                                    stroke="currentColor"
+                                  >
+                                    <path
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      strokeWidth={2}
+                                      d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
+                                    />
+                                  </svg>
+                                </div>
+                              </CardContent>
+                            </Card>
+                          </a>
+                          {isCompanyRep && (
                             <button
                               type="button"
                               onClick={(e) => {
+                                e.preventDefault();
                                 e.stopPropagation();
-                                handleEditProject(project);
+                                handleDeleteResource(resource.id);
                               }}
-                              className="p-2 bg-gold-500/30 hover:bg-gold-500/50 rounded-lg text-gold-400 hover:text-gold-300 transition-colors"
-                              title="Edit project"
+                              disabled={deletingResourceId === resource.id}
+                              className="absolute top-2 left-2 p-1.5 bg-red-500/80 hover:bg-red-500 text-white rounded-lg transition-all disabled:opacity-50 z-10"
+                              title="Delete resource"
                             >
-                              <svg
-                                className="w-4 h-4"
-                                fill="none"
-                                stroke="currentColor"
-                                viewBox="0 0 24 24"
-                              >
-                                <path
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  strokeWidth={2}
-                                  d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
-                                />
-                              </svg>
-                            </button>
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleDeleteProject(project.id);
-                              }}
-                              disabled={deletingProjectId === project.id}
-                              className="p-2 bg-red-500/30 hover:bg-red-500/50 rounded-lg text-red-400 hover:text-red-300 transition-colors"
-                              title="Delete project"
-                            >
-                              {deletingProjectId === project.id ? (
+                              {deletingResourceId === resource.id ? (
                                 <svg
                                   className="w-4 h-4 animate-spin"
                                   fill="none"
@@ -1872,8 +2279,8 @@ export default function CompanyDetailClient({
                                 <svg
                                   className="w-4 h-4"
                                   fill="none"
-                                  stroke="currentColor"
                                   viewBox="0 0 24 24"
+                                  stroke="currentColor"
                                 >
                                   <path
                                     strokeLinecap="round"
@@ -1884,342 +2291,46 @@ export default function CompanyDetailClient({
                                 </svg>
                               )}
                             </button>
-                          </div>
-                        )}
-                        <CardHeader>
-                          <div className="flex items-start justify-between mb-2">
-                            <CardTitle className="text-xl text-gold-400">
-                              {project.name}
-                            </CardTitle>
-                            {project.is_flagship && (
-                              <Badge variant="gold">Flagship</Badge>
-                            )}
-                          </div>
-                          {(project.country || project.province_state) && (
-                            <div className="flex items-center gap-2 text-sm text-slate-400 mb-2">
-                              <svg
-                                className="w-4 h-4"
-                                fill="none"
-                                stroke="currentColor"
-                                viewBox="0 0 24 24"
-                              >
-                                <path
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  strokeWidth={2}
-                                  d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
-                                />
-                                <path
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  strokeWidth={2}
-                                  d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"
-                                />
-                              </svg>
-                              <span>
-                                {[project.province_state, project.country]
-                                  .filter(Boolean)
-                                  .join(", ")}
-                              </span>
-                            </div>
                           )}
-                          <CardDescription className="line-clamp-2">
-                            {project.description ||
-                              "Gold exploration and development project"}
-                          </CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                          <div className="space-y-3">
-                            <div className="flex items-center justify-between text-sm">
-                              <span className="text-slate-400">
-                                Primary Commodity
-                              </span>
-                              <span className="text-white font-semibold">
-                                {project.primary_commodity || "Gold"}
-                              </span>
-                            </div>
-                            {project.project_stage && (
-                              <div className="flex items-center justify-between text-sm">
-                                <span className="text-slate-400">Stage</span>
-                                <Badge variant="copper">
-                                  {project.project_stage}
-                                </Badge>
-                              </div>
-                            )}
-                            {project.total_resources_oz && (
-                              <div className="pt-3 border-t border-slate-700">
-                                <div className="text-xs text-slate-400 mb-1">
-                                  Total Resources
-                                </div>
-                                <div className="text-lg font-bold text-gold-400">
-                                  {formatNumber(project.total_resources_oz)} oz
-                                  Au
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))}
-                  </div>
-                ) : (
-                  <Card variant="glass-card">
-                    <CardContent className="py-12 text-center">
-                      <div className="text-slate-400">
-                        No projects data available
-                      </div>
-                    </CardContent>
-                  </Card>
-                )}
-              </div>
-
-              {/* Resources & Documents Section */}
-              <div className="mb-12">
-                <div className="flex items-center justify-between mb-6">
-                  <div>
-                    <h2 className="text-3xl font-bold text-gold-400 mb-2">
-                      Resources & Documents
-                    </h2>
-                    <p className="text-slate-400">
-                      Investor presentations, technical reports, and company
-                      documents
-                    </p>
-                  </div>
-                  {isCompanyRep && (
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => setShowResourceUpload(true)}
-                    >
-                      + Add Resource
-                    </Button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <Card variant="glass-card">
+                      <CardContent className="py-12 text-center">
+                        <svg
+                          className="mx-auto w-12 h-12 text-slate-600 mb-3"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={1.5}
+                            d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                          />
+                        </svg>
+                        <p className="text-slate-400 mb-2">
+                          No resources uploaded yet
+                        </p>
+                        {isCompanyRep && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setShowResourceUpload(true)}
+                          >
+                            Upload your first resource
+                          </Button>
+                        )}
+                      </CardContent>
+                    </Card>
                   )}
                 </div>
+              )}
 
-                {resourcesLoading ? (
-                  <Card variant="glass-card">
-                    <CardContent className="py-12 text-center">
-                      <div className="text-slate-400">Loading resources...</div>
-                    </CardContent>
-                  </Card>
-                ) : companyResources.length > 0 ? (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {companyResources.map((resource) => (
-                      <div key={resource.id} className="group relative">
-                        <a
-                          href={
-                            resource.file_url || resource.external_url || "#"
-                          }
-                          target="_blank"
-                          rel="noopener noreferrer"
-                        >
-                          <Card
-                            variant="glass-card"
-                            className="h-full hover:border-gold-500/50 transition-colors"
-                          >
-                            <CardContent className="p-4">
-                              <div className="flex items-start gap-3">
-                                <div className="w-10 h-10 rounded-lg bg-slate-700 flex items-center justify-center flex-shrink-0">
-                                  {resource.resource_type === "document" ||
-                                  resource.category === "technical_report" ? (
-                                    <svg
-                                      className="w-5 h-5 text-gold-500"
-                                      fill="none"
-                                      viewBox="0 0 24 24"
-                                      stroke="currentColor"
-                                    >
-                                      <path
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                        strokeWidth={2}
-                                        d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                                      />
-                                    </svg>
-                                  ) : resource.resource_type ===
-                                      "presentation" ||
-                                    resource.category ===
-                                      "investor_presentation" ? (
-                                    <svg
-                                      className="w-5 h-5 text-gold-500"
-                                      fill="none"
-                                      viewBox="0 0 24 24"
-                                      stroke="currentColor"
-                                    >
-                                      <path
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                        strokeWidth={2}
-                                        d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"
-                                      />
-                                    </svg>
-                                  ) : resource.category === "map" ? (
-                                    <svg
-                                      className="w-5 h-5 text-gold-500"
-                                      fill="none"
-                                      viewBox="0 0 24 24"
-                                      stroke="currentColor"
-                                    >
-                                      <path
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                        strokeWidth={2}
-                                        d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"
-                                      />
-                                    </svg>
-                                  ) : resource.resource_type === "image" ? (
-                                    <svg
-                                      className="w-5 h-5 text-gold-500"
-                                      fill="none"
-                                      viewBox="0 0 24 24"
-                                      stroke="currentColor"
-                                    >
-                                      <path
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                        strokeWidth={2}
-                                        d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
-                                      />
-                                    </svg>
-                                  ) : (
-                                    <svg
-                                      className="w-5 h-5 text-gold-500"
-                                      fill="none"
-                                      viewBox="0 0 24 24"
-                                      stroke="currentColor"
-                                    >
-                                      <path
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                        strokeWidth={2}
-                                        d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                                      />
-                                    </svg>
-                                  )}
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                  <p className="text-white font-medium truncate group-hover:text-gold-400 transition-colors">
-                                    {resource.title}
-                                  </p>
-                                  {resource.description && (
-                                    <p className="text-sm text-slate-400 truncate">
-                                      {resource.description}
-                                    </p>
-                                  )}
-                                  <div className="flex items-center gap-2 mt-1">
-                                    <Badge variant="slate" className="text-xs">
-                                      {resource.category.replace(/_/g, " ")}
-                                    </Badge>
-                                    {resource.file_format && (
-                                      <span className="text-xs text-slate-500">
-                                        {resource.file_format.toUpperCase()}
-                                      </span>
-                                    )}
-                                  </div>
-                                </div>
-                                <svg
-                                  className="w-5 h-5 text-slate-500 group-hover:text-gold-400 transition-colors flex-shrink-0"
-                                  fill="none"
-                                  viewBox="0 0 24 24"
-                                  stroke="currentColor"
-                                >
-                                  <path
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    strokeWidth={2}
-                                    d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
-                                  />
-                                </svg>
-                              </div>
-                            </CardContent>
-                          </Card>
-                        </a>
-                        {isCompanyRep && (
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              handleDeleteResource(resource.id);
-                            }}
-                            disabled={deletingResourceId === resource.id}
-                            className="absolute top-2 left-2 p-1.5 bg-red-500/80 hover:bg-red-500 text-white rounded-lg transition-all disabled:opacity-50 z-10"
-                            title="Delete resource"
-                          >
-                            {deletingResourceId === resource.id ? (
-                              <svg
-                                className="w-4 h-4 animate-spin"
-                                fill="none"
-                                viewBox="0 0 24 24"
-                              >
-                                <circle
-                                  className="opacity-25"
-                                  cx="12"
-                                  cy="12"
-                                  r="10"
-                                  stroke="currentColor"
-                                  strokeWidth="4"
-                                ></circle>
-                                <path
-                                  className="opacity-75"
-                                  fill="currentColor"
-                                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                                ></path>
-                              </svg>
-                            ) : (
-                              <svg
-                                className="w-4 h-4"
-                                fill="none"
-                                viewBox="0 0 24 24"
-                                stroke="currentColor"
-                              >
-                                <path
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  strokeWidth={2}
-                                  d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                                />
-                              </svg>
-                            )}
-                          </button>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <Card variant="glass-card">
-                    <CardContent className="py-12 text-center">
-                      <svg
-                        className="mx-auto w-12 h-12 text-slate-600 mb-3"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={1.5}
-                          d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                        />
-                      </svg>
-                      <p className="text-slate-400 mb-2">
-                        No resources uploaded yet
-                      </p>
-                      {isCompanyRep && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setShowResourceUpload(true)}
-                        >
-                          Upload your first resource
-                        </Button>
-                      )}
-                    </CardContent>
-                  </Card>
-                )}
-              </div>
-
-              {/* Company Representative Registration Section */}
-              {!isCompanyRep && (
+              {/* Company Representative Registration Section — Overview tab */}
+              {activeTab === "overview" && !isCompanyRep && (
                 <div className="mb-12">
                   <Card variant="glass-card" className="border-gold-500/30">
                     <CardContent className="p-6">
@@ -2382,332 +2493,456 @@ export default function CompanyDetailClient({
                 </div>
               )}
 
-              {/* Community Forum Section — visually distinct from the
-                  data-table sections above. Gradient border + outer glow signal
-                  "this is a people section, not another table." Scroll-margin
-                  keeps the sticky nav from covering the heading on anchor jump. */}
-              <section
-                id="community-forum"
-                aria-labelledby="community-forum-heading"
-                className="mb-12 scroll-mt-24 relative rounded-2xl border border-gold-500/30 bg-gradient-to-br from-slate-800/60 to-slate-900/80 p-6 md:p-8 shadow-[0_0_40px_-15px_rgba(212,175,55,0.4)]"
-              >
-                <div className="mb-6 flex items-start justify-between gap-4 flex-wrap">
-                  <div className="flex items-start gap-4">
-                    <div
-                      className="w-12 h-12 rounded-xl bg-gold-500/15 border border-gold-500/30 flex items-center justify-center flex-shrink-0"
-                      aria-hidden="true"
-                    >
-                      <svg
-                        className="w-6 h-6 text-gold-400"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
+              {/* Community Forum Section — Forum tab. Visually distinct from
+                  the data sections; the gradient border + glow cue "this is a
+                  people section, not another table." */}
+              {activeTab === "forum" && (
+                <section
+                  id="community-forum"
+                  role="tabpanel"
+                  aria-labelledby="community-forum-heading"
+                  className="mb-12 scroll-mt-24 relative rounded-2xl border border-gold-500/30 bg-gradient-to-br from-slate-800/60 to-slate-900/80 p-6 md:p-8 shadow-[0_0_40px_-15px_rgba(212,175,55,0.4)]"
+                >
+                  <div className="mb-6 flex items-start justify-between gap-4 flex-wrap">
+                    <div className="flex items-start gap-4">
+                      <div
+                        className="w-12 h-12 rounded-xl bg-gold-500/15 border border-gold-500/30 flex items-center justify-center flex-shrink-0"
+                        aria-hidden="true"
                       >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
-                        />
-                      </svg>
+                        <svg
+                          className="w-6 h-6 text-gold-400"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
+                          />
+                        </svg>
+                      </div>
+                      <div>
+                        <h2
+                          id="community-forum-heading"
+                          className="text-3xl font-bold text-gold-400 mb-1"
+                        >
+                          Community Forum
+                        </h2>
+                        <p className="text-slate-400">
+                          Real-time discussion with investors and analysts
+                          following {company.name}
+                        </p>
+                      </div>
                     </div>
+                    <span
+                      className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-green-500/10 border border-green-500/30 text-xs font-semibold text-green-300 uppercase tracking-wide"
+                      aria-label="Live discussion"
+                    >
+                      <span
+                        className="w-2 h-2 rounded-full bg-green-400 motion-safe:animate-pulse"
+                        aria-hidden="true"
+                      />
+                      Live
+                    </span>
+                  </div>
+
+                  <CompanyForum
+                    companyId={parseInt(companyId)}
+                    companyName={company.name}
+                  />
+                </section>
+              )}
+
+              {/* News Releases Section — News tab */}
+              {activeTab === "news" && (
+                <div
+                  id="tab-panel-news"
+                  role="tabpanel"
+                  aria-labelledby="tab-news"
+                  className="mb-12"
+                >
+                  <div className="mb-6 flex items-center justify-between">
                     <div>
-                      <h2
-                        id="community-forum-heading"
-                        className="text-3xl font-bold text-gold-400 mb-1"
-                      >
-                        Community Forum
+                      <h2 className="text-3xl font-bold text-gold-400 mb-2">
+                        Company News Releases
                       </h2>
                       <p className="text-slate-400">
-                        Real-time discussion with investors and analysts
-                        following {company.name}
+                        Recent updates and announcements from {company.name}
                       </p>
+                      {newsData?.last_updated && (
+                        <p className="text-xs text-slate-500 mt-1">
+                          Last updated:{" "}
+                          {new Date(newsData.last_updated).toLocaleString()}
+                        </p>
+                      )}
+                      {scrapeError && (
+                        <p className="text-xs text-red-400 mt-2 flex items-center gap-1">
+                          <svg
+                            className="w-4 h-4"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                            />
+                          </svg>
+                          {scrapeError}
+                        </p>
+                      )}
                     </div>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={handleScrapeNews}
+                      disabled={scrapingNews || !company.website}
+                    >
+                      {scrapingNews ? (
+                        <>
+                          <svg
+                            className="animate-spin -ml-1 mr-2 h-4 w-4"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                          >
+                            <circle
+                              className="opacity-25"
+                              cx="12"
+                              cy="12"
+                              r="10"
+                              stroke="currentColor"
+                              strokeWidth="4"
+                            ></circle>
+                            <path
+                              className="opacity-75"
+                              fill="currentColor"
+                              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                            ></path>
+                          </svg>
+                          Updating...
+                        </>
+                      ) : (
+                        <>
+                          <svg
+                            className="w-4 h-4 mr-2"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                            />
+                          </svg>
+                          Update News
+                        </>
+                      )}
+                    </Button>
                   </div>
-                  <span
-                    className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-green-500/10 border border-green-500/30 text-xs font-semibold text-green-300 uppercase tracking-wide"
-                    aria-label="Live discussion"
-                  >
-                    <span
-                      className="w-2 h-2 rounded-full bg-green-400 motion-safe:animate-pulse"
-                      aria-hidden="true"
-                    />
-                    Live
-                  </span>
+
+                  {newsLoading ? (
+                    <Card variant="glass-card">
+                      <CardContent className="py-12 text-center">
+                        <div className="text-slate-400">
+                          Loading news releases...
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ) : (
+                    <div className="space-y-8">
+                      {/* Financial News Section */}
+                      <div>
+                        <h3 className="text-xl font-bold text-copper-400 mb-4 flex items-center gap-2">
+                          <svg
+                            className="w-5 h-5"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"
+                            />
+                          </svg>
+                          Financial News
+                        </h3>
+                        {newsData?.financial &&
+                        newsData.financial.length > 0 ? (
+                          <div className="grid grid-cols-1 gap-4">
+                            {newsData.financial.map((release) => (
+                              <Card key={release.id} variant="glass-card">
+                                <CardHeader>
+                                  <div className="flex items-start justify-between">
+                                    <CardTitle className="text-lg text-white">
+                                      {release.title}
+                                    </CardTitle>
+                                    <Badge variant="gold">Financial</Badge>
+                                  </div>
+                                  {release.release_date && (
+                                    <div className="text-sm text-slate-400 mt-1">
+                                      {new Date(
+                                        release.release_date + "T00:00:00",
+                                      ).toLocaleDateString("en-US", {
+                                        year: "numeric",
+                                        month: "long",
+                                        day: "numeric",
+                                      })}
+                                    </div>
+                                  )}
+                                </CardHeader>
+                                <CardContent>
+                                  <p className="text-slate-300 text-sm mb-3">
+                                    {release.summary}
+                                  </p>
+                                  {release.url && (
+                                    <a
+                                      href={release.url}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="text-gold-400 hover:text-gold-300 text-sm flex items-center gap-1"
+                                    >
+                                      <span>Read Full Release</span>
+                                      <svg
+                                        className="w-3 h-3"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        viewBox="0 0 24 24"
+                                      >
+                                        <path
+                                          strokeLinecap="round"
+                                          strokeLinejoin="round"
+                                          strokeWidth={2}
+                                          d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+                                        />
+                                      </svg>
+                                    </a>
+                                  )}
+                                </CardContent>
+                              </Card>
+                            ))}
+                          </div>
+                        ) : (
+                          <Card variant="glass-card">
+                            <CardContent className="py-8 text-center">
+                              <div className="text-slate-400 text-sm">
+                                No financial news releases available
+                              </div>
+                            </CardContent>
+                          </Card>
+                        )}
+                      </div>
+
+                      {/* Non-Financial News Section */}
+                      <div>
+                        <h3 className="text-xl font-bold text-copper-400 mb-4 flex items-center gap-2">
+                          <svg
+                            className="w-5 h-5"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z"
+                            />
+                          </svg>
+                          Company Updates
+                        </h3>
+                        {newsData?.non_financial &&
+                        newsData.non_financial.length > 0 ? (
+                          <div className="grid grid-cols-1 gap-4">
+                            {newsData.non_financial.map((release) => (
+                              <Card key={release.id} variant="glass-card">
+                                <CardHeader>
+                                  <div className="flex items-start justify-between">
+                                    <CardTitle className="text-lg text-white">
+                                      {release.title}
+                                    </CardTitle>
+                                    <Badge variant="copper">
+                                      {release.release_type.replace(/_/g, " ")}
+                                    </Badge>
+                                  </div>
+                                  {release.release_date && (
+                                    <div className="text-sm text-slate-400 mt-1">
+                                      {new Date(
+                                        release.release_date + "T00:00:00",
+                                      ).toLocaleDateString("en-US", {
+                                        year: "numeric",
+                                        month: "long",
+                                        day: "numeric",
+                                      })}
+                                    </div>
+                                  )}
+                                </CardHeader>
+                                <CardContent>
+                                  <p className="text-slate-300 text-sm mb-3">
+                                    {release.summary}
+                                  </p>
+                                  {release.url && (
+                                    <a
+                                      href={release.url}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="text-gold-400 hover:text-gold-300 text-sm flex items-center gap-1"
+                                    >
+                                      <span>Read Full Release</span>
+                                      <svg
+                                        className="w-3 h-3"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        viewBox="0 0 24 24"
+                                      >
+                                        <path
+                                          strokeLinecap="round"
+                                          strokeLinejoin="round"
+                                          strokeWidth={2}
+                                          d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+                                        />
+                                      </svg>
+                                    </a>
+                                  )}
+                                </CardContent>
+                              </Card>
+                            ))}
+                          </div>
+                        ) : (
+                          <Card variant="glass-card">
+                            <CardContent className="py-8 text-center">
+                              <div className="text-slate-400 text-sm">
+                                No company updates available
+                              </div>
+                            </CardContent>
+                          </Card>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
+              )}
 
-                <CompanyForum
-                  companyId={parseInt(companyId)}
-                  companyName={company.name}
-                />
-              </section>
-
-              {/* News Releases Section */}
-              <div className="mb-12">
-                <div className="mb-6 flex items-center justify-between">
-                  <div>
+              {/* Financings Section — Financings tab. Renders the full
+                  financings list from the already-fetched `financings` state
+                  so no extra round-trip is needed when switching tabs. */}
+              {activeTab === "financings" && (
+                <div
+                  id="tab-panel-financings"
+                  role="tabpanel"
+                  aria-labelledby="tab-financings"
+                  className="mb-12"
+                >
+                  <div className="mb-6">
                     <h2 className="text-3xl font-bold text-gold-400 mb-2">
-                      Company News Releases
+                      Financings
                     </h2>
                     <p className="text-slate-400">
-                      Recent updates and announcements from {company.name}
+                      All capital raises for {company.name} — open and closed
                     </p>
-                    {newsData?.last_updated && (
-                      <p className="text-xs text-slate-500 mt-1">
-                        Last updated:{" "}
-                        {new Date(newsData.last_updated).toLocaleString()}
-                      </p>
-                    )}
-                    {scrapeError && (
-                      <p className="text-xs text-red-400 mt-2 flex items-center gap-1">
-                        <svg
-                          className="w-4 h-4"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                          />
-                        </svg>
-                        {scrapeError}
-                      </p>
-                    )}
                   </div>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={handleScrapeNews}
-                    disabled={scrapingNews || !company.website}
-                  >
-                    {scrapingNews ? (
-                      <>
-                        <svg
-                          className="animate-spin -ml-1 mr-2 h-4 w-4"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                        >
-                          <circle
-                            className="opacity-25"
-                            cx="12"
-                            cy="12"
-                            r="10"
-                            stroke="currentColor"
-                            strokeWidth="4"
-                          ></circle>
-                          <path
-                            className="opacity-75"
-                            fill="currentColor"
-                            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                          ></path>
-                        </svg>
-                        Updating...
-                      </>
-                    ) : (
-                      <>
-                        <svg
-                          className="w-4 h-4 mr-2"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-                          />
-                        </svg>
-                        Update News
-                      </>
-                    )}
-                  </Button>
-                </div>
 
-                {newsLoading ? (
-                  <Card variant="glass-card">
-                    <CardContent className="py-12 text-center">
-                      <div className="text-slate-400">
-                        Loading news releases...
-                      </div>
-                    </CardContent>
-                  </Card>
-                ) : (
-                  <div className="space-y-8">
-                    {/* Financial News Section */}
-                    <div>
-                      <h3 className="text-xl font-bold text-copper-400 mb-4 flex items-center gap-2">
-                        <svg
-                          className="w-5 h-5"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"
-                          />
-                        </svg>
-                        Financial News
-                      </h3>
-                      {newsData?.financial && newsData.financial.length > 0 ? (
-                        <div className="grid grid-cols-1 gap-4">
-                          {newsData.financial.map((release) => (
-                            <Card key={release.id} variant="glass-card">
-                              <CardHeader>
-                                <div className="flex items-start justify-between">
-                                  <CardTitle className="text-lg text-white">
-                                    {release.title}
-                                  </CardTitle>
-                                  <Badge variant="gold">Financial</Badge>
-                                </div>
-                                {release.release_date && (
-                                  <div className="text-sm text-slate-400 mt-1">
-                                    {new Date(
-                                      release.release_date + "T00:00:00",
-                                    ).toLocaleDateString("en-US", {
-                                      year: "numeric",
-                                      month: "long",
-                                      day: "numeric",
-                                    })}
-                                  </div>
-                                )}
-                              </CardHeader>
-                              <CardContent>
-                                <p className="text-slate-300 text-sm mb-3">
-                                  {release.summary}
-                                </p>
-                                {release.url && (
-                                  <a
-                                    href={release.url}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="text-gold-400 hover:text-gold-300 text-sm flex items-center gap-1"
+                  {financings.length === 0 ? (
+                    <Card variant="glass-card">
+                      <CardContent className="p-8 text-center text-slate-400">
+                        No financing rounds recorded yet for this company.
+                      </CardContent>
+                    </Card>
+                  ) : (
+                    <div className="space-y-3">
+                      {financings.map((f) => {
+                        const isOpen = !f.is_closed;
+                        return (
+                          <Card
+                            key={f.id}
+                            variant="glass-card"
+                            className={
+                              isOpen
+                                ? "border-gold-500/30"
+                                : "border-slate-700/50"
+                            }
+                          >
+                            <CardContent className="p-5">
+                              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                                <div className="flex items-center gap-3 flex-wrap">
+                                  <Badge
+                                    variant={isOpen ? "gold" : "slate"}
+                                    className="text-xs"
                                   >
-                                    <span>Read Full Release</span>
-                                    <svg
-                                      className="w-3 h-3"
-                                      fill="none"
-                                      stroke="currentColor"
-                                      viewBox="0 0 24 24"
-                                    >
-                                      <path
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                        strokeWidth={2}
-                                        d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
-                                      />
-                                    </svg>
-                                  </a>
-                                )}
-                              </CardContent>
-                            </Card>
-                          ))}
-                        </div>
-                      ) : (
-                        <Card variant="glass-card">
-                          <CardContent className="py-8 text-center">
-                            <div className="text-slate-400 text-sm">
-                              No financial news releases available
-                            </div>
-                          </CardContent>
-                        </Card>
-                      )}
-                    </div>
-
-                    {/* Non-Financial News Section */}
-                    <div>
-                      <h3 className="text-xl font-bold text-copper-400 mb-4 flex items-center gap-2">
-                        <svg
-                          className="w-5 h-5"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z"
-                          />
-                        </svg>
-                        Company Updates
-                      </h3>
-                      {newsData?.non_financial &&
-                      newsData.non_financial.length > 0 ? (
-                        <div className="grid grid-cols-1 gap-4">
-                          {newsData.non_financial.map((release) => (
-                            <Card key={release.id} variant="glass-card">
-                              <CardHeader>
-                                <div className="flex items-start justify-between">
-                                  <CardTitle className="text-lg text-white">
-                                    {release.title}
-                                  </CardTitle>
-                                  <Badge variant="copper">
-                                    {release.release_type.replace(/_/g, " ")}
+                                    {isOpen ? "Open" : "Closed"}
                                   </Badge>
+                                  <span className="text-sm font-medium text-slate-200">
+                                    {f.financing_type_display ||
+                                      f.financing_type}
+                                  </span>
+                                  {f.announced_date && (
+                                    <span className="text-xs text-slate-500">
+                                      Announced{" "}
+                                      {new Date(
+                                        f.announced_date,
+                                      ).toLocaleDateString("en-US", {
+                                        month: "short",
+                                        day: "numeric",
+                                        year: "numeric",
+                                      })}
+                                    </span>
+                                  )}
+                                  {f.closing_date && (
+                                    <span className="text-xs text-slate-500">
+                                      · {isOpen ? "Closes" : "Closed"}{" "}
+                                      {new Date(
+                                        f.closing_date,
+                                      ).toLocaleDateString("en-US", {
+                                        month: "short",
+                                        day: "numeric",
+                                        year: "numeric",
+                                      })}
+                                    </span>
+                                  )}
                                 </div>
-                                {release.release_date && (
-                                  <div className="text-sm text-slate-400 mt-1">
-                                    {new Date(
-                                      release.release_date + "T00:00:00",
-                                    ).toLocaleDateString("en-US", {
-                                      year: "numeric",
-                                      month: "long",
-                                      day: "numeric",
-                                    })}
-                                  </div>
-                                )}
-                              </CardHeader>
-                              <CardContent>
-                                <p className="text-slate-300 text-sm mb-3">
-                                  {release.summary}
-                                </p>
-                                {release.url && (
-                                  <a
-                                    href={release.url}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="text-gold-400 hover:text-gold-300 text-sm flex items-center gap-1"
-                                  >
-                                    <span>Read Full Release</span>
-                                    <svg
-                                      className="w-3 h-3"
-                                      fill="none"
-                                      stroke="currentColor"
-                                      viewBox="0 0 24 24"
+                                <div className="flex items-center gap-3">
+                                  {f.amount_raised_usd && (
+                                    <span className="text-lg font-bold text-gold-400">
+                                      {new Intl.NumberFormat("en-CA", {
+                                        style: "currency",
+                                        currency: "CAD",
+                                        minimumFractionDigits: 0,
+                                        maximumFractionDigits: 0,
+                                      }).format(Number(f.amount_raised_usd))}
+                                    </span>
+                                  )}
+                                  {f.press_release_url && (
+                                    <a
+                                      href={f.press_release_url}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="text-xs text-gold-400 hover:text-gold-300 hover:underline"
                                     >
-                                      <path
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                        strokeWidth={2}
-                                        d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
-                                      />
-                                    </svg>
-                                  </a>
-                                )}
-                              </CardContent>
-                            </Card>
-                          ))}
-                        </div>
-                      ) : (
-                        <Card variant="glass-card">
-                          <CardContent className="py-8 text-center">
-                            <div className="text-slate-400 text-sm">
-                              No company updates available
-                            </div>
-                          </CardContent>
-                        </Card>
-                      )}
+                                      Press release →
+                                    </a>
+                                  )}
+                                </div>
+                              </div>
+                              {f.use_of_proceeds && (
+                                <p className="text-sm text-slate-400 mt-3">
+                                  {f.use_of_proceeds}
+                                </p>
+                              )}
+                            </CardContent>
+                          </Card>
+                        );
+                      })}
                     </div>
-                  </div>
-                )}
-              </div>
+                  )}
+                </div>
+              )}
             </div>
           </section>
         </>
@@ -2722,8 +2957,14 @@ export default function CompanyDetailClient({
       )}
 
       {/* Persistent jump-to-forum FAB. Sits opposite the chatbot FAB to avoid
-          collision and auto-hides while the forum is on screen. */}
-      {company && <FloatingForumButton />}
+          collision, and hides itself when the user is already on the Forum
+          tab. */}
+      {company && (
+        <FloatingForumButton
+          onClick={jumpToForum}
+          hidden={activeTab === "forum"}
+        />
+      )}
     </div>
   );
 }
