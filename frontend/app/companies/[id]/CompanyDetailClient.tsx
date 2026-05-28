@@ -1401,6 +1401,57 @@ export default function CompanyDetailClient({
                 </Card>
               </div>
 
+            </div>
+          </section>
+
+          {/* Company Details Tabs */}
+          <section className="py-12 px-4 sm:px-6 lg:px-8">
+            <div className="max-w-7xl mx-auto">
+              {/* Tab navigation — sticky below the global nav so users can
+                  switch sections without scrolling back. Horizontally
+                  scrollable on narrow screens. */}
+              <div
+                role="tablist"
+                aria-label="Company sections"
+                className="sticky top-16 z-30 -mx-4 sm:mx-0 mb-8 flex gap-1 overflow-x-auto bg-slate-900/85 backdrop-blur supports-[backdrop-filter]:bg-slate-900/70 border-b border-slate-800 px-4 sm:px-0 sm:rounded-xl sm:border sm:border-slate-800 sm:bg-slate-900/60 sm:p-1"
+              >
+                {(
+                  [
+                    { id: "overview", label: "Overview" },
+                    { id: "news", label: "News" },
+                    { id: "financings", label: "Financings" },
+                    { id: "resources", label: "Resources" },
+                    { id: "forum", label: "Community Forum" },
+                  ] as { id: TabId; label: string }[]
+                ).map((tab) => {
+                  const isActive = activeTab === tab.id;
+                  return (
+                    <button
+                      key={tab.id}
+                      role="tab"
+                      type="button"
+                      {...{ "aria-selected": isActive }}
+                      aria-controls={`tab-panel-${tab.id}`}
+                      id={`tab-${tab.id}`}
+                      onClick={() => setActiveTab(tab.id)}
+                      className={`whitespace-nowrap px-4 py-2.5 text-sm font-medium rounded-lg transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-gold-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 ${
+                        isActive
+                          ? "bg-gold-500/15 text-gold-300 border border-gold-500/40"
+                          : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 border border-transparent"
+                      }`}
+                    >
+                      {tab.label}
+                      {tab.id === "forum" && (
+                        <span
+                          className="inline-block ml-2 w-2 h-2 rounded-full bg-green-400 motion-safe:animate-pulse align-middle"
+                          aria-hidden="true"
+                        />
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+
               {/* Speaking Events & Active Financing Section — Overview tab
                   only. Other tabs have their own dedicated content (the
                   Financings tab supersedes the right-column financing panel)
@@ -1646,56 +1697,6 @@ export default function CompanyDetailClient({
                   )}
                 </div>
               )}
-            </div>
-          </section>
-
-          {/* Company Details Tabs */}
-          <section className="py-12 px-4 sm:px-6 lg:px-8">
-            <div className="max-w-7xl mx-auto">
-              {/* Tab navigation — sticky below the global nav so users can
-                  switch sections without scrolling back. Horizontally
-                  scrollable on narrow screens. */}
-              <div
-                role="tablist"
-                aria-label="Company sections"
-                className="sticky top-16 z-30 -mx-4 sm:mx-0 mb-8 flex gap-1 overflow-x-auto bg-slate-900/85 backdrop-blur supports-[backdrop-filter]:bg-slate-900/70 border-b border-slate-800 px-4 sm:px-0 sm:rounded-xl sm:border sm:border-slate-800 sm:bg-slate-900/60 sm:p-1"
-              >
-                {(
-                  [
-                    { id: "overview", label: "Overview" },
-                    { id: "news", label: "News" },
-                    { id: "financings", label: "Financings" },
-                    { id: "resources", label: "Resources" },
-                    { id: "forum", label: "Community Forum" },
-                  ] as { id: TabId; label: string }[]
-                ).map((tab) => {
-                  const isActive = activeTab === tab.id;
-                  return (
-                    <button
-                      key={tab.id}
-                      role="tab"
-                      type="button"
-                      {...{ "aria-selected": isActive }}
-                      aria-controls={`tab-panel-${tab.id}`}
-                      id={`tab-${tab.id}`}
-                      onClick={() => setActiveTab(tab.id)}
-                      className={`whitespace-nowrap px-4 py-2.5 text-sm font-medium rounded-lg transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-gold-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 ${
-                        isActive
-                          ? "bg-gold-500/15 text-gold-300 border border-gold-500/40"
-                          : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 border border-transparent"
-                      }`}
-                    >
-                      {tab.label}
-                      {tab.id === "forum" && (
-                        <span
-                          className="inline-block ml-2 w-2 h-2 rounded-full bg-green-400 motion-safe:animate-pulse align-middle"
-                          aria-hidden="true"
-                        />
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
 
               {/* Projects Section — Overview tab */}
               {activeTab === "overview" && (
