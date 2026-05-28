@@ -98,6 +98,10 @@ export const metadata: Metadata = {
   },
   alternates: {
     canonical: "https://juniorminingintelligence.com",
+    languages: {
+      "x-default": "https://juniorminingintelligence.com",
+      en: "https://juniorminingintelligence.com",
+    },
   },
 };
 

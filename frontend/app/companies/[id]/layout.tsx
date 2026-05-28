@@ -42,10 +42,29 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     const canonicalPath = companyHref(company);
     const canonicalUrl = `https://juniorminingintelligence.com${canonicalPath}`;
 
-    const title = `${company.name} (${company.ticker_symbol}) - Gold Mining Company Analysis`;
+    // Metal-aware copy — pull commodities from flagship projects if available.
+    const commodities: string[] = Array.isArray(company.projects)
+      ? Array.from(
+          new Set(
+            company.projects
+              .map((p: any) => (p.primary_commodity || "").toLowerCase())
+              .filter(Boolean),
+          ),
+        )
+      : [];
+    const primaryCommodity = commodities[0] || "mineral";
+    const commodityLabel =
+      primaryCommodity.charAt(0).toUpperCase() + primaryCommodity.slice(1);
+
+    // Keep title under ~60 chars: "{name} ({ticker}) | Junior Mining"
+    // appended automatically by root layout's title.template.
+    const tickerSuffix = company.ticker_symbol
+      ? ` (${company.ticker_symbol})`
+      : "";
+    const title = `${company.name}${tickerSuffix} — ${commodityLabel} Exploration`;
     const description = company.description
       ? `${company.description.substring(0, 155)}...`
-      : `Detailed analysis of ${company.name} (${company.exchange}: ${company.ticker_symbol}). Explore projects, resource estimates, financings, and real-time news for this junior gold mining company.`;
+      : `${company.name}${company.exchange ? ` (${company.exchange.toUpperCase()}: ${company.ticker_symbol})` : ""} — ${commodityLabel.toLowerCase()} exploration company. Projects, resource estimates, financings, and news.`;
 
     return {
       title,
@@ -54,7 +73,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
         company.name,
         company.ticker_symbol,
         `${company.exchange} ${company.ticker_symbol}`,
-        "gold mining stock",
+        `${primaryCommodity} mining stock`,
         "junior mining company",
         "mineral exploration",
         "mining investment",

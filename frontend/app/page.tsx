@@ -58,7 +58,9 @@ export default async function Home() {
   try {
     const res = await fetch(
       `${API_BASE_URL}/news/articles/?limit=8&offset=0&days=7`,
-      { cache: "no-store" },
+      // 15-min ISR: news is fresh enough for crawlers; saves per-request
+      // round-trips to the Django API on the homepage.
+      { next: { revalidate: 900 } },
     );
     if (res.ok) {
       const data = await res.json();
