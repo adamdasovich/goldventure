@@ -1,6 +1,6 @@
-import { notFound, permanentRedirect } from "next/navigation";
+import { notFound } from "next/navigation";
 import CompanyDetailClient from "./CompanyDetailClient";
-import { companyHref, parseCompanyIdParam } from "@/lib/companyUrl";
+import { parseCompanyIdParam } from "@/lib/companyUrl";
 
 const API_BASE_URL =
   process.env.API_BASE_URL ||
@@ -72,24 +72,10 @@ export default async function CompanyDetailPage({ params }: Props) {
   const company = await companyRes.json();
   const projects = projectsRes.ok ? await projectsRes.json() : [];
 
-  // 301 redirect to the canonical slug URL if the URL segment doesn't match.
-  // Must be called outside any try/catch — permanentRedirect throws an error
-  // the framework consumes to emit the 308 response.
-  const canonicalSegment = company.slug
-    ? `${company.id}-${company.slug}`
-    : `${company.id}`;
-  console.log(
-    "[slug-redirect-debug]",
-    JSON.stringify({
-      rawSegment,
-      canonicalSegment,
-      willRedirect: rawSegment !== canonicalSegment,
-    }),
-  );
-  if (rawSegment !== canonicalSegment) {
-    permanentRedirect(companyHref(company));
-    console.log("[slug-redirect-debug] AFTER permanentRedirect (unreachable?)");
-  }
+  // Canonical URL consolidation happens via <link rel="canonical"> in
+  // layout.tsx generateMetadata — Next.js 16 cache components prevent
+  // permanentRedirect() from emitting a 308 here. Google honors rel=canonical
+  // for ranking-signal consolidation, so the SEO outcome is equivalent.
 
   return (
     <CompanyDetailClient
