@@ -28,7 +28,7 @@ import {
   BreadcrumbListSchema,
 } from "@/components/StructuredData";
 import CompanyChatbot from "@/components/CompanyChatbot";
-import { CompanyForum } from "@/components/forum";
+import { CompanyForum, FloatingForumButton } from "@/components/forum";
 import { EventBanner } from "@/components/events";
 import { LoginModal, RegisterModal } from "@/components/auth";
 import WatchButton from "@/components/WatchButton";
@@ -1090,6 +1090,34 @@ export default function CompanyDetailClient({
                       companyId={company.id}
                       onRequireLogin={() => setShowLogin(true)}
                     />
+                    {/* Forum discovery pill — surfaces the Community Forum
+                        above the fold so users don't have to scroll the page
+                        to discover it exists. */}
+                    <a
+                      href="#community-forum"
+                      aria-label="Jump to community forum"
+                      className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-gold-500/10 hover:bg-gold-500/20 border border-gold-500/40 text-sm font-medium text-gold-300 hover:text-gold-200 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-gold-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
+                    >
+                      <span
+                        className="w-2 h-2 rounded-full bg-green-400 motion-safe:animate-pulse"
+                        aria-hidden="true"
+                      />
+                      <svg
+                        className="w-4 h-4"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                        aria-hidden="true"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
+                        />
+                      </svg>
+                      <span>Join the discussion</span>
+                    </a>
                   </div>
                   {/* Editable Description */}
                   {isEditingDescription ? (
@@ -2354,22 +2382,65 @@ export default function CompanyDetailClient({
                 </div>
               )}
 
-              {/* Community Forum Section */}
-              <div className="mb-12">
-                <div className="mb-6">
-                  <h2 className="text-3xl font-bold text-gold-400 mb-2">
-                    Community Forum
-                  </h2>
-                  <p className="text-slate-400">
-                    Join real-time discussions with investors and analysts
-                  </p>
+              {/* Community Forum Section — visually distinct from the
+                  data-table sections above. Gradient border + outer glow signal
+                  "this is a people section, not another table." Scroll-margin
+                  keeps the sticky nav from covering the heading on anchor jump. */}
+              <section
+                id="community-forum"
+                aria-labelledby="community-forum-heading"
+                className="mb-12 scroll-mt-24 relative rounded-2xl border border-gold-500/30 bg-gradient-to-br from-slate-800/60 to-slate-900/80 p-6 md:p-8 shadow-[0_0_40px_-15px_rgba(212,175,55,0.4)]"
+              >
+                <div className="mb-6 flex items-start justify-between gap-4 flex-wrap">
+                  <div className="flex items-start gap-4">
+                    <div
+                      className="w-12 h-12 rounded-xl bg-gold-500/15 border border-gold-500/30 flex items-center justify-center flex-shrink-0"
+                      aria-hidden="true"
+                    >
+                      <svg
+                        className="w-6 h-6 text-gold-400"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
+                        />
+                      </svg>
+                    </div>
+                    <div>
+                      <h2
+                        id="community-forum-heading"
+                        className="text-3xl font-bold text-gold-400 mb-1"
+                      >
+                        Community Forum
+                      </h2>
+                      <p className="text-slate-400">
+                        Real-time discussion with investors and analysts
+                        following {company.name}
+                      </p>
+                    </div>
+                  </div>
+                  <span
+                    className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-green-500/10 border border-green-500/30 text-xs font-semibold text-green-300 uppercase tracking-wide"
+                    aria-label="Live discussion"
+                  >
+                    <span
+                      className="w-2 h-2 rounded-full bg-green-400 motion-safe:animate-pulse"
+                      aria-hidden="true"
+                    />
+                    Live
+                  </span>
                 </div>
 
                 <CompanyForum
                   companyId={parseInt(companyId)}
                   companyName={company.name}
                 />
-              </div>
+              </section>
 
               {/* News Releases Section */}
               <div className="mb-12">
@@ -2649,6 +2720,10 @@ export default function CompanyDetailClient({
           companyName={company.name}
         />
       )}
+
+      {/* Persistent jump-to-forum FAB. Sits opposite the chatbot FAB to avoid
+          collision and auto-hides while the forum is on screen. */}
+      {company && <FloatingForumButton />}
     </div>
   );
 }
