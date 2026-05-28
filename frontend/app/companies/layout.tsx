@@ -1,48 +1,72 @@
-import type { Metadata } from 'next';
+import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: 'Junior Mining Companies - Gold, Silver & Critical Minerals | TSXV & TSX Stocks',
-  description: 'Browse 500+ junior mining companies exploring gold, silver, lithium, copper, rare earths & critical minerals on TSXV and TSX. View resource estimates, project data, and investment opportunities.',
+  title:
+    "Junior Mining Companies - Gold, Silver & Critical Minerals | TSXV & TSX Stocks",
+  description:
+    "Browse 500+ junior mining companies exploring gold, silver, lithium, copper, rare earths & critical minerals on TSXV and TSX. View resource estimates, project data, and investment opportunities.",
   keywords: [
-    'junior mining companies',
-    'gold mining companies',
-    'silver mining stocks',
-    'lithium exploration companies',
-    'critical minerals companies',
-    'rare earth mining',
-    'copper mining stocks',
-    'TSXV mining stocks',
-    'TSX mining companies',
-    'battery metals companies',
-    'mining stock database',
-    'mineral exploration companies',
-    'Canadian mining companies',
-    'mining resource estimates',
-    'mining company analysis'
+    "junior mining companies",
+    "gold mining companies",
+    "silver mining stocks",
+    "lithium exploration companies",
+    "critical minerals companies",
+    "rare earth mining",
+    "copper mining stocks",
+    "TSXV mining stocks",
+    "TSX mining companies",
+    "battery metals companies",
+    "mining stock database",
+    "mineral exploration companies",
+    "Canadian mining companies",
+    "mining resource estimates",
+    "mining company analysis",
   ],
   openGraph: {
-    title: 'Junior Mining Companies: Gold, Silver & Critical Minerals | Junior Mining Intelligence',
-    description: 'Comprehensive database of 500+ junior mining companies exploring gold, silver, lithium, copper, rare earths & critical minerals with detailed resource estimates.',
-    url: 'https://juniorminingintelligence.com/companies',
-    type: 'website',
+    title:
+      "Junior Mining Companies: Gold, Silver & Critical Minerals | Junior Mining Intelligence",
+    description:
+      "Comprehensive database of 500+ junior mining companies exploring gold, silver, lithium, copper, rare earths & critical minerals with detailed resource estimates.",
+    url: "https://juniorminingintelligence.com/companies",
+    type: "website",
     images: [
       {
-        url: '/og-image.png',
+        url: "/og-image.png",
         width: 1200,
         height: 630,
-        alt: 'Junior Mining Companies Database',
+        alt: "Junior Mining Companies Database",
       },
     ],
   },
   twitter: {
-    card: 'summary_large_image',
-    title: 'Junior Mining Companies: Gold, Silver & Critical Minerals',
-    description: 'Browse 500+ junior mining companies with AI-powered analysis. Track gold, silver, lithium, copper, rare earths & critical minerals.',
-    images: ['/og-image.png'],
+    card: "summary_large_image",
+    title: "Junior Mining Companies: Gold, Silver & Critical Minerals",
+    description:
+      "Browse 500+ junior mining companies with AI-powered analysis. Track gold, silver, lithium, copper, rare earths & critical minerals.",
+    images: ["/og-image.png"],
   },
   alternates: {
-    canonical: 'https://juniorminingintelligence.com/companies',
+    canonical: "https://juniorminingintelligence.com/companies",
   },
+};
+
+const breadcrumbJsonLd = {
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  itemListElement: [
+    {
+      "@type": "ListItem",
+      position: 1,
+      name: "Home",
+      item: "https://juniorminingintelligence.com",
+    },
+    {
+      "@type": "ListItem",
+      position: 2,
+      name: "Companies",
+      item: "https://juniorminingintelligence.com/companies",
+    },
+  ],
 };
 
 export default function CompaniesLayout({
@@ -50,5 +74,13 @@ export default function CompaniesLayout({
 }: {
   children: React.ReactNode;
 }) {
-  return children;
+  return (
+    <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }}
+      />
+      {children}
+    </>
+  );
 }

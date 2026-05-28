@@ -10,7 +10,7 @@ const API_URL =
 async function getProduct(slug: string) {
   try {
     const response = await fetch(`${API_URL}/store/products/${slug}/`, {
-      cache: "no-store",
+      next: { revalidate: 1800 },
     });
     if (!response.ok) return null;
     return await response.json();
@@ -75,5 +75,79 @@ export default async function ProductPage({ params }: Props) {
     notFound();
   }
 
-  return <ProductPageClient />;
+  const canonicalUrl = `https://juniorminingintelligence.com/store/product/${slug}`;
+  const image =
+    product.primary_image?.image_url || product.images?.[0]?.image_url;
+  const inStock = (product.stock_quantity ?? product.inventory ?? 1) > 0;
+
+  const productJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "Product",
+    name: product.name,
+    description:
+      product.short_description ||
+      product.description?.slice(0, 300) ||
+      product.name,
+    ...(image && { image: [image] }),
+    sku: product.sku || product.slug,
+    ...(product.category?.name && { category: product.category.name }),
+    brand: {
+      "@type": "Brand",
+      name: "Junior Mining Intelligence Store",
+    },
+    ...(product.price && {
+      offers: {
+        "@type": "Offer",
+        price: product.price,
+        priceCurrency: product.currency || "USD",
+        availability: inStock
+          ? "https://schema.org/InStock"
+          : "https://schema.org/OutOfStock",
+        url: canonicalUrl,
+        seller: {
+          "@type": "Organization",
+          name: "Junior Mining Intelligence",
+        },
+      },
+    }),
+  };
+
+  const breadcrumbJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: [
+      {
+        "@type": "ListItem",
+        position: 1,
+        name: "Home",
+        item: "https://juniorminingintelligence.com",
+      },
+      {
+        "@type": "ListItem",
+        position: 2,
+        name: "Store",
+        item: "https://juniorminingintelligence.com/store",
+      },
+      {
+        "@type": "ListItem",
+        position: 3,
+        name: product.name,
+        item: canonicalUrl,
+      },
+    ],
+  };
+
+  return (
+    <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(productJsonLd) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }}
+      />
+      <ProductPageClient />
+    </>
+  );
 }

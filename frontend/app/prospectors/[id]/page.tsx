@@ -10,7 +10,7 @@ const API_URL =
 async function getProspector(id: string) {
   try {
     const response = await fetch(`${API_URL}/properties/prospectors/${id}/`, {
-      cache: "no-store",
+      next: { revalidate: 1800 },
     });
     if (!response.ok) return null;
     return await response.json();
@@ -62,5 +62,59 @@ export default async function ProspectorProfilePage({ params }: Props) {
     notFound();
   }
 
-  return <ProspectorProfileClient params={params} />;
+  const name = prospector.display_name || prospector.username;
+  const canonicalUrl = `https://juniorminingintelligence.com/prospectors/${id}`;
+
+  const personJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "Person",
+    name,
+    url: canonicalUrl,
+    ...(prospector.bio && { description: prospector.bio.slice(0, 280) }),
+    ...(prospector.profile_photo_url && {
+      image: prospector.profile_photo_url.startsWith("http")
+        ? prospector.profile_photo_url
+        : `https://juniorminingintelligence.com${prospector.profile_photo_url}`,
+    }),
+    jobTitle: "Mineral Prospector",
+    worksFor: {
+      "@type": "Organization",
+      name: "Junior Mining Intelligence Prospector's Exchange",
+      url: "https://juniorminingintelligence.com/properties",
+    },
+  };
+
+  const breadcrumbJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: [
+      {
+        "@type": "ListItem",
+        position: 1,
+        name: "Home",
+        item: "https://juniorminingintelligence.com",
+      },
+      {
+        "@type": "ListItem",
+        position: 2,
+        name: "Prospector's Exchange",
+        item: "https://juniorminingintelligence.com/properties",
+      },
+      { "@type": "ListItem", position: 3, name, item: canonicalUrl },
+    ],
+  };
+
+  return (
+    <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(personJsonLd) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }}
+      />
+      <ProspectorProfileClient params={params} />
+    </>
+  );
 }
