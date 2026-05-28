@@ -522,7 +522,7 @@ export default function HowToReadNI43101Guide() {
                       [
                         "10",
                         "Drilling",
-                        "Total metres, programmes",
+                        "Total metres, programmes — for how to read individual drill releases see <a href='/guides/how-to-interpret-mining-drill-results' class='text-gold-400 hover:underline'>our drill results guide</a>",
                         "Yes — note recency and density",
                       ],
                       [

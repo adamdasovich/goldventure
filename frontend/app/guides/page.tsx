@@ -44,6 +44,15 @@ const guides = [
     featured: true,
   },
   {
+    title: "How to Read Mining Drill Results",
+    slug: "how-to-interpret-mining-drill-results",
+    description:
+      "A plain-English guide to drill press releases. What g/t means, why width matters as much as grade, the press-release tricks that make ordinary intercepts look spectacular, and how to spot real winners.",
+    readTime: "18 min read",
+    category: "Exploration",
+    featured: true,
+  },
+  {
     title: "The Complete Guide to Junior Gold Mining Companies",
     slug: "junior-gold-mining-companies-guide",
     description:
@@ -130,7 +139,8 @@ export default function GuidesPage() {
           <div className="grid md:grid-cols-3 gap-6">
             {[
               {
-                title: "Junior Mining Drill Results: How to Read and Interpret",
+                title:
+                  "Gold Grade Explained: g/t, oz/t, ppm, and What's 'High Grade'?",
                 category: "Exploration",
               },
               {

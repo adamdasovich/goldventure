@@ -94,6 +94,12 @@ const fallbackGlossaryTerms: GlossaryTerm[] = [
     definition:
       "The concentration of a valuable mineral within ore, typically expressed in grams per tonne (g/t) for precious metals like gold and silver. Higher grades indicate richer ore deposits and generally better economics. For example, 5 g/t gold means 5 grams of gold per tonne of ore.",
     category: "geology",
+    relatedLinks: [
+      {
+        text: "Grade Tiers by Metal — What Counts as 'High Grade' (Guide)",
+        url: "/guides/how-to-interpret-mining-drill-results#grade-tiers",
+      },
+    ],
   },
   {
     term: "Heap Leaching",
@@ -140,12 +146,24 @@ const fallbackGlossaryTerms: GlossaryTerm[] = [
     definition:
       "The chemical analysis of rock, soil, or drill core samples to determine the concentration of valuable minerals or metals. Assay results are critical for resource estimation and are typically reported in parts per million (ppm) or grams per tonne (g/t) for precious metals.",
     category: "geology",
+    relatedLinks: [
+      {
+        text: "How to Read Drill Results (Guide)",
+        url: "/guides/how-to-interpret-mining-drill-results",
+      },
+    ],
   },
   {
     term: "Drill Program",
     definition:
       "A systematic exploration program using diamond or reverse circulation drilling to obtain subsurface samples for geological and geochemical analysis. Drill programs are essential for resource definition, exploration targeting, and upgrading resource classifications.",
     category: "operations",
+    relatedLinks: [
+      {
+        text: "Step-out vs Infill vs Twin Holes (Guide)",
+        url: "/guides/how-to-interpret-mining-drill-results#drill-program-types",
+      },
+    ],
   },
   {
     term: "Cut-off Grade",

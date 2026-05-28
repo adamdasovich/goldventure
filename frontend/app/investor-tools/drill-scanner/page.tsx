@@ -159,10 +159,21 @@ export default function DrillScannerPage() {
           <h1 className="text-3xl sm:text-4xl font-bold text-gradient-gold mb-3">
             Drill Result Scanner
           </h1>
-          <p className="text-slate-300 max-w-xl mx-auto">
+          <p className="text-slate-300 max-w-xl mx-auto mb-4">
             Track drill results and assay releases across junior mining
             companies. Spot active exploration programs and significant
             intercepts.
+          </p>
+          <p className="text-sm text-slate-400 max-w-xl mx-auto">
+            New to drill results? Read our{" "}
+            <Link
+              href="/guides/how-to-interpret-mining-drill-results"
+              className="text-gold-400 hover:underline"
+            >
+              plain-English guide to reading drill press releases
+            </Link>{" "}
+            — covers grade × width, true vs. down-hole width, grade tiers by
+            metal, and 10 press-release tricks to watch for.
           </p>
         </div>
       </section>
