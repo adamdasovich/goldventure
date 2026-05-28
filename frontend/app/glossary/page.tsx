@@ -52,8 +52,8 @@ const fallbackGlossaryTerms: GlossaryTerm[] = [
     category: "reporting",
     relatedLinks: [
       {
-        text: "How Resource Categories Work (Guide)",
-        url: "/guides/how-to-read-ni-43-101-report#resource-categories",
+        text: "Inferred vs Indicated vs Measured (Guide)",
+        url: "/guides/inferred-vs-indicated-vs-measured-resources",
       },
       { text: "Browse Mining Projects", url: "/companies" },
     ],
@@ -66,7 +66,7 @@ const fallbackGlossaryTerms: GlossaryTerm[] = [
     relatedLinks: [
       {
         text: "Why Inferred Resources Matter (Guide)",
-        url: "/guides/how-to-read-ni-43-101-report#resource-categories",
+        url: "/guides/inferred-vs-indicated-vs-measured-resources#conversion-losses",
       },
     ],
   },
@@ -77,8 +77,8 @@ const fallbackGlossaryTerms: GlossaryTerm[] = [
     category: "reporting",
     relatedLinks: [
       {
-        text: "How Resource Categories Work (Guide)",
-        url: "/guides/how-to-read-ni-43-101-report#resource-categories",
+        text: "Inferred vs Indicated vs Measured (Guide)",
+        url: "/guides/inferred-vs-indicated-vs-measured-resources",
       },
     ],
   },

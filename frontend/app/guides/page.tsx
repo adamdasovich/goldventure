@@ -35,6 +35,15 @@ const guides = [
     featured: true,
   },
   {
+    title: "Inferred vs Indicated vs Measured Resources",
+    slug: "inferred-vs-indicated-vs-measured-resources",
+    description:
+      "The three NI 43-101 resource categories explained. What drill spacing produces each, why Inferred can't be used in PFS or DFS, and how to read a category-mixed resource table.",
+    readTime: "9 min read",
+    category: "Technical Analysis",
+    featured: true,
+  },
+  {
     title: "The Complete Guide to Junior Gold Mining Companies",
     slug: "junior-gold-mining-companies-guide",
     description:

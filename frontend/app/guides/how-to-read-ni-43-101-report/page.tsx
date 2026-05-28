@@ -1009,6 +1009,18 @@ export default function HowToReadNI43101Guide() {
                 </li>
               </ol>
               <p className="text-slate-300 mb-4 leading-relaxed">
+                For a deeper-dive on the three categories — typical drill
+                spacings, conversion failure rates, why PEAs can use Inferred
+                but PFS/DFS cannot, and how to read a category-mixed resource
+                table — see our companion piece:{" "}
+                <Link
+                  href="/guides/inferred-vs-indicated-vs-measured-resources"
+                  className="text-gold-400 hover:underline"
+                >
+                  Inferred vs Indicated vs Measured Resources →
+                </Link>
+              </p>
+              <p className="text-slate-300 mb-4 leading-relaxed">
                 For the definitions of these and other terms in isolation, see
                 our{" "}
                 <Link

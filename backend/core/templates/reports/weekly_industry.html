@@ -1,0 +1,327 @@
+<!doctype html>
+{% load humanize %}
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>GoldVenture Weekly — Week ending {{ week_ending }}</title>
+    <style>
+      @page {
+        size: letter;
+        margin: 0.55in 0.55in 0.55in 0.55in;
+      }
+      body {
+        font-family: Helvetica, Arial, sans-serif;
+        color: #1a1a1a;
+        font-size: 9.5pt;
+        line-height: 1.35;
+        margin: 0;
+      }
+      h1 {
+        font-size: 16pt;
+        margin: 0;
+        color: #b8860b;
+        letter-spacing: 0.5pt;
+      }
+      h2 {
+        font-size: 10.5pt;
+        margin: 10pt 0 4pt 0;
+        color: #1a1a1a;
+        border-bottom: 1pt solid #b8860b;
+        padding-bottom: 2pt;
+        text-transform: uppercase;
+        letter-spacing: 0.3pt;
+      }
+      .header-bar {
+        border-bottom: 2pt solid #b8860b;
+        padding-bottom: 6pt;
+        margin-bottom: 8pt;
+      }
+      .header-bar .sub {
+        font-size: 9pt;
+        color: #555;
+        margin-top: 2pt;
+      }
+      .exec {
+        background: #faf6ec;
+        border-left: 3pt solid #b8860b;
+        padding: 7pt 9pt;
+        margin: 6pt 0 10pt 0;
+        font-size: 10pt;
+        line-height: 1.45;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+      td {
+        vertical-align: top;
+      }
+
+      /* Top developments */
+      .dev {
+        border-top: 0.5pt solid #ddd;
+        padding: 5pt 0;
+      }
+      .dev:first-child {
+        border-top: none;
+      }
+      .dev .rank {
+        display: inline-block;
+        background: #b8860b;
+        color: #fff;
+        width: 14pt;
+        height: 14pt;
+        text-align: center;
+        font-weight: bold;
+        margin-right: 5pt;
+        font-size: 9pt;
+      }
+      .dev .name {
+        font-weight: bold;
+        font-size: 10pt;
+      }
+      .dev .ticker {
+        color: #555;
+        font-size: 9pt;
+      }
+      .dev .move-pos {
+        color: #047857;
+        font-weight: bold;
+      }
+      .dev .move-neg {
+        color: #b91c1c;
+        font-weight: bold;
+      }
+      .dev .gloss {
+        color: #333;
+        margin-top: 2pt;
+        font-size: 9pt;
+      }
+      .dev .meta {
+        color: #777;
+        font-size: 8.5pt;
+        margin-top: 1pt;
+      }
+
+      /* Metals table */
+      .metals-tbl td {
+        padding: 3pt 5pt 3pt 0;
+        font-size: 9pt;
+        border-bottom: 0.25pt solid #eee;
+      }
+      .metals-tbl .name {
+        font-weight: bold;
+      }
+      .pos {
+        color: #047857;
+      }
+      .neg {
+        color: #b91c1c;
+      }
+      .flat {
+        color: #888;
+      }
+
+      /* Financings */
+      .fin-summary {
+        font-size: 9pt;
+        margin: 3pt 0 6pt 0;
+      }
+      .fin-bars td {
+        padding: 2pt 4pt 2pt 0;
+        font-size: 8.5pt;
+      }
+      .fin-bars .label {
+        width: 18%;
+      }
+      .fin-bars .bar-cell {
+        width: 60%;
+      }
+      .fin-bars .bar {
+        background: #b8860b;
+        height: 8pt;
+        display: inline-block;
+      }
+      .fin-bars .amt {
+        width: 22%;
+        text-align: right;
+        font-weight: bold;
+      }
+
+      .footer {
+        margin-top: 10pt;
+        padding-top: 5pt;
+        border-top: 0.5pt solid #ccc;
+        font-size: 8pt;
+        color: #777;
+      }
+      .theme {
+        margin-top: 6pt;
+        font-size: 9pt;
+        font-style: italic;
+        color: #444;
+      }
+      .pending-note {
+        font-size: 8pt;
+        color: #b45309;
+        margin-top: 2pt;
+      }
+
+      /* Two-column layout for body */
+      .two-col {
+        width: 100%;
+      }
+      .two-col .left {
+        width: 62%;
+        padding-right: 10pt;
+      }
+      .two-col .right {
+        width: 38%;
+        padding-left: 6pt;
+        border-left: 0.5pt solid #eee;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="header-bar">
+      <h1>GOLDVENTURE WEEKLY</h1>
+      <div class="sub">
+        Week ending {{ week_ending }} &middot; Junior Mining Intelligence
+        &middot; Generated {{ generated_at }}
+      </div>
+    </div>
+
+    {% if narrative.executive_summary %}
+    <div class="exec">{{ narrative.executive_summary }}</div>
+    {% endif %}
+
+    <table class="two-col">
+      <tr>
+        <td class="left">
+          <h2>Top Developments</h2>
+          {% if top_developments %} {% for d in top_developments %}
+          <div class="dev">
+            <span class="rank">{{ forloop.counter }}</span>
+            <span class="name">{{ d.company_name }}</span>
+            <span class="ticker">
+              {% if d.ticker %}({{ d.ticker }}{% if d.exchange %}.{{
+              d.exchange|upper }}{% endif %}){% endif %}
+            </span>
+            {% if d.weekly_return_pct >= 0 %}
+            <span class="move-pos">+{{ d.weekly_return_pct }}%</span>
+            {% else %}
+            <span class="move-neg">{{ d.weekly_return_pct }}%</span>
+            {% endif %} {% if d.sector_zscore is not None %}
+            <span class="meta"
+              >&middot; z={{ d.sector_zscore }} vs {{ d.primary_commodity }}
+              cohort</span
+            >
+            {% endif %} {% if d.gloss %}
+            <div class="gloss">{{ d.gloss }}</div>
+            {% elif d.catalyst %}
+            <div class="gloss">
+              {{ d.catalyst.kind|title }}: {{ d.catalyst.title }} {% if
+              d.catalyst.date %}({{ d.catalyst.date }}){% endif %}
+            </div>
+            {% else %}
+            <div class="gloss">
+              No material release in window — move appears technical.
+            </div>
+            {% endif %}
+          </div>
+          {% endfor %} {% else %}
+          <p>No qualifying movers this week.</p>
+          {% endif %} {% if technical_reports %}
+          <h2>New Technical Reports</h2>
+          {% for r in technical_reports %}
+          <div class="dev">
+            <span class="name">{{ r.company_name }}</span>
+            <span class="ticker"
+              >{% if r.ticker %}({{ r.ticker }}){% endif %}</span
+            >
+            <span class="meta"
+              >&middot; {{ r.document_type|upper }} &middot; {{ r.document_date
+              }}</span
+            >
+            <div class="gloss">
+              {{ r.title }}{% if r.project_name %} — {{ r.project_name }}{%
+              endif %}
+            </div>
+            {% if r.economics %}
+            <div class="meta">
+              {% if r.economics.npv_5_usd_millions %}NPV5 ${{
+              r.economics.npv_5_usd_millions }}M &middot;{% endif %} {% if
+              r.economics.irr_percent %}IRR {{ r.economics.irr_percent }}%
+              &middot;{% endif %} {% if r.economics.aisc_per_oz %}AISC ${{
+              r.economics.aisc_per_oz }}/oz &middot;{% endif %} {% if
+              r.economics.mine_life_years %}LOM {{ r.economics.mine_life_years
+              }}y{% endif %}
+            </div>
+            {% endif %}
+          </div>
+          {% endfor %} {% endif %}
+        </td>
+
+        <td class="right">
+          <h2>Metal Prices (WoW)</h2>
+          <table class="metals-tbl">
+            {% for m in metals %}
+            <tr>
+              <td class="name">{{ m.label }}</td>
+              <td>${{ m.end_price }}/{{ m.unit }}</td>
+              <td>
+                {% if m.wow_change_pct is None %}
+                <span class="flat">—</span>
+                {% elif m.wow_change_pct > 0 %}
+                <span class="pos">+{{ m.wow_change_pct }}%</span>
+                {% elif m.wow_change_pct < 0 %}
+                <span class="neg">{{ m.wow_change_pct }}%</span>
+                {% else %}
+                <span class="flat">flat</span>
+                {% endif %}
+              </td>
+              <td class="meta">{{ m.trend_4w }} 4w</td>
+            </tr>
+            {% endfor %}
+          </table>
+
+          <h2>Financings Closed</h2>
+          <div class="fin-summary">
+            <strong>${{ financings.total_amount_usd_millions }}M</strong>
+            across {{ financings.count }} deal{{ financings.count|pluralize }}.
+          </div>
+          {% if financings.by_commodity %}
+          <table class="fin-bars">
+            {% for c in financings.by_commodity %}
+            <tr>
+              <td class="label">{{ c.commodity|title }}</td>
+              <td class="bar-cell">
+                <span class="bar" style="width: {{ c.bar_width }}pt;"
+                  >&nbsp;</span
+                >
+              </td>
+              <td class="amt">${{ c.amount_usd_millions }}M</td>
+            </tr>
+            {% endfor %}
+          </table>
+          {% endif %} {% if financings.pending_review_flag_count %}
+          <div class="pending-note">
+            +{{ financings.pending_review_flag_count }} flag{{
+            financings.pending_review_flag_count|pluralize }} awaiting review
+            (totals may be understated).
+          </div>
+          {% endif %}
+        </td>
+      </tr>
+    </table>
+
+    {% if narrative.theme_note %}
+    <div class="theme">{{ narrative.theme_note }}</div>
+    {% endif %}
+
+    <div class="footer">
+      Generated {{ generated_at }} &middot; source: juniorminingintelligence.com
+      &middot; data window: {{ window_start }} → {{ window_end }}
+    </div>
+  </body>
+</html>

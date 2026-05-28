@@ -188,6 +188,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       priority: 0.8,
     },
     {
+      url: `${baseUrl}/guides/inferred-vs-indicated-vs-measured-resources`,
+      lastModified: new Date(),
+      changeFrequency: "monthly",
+      priority: 0.7,
+    },
+    {
       url: `${baseUrl}/investor-tools`,
       lastModified: new Date(),
       changeFrequency: "monthly",
