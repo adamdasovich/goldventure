@@ -88,6 +88,7 @@ export default async function CompanyDetailPage({ params }: Props) {
   );
   if (rawSegment !== canonicalSegment) {
     permanentRedirect(companyHref(company));
+    console.log("[slug-redirect-debug] AFTER permanentRedirect (unreachable?)");
   }
 
   return (
