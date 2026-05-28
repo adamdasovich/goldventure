@@ -86,6 +86,19 @@ export default async function CompanyDetailPage({ params }: Props) {
         ...(newsPayload?.results || []),
         ...(newsPayload?.news_releases || []),
       ];
+  if (numericId === 2) {
+    console.log(
+      "[news-debug] id=2",
+      JSON.stringify({
+        newsResOk: newsRes.ok,
+        newsResStatus: newsRes.status,
+        payloadKeys: newsPayload ? Object.keys(newsPayload) : null,
+        financialCount: newsPayload?.financial?.length,
+        nonFinancialCount: newsPayload?.non_financial?.length,
+        mergedCount: newsReleases.length,
+      }),
+    );
+  }
   // Sort most-recent first so the 10 chosen for JSON-LD are the freshest.
   newsReleases.sort(
     (a, b) =>
