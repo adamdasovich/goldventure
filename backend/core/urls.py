@@ -186,6 +186,12 @@ urlpatterns = [
     # Open Financings (public page; first 5 in full + locked stubs for free users)
     path('open-financings/', views.open_financings_list, name='open_financings_list'),
 
+    # Weekly Industry Report (public archive)
+    path('reports/weekly/', views.weekly_report_list, name='weekly_report_list'),
+    path('reports/weekly/latest/', views.weekly_report_latest, name='weekly_report_latest'),
+    path('reports/weekly/<str:week_ending>/', views.weekly_report_detail, name='weekly_report_detail'),
+    path('reports/weekly/<str:week_ending>/pdf/', views.weekly_report_pdf, name='weekly_report_pdf'),
+
     # ViewSet routes
     path('', include(router.urls)),
 ]

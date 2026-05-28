@@ -44,6 +44,10 @@ pypdf==4.0.2
 # PDF rendering (weekly industry report)
 xhtml2pdf==0.2.15
 
+# GA4 Data API client (weekly industry report engagement signal).
+# Optional — only activates when GA4_PROPERTY_ID + GA4_CREDENTIALS_PATH are set.
+google-analytics-data>=0.18.0
+
 # Utilities
 python-dateutil==2.8.2
 pytz==2024.1

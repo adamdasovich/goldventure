@@ -497,15 +497,13 @@ def get_emerging_themes(week_ending: date, top_n: int = 10) -> list[dict[str, An
 
 def get_ga4_top_companies(week_ending: date, top_n: int = 20) -> list[dict[str, Any]]:
     """
-    Placeholder. Wired in commit 3 (GA4 client). Returns empty list when
-    GA4_PROPERTY_ID / GA4_CREDENTIALS_PATH env vars are not set so the rest
-    of the report still renders cleanly.
+    Top-viewed company pages over the report window, via the GA4 Data API.
+    Returns [] when GA4 env vars are absent or any error occurs — the report
+    must render cleanly without this data.
     """
-    import os
-    if not (os.environ.get('GA4_PROPERTY_ID') and os.environ.get('GA4_CREDENTIALS_PATH')):
-        return []
-    # Real implementation lives in core/reports/ga4.py once added.
-    return []
+    from core.reports.ga4 import fetch_top_company_pageviews
+    start, end = get_week_window(week_ending)
+    return fetch_top_company_pageviews(start, end, top_n=top_n)
 
 
 # ---------------------------------------------------------------------------

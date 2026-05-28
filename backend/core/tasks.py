@@ -2131,3 +2131,107 @@ def send_weekly_briefings_task():
         f"Weekly briefings: sent={sent} skipped={skipped} failed={failed}"
     )
     return {'sent': sent, 'skipped': skipped, 'failed': failed}
+
+
+# =============================================================================
+# Weekly industry report (Friday 5:30 PM ET, after fetch_stock_prices_task)
+# =============================================================================
+
+def _most_recent_friday(today=None):
+    """Return today if today is Friday, else the previous Friday."""
+    from datetime import date, timedelta
+    d = today or timezone.localtime().date()
+    # weekday(): Mon=0 ... Fri=4 ... Sun=6
+    return d - timedelta(days=(d.weekday() - 4) % 7)
+
+
+@shared_task(bind=True, max_retries=2, default_retry_delay=600)
+def generate_weekly_industry_report_task(self, week_ending: str = None):
+    """
+    Build the Friday weekly industry report. Idempotent on (week_ending):
+    re-running for the same week overwrites the existing row.
+
+    Args:
+        week_ending: Optional 'YYYY-MM-DD'. Defaults to the most recent
+            Friday in local time (so the scheduled 5:30 PM ET run picks up
+            today's date when running on a Friday).
+    """
+    from datetime import date as date_cls
+    from django.core.files.base import ContentFile
+
+    from core.models import User, WeeklyIndustryReport
+    from core.reports.weekly_industry import collect_weekly_data
+    from core.reports.scoring import annotate
+    from core.reports.narrative import attach_narrative
+    from core.reports.render import render_report
+    from core.email_service import EmailService
+
+    if week_ending:
+        wk = date_cls.fromisoformat(week_ending)
+    else:
+        wk = _most_recent_friday()
+
+    started = timezone.now()
+
+    report, _ = WeeklyIndustryReport.objects.update_or_create(
+        week_ending=wk,
+        defaults={'status': 'generating', 'generated_at': started, 'error_message': ''},
+    )
+
+    try:
+        data = collect_weekly_data(wk)
+        data = annotate(data)
+        data = attach_narrative(data)
+
+        html, pdf_bytes = render_report(data)
+
+        report.html = html
+        report.data_snapshot = data
+        report.executive_summary = (data.get('narrative') or {}).get('executive_summary', '')
+
+        if pdf_bytes:
+            report.pdf_file.save(
+                f'weekly-{wk.isoformat()}.pdf',
+                ContentFile(pdf_bytes),
+                save=False,
+            )
+
+        report.status = 'completed'
+        report.generation_duration_seconds = int((timezone.now() - started).total_seconds())
+        report.save()
+
+    except Exception as exc:
+        logger.exception("Weekly industry report generation failed for %s", wk)
+        report.status = 'failed'
+        report.error_message = f"{type(exc).__name__}: {exc}"
+        report.generation_duration_seconds = int((timezone.now() - started).total_seconds())
+        report.save()
+        raise self.retry(exc=exc)
+
+    # Email opted-in recipients
+    public_url = f"https://juniorminingintelligence.com/api/reports/weekly/{wk.isoformat()}/"
+    sent = failed = 0
+    for user in User.objects.filter(
+        email_weekly_industry_report_enabled=True, is_active=True,
+    ).exclude(email=''):
+        try:
+            if EmailService.send_weekly_industry_report(user, report, public_url):
+                sent += 1
+            else:
+                failed += 1
+        except Exception as e:
+            logger.error(f"Weekly industry report email failed for user {user.id}: {e}")
+            failed += 1
+
+    logger.info(
+        f"Weekly industry report week_ending={wk.isoformat()} "
+        f"status={report.status} duration={report.generation_duration_seconds}s "
+        f"emails_sent={sent} emails_failed={failed}"
+    )
+    return {
+        'week_ending': wk.isoformat(),
+        'status': report.status,
+        'duration_seconds': report.generation_duration_seconds,
+        'emails_sent': sent,
+        'emails_failed': failed,
+    }

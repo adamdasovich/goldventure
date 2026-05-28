@@ -188,3 +188,9 @@ from .dashboard import (  # noqa: F401
     briefing_email_toggle,
     briefing_email_unsubscribe,
 )
+from .reports import (  # noqa: F401
+    weekly_report_list,
+    weekly_report_detail,
+    weekly_report_pdf,
+    weekly_report_latest,
+)

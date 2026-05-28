@@ -695,6 +695,82 @@ class EmailService:
             )
             return False
 
+    # ----------------------------------------------------------------------
+    # Weekly industry report
+    # ----------------------------------------------------------------------
+
+    @staticmethod
+    def send_weekly_industry_report(user, report, public_url):
+        """
+        Send the Friday weekly industry report to a single user.
+
+        Args:
+            user: recipient User
+            report: WeeklyIndustryReport instance (must have .html populated)
+            public_url: absolute URL to the public archive page for this week
+        Returns True on success.
+        """
+        if not EmailService.is_configured():
+            logger.warning("Email not configured, skipping weekly industry report")
+            return False
+
+        recipient_email = getattr(user, 'email', None)
+        if not recipient_email:
+            logger.warning(f"No email address for user {getattr(user, 'id', '?')}")
+            return False
+
+        try:
+            from sendgrid import SendGridAPIClient
+            from sendgrid.helpers.mail import Mail, Email, To, Content, HtmlContent
+
+            html_content = report.html or ''
+            if public_url:
+                html_content = (
+                    f'<div style="background:#faf6ec;border-left:3px solid #b8860b;'
+                    f'padding:8px 12px;margin-bottom:12px;font-family:Helvetica,Arial,'
+                    f'sans-serif;font-size:13px;">'
+                    f'View this report in your browser: '
+                    f'<a href="{public_url}">{public_url}</a></div>'
+                ) + html_content
+            text_content = strip_tags(html_content)
+
+            from_email_setting = getattr(
+                settings, 'DEFAULT_FROM_EMAIL',
+                'noreply@juniorminingintelligence.com',
+            )
+            if '<' in from_email_setting and '>' in from_email_setting:
+                from_email = from_email_setting.split('<')[1].split('>')[0].strip()
+                from_name = from_email_setting.split('<')[0].strip()
+            else:
+                from_email = from_email_setting
+                from_name = 'Junior Gold Mining Intelligence'
+
+            subject = (
+                f'GoldVenture Weekly — week ending {report.week_ending.isoformat()}'
+            )
+
+            message = Mail(
+                from_email=Email(from_email, from_name),
+                to_emails=To(recipient_email),
+                subject=subject,
+                plain_text_content=Content('text/plain', text_content),
+                html_content=HtmlContent(html_content),
+            )
+
+            sg = SendGridAPIClient(_get_sendgrid_api_key())
+            response = sg.send(message)
+            logger.info(
+                f"Weekly industry report sent to {recipient_email} "
+                f"(status: {response.status_code})"
+            )
+            return True
+
+        except Exception as e:
+            logger.error(
+                f"Failed to send weekly industry report to {recipient_email}: {e}"
+            )
+            return False
+
     @staticmethod
     def _render_weekly_briefing_html(user, briefing, unsubscribe_url):
         """Render the weekly briefing email as dark-themed, inline-styled HTML."""

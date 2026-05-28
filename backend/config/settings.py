@@ -443,6 +443,16 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'core.tasks.send_weekly_briefings_task',
         'schedule': crontab(hour=12, minute=0, day_of_week=1),  # Mon 7 AM ET
     },
+
+    # Weekly industry report — Friday 5:30 PM ET / 22:30 UTC
+    # Runs after fetch_stock_prices_task (21:30 UTC) so Friday's stock closes
+    # exist. Co-runs with fetch_base_metals_prices_daily at 22:30 — if that
+    # race causes Friday's base-metal row to be missed, the report falls back
+    # to Thursday's close for those metals.
+    'generate-weekly-industry-report': {
+        'task': 'core.tasks.generate_weekly_industry_report_task',
+        'schedule': crontab(hour=22, minute=30, day_of_week=5),  # Fri 5:30 PM ET
+    },
 }
 
 # ============================================================================
