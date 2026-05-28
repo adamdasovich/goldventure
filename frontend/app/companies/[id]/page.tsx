@@ -78,6 +78,14 @@ export default async function CompanyDetailPage({ params }: Props) {
   const canonicalSegment = company.slug
     ? `${company.id}-${company.slug}`
     : `${company.id}`;
+  console.log(
+    "[slug-redirect-debug]",
+    JSON.stringify({
+      rawSegment,
+      canonicalSegment,
+      willRedirect: rawSegment !== canonicalSegment,
+    }),
+  );
   if (rawSegment !== canonicalSegment) {
     permanentRedirect(companyHref(company));
   }
