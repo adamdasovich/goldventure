@@ -48,11 +48,13 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     property.description?.slice(0, 155) ||
     `${(property.listing_type || "").replace("_", " ")} property in ${property.province_state}, ${property.country_display}. ${property.total_hectares || "N/A"} hectares, ${property.primary_mineral_display || "mineral exploration"} project.`;
 
+  // Prefer the listing's own hero image; fall back to a dynamic, branded
+  // OG card that includes title, mineral, location, and acreage.
   const images = property.hero_image
     ? [`https://juniorminingintelligence.com${property.hero_image}`]
     : property.media?.[0]?.file_url
       ? [`https://juniorminingintelligence.com${property.media[0].file_url}`]
-      : ["/og-image.png"];
+      : [`/api/og/property/${slug}`];
 
   return {
     title,

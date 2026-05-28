@@ -80,7 +80,18 @@ export default async function CompanyDetailPage({ params }: Props) {
     : null;
   const newsReleases: any[] = Array.isArray(newsPayload)
     ? newsPayload
-    : newsPayload?.results || newsPayload?.news_releases || [];
+    : [
+        ...(newsPayload?.financial || []),
+        ...(newsPayload?.non_financial || []),
+        ...(newsPayload?.results || []),
+        ...(newsPayload?.news_releases || []),
+      ];
+  // Sort most-recent first so the 10 chosen for JSON-LD are the freshest.
+  newsReleases.sort(
+    (a, b) =>
+      new Date(b.release_date || 0).getTime() -
+      new Date(a.release_date || 0).getTime(),
+  );
 
   // Emit NewsArticle JSON-LD for the 10 most recent press releases so they
   // become eligible for Google's Article rich result + Top Stories indexing.
