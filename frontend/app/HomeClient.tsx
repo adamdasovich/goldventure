@@ -601,6 +601,15 @@ export default function HomeClient({ initialArticles }: HomeClientProps) {
                 Closed Financings
               </Button>
             </Link>
+            <Link href="/reports/weekly">
+              <Button
+                variant="secondary"
+                size="sm"
+                className="w-full sm:w-auto"
+              >
+                Weekly Financial Snapshot
+              </Button>
+            </Link>
           </div>
         </div>
       </section>
