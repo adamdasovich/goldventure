@@ -9,7 +9,11 @@ from celery import shared_task
 from django.utils import timezone
 from datetime import datetime
 from .models import DocumentProcessingJob, Company, NewsRelease, Document
-from .news_classification import classify_release_type, VALID_RELEASE_TYPES
+from .news_classification import (
+    classify_release_type,
+    is_material_release_type,
+    VALID_RELEASE_TYPES,
+)
 from mcp_servers.document_processor_hybrid import HybridDocumentProcessor
 from mcp_servers.website_crawler import crawl_news_releases
 from django.db.models import Q
@@ -523,11 +527,15 @@ def scrape_company_news_task(self, company_id):
                 else classify_release_type(title)
             )
 
-            # Determine if this is a financial report
+            # is_material flags genuine catalyst events (drilling, resources,
+            # studies, financings, M&A) — distinct from the local
+            # `is_financial` flag below which is only for financial-statement
+            # press releases used to route documents.
             is_financial = any(keyword in title.lower() for keyword in [
                 'financial', 'earnings', 'quarter', 'q1', 'q2', 'q3', 'q4',
                 'annual report', 'md&a', 'interim', 'fiscal'
             ])
+            is_material = is_material_release_type(release_type)
 
             # Parse date
             if date_str:
@@ -556,7 +564,7 @@ def scrape_company_news_task(self, company_id):
                     'release_type': release_type,
                     'release_date': release_date,
                     'summary': '',
-                    'is_material': is_financial,
+                    'is_material': is_material,
                     'full_text': ''
                 }
             )
@@ -1082,7 +1090,7 @@ def scrape_single_company_news_task(self, company_id: int):
                     'release_type': release_type,
                     'release_date': release_date,
                     'summary': '',
-                    'is_material': False,
+                    'is_material': is_material_release_type(release_type),
                     'full_text': ''
                 }
             )

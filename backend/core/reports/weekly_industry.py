@@ -13,12 +13,13 @@ from __future__ import annotations
 
 import re
 from collections import Counter, defaultdict
-from datetime import date, timedelta
+from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 from statistics import mean, pstdev
 from typing import Any
 
 from django.db.models import Avg, Sum, Q
+from django.utils import timezone
 
 from core.models import (
     Company,
@@ -51,6 +52,12 @@ TECHNICAL_REPORT_TYPES = ('ni43101',)
 def get_week_window(week_ending: date) -> tuple[date, date]:
     """Return (start, end) inclusive dates for the report window."""
     return week_ending - timedelta(days=WEEK_DAYS), week_ending
+
+
+def _aware_dt(d: date, end_of_day: bool = False) -> datetime:
+    """Convert a date to an aware datetime at the project timezone boundary."""
+    t = time.max if end_of_day else time.min
+    return timezone.make_aware(datetime.combine(d, t))
 
 
 def _d(value) -> float | None:
@@ -450,11 +457,13 @@ def get_emerging_themes(week_ending: date, top_n: int = 10) -> list[dict[str, An
     prior_end = start  # exclusive of current window start
 
     this_week = NewsArticle.objects.filter(
-        published_at__gt=start, published_at__lte=end,
+        published_at__gt=_aware_dt(start),
+        published_at__lte=_aware_dt(end, end_of_day=True),
     ).values_list('title', 'summary')
 
     prior = NewsArticle.objects.filter(
-        published_at__gt=prior_start, published_at__lte=prior_end,
+        published_at__gt=_aware_dt(prior_start),
+        published_at__lte=_aware_dt(prior_end, end_of_day=True),
     ).values_list('title', 'summary')
 
     cur_counts: Counter = Counter()

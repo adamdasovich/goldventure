@@ -19,6 +19,20 @@ VALID_RELEASE_TYPES = frozenset({
     'corporate', 'acquisition', 'management', 'other',
 })
 
+# Release types treated as "material news events" for the weekly industry
+# report, daily briefings, and catalyst-impact analytics. Captures the
+# fundamentally-news-moving categories: drilling, resources, economic studies,
+# financings, and M&A. Management/corporate/other are administrative.
+MATERIAL_RELEASE_TYPES = frozenset({
+    'drill_results', 'resource_update', 'study_results',
+    'financing', 'acquisition',
+})
+
+
+def is_material_release_type(release_type: str) -> bool:
+    """Whether a release_type code counts as a material news event."""
+    return release_type in MATERIAL_RELEASE_TYPES
+
 # Ordered most-specific-first; the first bucket with a keyword hit wins.
 # Keywords are matched as case-insensitive substrings of the title.
 _CLASSIFICATION_RULES = [
