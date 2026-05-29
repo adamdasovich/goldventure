@@ -62,6 +62,14 @@ const FEATURES: {
   badge?: string;
 }[] = [
   {
+    title: "Weekly Financial Snapshot",
+    badge: "New",
+    description:
+      "Every Friday after the close: top movers with catalysts, new NI 43-101 reports, financings closed, metal price changes, and emerging themes — on one page.",
+    icon: "M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z",
+    href: "/reports/weekly",
+  },
+  {
     title: "Company Database",
     description:
       "Profiles for 500+ junior miners — projects, resource estimates, financing history, and news, all in one place.",
