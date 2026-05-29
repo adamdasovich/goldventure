@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import SiteNav from "@/components/SiteNav";
 
 const SITE_URL = "https://juniorminingintelligence.com";
 const API_BASE_URL =
@@ -85,49 +86,52 @@ export default async function WeeklyReportDetailPage({ params }: PageProps) {
   const iframeSrc = `${API_BASE_URL}/reports/weekly/${week_ending}/`;
 
   return (
-    <main className="mx-auto max-w-5xl px-4 py-8">
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <Link
-            href="/reports/weekly"
-            className="text-sm font-medium text-amber-700 hover:text-amber-800 hover:underline"
-          >
-            &larr; All weekly reports
-          </Link>
-          <h1 className="mt-2 text-2xl font-bold text-slate-900">
-            Week ending {formatWeekEnding(week_ending)}
-          </h1>
-        </div>
-        <div className="flex gap-2">
-          {report.pdf_url && (
+    <>
+      <SiteNav />
+      <main className="mx-auto max-w-5xl px-4 py-8">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <Link
+              href="/reports/weekly"
+              className="text-sm font-medium text-amber-700 hover:text-amber-800 hover:underline"
+            >
+              &larr; All weekly reports
+            </Link>
+            <h1 className="mt-2 text-2xl font-bold text-slate-900">
+              Week ending {formatWeekEnding(week_ending)}
+            </h1>
+          </div>
+          <div className="flex gap-2">
+            {report.pdf_url && (
+              <a
+                href={report.pdf_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="rounded border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:border-slate-400 hover:bg-slate-50"
+              >
+                Download PDF
+              </a>
+            )}
             <a
-              href={report.pdf_url}
+              href={report.html_url}
               target="_blank"
               rel="noopener noreferrer"
-              className="rounded border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:border-slate-400 hover:bg-slate-50"
+              className="rounded bg-amber-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-amber-800"
             >
-              Download PDF
+              Open in new tab
             </a>
-          )}
-          <a
-            href={report.html_url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="rounded bg-amber-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-amber-800"
-          >
-            Open in new tab
-          </a>
+          </div>
         </div>
-      </div>
 
-      <div className="overflow-hidden rounded border border-slate-200 bg-white shadow-sm">
-        <iframe
-          src={iframeSrc}
-          title={`Weekly mining report — week ending ${week_ending}`}
-          className="block h-[1400px] w-full"
-          loading="lazy"
-        />
-      </div>
-    </main>
+        <div className="overflow-hidden rounded border border-slate-200 bg-white shadow-sm">
+          <iframe
+            src={iframeSrc}
+            title={`Weekly mining report — week ending ${week_ending}`}
+            className="block h-[1400px] w-full"
+            loading="lazy"
+          />
+        </div>
+      </main>
+    </>
   );
 }

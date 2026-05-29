@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import SiteNav from "@/components/SiteNav";
 
 const CANONICAL = "https://juniorminingintelligence.com/reports/weekly";
 const API_BASE_URL =
@@ -66,78 +67,81 @@ export default async function WeeklyReportsArchivePage() {
   const reports = await fetchReports();
 
   return (
-    <main className="mx-auto max-w-4xl px-4 py-10 sm:py-14">
-      <header className="mb-10 border-b border-amber-700/40 pb-6">
-        <p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-amber-700">
-          Weekly Report Archive
-        </p>
-        <h1 className="text-3xl font-bold text-slate-900 sm:text-4xl">
-          Weekly Mining Industry Report
-        </h1>
-        <p className="mt-3 max-w-2xl text-base leading-relaxed text-slate-600">
-          A Friday afternoon snapshot of the junior mining industry — top stock
-          moves with catalysts, new NI 43-101 reports, financings closed, metal
-          price changes, and emerging themes. Generated automatically after the
-          close.
-        </p>
-      </header>
+    <>
+      <SiteNav />
+      <main className="mx-auto max-w-4xl px-4 py-10 sm:py-14">
+        <header className="mb-10 border-b border-amber-700/40 pb-6">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-amber-700">
+            Weekly Report Archive
+          </p>
+          <h1 className="text-3xl font-bold text-slate-900 sm:text-4xl">
+            Weekly Mining Industry Report
+          </h1>
+          <p className="mt-3 max-w-2xl text-base leading-relaxed text-slate-600">
+            A Friday afternoon snapshot of the junior mining industry — top
+            stock moves with catalysts, new NI 43-101 reports, financings
+            closed, metal price changes, and emerging themes. Generated
+            automatically after the close.
+          </p>
+        </header>
 
-      {reports.length === 0 ? (
-        <div className="rounded border border-slate-200 bg-slate-50 p-6 text-center text-slate-600">
-          No reports published yet. Check back after Friday at 5:30 PM ET.
-        </div>
-      ) : (
-        <ul className="space-y-3">
-          {reports.map((report) => (
-            <li
-              key={report.week_ending}
-              className="flex flex-col gap-3 rounded border border-slate-200 bg-white p-5 transition hover:border-amber-700/60 hover:shadow-sm sm:flex-row sm:items-center sm:justify-between"
-            >
-              <div>
-                <Link
-                  href={`/reports/weekly/${report.week_ending}`}
-                  className="text-lg font-semibold text-slate-900 hover:text-amber-800 hover:underline"
-                >
-                  Week ending {formatWeekEnding(report.week_ending)}
-                </Link>
-                {report.generated_at && (
-                  <p className="mt-1 text-xs text-slate-500">
-                    Generated{" "}
-                    {new Date(report.generated_at).toLocaleString("en-US", {
-                      dateStyle: "medium",
-                      timeStyle: "short",
-                      timeZone: "America/New_York",
-                    })}{" "}
-                    ET
-                  </p>
-                )}
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <Link
-                  href={`/reports/weekly/${report.week_ending}`}
-                  className="rounded bg-amber-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-amber-800"
-                >
-                  Read
-                </Link>
-                {report.pdf_url && (
-                  <a
-                    href={report.pdf_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="rounded border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:border-slate-400 hover:bg-slate-50"
+        {reports.length === 0 ? (
+          <div className="rounded border border-slate-200 bg-slate-50 p-6 text-center text-slate-600">
+            No reports published yet. Check back after Friday at 5:30 PM ET.
+          </div>
+        ) : (
+          <ul className="space-y-3">
+            {reports.map((report) => (
+              <li
+                key={report.week_ending}
+                className="flex flex-col gap-3 rounded border border-slate-200 bg-white p-5 transition hover:border-amber-700/60 hover:shadow-sm sm:flex-row sm:items-center sm:justify-between"
+              >
+                <div>
+                  <Link
+                    href={`/reports/weekly/${report.week_ending}`}
+                    className="text-lg font-semibold text-slate-900 hover:text-amber-800 hover:underline"
                   >
-                    PDF
-                  </a>
-                )}
-              </div>
-            </li>
-          ))}
-        </ul>
-      )}
+                    Week ending {formatWeekEnding(report.week_ending)}
+                  </Link>
+                  {report.generated_at && (
+                    <p className="mt-1 text-xs text-slate-500">
+                      Generated{" "}
+                      {new Date(report.generated_at).toLocaleString("en-US", {
+                        dateStyle: "medium",
+                        timeStyle: "short",
+                        timeZone: "America/New_York",
+                      })}{" "}
+                      ET
+                    </p>
+                  )}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Link
+                    href={`/reports/weekly/${report.week_ending}`}
+                    className="rounded bg-amber-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-amber-800"
+                  >
+                    Read
+                  </Link>
+                  {report.pdf_url && (
+                    <a
+                      href={report.pdf_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="rounded border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:border-slate-400 hover:bg-slate-50"
+                    >
+                      PDF
+                    </a>
+                  )}
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
 
-      <footer className="mt-12 text-center text-xs text-slate-500">
-        Reports cover the trailing 7 days through the Friday close.
-      </footer>
-    </main>
+        <footer className="mt-12 text-center text-xs text-slate-500">
+          Reports cover the trailing 7 days through the Friday close.
+        </footer>
+      </main>
+    </>
   );
 }
