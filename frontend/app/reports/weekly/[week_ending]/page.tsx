@@ -83,7 +83,10 @@ export default async function WeeklyReportDetailPage({ params }: PageProps) {
 
   // The Django HTML endpoint returns a fully-formed document. Iframe-embed it
   // so the report's print-styled CSS stays isolated from the site theme.
-  const iframeSrc = `${API_BASE_URL}/reports/weekly/${week_ending}/`;
+  // Use a same-origin relative path (nginx proxies /api/* to Django) so the
+  // iframe is always allowed by the page's default-src 'self' CSP regardless
+  // of which API_BASE_URL the build was given.
+  const iframeSrc = `/api/reports/weekly/${week_ending}/`;
 
   return (
     <>
