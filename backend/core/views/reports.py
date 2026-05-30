@@ -14,6 +14,7 @@ from datetime import date
 
 from django.http import FileResponse, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404
+from django.views.decorators.clickjacking import xframe_options_sameorigin
 from django.views.decorators.http import require_GET
 
 from core.models import WeeklyIndustryReport
@@ -42,9 +43,17 @@ def weekly_report_list(request):
     })
 
 
+@xframe_options_sameorigin
 @require_GET
 def weekly_report_detail(request, week_ending: str):
-    """Render the report HTML for a given week_ending date (YYYY-MM-DD)."""
+    """Render the report HTML for a given week_ending date (YYYY-MM-DD).
+
+    `xframe_options_sameorigin` overrides the project-wide DENY default so
+    the frontend's /reports/weekly/<date>/ page can iframe-embed the report.
+    nginx also adds X-Frame-Options: SAMEORIGIN — without this override,
+    Django emits DENY and Chrome refuses the iframe due to conflicting
+    values.
+    """
     try:
         wk = date.fromisoformat(week_ending)
     except ValueError:
@@ -79,6 +88,7 @@ def weekly_report_pdf(request, week_ending: str):
     )
 
 
+@xframe_options_sameorigin
 @require_GET
 def weekly_report_latest(request):
     """Convenience: render the most recent completed report."""
