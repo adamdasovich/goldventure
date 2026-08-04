@@ -196,7 +196,7 @@ If you don't have access to specific information, say so clearly and suggest whe
 
         # Initial API call
         response = self.client.messages.create(
-            model="claude-sonnet-4-20250514",
+            model="claude-sonnet-4-6",
             max_tokens=max_tokens,
             system=system_prompt,
             tools=tools,
@@ -240,7 +240,7 @@ If you don't have access to specific information, say so clearly and suggest whe
             ])
 
             response = self.client.messages.create(
-                model="claude-sonnet-4-20250514",
+                model="claude-sonnet-4-6",
                 max_tokens=max_tokens,
                 system=system_prompt,
                 tools=tools,

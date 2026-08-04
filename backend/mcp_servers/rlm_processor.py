@@ -120,7 +120,7 @@ class RLMProcessor:
     # Token estimation ratio (chars to tokens)
     CHARS_PER_TOKEN = 4
 
-    def __init__(self, model: str = "claude-sonnet-4-20250514"):
+    def __init__(self, model: str = "claude-sonnet-4-6"):
         self.client = anthropic.Anthropic(api_key=settings.ANTHROPIC_API_KEY)
         self.model = model
         self.processing_log: List[Dict] = []

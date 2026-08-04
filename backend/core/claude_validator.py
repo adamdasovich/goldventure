@@ -78,7 +78,7 @@ Respond with ONLY the JSON array, no explanation:"""
 
     try:
         response = client.messages.create(
-            model="claude-3-5-haiku-20241022",
+            model="claude-haiku-4-5",
             max_tokens=1024,
             messages=[{"role": "user", "content": prompt}]
         )
@@ -172,7 +172,7 @@ Respond with ONLY the JSON array:"""
 
     try:
         response = client.messages.create(
-            model="claude-3-5-haiku-20241022",
+            model="claude-haiku-4-5",
             max_tokens=2048,
             messages=[{"role": "user", "content": prompt}]
         )
@@ -242,7 +242,7 @@ Respond with ONLY "valid" or "invalid":"""
 
     try:
         response = client.messages.create(
-            model="claude-3-5-haiku-20241022",
+            model="claude-haiku-4-5",
             max_tokens=10,
             messages=[{"role": "user", "content": prompt}]
         )
@@ -818,7 +818,7 @@ IMPORTANT: If saved projects count is 0 but you find projects on the website, pu
 
     try:
         response = client.messages.create(
-            model="claude-3-5-haiku-20241022",
+            model="claude-haiku-4-5",
             max_tokens=2048,
             messages=[{"role": "user", "content": prompt}]
         )

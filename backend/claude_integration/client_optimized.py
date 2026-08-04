@@ -297,7 +297,7 @@ class OptimizedClaudeClient:
 
         # Initial API call
         response = self.client.messages.create(
-            model="claude-sonnet-4-20250514",
+            model="claude-sonnet-4-6",
             max_tokens=max_tokens,
             system=system_prompt,
             tools=tools,
@@ -347,7 +347,7 @@ class OptimizedClaudeClient:
             ])
 
             response = self.client.messages.create(
-                model="claude-sonnet-4-20250514",
+                model="claude-sonnet-4-6",
                 max_tokens=max_tokens,
                 system=system_prompt,
                 tools=tools,
