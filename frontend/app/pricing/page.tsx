@@ -200,6 +200,11 @@ function PricingContent() {
           </button>
         </div>
 
+        {/* Currency note */}
+        <p className="text-center text-sm text-slate-400 -mt-8 mb-12">
+          All prices in Canadian dollars (CAD)
+        </p>
+
         {/* Pricing Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-16">
           {/* Explorer - Free */}
