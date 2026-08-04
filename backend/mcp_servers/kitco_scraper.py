@@ -150,52 +150,43 @@ class KitcoScraper:
                 else:
                     price_text = text
 
-                # Now find prices in the cleaned text
-                # Prices with commas (like 4,366.00)
-                prices_with_commas = re.findall(r'(\d{1,3},\d{3}\.\d{2})', price_text)
+                # The concatenated row has the deterministic shape:
+                #   {Bid}{Ask}{Change}{Pct}%{Low}{High}
+                # (Change is omitted for some metals, e.g. Rhodium.) Bid/Ask/
+                # Low/High carry 2 decimals, Change carries 3, Pct is 2 decimals
+                # + '%'. There are NO separators between fields, so anchor on the
+                # single '%' that terminates the percent change and read fields by
+                # position. The old flat-number-list approach failed on silver
+                # (no thousands comma -> nothing matched -> Method 3 grabbed
+                # gold's price) and leaked the ask's trailing digits into change.
+                PRICE_RE = r'\d{1,3}(?:,\d{3})*\.\d{2}'
 
-                # For silver (< 100), find prices like 76.19
-                prices_without_commas = re.findall(r'(?<![,\d])(\d{2,3}\.\d{2})(?![,\d])', price_text)
+                def _dec(s):
+                    return Decimal(s.replace(',', ''))
 
-                all_prices = []
+                left, _, right = price_text.partition('%')
 
-                # Add comma-separated prices (gold, platinum, palladium)
-                for p in prices_with_commas:
-                    try:
-                        all_prices.append(Decimal(p.replace(',', '')))
-                    except (ValueError, TypeError, decimal.InvalidOperation):
-                        pass
+                left_prices = list(re.finditer(PRICE_RE, left))
+                if len(left_prices) >= 2:
+                    price_data['bid_price'] = _dec(left_prices[0].group())
+                    price_data['ask_price'] = _dec(left_prices[1].group())
 
-                # Add non-comma prices if we don't have comma prices (for silver)
-                if not all_prices and prices_without_commas:
-                    for p in prices_without_commas:
-                        try:
-                            val = Decimal(p)
-                            # Filter reasonable prices (silver > 20)
-                            if val > 20:
-                                all_prices.append(val)
-                        except (ValueError, TypeError, decimal.InvalidOperation):
-                            pass
+                    # Everything after the ask, up to '%', is Change (3-decimal,
+                    # optional) followed by Pct (2-decimal).
+                    tail = left[left_prices[1].end():]
+                    change_m = re.match(r'\d{1,3}(?:,\d{3})*\.\d{3}', tail)
+                    if change_m:
+                        price_data['change_amount'] = _dec(change_m.group())
+                        tail = tail[change_m.end():]
+                    pct_m = re.search(PRICE_RE, tail)
+                    if pct_m:
+                        price_data['change_percent'] = _dec(pct_m.group())
 
-                if len(all_prices) >= 2:
-                    price_data['bid_price'] = all_prices[0]
-                    price_data['ask_price'] = all_prices[1]
-
-                    # Extract low and high prices if available (last 2 prices in the list)
-                    # Format: Bid | Ask | ... | Low | High
-                    if len(all_prices) >= 4:
-                        price_data['low_price'] = all_prices[-2]
-                        price_data['high_price'] = all_prices[-1]
-
-                # Extract change amount and percent
-                # Look for pattern like "32.6000.75%" (change followed by percent)
-                change_match = re.search(r'(\d+\.\d{2,3})(\d+\.\d{2})%', price_text)
-                if change_match:
-                    try:
-                        price_data['change_amount'] = Decimal(change_match.group(1))
-                        price_data['change_percent'] = Decimal(change_match.group(2))
-                    except (ValueError, TypeError, decimal.InvalidOperation):
-                        pass
+                    # Low / High are the first two prices after '%'.
+                    right_prices = re.findall(PRICE_RE, right)
+                    if len(right_prices) >= 2:
+                        price_data['low_price'] = _dec(right_prices[0])
+                        price_data['high_price'] = _dec(right_prices[1])
 
                 break
 
