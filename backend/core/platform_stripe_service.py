@@ -12,9 +12,13 @@ Mirrors the pattern in stripe_service.py (company subscriptions).
 import stripe
 from django.conf import settings
 from django.utils import timezone
-from datetime import datetime
+from datetime import datetime, timezone as dt_timezone
 import logging
-from .api_utils import get_stripe_api_key
+from .api_utils import (
+    get_stripe_api_key,
+    stripe_subscription_period,
+    stripe_invoice_subscription_id,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -155,6 +159,10 @@ class PlatformStripeService:
         session = stripe.checkout.Session.create(
             customer=customer_id,
             payment_method_types=['card'],
+            # Managed Payments is enabled by default on new Stripe accounts and
+            # rejects payment_method_types + requires product tax codes. Disable
+            # it per-session to keep classic card Checkout behavior.
+            managed_payments={'enabled': False},
             line_items=[{'price': price_id, 'quantity': 1}],
             mode='subscription',
             subscription_data={
@@ -241,6 +249,7 @@ def process_platform_webhook(event):
             user = User.objects.get(id=user_id)
             stripe_sub = stripe.Subscription.retrieve(data.subscription)
             price_cents = TIER_PRICING.get(tier, {}).get(interval, 0)
+            period_start, period_end = stripe_subscription_period(stripe_sub)
 
             sub, created = PlatformSubscription.objects.update_or_create(
                 user=user,
@@ -249,13 +258,13 @@ def process_platform_webhook(event):
                     'status': stripe_sub.status,
                     'stripe_customer_id': data.customer,
                     'stripe_subscription_id': data.subscription,
-                    'stripe_price_id': stripe_sub.items.data[0].price.id if stripe_sub.items.data else '',
+                    'stripe_price_id': stripe_sub['items']['data'][0]['price']['id'] if stripe_sub['items']['data'] else '',
                     'plan_interval': interval,
                     'price_cents': price_cents,
-                    'trial_start': datetime.fromtimestamp(stripe_sub.trial_start, tz=timezone.utc) if stripe_sub.trial_start else None,
-                    'trial_end': datetime.fromtimestamp(stripe_sub.trial_end, tz=timezone.utc) if stripe_sub.trial_end else None,
-                    'current_period_start': datetime.fromtimestamp(stripe_sub.current_period_start, tz=timezone.utc),
-                    'current_period_end': datetime.fromtimestamp(stripe_sub.current_period_end, tz=timezone.utc),
+                    'trial_start': datetime.fromtimestamp(stripe_sub.trial_start, tz=dt_timezone.utc) if stripe_sub.trial_start else None,
+                    'trial_end': datetime.fromtimestamp(stripe_sub.trial_end, tz=dt_timezone.utc) if stripe_sub.trial_end else None,
+                    'current_period_start': datetime.fromtimestamp(period_start, tz=dt_timezone.utc),
+                    'current_period_end': datetime.fromtimestamp(period_end, tz=dt_timezone.utc),
                     'cancel_at_period_end': False,
                     'canceled_at': None,
                 }
@@ -279,12 +288,13 @@ def process_platform_webhook(event):
 
             try:
                 sub = PlatformSubscription.objects.get(stripe_subscription_id=sub_id)
+                period_start, period_end = stripe_subscription_period(data)
                 sub.status = data.status
                 sub.cancel_at_period_end = data.cancel_at_period_end
-                sub.current_period_start = datetime.fromtimestamp(data.current_period_start, tz=timezone.utc)
-                sub.current_period_end = datetime.fromtimestamp(data.current_period_end, tz=timezone.utc)
+                sub.current_period_start = datetime.fromtimestamp(period_start, tz=dt_timezone.utc)
+                sub.current_period_end = datetime.fromtimestamp(period_end, tz=dt_timezone.utc)
                 if data.canceled_at:
-                    sub.canceled_at = datetime.fromtimestamp(data.canceled_at, tz=timezone.utc)
+                    sub.canceled_at = datetime.fromtimestamp(data.canceled_at, tz=dt_timezone.utc)
                 sub.save()
                 logger.info(f"Updated platform subscription {sub_id} -> {data.status}")
             except PlatformSubscription.DoesNotExist:
@@ -314,7 +324,7 @@ def process_platform_webhook(event):
                 logger.warning(f"Platform subscription {sub_id} not found")
 
         elif event_type == 'invoice.paid':
-            subscription_id = data.subscription
+            subscription_id = stripe_invoice_subscription_id(data)
             if not subscription_id:
                 return {'success': True, 'skipped': True}
 
@@ -324,13 +334,13 @@ def process_platform_webhook(event):
                     stripe_invoice_id=data.id,
                     defaults={
                         'subscription': sub,
-                        'stripe_payment_intent_id': data.payment_intent or '',
+                        'stripe_payment_intent_id': data.get('payment_intent') or '',
                         'status': 'paid',
                         'amount_cents': data.amount_paid,
                         'currency': data.currency,
-                        'invoice_date': datetime.fromtimestamp(data.created, tz=timezone.utc),
+                        'invoice_date': datetime.fromtimestamp(data.created, tz=dt_timezone.utc),
                         'paid_at': datetime.fromtimestamp(
-                            data.status_transitions.paid_at, tz=timezone.utc
+                            data.status_transitions.paid_at, tz=dt_timezone.utc
                         ) if data.status_transitions.paid_at else timezone.now(),
                         'invoice_pdf_url': data.invoice_pdf or '',
                         'hosted_invoice_url': data.hosted_invoice_url or '',
@@ -341,7 +351,7 @@ def process_platform_webhook(event):
                 pass  # Not a platform subscription invoice
 
         elif event_type == 'invoice.payment_failed':
-            subscription_id = data.subscription
+            subscription_id = stripe_invoice_subscription_id(data)
             if not subscription_id:
                 return {'success': True, 'skipped': True}
             try:

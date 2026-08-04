@@ -12,9 +12,13 @@ Handles:
 import stripe
 from django.conf import settings
 from django.utils import timezone
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone as dt_timezone
 import logging
-from .api_utils import get_stripe_api_key
+from .api_utils import (
+    get_stripe_api_key,
+    stripe_subscription_period,
+    stripe_invoice_subscription_id,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -263,6 +267,10 @@ class StripeService:
             session = stripe.checkout.Session.create(
                 customer=customer_id,
                 payment_method_types=['card'],
+                # Managed Payments is enabled by default on new Stripe accounts
+                # and rejects payment_method_types + requires product tax codes.
+                # Disable it per-session to keep classic card Checkout behavior.
+                managed_payments={'enabled': False},
                 line_items=[{
                     'price': price_id,
                     'quantity': 1,
@@ -366,17 +374,18 @@ def process_subscription_webhook(event):
             company_id = data.metadata.get('company_id')
             if company_id:
                 company = Company.objects.get(id=company_id)
+                period_start, period_end = stripe_subscription_period(data)
                 subscription, created = CompanySubscription.objects.update_or_create(
                     company=company,
                     defaults={
                         'stripe_customer_id': data.customer,
                         'stripe_subscription_id': data.id,
-                        'stripe_price_id': data.items.data[0].price.id if data.items.data else '',
+                        'stripe_price_id': data['items']['data'][0]['price']['id'] if data['items']['data'] else '',
                         'status': data.status,
-                        'trial_start': datetime.fromtimestamp(data.trial_start, tz=timezone.utc) if data.trial_start else None,
-                        'trial_end': datetime.fromtimestamp(data.trial_end, tz=timezone.utc) if data.trial_end else None,
-                        'current_period_start': datetime.fromtimestamp(data.current_period_start, tz=timezone.utc),
-                        'current_period_end': datetime.fromtimestamp(data.current_period_end, tz=timezone.utc),
+                        'trial_start': datetime.fromtimestamp(data.trial_start, tz=dt_timezone.utc) if data.trial_start else None,
+                        'trial_end': datetime.fromtimestamp(data.trial_end, tz=dt_timezone.utc) if data.trial_end else None,
+                        'current_period_start': datetime.fromtimestamp(period_start, tz=dt_timezone.utc),
+                        'current_period_end': datetime.fromtimestamp(period_end, tz=dt_timezone.utc),
                     }
                 )
                 logger.info(f"{'Created' if created else 'Updated'} subscription for company {company_id}")
@@ -386,12 +395,13 @@ def process_subscription_webhook(event):
             subscription_id = data.id
             try:
                 subscription = CompanySubscription.objects.get(stripe_subscription_id=subscription_id)
+                period_start, period_end = stripe_subscription_period(data)
                 subscription.status = data.status
                 subscription.cancel_at_period_end = data.cancel_at_period_end
-                subscription.current_period_start = datetime.fromtimestamp(data.current_period_start, tz=timezone.utc)
-                subscription.current_period_end = datetime.fromtimestamp(data.current_period_end, tz=timezone.utc)
+                subscription.current_period_start = datetime.fromtimestamp(period_start, tz=dt_timezone.utc)
+                subscription.current_period_end = datetime.fromtimestamp(period_end, tz=dt_timezone.utc)
                 if data.canceled_at:
-                    subscription.canceled_at = datetime.fromtimestamp(data.canceled_at, tz=timezone.utc)
+                    subscription.canceled_at = datetime.fromtimestamp(data.canceled_at, tz=dt_timezone.utc)
                 subscription.save()
                 logger.info(f"Updated subscription {subscription_id} status to {data.status}")
             except CompanySubscription.DoesNotExist:
@@ -411,7 +421,7 @@ def process_subscription_webhook(event):
 
         elif event_type == 'invoice.paid':
             # Invoice paid - record it
-            subscription_id = data.subscription
+            subscription_id = stripe_invoice_subscription_id(data)
             if subscription_id:
                 try:
                     subscription = CompanySubscription.objects.get(stripe_subscription_id=subscription_id)
@@ -419,12 +429,12 @@ def process_subscription_webhook(event):
                         stripe_invoice_id=data.id,
                         defaults={
                             'subscription': subscription,
-                            'stripe_payment_intent_id': data.payment_intent or '',
+                            'stripe_payment_intent_id': data.get('payment_intent') or '',
                             'status': 'paid',
                             'amount_cents': data.amount_paid,
                             'currency': data.currency,
-                            'invoice_date': datetime.fromtimestamp(data.created, tz=timezone.utc),
-                            'paid_at': datetime.fromtimestamp(data.status_transitions.paid_at, tz=timezone.utc) if data.status_transitions.paid_at else timezone.now(),
+                            'invoice_date': datetime.fromtimestamp(data.created, tz=dt_timezone.utc),
+                            'paid_at': datetime.fromtimestamp(data.status_transitions.paid_at, tz=dt_timezone.utc) if data.status_transitions.paid_at else timezone.now(),
                             'invoice_pdf_url': data.invoice_pdf or '',
                             'hosted_invoice_url': data.hosted_invoice_url or '',
                         }
@@ -435,7 +445,7 @@ def process_subscription_webhook(event):
 
         elif event_type == 'invoice.payment_failed':
             # Payment failed - update subscription status
-            subscription_id = data.subscription
+            subscription_id = stripe_invoice_subscription_id(data)
             if subscription_id:
                 try:
                     subscription = CompanySubscription.objects.get(stripe_subscription_id=subscription_id)
@@ -455,17 +465,18 @@ def process_subscription_webhook(event):
 
                 company = Company.objects.get(id=company_id)
                 stripe_sub = stripe.Subscription.retrieve(data.subscription)
+                period_start, period_end = stripe_subscription_period(stripe_sub)
                 subscription, created = CompanySubscription.objects.update_or_create(
                     company=company,
                     defaults={
                         'stripe_customer_id': data.customer,
                         'stripe_subscription_id': data.subscription,
-                        'stripe_price_id': stripe_sub.items.data[0].price.id if stripe_sub.items.data else '',
+                        'stripe_price_id': stripe_sub['items']['data'][0]['price']['id'] if stripe_sub['items']['data'] else '',
                         'status': stripe_sub.status,
-                        'trial_start': datetime.fromtimestamp(stripe_sub.trial_start, tz=timezone.utc) if stripe_sub.trial_start else None,
-                        'trial_end': datetime.fromtimestamp(stripe_sub.trial_end, tz=timezone.utc) if stripe_sub.trial_end else None,
-                        'current_period_start': datetime.fromtimestamp(stripe_sub.current_period_start, tz=timezone.utc),
-                        'current_period_end': datetime.fromtimestamp(stripe_sub.current_period_end, tz=timezone.utc),
+                        'trial_start': datetime.fromtimestamp(stripe_sub.trial_start, tz=dt_timezone.utc) if stripe_sub.trial_start else None,
+                        'trial_end': datetime.fromtimestamp(stripe_sub.trial_end, tz=dt_timezone.utc) if stripe_sub.trial_end else None,
+                        'current_period_start': datetime.fromtimestamp(period_start, tz=dt_timezone.utc),
+                        'current_period_end': datetime.fromtimestamp(period_end, tz=dt_timezone.utc),
                     }
                 )
                 logger.info(f"Checkout completed for company {company_id}")
