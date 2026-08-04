@@ -43,6 +43,7 @@ backend/NUL
 # Temporary scripts
 backend/company_scraper.py
 backend/onboard_company.py
+backend/_*.py
 
 # PM2 ecosystem config (server-specific)
 ecosystem.config.js
