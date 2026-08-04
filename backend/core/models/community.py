@@ -1044,8 +1044,53 @@ class PlatformSubscription(models.Model):
 
     @property
     def is_active(self):
-        """Check if subscription is in good standing (includes trial)."""
-        return self.status in ('active', 'trialing')
+        """Check if subscription is in good standing (includes trial).
+
+        Comp grants (early-access free months) carry no Stripe subscription,
+        so nothing external flips them off. They expire at ``trial_end`` (or
+        ``current_period_end``) — checked here at read time so an expired grant
+        falls back to Explorer without needing a scheduled job.
+        """
+        if self.status not in ('active', 'trialing'):
+            return False
+        if not self.stripe_subscription_id:
+            expiry = self.trial_end or self.current_period_end
+            if expiry is not None:
+                from django.utils import timezone
+                if timezone.now() >= expiry:
+                    return False
+        return True
+
+    @classmethod
+    def grant_free_month(cls, user, days=30):
+        """Grant `user` a comp Prospector subscription for `days` days.
+
+        Used for the early-access welcome gift. No Stripe involved: the grant
+        expires via ``is_active``'s read-time check and reverts to Explorer.
+        Skips users who already hold a real (Stripe) subscription so we never
+        clobber a paying customer. Returns (subscription, granted: bool).
+        """
+        from django.utils import timezone
+        from datetime import timedelta
+
+        sub, _ = cls.objects.get_or_create(user=user)
+        if sub.stripe_subscription_id:
+            return sub, False
+
+        now = timezone.now()
+        end = now + timedelta(days=days)
+        sub.tier = 'prospector'
+        sub.status = 'trialing'
+        sub.plan_interval = 'month'
+        sub.price_cents = 0
+        sub.trial_start = now
+        sub.trial_end = end
+        sub.current_period_start = now
+        sub.current_period_end = end
+        # No auto-renewal — there's no card on file; they revert to Explorer.
+        sub.cancel_at_period_end = True
+        sub.save()
+        return sub, True
 
     @property
     def is_paid_tier(self):

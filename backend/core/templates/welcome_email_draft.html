@@ -1,0 +1,742 @@
+<!doctype html>
+<!--
+  Welcome email draft for new Junior Mining Intelligence users.
+  From: info@juniorminingintelligence.com
+  Matches the dark/gold brand style used in core/email_service.py.
+  Subject: Welcome to Junior Mining Intelligence — here's where to start
+
+  Tier framing (verified against core/models/community.py + open_financings.py):
+    - Explorer (free), Prospector ($29/mo), Miner ($79/mo)
+    - Soft-gold line under each feature shows what's free vs. what unlocks on a paid plan.
+
+  Feature deep-links (verified against frontend/app/HomeClient.tsx routes):
+    Forums/Events -> /companies (live per-company)   AI chat -> /#chat-section
+    Database -> /companies   Tools -> /investor-tools   News -> /#news-section
+    Financing -> /open-financings   Prospectors -> /properties
+    Weekly Snapshot -> /reports/weekly   Metals -> /metals   Guides -> /guides
+    Financing Tracker -> /closed-financings   Financial Hub -> /financial-hub
+-->
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Welcome to Junior Mining Intelligence</title>
+  </head>
+  <body
+    style="
+      margin: 0;
+      padding: 0;
+      background-color: #0f172a;
+      font-family:
+        -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, Roboto,
+        &quot;Helvetica Neue&quot;, Arial, sans-serif;
+    "
+  >
+    <table
+      role="presentation"
+      width="100%"
+      cellspacing="0"
+      cellpadding="0"
+      style="background-color: #0f172a"
+    >
+      <tr>
+        <td align="center" style="padding: 40px 20px">
+          <table
+            role="presentation"
+            width="600"
+            cellspacing="0"
+            cellpadding="0"
+            style="max-width: 600px"
+          >
+            <!-- Header -->
+            <tr>
+              <td style="text-align: center; padding-bottom: 32px">
+                <div
+                  style="
+                    font-size: 24px;
+                    font-weight: 700;
+                    color: #d4af37;
+                    letter-spacing: 1px;
+                  "
+                >
+                  JUNIOR MINING INTELLIGENCE
+                </div>
+              </td>
+            </tr>
+
+            <!-- Main Card -->
+            <tr>
+              <td
+                style="
+                  background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+                  border: 1px solid #334155;
+                  border-radius: 16px;
+                  padding: 32px;
+                "
+              >
+                <!-- Welcome Icon -->
+                <div style="text-align: center; margin-bottom: 24px">
+                  <div
+                    style="
+                      display: inline-block;
+                      width: 64px;
+                      height: 64px;
+                      background: linear-gradient(
+                        135deg,
+                        #d4af37 0%,
+                        #b8860b 100%
+                      );
+                      border-radius: 50%;
+                      line-height: 64px;
+                      font-size: 30px;
+                    "
+                  >
+                    ⛏️
+                  </div>
+                </div>
+
+                <!-- Title -->
+                <h1
+                  style="
+                    color: #f1f5f9;
+                    font-size: 28px;
+                    text-align: center;
+                    margin: 0 0 8px 0;
+                  "
+                >
+                  Welcome aboard{% if first_name %}, {{ first_name }}{% endif
+                  %}!
+                </h1>
+                <p
+                  style="
+                    color: #94a3b8;
+                    text-align: center;
+                    margin: 0 0 12px 0;
+                    font-size: 15px;
+                    line-height: 1.6;
+                  "
+                >
+                  Thanks for joining Junior Mining Intelligence — your
+                  all-in-one platform for research, live discussion, and
+                  financing in the junior mining space. Here's a quick tour of
+                  what you can do — click any feature to jump straight to it.
+                </p>
+                <p
+                  style="
+                    color: #64748b;
+                    text-align: center;
+                    margin: 0 0 20px 0;
+                    font-size: 13px;
+                    line-height: 1.6;
+                  "
+                >
+                  Your account starts on the free
+                  <strong style="color: #94a3b8">Explorer</strong> plan —
+                  everything below is yours to try today.
+                </p>
+
+                <!-- Early-access gift callout -->
+                <div
+                  style="
+                    background: linear-gradient(
+                      135deg,
+                      #d4af37 0%,
+                      #b8860b 100%
+                    );
+                    border-radius: 12px;
+                    padding: 18px 20px;
+                    margin: 0 0 24px 0;
+                    text-align: center;
+                  "
+                >
+                  <div
+                    style="
+                      color: #0f172a;
+                      font-size: 16px;
+                      font-weight: 700;
+                      margin-bottom: 4px;
+                    "
+                  >
+                    🎁 A thank-you for joining us early
+                  </div>
+                  <div
+                    style="color: #1e293b; font-size: 14px; line-height: 1.6"
+                  >
+                    As one of our earliest members, I'd like to give you
+                    <strong>one month of full access — completely free.</strong>
+                    Enjoy unlimited AI chat, all the investor tools, and full
+                    company data, on the house.
+                  </div>
+                </div>
+
+                <!-- Feature list -->
+                <table
+                  role="presentation"
+                  width="100%"
+                  cellspacing="0"
+                  cellpadding="0"
+                >
+                  <!-- 1. Community Forums (FREE) -->
+                  <tr>
+                    <td style="padding: 16px 0; border-top: 1px solid #334155">
+                      <a
+                        href="https://juniorminingintelligence.com/companies"
+                        style="
+                          color: #d4af37;
+                          font-size: 16px;
+                          font-weight: 600;
+                          text-decoration: none;
+                        "
+                      >
+                        💬 Community Forums
+                        <span style="color: #b8860b">→</span>
+                      </a>
+                      <div
+                        style="
+                          color: #94a3b8;
+                          font-size: 14px;
+                          line-height: 1.6;
+                          margin-top: 4px;
+                        "
+                      >
+                        Jump into a live, real-time forum for any mining company
+                        you follow. Ask questions, share insight, and see
+                        replies appear instantly — no refreshing required.
+                      </div>
+                      <div
+                        style="
+                          color: #6ee7b7;
+                          font-size: 12px;
+                          font-weight: 600;
+                          margin-top: 6px;
+                        "
+                      >
+                        ✓ Free for all members
+                      </div>
+                    </td>
+                  </tr>
+
+                  <!-- 2. Claude Mining Assistant (LIMITED FREE) -->
+                  <tr>
+                    <td style="padding: 16px 0; border-top: 1px solid #334155">
+                      <a
+                        href="https://juniorminingintelligence.com/#chat-section"
+                        style="
+                          color: #d4af37;
+                          font-size: 16px;
+                          font-weight: 600;
+                          text-decoration: none;
+                        "
+                      >
+                        🤖 Claude Mining Assistant
+                        <span style="color: #b8860b">→</span>
+                      </a>
+                      <div
+                        style="
+                          color: #94a3b8;
+                          font-size: 14px;
+                          line-height: 1.6;
+                          margin-top: 4px;
+                        "
+                      >
+                        Ask questions in plain English and get answers grounded
+                        in our own data. Our AI assistant reads across a
+                        database that grows every single day, so its answers
+                        keep getting sharper.
+                      </div>
+                      <div
+                        style="
+                          color: #c8a951;
+                          font-size: 12px;
+                          font-weight: 600;
+                          margin-top: 6px;
+                        "
+                      >
+                        ✦ 5 questions/day on Explorer · Unlimited on Prospector
+                        &amp; Miner
+                      </div>
+                    </td>
+                  </tr>
+
+                  <!-- 3. Comprehensive Database (LIMITED FREE) -->
+                  <tr>
+                    <td style="padding: 16px 0; border-top: 1px solid #334155">
+                      <a
+                        href="https://juniorminingintelligence.com/companies"
+                        style="
+                          color: #d4af37;
+                          font-size: 16px;
+                          font-weight: 600;
+                          text-decoration: none;
+                        "
+                      >
+                        🗄️ A Growing Mining Database
+                        <span style="color: #b8860b">→</span>
+                      </a>
+                      <div
+                        style="
+                          color: #94a3b8;
+                          font-size: 14px;
+                          line-height: 1.6;
+                          margin-top: 4px;
+                        "
+                      >
+                        We've been collecting company profiles, news, filings,
+                        financials, and NI 43-101 technical reports since the
+                        start of this year — and we add more every day. The
+                        result is a deep, current picture of the junior mining
+                        sector in one place. Interested in a company that isn't
+                        in the database yet? Just let us know and we'll add it
+                        immediately.
+                      </div>
+                      <div
+                        style="
+                          color: #c8a951;
+                          font-size: 12px;
+                          font-weight: 600;
+                          margin-top: 6px;
+                        "
+                      >
+                        ✦ Browse 500+ profiles free · Full profiles &amp;
+                        resources on a paid plan
+                      </div>
+                    </td>
+                  </tr>
+
+                  <!-- 4. Data Extraction Tools (LIMITED FREE) -->
+                  <tr>
+                    <td style="padding: 16px 0; border-top: 1px solid #334155">
+                      <a
+                        href="https://juniorminingintelligence.com/investor-tools"
+                        style="
+                          color: #d4af37;
+                          font-size: 16px;
+                          font-weight: 600;
+                          text-decoration: none;
+                        "
+                      >
+                        📊 Data Extraction Tools
+                        <span style="color: #b8860b">→</span>
+                      </a>
+                      <div
+                        style="
+                          color: #94a3b8;
+                          font-size: 14px;
+                          line-height: 1.6;
+                          margin-top: 4px;
+                        "
+                      >
+                        A suite of investor tools that let you filter, compare,
+                        and analyze data straight from our database — built to
+                        fit into your own research workflow.
+                      </div>
+                      <div
+                        style="
+                          color: #c8a951;
+                          font-size: 12px;
+                          font-weight: 600;
+                          margin-top: 6px;
+                        "
+                      >
+                        ✦ 2 tools free · All 10 tools + CSV export on Prospector
+                        (API access on Miner)
+                      </div>
+                    </td>
+                  </tr>
+
+                  <!-- 5. Daily Mining News (FREE) -->
+                  <tr>
+                    <td style="padding: 16px 0; border-top: 1px solid #334155">
+                      <a
+                        href="https://juniorminingintelligence.com/#news-section"
+                        style="
+                          color: #d4af37;
+                          font-size: 16px;
+                          font-weight: 600;
+                          text-decoration: none;
+                        "
+                      >
+                        📰 Daily Mining News
+                        <span style="color: #b8860b">→</span>
+                      </a>
+                      <div
+                        style="
+                          color: #94a3b8;
+                          font-size: 14px;
+                          line-height: 1.6;
+                          margin-top: 4px;
+                        "
+                      >
+                        Start each day with curated news articles from across
+                        the mining industry, hand-picked for relevance so you
+                        never miss what's moving the market.
+                      </div>
+                      <div
+                        style="
+                          color: #6ee7b7;
+                          font-size: 12px;
+                          font-weight: 600;
+                          margin-top: 6px;
+                        "
+                      >
+                        ✓ Free for all members
+                      </div>
+                    </td>
+                  </tr>
+
+                  <!-- 6. Finance Opportunities (LIMITED FREE) -->
+                  <tr>
+                    <td style="padding: 16px 0; border-top: 1px solid #334155">
+                      <a
+                        href="https://juniorminingintelligence.com/open-financings"
+                        style="
+                          color: #d4af37;
+                          font-size: 16px;
+                          font-weight: 600;
+                          text-decoration: none;
+                        "
+                      >
+                        💰 Financing Opportunities
+                        <span style="color: #b8860b">→</span>
+                      </a>
+                      <div
+                        style="
+                          color: #94a3b8;
+                          font-size: 14px;
+                          line-height: 1.6;
+                          margin-top: 4px;
+                        "
+                      >
+                        Discover open financings and participate in raises from
+                        mining companies actively seeking investors — all
+                        tracked and updated in one convenient hub.
+                      </div>
+                      <div
+                        style="
+                          color: #c8a951;
+                          font-size: 12px;
+                          font-weight: 600;
+                          margin-top: 6px;
+                        "
+                      >
+                        ✦ 5 latest financings free · Every open raise + email
+                        alerts on a paid plan
+                      </div>
+                    </td>
+                  </tr>
+
+                  <!-- 7. Upcoming Events (FREE) -->
+                  <tr>
+                    <td style="padding: 16px 0; border-top: 1px solid #334155">
+                      <a
+                        href="https://juniorminingintelligence.com/companies"
+                        style="
+                          color: #d4af37;
+                          font-size: 16px;
+                          font-weight: 600;
+                          text-decoration: none;
+                        "
+                      >
+                        🎥 Upcoming Events <span style="color: #b8860b">→</span>
+                      </a>
+                      <div
+                        style="
+                          color: #94a3b8;
+                          font-size: 14px;
+                          line-height: 1.6;
+                          margin-top: 4px;
+                        "
+                      >
+                        Attend live video presentations from mining executives
+                        and put your questions to them directly through
+                        real-time Q&amp;A. It's direct access you won't find
+                        anywhere else.
+                      </div>
+                      <div
+                        style="
+                          color: #6ee7b7;
+                          font-size: 12px;
+                          font-weight: 600;
+                          margin-top: 6px;
+                        "
+                      >
+                        ✓ Free for all members
+                      </div>
+                    </td>
+                  </tr>
+
+                  <!-- 8. Prospectors Section (FREE) -->
+                  <tr>
+                    <td style="padding: 16px 0; border-top: 1px solid #334155">
+                      <a
+                        href="https://juniorminingintelligence.com/properties"
+                        style="
+                          color: #d4af37;
+                          font-size: 16px;
+                          font-weight: 600;
+                          text-decoration: none;
+                        "
+                      >
+                        🧭 Prospectors Section
+                        <span style="color: #b8860b">→</span>
+                      </a>
+                      <div
+                        style="
+                          color: #94a3b8;
+                          font-size: 14px;
+                          line-height: 1.6;
+                          margin-top: 4px;
+                        "
+                      >
+                        Prospectors can showcase their projects directly to
+                        investors and mining companies — a marketplace for
+                        getting promising ground in front of the right people.
+                      </div>
+                      <div
+                        style="
+                          color: #6ee7b7;
+                          font-size: 12px;
+                          font-weight: 600;
+                          margin-top: 6px;
+                        "
+                      >
+                        ✓ Browse free for all members
+                      </div>
+                    </td>
+                  </tr>
+
+                  <!-- 9. Weekly Financial Snapshot (FREE) -->
+                  <tr>
+                    <td style="padding: 16px 0; border-top: 1px solid #334155">
+                      <a
+                        href="https://juniorminingintelligence.com/reports/weekly"
+                        style="
+                          color: #d4af37;
+                          font-size: 16px;
+                          font-weight: 600;
+                          text-decoration: none;
+                        "
+                      >
+                        📈 Weekly Financial Snapshot
+                        <span style="color: #b8860b">→</span>
+                      </a>
+                      <div
+                        style="
+                          color: #94a3b8;
+                          font-size: 14px;
+                          line-height: 1.6;
+                          margin-top: 4px;
+                        "
+                      >
+                        Want the week distilled into one email? Opt in to our
+                        Friday-evening Weekly Financial Snapshot and get a tidy
+                        digest delivered to your inbox.
+                      </div>
+                      <div
+                        style="
+                          color: #6ee7b7;
+                          font-size: 12px;
+                          font-weight: 600;
+                          margin-top: 6px;
+                        "
+                      >
+                        ✓ Optional &amp; free — subscribe anytime
+                      </div>
+                    </td>
+                  </tr>
+
+                  <!-- 10. Additional Resources (MIXED) -->
+                  <tr>
+                    <td
+                      style="
+                        padding: 16px 0;
+                        border-top: 1px solid #334155;
+                        border-bottom: 1px solid #334155;
+                      "
+                    >
+                      <div
+                        style="
+                          color: #d4af37;
+                          font-size: 16px;
+                          font-weight: 600;
+                          margin-bottom: 4px;
+                        "
+                      >
+                        🔎 And plenty more to explore
+                      </div>
+                      <div
+                        style="
+                          color: #94a3b8;
+                          font-size: 14px;
+                          line-height: 1.6;
+                        "
+                      >
+                        Dig into live
+                        <a
+                          href="https://juniorminingintelligence.com/metals"
+                          style="
+                            color: #d4af37;
+                            text-decoration: none;
+                            font-weight: 600;
+                          "
+                          >Metals</a
+                        >
+                        prices, learning
+                        <a
+                          href="https://juniorminingintelligence.com/guides"
+                          style="
+                            color: #d4af37;
+                            text-decoration: none;
+                            font-weight: 600;
+                          "
+                          >Guides</a
+                        >, the
+                        <a
+                          href="https://juniorminingintelligence.com/closed-financings"
+                          style="
+                            color: #d4af37;
+                            text-decoration: none;
+                            font-weight: 600;
+                          "
+                          >Financing Tracker</a
+                        >, and our
+                        <a
+                          href="https://juniorminingintelligence.com/financial-hub"
+                          style="
+                            color: #d4af37;
+                            text-decoration: none;
+                            font-weight: 600;
+                          "
+                          >Financial Hub</a
+                        >
+                        whenever you're ready.
+                      </div>
+                      <div
+                        style="
+                          color: #c8a951;
+                          font-size: 12px;
+                          font-weight: 600;
+                          margin-top: 6px;
+                        "
+                      >
+                        ✦ Guides &amp; current metals prices free · Historical
+                        charts on a paid plan
+                      </div>
+                    </td>
+                  </tr>
+                </table>
+
+                <!-- CTA Button -->
+                <div style="text-align: center; margin-top: 32px">
+                  <a
+                    href="https://juniorminingintelligence.com/dashboard"
+                    style="
+                      display: inline-block;
+                      background: linear-gradient(
+                        135deg,
+                        #d4af37 0%,
+                        #b8860b 100%
+                      );
+                      color: #0f172a;
+                      text-decoration: none;
+                      padding: 14px 36px;
+                      border-radius: 8px;
+                      font-weight: 600;
+                      font-size: 16px;
+                    "
+                  >
+                    Explore the Platform
+                  </a>
+                </div>
+
+                <!-- Upgrade nudge -->
+                <div
+                  style="
+                    background: #0f172a;
+                    border: 1px solid #b8860b;
+                    border-radius: 12px;
+                    padding: 20px;
+                    margin-top: 28px;
+                  "
+                >
+                  <div
+                    style="
+                      color: #d4af37;
+                      font-size: 15px;
+                      font-weight: 700;
+                      margin-bottom: 6px;
+                    "
+                  >
+                    Ready for the full picture?
+                  </div>
+                  <div
+                    style="
+                      color: #94a3b8;
+                      font-size: 13px;
+                      line-height: 1.6;
+                      margin-bottom: 14px;
+                    "
+                  >
+                    Upgrade to Paid subscriptions are now live and fully
+                    operational. Upgrade to
+                    <strong style="color: #f1f5f9">Prospector</strong> for
+                    unlimited AI chat, all 10 investor tools, full company data,
+                    historical metals charts, and financing alerts. Start with a
+                    <strong style="color: #f1f5f9">7-day free trial</strong>
+                    — cancel anytime.
+                  </div>
+                  <a
+                    href="https://juniorminingintelligence.com/pricing"
+                    style="
+                      display: inline-block;
+                      border: 1px solid #d4af37;
+                      color: #d4af37;
+                      text-decoration: none;
+                      padding: 10px 24px;
+                      border-radius: 8px;
+                      font-weight: 600;
+                      font-size: 14px;
+                    "
+                  >
+                    See plans &amp; pricing →
+                  </a>
+                </div>
+
+                <p
+                  style="
+                    color: #64748b;
+                    text-align: center;
+                    font-size: 13px;
+                    margin: 20px 0 0 0;
+                    line-height: 1.6;
+                  "
+                >
+                  This platform is always expanding to meet our users' needs. If
+                  there's a tool or feature you'd like to see, just reply to
+                  this email and we'll do our best to build it for you. And if
+                  you find it useful, please feel free to share it with friends
+                  and colleagues.
+                </p>
+              </td>
+            </tr>
+
+            <!-- Footer -->
+            <tr>
+              <td style="text-align: center; padding-top: 32px">
+                <p style="color: #64748b; font-size: 14px; margin: 0 0 8px 0">
+                  Happy prospecting,<br />
+                  <strong style="color: #94a3b8"
+                    >The Junior Mining Intelligence Team</strong
+                  >
+                </p>
+                <p style="color: #475569; font-size: 12px; margin: 0">
+                  © 2026 Junior Mining Intelligence. All rights reserved.
+                </p>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>

@@ -38,6 +38,9 @@ class User(AbstractUser):
     email_briefing_enabled = models.BooleanField(default=False)
     # Opt-in (default off) for the Friday weekly industry report email.
     email_weekly_industry_report_enabled = models.BooleanField(default=False)
+    # When the one-time welcome email was sent — guards against double-sends
+    # and makes the existing-user backfill batch safe to re-run.
+    welcome_email_sent_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

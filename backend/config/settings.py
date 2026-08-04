@@ -222,6 +222,11 @@ EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', '')
 EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', '')
 DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'Junior Mining Intelligence <noreply@juniorminingintelligence.com>')
 
+# Early-access promo: grant new registrations a 1-month comp Prospector
+# subscription along with the welcome email. Flip to 'False' via env once the
+# launch promo ends — the welcome email still sends, just without the free month.
+WELCOME_FREE_MONTH_ENABLED = os.getenv('WELCOME_FREE_MONTH_ENABLED', 'True') == 'True'
+
 # Notification Recipients - MUST be set via environment variables in production
 ADMIN_EMAIL = os.getenv('ADMIN_EMAIL', 'admin@example.com')
 NI43101_NOTIFICATION_EMAIL = os.getenv('NI43101_NOTIFICATION_EMAIL', 'notifications@example.com')

@@ -630,6 +630,64 @@ class EmailService:
             return False
 
     # ----------------------------------------------------------------------
+    # Welcome / onboarding email
+    # ----------------------------------------------------------------------
+
+    @staticmethod
+    def send_welcome_email(user):
+        """
+        Send the one-time welcome email to a new (or backfilled) user.
+
+        Sent from info@juniorminingintelligence.com (not the noreply default)
+        because the email invites replies. Returns True on success.
+        """
+        if not EmailService.is_configured():
+            logger.warning("Email not configured, skipping welcome email")
+            return False
+
+        recipient_email = getattr(user, 'email', None)
+        if not recipient_email:
+            logger.warning(f"No email address for user {getattr(user, 'id', '?')}")
+            return False
+
+        try:
+            from django.template.loader import render_to_string
+            from sendgrid import SendGridAPIClient
+            from sendgrid.helpers.mail import Mail, Email, To, Content, HtmlContent
+
+            first_name = (user.first_name or '').strip()
+            html_content = render_to_string(
+                'welcome_email_draft.html',
+                {'first_name': first_name},
+            )
+            text_content = strip_tags(html_content)
+
+            # Welcome mail always comes from the monitored info@ inbox so replies
+            # (feature requests, company-add requests) land somewhere a human reads.
+            from_email = 'info@juniorminingintelligence.com'
+            from_name = 'Junior Mining Intelligence'
+
+            message = Mail(
+                from_email=Email(from_email, from_name),
+                to_emails=To(recipient_email),
+                subject="Welcome to Junior Mining Intelligence — here's where to start",
+                plain_text_content=Content("text/plain", text_content),
+                html_content=HtmlContent(html_content),
+            )
+
+            sg = SendGridAPIClient(_get_sendgrid_api_key())
+            response = sg.send(message)
+            logger.info(
+                f"Welcome email sent to {recipient_email} "
+                f"(status: {response.status_code})"
+            )
+            return True
+
+        except Exception as e:
+            logger.error(f"Failed to send welcome email to {recipient_email}: {str(e)}")
+            return False
+
+    # ----------------------------------------------------------------------
     # Weekly watchlist briefing
     # ----------------------------------------------------------------------
 

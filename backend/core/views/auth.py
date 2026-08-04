@@ -185,6 +185,14 @@ def register_user(request):
         # Generate JWT tokens
         refresh = RefreshToken.for_user(user)
 
+        # Welcome the user: grant the early-access free month + send the welcome
+        # email. Must never break registration, so failures are swallowed here.
+        try:
+            from ..welcome_service import deliver_welcome
+            deliver_welcome(user)
+        except Exception as e:
+            logger.error(f"deliver_welcome failed for user {user.id}: {str(e)}")
+
         # Get full name
         user_full_name = f"{user.first_name} {user.last_name}".strip() or user.username
 
