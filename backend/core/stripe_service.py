@@ -116,7 +116,7 @@ class StripeService:
             price = stripe.Price.create(
                 product=product.id,
                 unit_amount=SUBSCRIPTION_PRICE_CENTS if interval == 'month' else 50000,  # $500/year (limited time promotional rate)
-                currency='usd',
+                currency='cad',
                 recurring={'interval': interval},
                 metadata={'plan_type': 'monthly' if interval == 'month' else 'annual'}
             )

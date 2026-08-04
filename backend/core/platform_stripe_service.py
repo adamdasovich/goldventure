@@ -93,7 +93,7 @@ class PlatformStripeService:
         price = stripe.Price.create(
             product=product.id,
             unit_amount=amount,
-            currency='usd',
+            currency='cad',
             recurring={'interval': interval},
             metadata={'tier': tier, 'interval': interval}
         )
