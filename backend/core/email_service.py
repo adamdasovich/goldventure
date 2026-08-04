@@ -656,9 +656,14 @@ class EmailService:
             from sendgrid.helpers.mail import Mail, Email, To, Content, HtmlContent
 
             first_name = (user.first_name or '').strip()
+            # Build the greeting in Python rather than with a template {% if %}:
+            # this HTML file is auto-formatted, which mangles multi-token tags.
+            welcome_heading = (
+                f"Welcome aboard, {first_name}!" if first_name else "Welcome aboard!"
+            )
             html_content = render_to_string(
                 'welcome_email_draft.html',
-                {'first_name': first_name},
+                {'first_name': first_name, 'welcome_heading': welcome_heading},
             )
             text_content = strip_tags(html_content)
 
