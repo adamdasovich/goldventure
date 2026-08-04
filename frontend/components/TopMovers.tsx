@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { marketAPI, type TopMover } from "@/lib/api";
+import { companyHref } from "@/lib/companyUrl";
 
 export default function TopMovers() {
   const [movers, setMovers] = useState<TopMover[]>([]);
@@ -51,7 +52,7 @@ export default function TopMovers() {
       {movers.map((m) => (
         <Link
           key={m.company_id}
-          href={`/companies/${m.company_id}`}
+          href={companyHref({ id: m.company_id, slug: m.company_slug })}
           className="group flex items-center justify-between px-3 py-2 rounded-lg bg-slate-800/40 hover:bg-slate-800/70 transition-colors"
         >
           <div className="flex-1 min-w-0 mr-3">

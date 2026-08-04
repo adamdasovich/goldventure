@@ -189,6 +189,7 @@ def closed_financings_list(request):
         data.append({
             'id': financing.id,
             'company_id': financing.company.id,
+            'company_slug': financing.company.slug,
             'company_name': financing.company.name,
             'company_ticker': financing.company.ticker_symbol,
             'company_exchange': financing.company.exchange,

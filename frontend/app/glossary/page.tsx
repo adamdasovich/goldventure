@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import Head from "next/head";
 import {
   Card,
   CardHeader,
@@ -634,39 +633,6 @@ export default function GlossaryPage() {
 
   return (
     <>
-      {/* SEO Meta Tags */}
-      <Head>
-        <title>
-          Junior Gold Mining Glossary - NI 43-101, TSXV & Mining Terms | Junior
-          Gold Mining Intelligence
-        </title>
-        <meta
-          name="description"
-          content="Comprehensive glossary of 60+ junior gold mining terms covering NI 43-101 standards, TSXV listings, mineral resources, exploration geology, and mining investment. Essential definitions for understanding junior mining stocks."
-        />
-        <meta
-          name="keywords"
-          content="junior gold mining glossary, NI 43-101 terms, mining definitions, TSXV mining, indicated resource, feasibility study, junior mining company, gold exploration terms"
-        />
-        <link
-          rel="canonical"
-          href="https://juniorminingintelligence.com/glossary"
-        />
-        <meta
-          property="og:title"
-          content="Junior Gold Mining Industry Glossary - 60+ Essential Terms"
-        />
-        <meta
-          property="og:description"
-          content="Learn junior gold mining terminology: NI 43-101, indicated resources, feasibility studies, TSXV listings, and exploration terms."
-        />
-        <meta
-          property="og:url"
-          content="https://juniorminingintelligence.com/glossary"
-        />
-        <meta property="og:type" content="website" />
-      </Head>
-
       <div className="min-h-screen bg-slate-900">
         {/* Schema Markup */}
         <script

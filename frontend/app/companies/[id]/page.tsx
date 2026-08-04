@@ -27,7 +27,12 @@ export async function generateStaticParams() {
       allParams = [
         ...allParams,
         ...results
-          .filter((c: any) => c.name && (c.description || c.brief_description))
+          .filter(
+            (c: any) =>
+              c.name &&
+              (c.description || c.brief_description) &&
+              (c.project_count ?? 0) > 0,
+          )
           .map((c: any) => ({
             id: c.slug ? `${c.id}-${c.slug}` : String(c.id),
           })),

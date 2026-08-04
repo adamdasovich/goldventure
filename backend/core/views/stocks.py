@@ -445,6 +445,7 @@ def top_movers(request):
 
         movers.append({
             'company_id': company.id,
+            'company_slug': company.slug,
             'company_name': company.name,
             'ticker': f"{ticker}.{exchange.upper()}" if ticker and exchange else ticker,
             'price': round(latest_price, 4),

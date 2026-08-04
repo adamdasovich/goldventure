@@ -8,6 +8,7 @@ import {
   type MetalPrice,
   type TopMover,
 } from "@/lib/api";
+import { companyHref } from "@/lib/companyUrl";
 
 interface TickerItem {
   key: string;
@@ -63,7 +64,7 @@ export default function MetalsTicker() {
             label: m.ticker || m.company_name,
             price: `$${m.price.toFixed(2)}`,
             change: m.change_percent,
-            href: `/companies/${m.company_id}`,
+            href: companyHref({ id: m.company_id, slug: m.company_slug }),
           });
         }
       }

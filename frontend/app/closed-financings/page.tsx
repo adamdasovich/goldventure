@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/Button";
 import LogoMono from "@/components/LogoMono";
 import { LoginModal, RegisterModal } from "@/components/auth";
 import { useAuth } from "@/contexts/AuthContext";
+import { companyHref } from "@/lib/companyUrl";
 
 interface Company {
   id: number;
@@ -26,6 +27,7 @@ interface Company {
 interface ClosedFinancing {
   id: number;
   company_id: number;
+  company_slug?: string | null;
   company_name: string;
   company_ticker: string;
   company_exchange: string;
@@ -639,7 +641,10 @@ export default function ClosedFinancingsPage() {
                         <div className="flex-1">
                           <div className="flex items-center gap-2 mb-1">
                             <Link
-                              href={`/companies/${financing.company_id}`}
+                              href={companyHref({
+                                id: financing.company_id,
+                                slug: financing.company_slug,
+                              })}
                               className="text-lg font-semibold text-white hover:text-gold-400 transition-colors"
                             >
                               {financing.company_name}
@@ -697,7 +702,12 @@ export default function ClosedFinancingsPage() {
 
                       {/* Actions */}
                       <div className="flex flex-row lg:flex-col gap-2 lg:justify-start">
-                        <Link href={`/companies/${financing.company_id}`}>
+                        <Link
+                          href={companyHref({
+                            id: financing.company_id,
+                            slug: financing.company_slug,
+                          })}
+                        >
                           <Button
                             variant="secondary"
                             size="sm"

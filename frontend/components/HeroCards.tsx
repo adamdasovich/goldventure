@@ -6,11 +6,13 @@ import Image from "next/image";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { useAuth } from "@/contexts/AuthContext";
+import { companyHref } from "@/lib/companyUrl";
 
 interface UpcomingEvent {
   id: number;
   title: string;
   company_id: number;
+  company_slug?: string | null;
   company_name: string;
   company_ticker: string;
   scheduled_start: string;
@@ -210,7 +212,10 @@ export function HeroCards({ onLoginClick }: HeroCardsProps) {
                   {data.upcoming_events.map((event) => (
                     <Link
                       key={event.id}
-                      href={`/companies/${event.company_id}`}
+                      href={companyHref({
+                        id: event.company_id,
+                        slug: event.company_slug,
+                      })}
                       onClick={(e) => handleCardClick(e, true)}
                       className="block"
                     >

@@ -292,10 +292,15 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   ];
 
   // Dynamic company routes — exclude thin-content companies to avoid soft 404s
+  // and "crawled - currently not indexed". Bar: a real name, some prose, AND at
+  // least one project. Description-only shells with no projects read as thin /
+  // near-duplicate to Google and dilute crawl budget on a young domain.
   const companyRoutes: MetadataRoute.Sitemap = companies
     .filter(
       (company) =>
-        company.name && (company.description || company.brief_description),
+        company.name &&
+        (company.description || company.brief_description) &&
+        (company.project_count ?? 0) > 0,
     )
     .map((company) => ({
       url: `${baseUrl}${companyHref(company)}`,
@@ -312,5 +317,34 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: 0.7,
   }));
 
-  return [...staticRoutes, ...companyRoutes, ...propertyRoutes];
+  // Faceted commodity landing pages — mid-tail keyword targets
+  // ("gold mining companies", "lithium exploration stocks", etc.). Keep this
+  // list in sync with FACETS in app/companies/commodity/[commodity]/page.tsx.
+  const commodityFacets = [
+    "gold",
+    "silver",
+    "copper",
+    "lithium",
+    "nickel",
+    "cobalt",
+    "uranium",
+    "rare-earths",
+    "graphite",
+    "critical-minerals",
+  ];
+  const commodityFacetRoutes: MetadataRoute.Sitemap = commodityFacets.map(
+    (slug) => ({
+      url: `${baseUrl}/companies/commodity/${slug}`,
+      lastModified: new Date(),
+      changeFrequency: "weekly" as const,
+      priority: 0.8,
+    }),
+  );
+
+  return [
+    ...staticRoutes,
+    ...commodityFacetRoutes,
+    ...companyRoutes,
+    ...propertyRoutes,
+  ];
 }

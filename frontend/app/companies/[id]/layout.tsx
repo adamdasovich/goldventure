@@ -66,19 +66,15 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       ? `${company.description.substring(0, 155)}...`
       : `${company.name}${company.exchange ? ` (${company.exchange.toUpperCase()}: ${company.ticker_symbol})` : ""} — ${commodityLabel.toLowerCase()} exploration company. Projects, resource estimates, financings, and news.`;
 
+    // Thin profiles (no real description or zero projects) read as soft-404s to
+    // Google. Keep them reachable for users but out of the index — this is the
+    // page-level counterpart to the sitemap inclusion bar.
+    const isThin = !company.description || (company.project_count ?? 0) === 0;
+
     return {
       title,
       description,
-      keywords: [
-        company.name,
-        company.ticker_symbol,
-        `${company.exchange} ${company.ticker_symbol}`,
-        `${primaryCommodity} mining stock`,
-        "junior mining company",
-        "mineral exploration",
-        "mining investment",
-        company.headquarters || "",
-      ].filter(Boolean),
+      ...(isThin && { robots: { index: false, follow: true } }),
       openGraph: {
         title,
         description,

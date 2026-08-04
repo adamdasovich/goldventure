@@ -295,6 +295,7 @@ export const metalsAPI = {
 // Market / Top Movers API
 export interface TopMover {
   company_id: number;
+  company_slug?: string | null;
   company_name: string;
   ticker: string;
   price: number;

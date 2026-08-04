@@ -4,19 +4,6 @@ export const metadata: Metadata = {
   title: "Gold & Precious Metals Prices - Live Gold, Silver, Platinum Charts",
   description:
     "Track real-time gold, silver, platinum, and palladium prices. View historical price charts, market analysis, and precious metals trends for mining investors.",
-  keywords: [
-    "gold price today",
-    "live gold price",
-    "silver price",
-    "platinum price",
-    "palladium price",
-    "precious metals prices",
-    "gold price chart",
-    "gold spot price",
-    "XAU USD",
-    "precious metals market",
-    "gold investment",
-  ],
   openGraph: {
     title: "Live Precious Metals Prices | Junior Gold Mining Intelligence",
     description:

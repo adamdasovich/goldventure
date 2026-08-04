@@ -9,10 +9,12 @@ import { Button } from "@/components/ui/Button";
 import LogoMono from "@/components/LogoMono";
 import { LoginModal, RegisterModal } from "@/components/auth";
 import { useAuth } from "@/contexts/AuthContext";
+import { companyHref } from "@/lib/companyUrl";
 
 interface OpenFinancing {
   id: number;
   company_id: number;
+  company_slug?: string | null;
   company_name: string;
   company_ticker: string;
   company_exchange: string;
@@ -421,7 +423,10 @@ function OpenFinancingCard({
             <div className="flex-1">
               <div className="flex items-center gap-2 mb-1">
                 <Link
-                  href={`/companies/${financing.company_id}`}
+                  href={companyHref({
+                    id: financing.company_id,
+                    slug: financing.company_slug,
+                  })}
                   className="text-lg font-semibold text-white hover:text-gold-400 transition-colors"
                 >
                   {financing.company_name}
@@ -482,7 +487,12 @@ function OpenFinancingCard({
           </div>
 
           <div className="flex flex-row lg:flex-col gap-2 lg:justify-start">
-            <Link href={`/companies/${financing.company_id}`}>
+            <Link
+              href={companyHref({
+                id: financing.company_id,
+                slug: financing.company_slug,
+              })}
+            >
               <Button variant="secondary" size="sm" className="w-full">
                 View Company
               </Button>

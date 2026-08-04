@@ -163,6 +163,7 @@ def hero_section_data(request):
             'id': event.id,
             'title': event.title,
             'company_id': event.company.id,
+            'company_slug': event.company.slug,
             'company_name': event.company.name,
             'company_ticker': event.company.ticker_symbol,
             'scheduled_start': event.scheduled_start.isoformat(),
@@ -186,6 +187,7 @@ def hero_section_data(request):
         financings_data.append({
             'id': financing.id,
             'company_id': financing.company.id,
+            'company_slug': financing.company.slug,
             'company_name': financing.company.name,
             'company_ticker': financing.company.ticker_symbol,
             'financing_type': financing.financing_type,
