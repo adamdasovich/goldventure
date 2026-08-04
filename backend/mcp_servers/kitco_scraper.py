@@ -182,6 +182,15 @@ class KitcoScraper:
                     if pct_m:
                         price_data['change_percent'] = _dec(pct_m.group())
 
+                    # Kitco encodes direction as a CSS class on the change cells
+                    # (BidAskGrid_changeUp / changeDown / changeNeutral, hashed
+                    # suffix) rather than a +/- sign in the text. Parsed change
+                    # values are magnitudes, so flip them negative on a 'down'
+                    # row; 'up'/'neutral' stay positive/zero.
+                    if div.find(class_=lambda c: c and any('changeDown' in x for x in c)):
+                        price_data['change_amount'] = -price_data['change_amount']
+                        price_data['change_percent'] = -price_data['change_percent']
+
                     # Low / High are the first two prices after '%'.
                     right_prices = re.findall(PRICE_RE, right)
                     if len(right_prices) >= 2:
