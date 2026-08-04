@@ -36,6 +36,11 @@ TIER_PRICING = {
 
 TRIAL_DAYS = 7  # 7-day free trial for paid tiers
 
+# Billing currency. A Stripe Price's currency is immutable, so this is baked
+# into the price metadata + lookup — changing it creates fresh prices rather
+# than reusing stale ones of another currency.
+PRICE_CURRENCY = 'cad'
+
 # Stripe product/price cache (populated on first use)
 _price_cache = {}
 
@@ -81,9 +86,10 @@ class PlatformStripeService:
         if not amount:
             raise ValueError(f"Invalid tier/interval: {tier}/{interval}")
 
-        # Search for existing price
+        # Search for existing price (currency-scoped so a currency change
+        # creates a new price instead of reusing a stale one).
         prices = stripe.Price.search(
-            query=f"metadata['tier']:'{tier}' AND metadata['interval']:'{interval}'"
+            query=f"metadata['tier']:'{tier}' AND metadata['interval']:'{interval}' AND metadata['currency']:'{PRICE_CURRENCY}'"
         )
         if prices.data:
             _price_cache[cache_key] = prices.data[0].id
@@ -93,9 +99,9 @@ class PlatformStripeService:
         price = stripe.Price.create(
             product=product.id,
             unit_amount=amount,
-            currency='cad',
+            currency=PRICE_CURRENCY,
             recurring={'interval': interval},
-            metadata={'tier': tier, 'interval': interval}
+            metadata={'tier': tier, 'interval': interval, 'currency': PRICE_CURRENCY}
         )
         logger.info(f"Created Stripe price {price.id} for {tier}/{interval}")
         _price_cache[cache_key] = price.id
