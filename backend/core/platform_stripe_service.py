@@ -25,12 +25,12 @@ logger = logging.getLogger(__name__)
 # Pricing configuration (cents)
 TIER_PRICING = {
     'prospector': {
-        'month': 2900,   # $29/month
-        'year': 24900,   # $249/year
+        'month': 1500,   # $15/month
+        'year': 15000,   # $150/year (10x monthly)
     },
     'miner': {
-        'month': 7900,   # $79/month
-        'year': 69900,   # $699/year
+        'month': 5000,   # $50/month
+        'year': 50000,   # $500/year (10x monthly)
     },
 }
 
@@ -77,19 +77,20 @@ class PlatformStripeService:
     @staticmethod
     def get_or_create_price(tier, interval='month'):
         """Get or create a Stripe Price for a given tier and interval."""
-        cache_key = f"{tier}_{interval}"
-        if cache_key in _price_cache:
-            return _price_cache[cache_key]
-
         get_stripe_api_key()
         amount = TIER_PRICING.get(tier, {}).get(interval)
         if not amount:
             raise ValueError(f"Invalid tier/interval: {tier}/{interval}")
 
-        # Search for existing price (currency-scoped so a currency change
-        # creates a new price instead of reusing a stale one).
+        cache_key = f"{tier}_{interval}_{amount}_{PRICE_CURRENCY}"
+        if cache_key in _price_cache:
+            return _price_cache[cache_key]
+
+        # Search for existing price scoped by currency AND amount, so changing
+        # the price (or currency) creates a fresh Stripe Price instead of
+        # reusing a stale one (Price.unit_amount/currency are immutable).
         prices = stripe.Price.search(
-            query=f"metadata['tier']:'{tier}' AND metadata['interval']:'{interval}' AND metadata['currency']:'{PRICE_CURRENCY}'"
+            query=f"metadata['tier']:'{tier}' AND metadata['interval']:'{interval}' AND metadata['currency']:'{PRICE_CURRENCY}' AND metadata['amount']:'{amount}'"
         )
         if prices.data:
             _price_cache[cache_key] = prices.data[0].id
@@ -101,7 +102,7 @@ class PlatformStripeService:
             unit_amount=amount,
             currency=PRICE_CURRENCY,
             recurring={'interval': interval},
-            metadata={'tier': tier, 'interval': interval, 'currency': PRICE_CURRENCY}
+            metadata={'tier': tier, 'interval': interval, 'currency': PRICE_CURRENCY, 'amount': str(amount)}
         )
         logger.info(f"Created Stripe price {price.id} for {tier}/{interval}")
         _price_cache[cache_key] = price.id

@@ -194,9 +194,7 @@ function PricingContent() {
             }`}
           >
             Annual
-            <span className="ml-2 text-xs text-emerald-400">
-              Save up to 26%
-            </span>
+            <span className="ml-2 text-xs text-emerald-400">Save 2 months</span>
           </button>
         </div>
 
@@ -268,14 +266,14 @@ function PricingContent() {
               </p>
               <div className="mt-4">
                 <span className="text-4xl font-bold text-white">
-                  {interval === "month" ? "$29" : "$249"}
+                  {interval === "month" ? "$15" : "$150"}
                 </span>
                 <span className="text-slate-400 ml-1">
                   /{interval === "month" ? "month" : "year"}
                 </span>
                 {interval === "year" && (
                   <span className="block text-xs text-emerald-400 mt-1">
-                    Save $99/year vs monthly
+                    Save $30/year vs monthly
                   </span>
                 )}
               </div>
@@ -341,14 +339,14 @@ function PricingContent() {
               </p>
               <div className="mt-4">
                 <span className="text-4xl font-bold text-white">
-                  {interval === "month" ? "$79" : "$699"}
+                  {interval === "month" ? "$50" : "$500"}
                 </span>
                 <span className="text-slate-400 ml-1">
                   /{interval === "month" ? "month" : "year"}
                 </span>
                 {interval === "year" && (
                   <span className="block text-xs text-emerald-400 mt-1">
-                    Save $249/year vs monthly
+                    Save $100/year vs monthly
                   </span>
                 )}
               </div>

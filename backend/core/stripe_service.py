@@ -23,7 +23,7 @@ from .api_utils import (
 logger = logging.getLogger(__name__)
 
 # Pricing configuration
-SUBSCRIPTION_PRICE_CENTS = 5000  # $50.00 (limited time promotional rate)
+SUBSCRIPTION_PRICE_CENTS = 7500  # $75.00/month
 TRIAL_DAYS = 30  # 1 month free trial
 
 
@@ -115,7 +115,7 @@ class StripeService:
             # Create price
             price = stripe.Price.create(
                 product=product.id,
-                unit_amount=SUBSCRIPTION_PRICE_CENTS if interval == 'month' else 50000,  # $500/year (limited time promotional rate)
+                unit_amount=SUBSCRIPTION_PRICE_CENTS if interval == 'month' else 75000,  # $750/year (10x monthly)
                 currency='cad',
                 recurring={'interval': interval},
                 metadata={'plan_type': 'monthly' if interval == 'month' else 'annual'}
