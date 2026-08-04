@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Card, CardContent } from "@/components/ui/Card";
@@ -36,7 +36,7 @@ interface OpenFinancing {
   is_locked: boolean;
 }
 
-interface OpenFinancingsResponse {
+export interface OpenFinancingsResponse {
   count: number;
   total_count: number;
   locked_count: number;
@@ -47,14 +47,22 @@ interface OpenFinancingsResponse {
   financing_types: { value: string; label: string }[];
 }
 
+interface OpenFinancingsClientProps {
+  initialData?: OpenFinancingsResponse | null;
+}
+
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api";
 
-export default function OpenFinancingsPage() {
+export default function OpenFinancingsClient({
+  initialData,
+}: OpenFinancingsClientProps) {
   const router = useRouter();
   const { user, logout } = useAuth();
 
-  const [data, setData] = useState<OpenFinancingsResponse | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [data, setData] = useState<OpenFinancingsResponse | null>(
+    initialData ?? null,
+  );
+  const [loading, setLoading] = useState(!initialData);
   const [error, setError] = useState<string | null>(null);
   const [showLogin, setShowLogin] = useState(false);
   const [showRegister, setShowRegister] = useState(false);
@@ -64,17 +72,29 @@ export default function OpenFinancingsPage() {
   const [financingType, setFinancingType] = useState<string>("");
   const [searchQuery, setSearchQuery] = useState<string>("");
 
+  const seeded = !!initialData;
+  const didMountRef = useRef(false);
+
   const accessToken =
     typeof window !== "undefined" ? localStorage.getItem("accessToken") : null;
 
   useEffect(() => {
-    fetchOpenFinancings();
+    // The server already seeded default-sorted anonymous preview data. Skip the
+    // redundant first fetch unless (a) the visitor is logged in and needs their
+    // unlocked rows, or (b) they change a filter.
+    const isFilterChange = didMountRef.current;
+    didMountRef.current = true;
+    if (!seeded || isFilterChange || accessToken) {
+      fetchOpenFinancings({ silent: seeded && !isFilterChange });
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sortBy, sortOrder, financingType]);
 
-  const fetchOpenFinancings = async () => {
+  const fetchOpenFinancings = async ({
+    silent = false,
+  }: { silent?: boolean } = {}) => {
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
 
       const params = new URLSearchParams();
       params.append("sort_by", sortBy);
@@ -107,7 +127,7 @@ export default function OpenFinancingsPage() {
         err instanceof Error ? err.message : "Failed to load open financings",
       );
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
