@@ -11,7 +11,7 @@ export default async function CompaniesPage() {
 
   try {
     const res = await fetch(`${API_BASE_URL}/companies/?page=1&page_size=9`, {
-      cache: "no-store",
+      next: { revalidate: 3600 },
     });
     if (res.ok) {
       const data = await res.json();

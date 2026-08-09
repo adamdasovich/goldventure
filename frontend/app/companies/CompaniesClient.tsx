@@ -243,13 +243,35 @@ export default function CompaniesClient({
             Junior Mining Companies
           </Badge>
           <h1 className="text-5xl md:text-6xl font-bold mb-6 text-gradient-gold animate-fade-in leading-tight pb-2">
-            Explore Mining Companies
+            Junior Mining Companies: Gold, Silver &amp; Critical Minerals Stocks
           </h1>
-          <p className="text-xl text-slate-300 max-w-3xl mx-auto mb-12 animate-slide-in-up">
+          <p className="text-xl text-slate-300 max-w-3xl mx-auto mb-6 animate-slide-in-up">
             Comprehensive database of junior mining companies exploring gold,
             silver, lithium, copper, rare earths & critical minerals with
             detailed resource estimates and project data
           </p>
+          <div className="flex flex-wrap justify-center gap-2 mb-12 animate-slide-in-up">
+            {(
+              [
+                ["gold", "Gold"],
+                ["silver", "Silver"],
+                ["copper", "Copper"],
+                ["lithium", "Lithium"],
+                ["nickel", "Nickel"],
+                ["uranium", "Uranium"],
+                ["rare-earths", "Rare Earths"],
+                ["critical-minerals", "Critical Minerals"],
+              ] as const
+            ).map(([slug, label]) => (
+              <Link
+                key={slug}
+                href={`/companies/commodity/${slug}`}
+                className="px-3 py-1.5 rounded-full border border-gold-500/30 text-gold-300 hover:bg-gold-500/10 text-sm transition-colors"
+              >
+                {label} companies
+              </Link>
+            ))}
+          </div>
         </div>
       </section>
 
@@ -534,7 +556,13 @@ export default function CompaniesClient({
                     <CardHeader>
                       <div className="flex items-start justify-between mb-2">
                         <CardTitle className="text-lg text-gold-400">
-                          {company.name}
+                          <Link
+                            href={companyHref(company)}
+                            className="hover:text-gold-300"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            {company.name}
+                          </Link>
                         </CardTitle>
                         <Badge
                           variant={getExchangeBadgeVariant(company.exchange)}
@@ -686,7 +714,13 @@ export default function CompaniesClient({
                             }
                           >
                             <td className="py-4 px-6 text-white font-medium">
-                              {company.name}
+                              <Link
+                                href={companyHref(company)}
+                                className="hover:text-gold-400"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                {company.name}
+                              </Link>
                             </td>
                             <td className="py-4 px-6 text-slate-300 font-mono text-sm">
                               {company.ticker_symbol}
