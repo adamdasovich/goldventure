@@ -192,6 +192,10 @@ urlpatterns = [
     path('reports/weekly/<str:week_ending>/', views.weekly_report_detail, name='weekly_report_detail'),
     path('reports/weekly/<str:week_ending>/pdf/', views.weekly_report_pdf, name='weekly_report_pdf'),
 
+    # Weekly Financing Roundup (native SEO pages — JSON for the Next.js routes)
+    path('reports/financings/', views.weekly_financings_list, name='weekly_financings_list'),
+    path('reports/financings/<str:week_ending>/', views.weekly_financings_detail, name='weekly_financings_detail'),
+
     # ViewSet routes
     path('', include(router.urls)),
 ]

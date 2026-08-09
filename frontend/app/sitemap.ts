@@ -341,9 +341,38 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     }),
   );
 
+  // Weekly financing roundup pages (native SEO archive)
+  let financingWeeks: any[] = [];
+  try {
+    const res = await fetch(`${API_BASE_URL}/reports/financings/`, {
+      next: { revalidate: 3600 },
+    });
+    if (res.ok) {
+      const data = await res.json();
+      financingWeeks = data.weeks || [];
+    }
+  } catch (error) {
+    console.error("Failed to fetch financing roundups for sitemap:", error);
+  }
+  const financingRoundupRoutes: MetadataRoute.Sitemap = [
+    {
+      url: `${baseUrl}/reports/financings`,
+      lastModified: new Date(),
+      changeFrequency: "weekly",
+      priority: 0.7,
+    },
+    ...financingWeeks.map((w: any) => ({
+      url: `${baseUrl}/reports/financings/${w.week_ending}`,
+      lastModified: new Date(w.generated_at || `${w.week_ending}T12:00:00Z`),
+      changeFrequency: "monthly" as const,
+      priority: 0.6,
+    })),
+  ];
+
   return [
     ...staticRoutes,
     ...commodityFacetRoutes,
+    ...financingRoundupRoutes,
     ...companyRoutes,
     ...propertyRoutes,
   ];

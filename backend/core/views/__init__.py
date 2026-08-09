@@ -193,4 +193,6 @@ from .reports import (  # noqa: F401
     weekly_report_detail,
     weekly_report_pdf,
     weekly_report_latest,
+    weekly_financings_list,
+    weekly_financings_detail,
 )
