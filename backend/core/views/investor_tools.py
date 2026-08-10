@@ -785,12 +785,18 @@ def property_valuation(request):
 
     listings = PropertyListing.objects.filter(
         status='active'
-    ).select_related('seller').order_by('-created_at')
+    ).select_related('prospector').order_by('-created_at')
 
     if mineral:
         listings = listings.filter(primary_mineral__iexact=mineral)
     if country:
-        listings = listings.filter(country__iexact=country)
+        # `country` is stored as a short code (CA, US); accept either code or display name
+        code = country.strip()
+        for c_code, c_label in PropertyListing.COUNTRIES:
+            if c_label.lower() == code.lower():
+                code = c_code
+                break
+        listings = listings.filter(country__iexact=code)
 
     results = []
     for p in listings[:30]:
@@ -798,12 +804,17 @@ def property_valuation(request):
         price = float(p.asking_price) if p.asking_price else None
         price_per_ha = round(price / hectares, 2) if price and hectares and hectares > 0 else None
 
+        # No single `location` column — compose one from the geographic fields.
+        location = ', '.join(
+            part for part in (p.nearest_town, p.region_district, p.province_state) if part
+        )
+
         results.append({
             'id': p.id,
             'slug': p.slug,
             'title': p.title,
-            'location': p.location,
-            'country': p.country,
+            'location': location,
+            'country': p.get_country_display(),
             'primary_mineral': p.primary_mineral,
             'exploration_stage': p.exploration_stage,
             'total_hectares': hectares,
@@ -827,8 +838,11 @@ def property_valuation(request):
         }
 
     # Distinct values for filters
-    minerals = list(PropertyListing.objects.filter(status='active').values_list('primary_mineral', flat=True).distinct().order_by('primary_mineral'))
-    countries = list(PropertyListing.objects.filter(status='active').values_list('country', flat=True).distinct().order_by('country'))
+    active = PropertyListing.objects.filter(status='active')
+    minerals = list(active.values_list('primary_mineral', flat=True).distinct().order_by('primary_mineral'))
+    country_codes = active.values_list('country', flat=True).distinct().order_by('country')
+    country_labels = dict(PropertyListing.COUNTRIES)
+    countries = [country_labels.get(c, c) for c in country_codes]
 
     return Response({
         'listings': results,
@@ -838,6 +852,9 @@ def property_valuation(request):
             'minerals': minerals,
             'countries': countries,
         },
+        # Let the frontend distinguish "no match for your filters" from
+        # "the marketplace has no active listings yet".
+        'total_active_listings': active.count(),
     })
 
 

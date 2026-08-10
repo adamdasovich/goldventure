@@ -227,7 +227,32 @@ def parse_date_comprehensive(text: str) -> Tuple[Optional[str], str]:
 
 
 def parse_date_standalone(text: str) -> Optional[str]:
-    """Parse date from a string that contains ONLY a date (for dedicated date elements)."""
+    """
+    Parse date from a string that contains ONLY a date (for dedicated date elements).
+
+    Wraps the raw parser with a sanity clamp: a press release can never be
+    meaningfully in the future, so anything past today+7d is rejected rather
+    than stored. Future-dated rows sort to the top of every news-driven tool.
+    """
+    parsed = _parse_date_standalone_raw(text)
+    if not parsed:
+        return None
+    try:
+        d = datetime.strptime(parsed, '%Y-%m-%d').date()
+    except ValueError:
+        return None
+    today = datetime.now().date()
+    # Allow a week of slack for timezone skew and embargoed releases.
+    if d > today + timedelta(days=7):
+        return None
+    # Nothing in this corpus predates modern electronic filing.
+    if d.year < 1990:
+        return None
+    return parsed
+
+
+def _parse_date_standalone_raw(text: str) -> Optional[str]:
+    """Format-matching half of `parse_date_standalone` — no validation."""
     if not text:
         return None
     text = text.strip()
@@ -253,9 +278,20 @@ def parse_date_standalone(text: str) -> Optional[str]:
         # If second > 12, it MUST be MM.DD.YYYY (e.g., 01.22.2026)
         elif second_int > 12 and 1 <= first_int <= 12:
             return f"{year}-{first.zfill(2)}-{second.zfill(2)}"
-        # Ambiguous (both <= 12): prefer MM.DD.YYYY for North American mining sites
+        # Ambiguous (both <= 12): prefer MM.DD.YYYY for North American mining sites,
+        # unless that reading lands in the future and the DD.MM reading doesn't.
+        # e.g. Troilus "11.06.2026" scraped in Aug 2026 is 11 June, not 6 November.
         elif 1 <= first_int <= 12 and 1 <= second_int <= 31:
-            return f"{year}-{first.zfill(2)}-{second.zfill(2)}"
+            mmdd = f"{year}-{first.zfill(2)}-{second.zfill(2)}"
+            ddmm = f"{year}-{second.zfill(2)}-{first.zfill(2)}"
+            today = datetime.now().date()
+            try:
+                if (datetime.strptime(mmdd, '%Y-%m-%d').date() > today
+                        and datetime.strptime(ddmm, '%Y-%m-%d').date() <= today):
+                    return ddmm
+            except ValueError:
+                pass
+            return mmdd
         # Fallback to DD.MM.YYYY
         return f"{year}-{second.zfill(2)}-{first.zfill(2)}"
 

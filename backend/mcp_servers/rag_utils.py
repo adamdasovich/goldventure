@@ -6,6 +6,8 @@ Supports both technical documents (NI 43-101) and news content.
 Uses Voyage AI for fast embeddings when available, falls back to local model.
 """
 
+import logging
+
 import chromadb
 from chromadb.config import Settings
 import tiktoken
@@ -19,6 +21,8 @@ from .retrieval_enhancements import (
     rerank_results, bm25_search_postgres, reciprocal_rank_fusion,
     mmr_diversify, apply_relevance_threshold
 )
+
+logger = logging.getLogger(__name__)
 
 
 class RAGManager:
@@ -168,13 +172,28 @@ class RAGManager:
                 'document_title': document.title[:100]  # Truncate for metadata
             })
 
-        # Batch insert into ChromaDB (it will auto-generate embeddings)
+        # Batch insert into ChromaDB (it will auto-generate embeddings).
+        #
+        # This write is not in the same transaction as the DocumentChunk rows
+        # above, which are already committed with their chroma_ids. If it fails
+        # silently, Postgres claims those chunks are indexed when they are not —
+        # that is how the index drifted to ~10% coverage. Failing loudly here
+        # lets the caller retry; `manage.py reindex_chroma` repairs the backlog.
         if chroma_ids:
-            self.collection.add(
-                ids=chroma_ids,
-                documents=chroma_texts,
-                metadatas=chroma_metadatas
-            )
+            try:
+                self.collection.add(
+                    ids=chroma_ids,
+                    documents=chroma_texts,
+                    metadatas=chroma_metadatas
+                )
+            except Exception:
+                logger.exception(
+                    "ChromaDB add failed for document %s (%d chunks). "
+                    "Postgres rows are committed but unindexed — "
+                    "run `manage.py reindex_chroma` to repair.",
+                    document.id, len(chroma_ids),
+                )
+                raise
 
         return len(chunks)
 
