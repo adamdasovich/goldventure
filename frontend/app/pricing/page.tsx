@@ -1,10 +1,11 @@
 "use client";
 
-import { Suspense, useState, useEffect } from "react";
+import { Suspense, useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
 import { platformAPI } from "@/lib/api";
+import { trackSubscribe } from "@/lib/analytics";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import LogoMono from "@/components/LogoMono";
@@ -76,10 +77,17 @@ function PricingContent() {
   const [interval, setInterval] = useState<"month" | "year">("year");
   const [loadingTier, setLoadingTier] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState("");
+  const conversionFired = useRef(false);
 
   useEffect(() => {
     if (searchParams.get("success") === "true") {
       setSuccessMessage("Your subscription is now active! Welcome aboard.");
+      // Google Ads / GA4 conversion: paid subscription completed. Ref-guarded
+      // so a re-render can't double-count the conversion.
+      if (!conversionFired.current) {
+        conversionFired.current = true;
+        trackSubscribe();
+      }
       // Clear after 8 seconds
       const t = setTimeout(() => setSuccessMessage(""), 8000);
       return () => clearTimeout(t);

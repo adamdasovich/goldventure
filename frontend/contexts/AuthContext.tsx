@@ -9,6 +9,7 @@ import {
   useCallback,
   ReactNode,
 } from "react";
+import { trackSignUp } from "@/lib/analytics";
 
 interface SubscriptionFeatures {
   tier: string;
@@ -289,6 +290,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     // Set up automatic token refresh
     setupTokenRefresh();
+
+    // Google Ads / GA4 conversion: free-account registration completed.
+    // Fired before the reload — gtag uses sendBeacon, which survives navigation.
+    trackSignUp("email");
 
     // Force reload to ensure fresh state
     window.location.reload();
