@@ -1366,6 +1366,15 @@ export default function FinancingPillarGuide() {
               <ul className="space-y-3">
                 <li>
                   <Link
+                    href="/guides/private-placements-and-warrants"
+                    className="text-gold-400 hover:underline"
+                  >
+                    Private Placements &amp; Warrants Explained (Units, Strike,
+                    Expiry) →
+                  </Link>
+                </li>
+                <li>
+                  <Link
                     href="/guides/how-to-read-ni-43-101-report"
                     className="text-gold-400 hover:underline"
                   >

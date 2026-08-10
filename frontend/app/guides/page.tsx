@@ -71,6 +71,15 @@ const guides = [
     featured: true,
   },
   {
+    title: "Private Placements & Warrants Explained",
+    slug: "private-placements-and-warrants",
+    description:
+      "How junior mining private placements are structured as units of shares plus warrants. What a unit is, how warrants work (strike price, expiry, half vs full warrants), and how to read a placement announcement line by line.",
+    readTime: "10 min read",
+    category: "Financing",
+    featured: true,
+  },
+  {
     title: "The Complete Guide to Junior Gold Mining Companies",
     slug: "junior-gold-mining-companies-guide",
     description:
