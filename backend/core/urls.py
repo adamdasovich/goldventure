@@ -93,6 +93,7 @@ urlpatterns = [
     path('tools/catalyst-impact/', views.catalyst_impact, name='catalyst_impact'),
     path('tools/due-diligence/', views.due_diligence, name='due_diligence'),
     path('tools/metal-correlation/', views.metal_correlation, name='metal_correlation'),
+    path('tools/warrant-radar/', views.warrant_radar, name='warrant_radar'),
 
     # User dashboard - watchlist + daily briefing
     path('watchlist/', views.watchlist_detail, name='watchlist_detail'),

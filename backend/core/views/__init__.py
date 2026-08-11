@@ -172,6 +172,9 @@ from .investor_tools import (  # noqa: F401
     due_diligence,
     metal_correlation,
 )
+from .warrant_radar import (  # noqa: F401
+    warrant_radar,
+)
 from .platform_subscriptions import (  # noqa: F401
     platform_subscription_tiers,
     platform_subscription_status,
