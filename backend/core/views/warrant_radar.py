@@ -35,6 +35,27 @@ DEFAULT_WARRANT_COVERAGE = 0.5
 # Cap the tranche list on the sector-wide view so the payload stays sane.
 SECTOR_TRANCHE_LIMIT = 200
 
+# A financing's units issued should be about amount raised / price per unit.
+# Records that disagree badly are parse errors, not unusual deals — one
+# Coyote Copper row had units 101x its implied value, which on its own
+# accounted for more than half the sector's estimated warrant proceeds. Since
+# every figure here is a multiple of units issued, one bad row is enough to
+# make the whole view wrong, so they are excluded and counted.
+UNITS_TOLERANCE_LOW = 0.8
+UNITS_TOLERANCE_HIGH = 1.25
+
+
+def _units_look_sane(fin):
+    """False when units issued contradicts amount raised / price per unit."""
+    price = float(fin.price_per_share or 0)
+    amount = float(fin.amount_raised_usd or 0)
+    units = int(fin.shares_issued or 0)
+    if price <= 0 or amount <= 0 or units <= 0:
+        # Nothing to check against — let it through rather than drop real data.
+        return True
+    implied = amount / price
+    return UNITS_TOLERANCE_LOW <= units / implied <= UNITS_TOLERANCE_HIGH
+
 
 def _latest_prices(company_ids):
     """Most recent close per company, as {company_id: row}."""
@@ -216,7 +237,10 @@ def warrant_radar(request):
     if company_id.isdigit():
         queryset = queryset.filter(company_id=int(company_id))
 
-    financings = list(queryset)
+    all_financings = list(queryset)
+    financings = [f for f in all_financings if _units_look_sane(f)]
+    excluded = len(all_financings) - len(financings)
+
     tranches = _build_tranches(financings, coverage, today)
     tranches.sort(key=lambda t: t['expiry_date'])
 
@@ -232,6 +256,7 @@ def warrant_radar(request):
             'est_proceeds_if_all_exercised': round(sum(t['est_proceeds'] for t in tranches), 2),
             'est_proceeds_in_the_money': round(sum(t['est_proceeds'] for t in in_the_money), 2),
             'next_expiry': tranches[0]['expiry_date'] if tranches else None,
+            'excluded_implausible': excluded,
         },
         'expiry_wall': _expiry_wall(tranches),
         'companies': _roll_up_companies(tranches),
@@ -251,6 +276,12 @@ def warrant_radar(request):
                 "Strikes and proceeds are in the currency of the original "
                 "financing — usually CAD — and are compared against a close "
                 "from the same exchange. They are not converted to USD."
+            ),
+            'excluded': (
+                f"{excluded} financing(s) excluded because units issued "
+                "contradicts amount raised divided by price per unit by more "
+                "than 25%, which indicates a parse error rather than an "
+                "unusual deal."
             ),
         },
     }
