@@ -45,13 +45,25 @@ output, so editing source without `npm run build` has no effect.
 ```bash
 # After git pull on the server:
 cd /var/www/goldventure/frontend
-npm run build                       # ~2-4 min; serves from .next/
+set -o pipefail                     # so a failed build is NOT masked by the pipe
+npm run build 2>&1 | grep -v baseline-browser-mapping   # ~2-4 min; serves from .next/
 pm2 restart goldventure-frontend    # picks up the new build
 
 # Useful:
 pm2 list                            # status / restart count
 pm2 logs goldventure-frontend       # tail logs (check after a deploy)
 ```
+
+> **NOTE:** The `grep -v` filters an unsuppressable build warning
+> (`[baseline-browser-mapping] The data in this module is over two months old`).
+> It comes from `next/dist/compiled/browserslist/index.js` — Next 16.0.10's
+> **vendored** copy, which does a bare `timestamp < twoMonthsAgo && console.warn()`
+> with no env-var guard. `BROWSERSLIST_IGNORE_OLD_DATA` exists only in the
+> standalone `baseline-browser-mapping` package and has no effect here, and no
+> dependency bump silences it. Cosmetic only, no runtime impact; it should go away
+> on a future Next upgrade (currently on 16.0.10). Drop the pipe once it does.
+> Keep `set -o pipefail` — without it the pipeline reports grep's exit status and
+> a broken build would look like it succeeded.
 
 > **CRITICAL:** Server path is `/var/www/goldventure` (NOT `/var/www/goldventure-platform`). Always deploy immediately after pushing — don't wait for the user to notice.
 >
