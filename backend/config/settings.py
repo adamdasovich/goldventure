@@ -98,6 +98,11 @@ DATABASES = {
 AUTH_USER_MODEL = 'core.User'
 
 # Password validation
+# Length is the ONLY rule we ask users to satisfy up front — no uppercase/number/
+# symbol requirements (NIST 800-63B advises against composition rules). The
+# remaining validators below only reject genuinely weak passwords, so they rarely
+# fire. Keep min_length in sync with MIN_PASSWORD_LENGTH in
+# frontend/components/auth/RegisterModal.tsx.
 AUTH_PASSWORD_VALIDATORS = [
     {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'},
     # SECURITY: Require minimum 12 characters (NIST 800-63B recommendation)
