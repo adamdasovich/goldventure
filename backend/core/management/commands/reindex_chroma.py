@@ -212,6 +212,16 @@ class Command(BaseCommand):
                 break
         return found
 
+    @staticmethod
+    def _news_source_id(chunk):
+        """The originating row id, whichever news table the chunk came from."""
+        return (
+            chunk.company_news_id
+            or chunk.news_release_id
+            or chunk.news_article_id
+            or ''
+        )
+
     def _build_payload(self, label, chroma_ids):
         """Rebuild documents+metadata for the given chroma_ids from Postgres."""
         ids, documents, metadatas = [], [], []
@@ -247,7 +257,11 @@ class Command(BaseCommand):
                     meta['section_title'] = chunk.section_title[:200]
                 metadatas.append(meta)
         else:
-            rows = NewsChunk.objects.filter(chroma_id__in=chroma_ids)
+            rows = (
+                NewsChunk.objects
+                .filter(chroma_id__in=chroma_ids)
+                .select_related('company')
+            )
             for chunk in rows:
                 if not chunk.text:
                     continue
@@ -256,6 +270,11 @@ class Command(BaseCommand):
                 metadatas.append({
                     'chunk_index': chunk.chunk_index,
                     'company_id': chunk.company_id,
+                    # `company` (the name) must stay: RAGManager.search_news
+                    # filters with where={"company": <name>}, so dropping it
+                    # silently breaks every company-scoped news search.
+                    'company': chunk.company.name if chunk.company else '',
+                    'source_id': self._news_source_id(chunk),
                     'content_type': chunk.content_type,
                     'title': (chunk.source_title or '')[:100],
                     'url': chunk.source_url or '',

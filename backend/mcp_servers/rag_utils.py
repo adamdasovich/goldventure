@@ -197,6 +197,92 @@ class RAGManager:
 
         return len(chunks)
 
+    def _hydrate_bm25_metadata(self, bm25_results: List[Dict]) -> None:
+        """
+        Fill in document metadata for BM25 chunk hits, in place.
+
+        Mirrors the metadata written to ChromaDB in `store_document_chunks`, so
+        a caller cannot tell which retrieval leg a result came from.
+        """
+        if not bm25_results:
+            return
+
+        chunk_ids = [r.get('id') for r in bm25_results if r.get('id')]
+        rows = (
+            DocumentChunk.objects
+            .filter(id__in=chunk_ids)
+            .select_related('document', 'document__company')
+        )
+        by_id = {c.id: c for c in rows}
+
+        for result in bm25_results:
+            chunk = by_id.get(result.get('id'))
+            if not chunk:
+                # Fall back to the old stub rather than dropping the result.
+                result.setdefault('metadata', {
+                    'document_id': result.get('id', ''),
+                    'chunk_index': result.get('chunk_index', 0),
+                })
+                continue
+
+            doc = chunk.document
+            meta = {
+                'document_id': doc.id,
+                'chunk_index': chunk.chunk_index,
+                'company': doc.company.name,
+                'company_id': doc.company_id,
+                'document_type': doc.document_type,
+                'document_date': str(doc.document_date),
+                'document_title': (doc.title or '')[:100],
+            }
+            if chunk.page_number is not None:
+                meta['page_number'] = chunk.page_number
+            if chunk.section_title:
+                meta['section_title'] = chunk.section_title
+
+            result['metadata'] = meta
+            result['document_id'] = doc.id
+            result['chunk_index'] = chunk.chunk_index
+
+    def _hydrate_bm25_news_metadata(self, bm25_results: List[Dict]) -> None:
+        """Fill in news metadata for BM25 chunk hits, in place."""
+        if not bm25_results:
+            return
+
+        chunk_ids = [r.get('id') for r in bm25_results if r.get('id')]
+        rows = (
+            NewsChunk.objects
+            .filter(id__in=chunk_ids)
+            .select_related('company')
+        )
+        by_id = {c.id: c for c in rows}
+
+        for result in bm25_results:
+            result['source_type'] = 'news'
+            chunk = by_id.get(result.get('id'))
+            if not chunk:
+                result.setdefault('metadata', {
+                    'source_id': result.get('id', ''),
+                    'chunk_index': result.get('chunk_index', 0),
+                })
+                continue
+
+            company_name = chunk.company.name if chunk.company else ''
+            meta = {
+                'chunk_index': chunk.chunk_index,
+                'company': company_name,
+                'company_id': chunk.company_id,
+                'content_type': chunk.content_type,
+                'title': (chunk.source_title or '')[:100],
+                'url': chunk.source_url or '',
+                'date': str(chunk.source_date) if chunk.source_date else '',
+            }
+            result['metadata'] = meta
+            # search_news's vector leg also exposes these at the top level.
+            result['title'] = meta['title']
+            result['date'] = meta['date']
+            result['company'] = company_name
+
     def search_documents(self, query: str, n_results: int = 5, filter_company: str = None) -> List[Dict]:
         """
         Hybrid search across document chunks: vector (ChromaDB) + BM25 (PostgreSQL),
@@ -242,10 +328,14 @@ class RAGManager:
         bm25_results = bm25_search_postgres(
             query, DocumentChunk, top_k=fetch_count, filter_company=filter_company
         )
-        # Normalize BM25 results to match vector result format
-        for r in bm25_results:
-            if 'metadata' not in r:
-                r['metadata'] = {'document_id': r.get('id', ''), 'chunk_index': r.get('chunk_index', 0)}
+        # Normalize BM25 results to match vector result format.
+        #
+        # bm25_search_postgres returns raw chunk rows (id/text/chunk_index) with
+        # no document context. Stubbing metadata here left every BM25-sourced
+        # passage with no company or document title, so citations rendered blank
+        # whenever a hit came from the keyword leg rather than the vector leg.
+        # Hydrate from Postgres in one query so both legs carry the same shape.
+        self._hydrate_bm25_metadata(bm25_results)
 
         # --- Reciprocal Rank Fusion ---
         merged = reciprocal_rank_fusion(vector_results, bm25_results)
@@ -335,10 +425,9 @@ class RAGManager:
         bm25_results = bm25_search_postgres(
             query, NewsChunk, top_k=fetch_count, filter_company=filter_company
         )
-        for r in bm25_results:
-            if 'metadata' not in r:
-                r['metadata'] = {'source_id': r.get('id', ''), 'chunk_index': r.get('chunk_index', 0)}
-            r['source_type'] = 'news'
+        # Same hydration as search_documents: without it, keyword-sourced hits
+        # reach the caller with no title, date or company attribution.
+        self._hydrate_bm25_news_metadata(bm25_results)
 
         # --- Reciprocal Rank Fusion ---
         merged = reciprocal_rank_fusion(vector_results, bm25_results)
