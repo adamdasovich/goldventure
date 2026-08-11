@@ -2243,3 +2243,140 @@ def generate_weekly_industry_report_task(self, week_ending: str = None):
         'emails_sent': sent,
         'emails_failed': failed,
     }
+
+
+# =============================================================================
+# CHROMADB / POSTGRESQL INDEX RECONCILIATION
+# =============================================================================
+
+@shared_task(bind=True, time_limit=1800, soft_time_limit=1740, on_failure=log_task_failure)
+def reconcile_chroma_index_task(self, repair_limit=2000):
+    """
+    Detect and heal drift between PostgreSQL chunk rows and the ChromaDB index.
+
+    `RAGManager.store_document_chunks` commits DocumentChunk rows (chroma_id
+    included) before embedding them, and the two steps share no transaction. A
+    Voyage timeout therefore leaves Postgres asserting an index entry that was
+    never written. That went unnoticed until the index had drifted to 3,147
+    vectors against 32,228 rows — roughly 90% of the technical corpus silently
+    unsearchable, with no error anywhere.
+
+    This task closes that loop. Small drift is repaired in place so it never
+    accumulates; drift larger than `repair_limit` is left alone and logged at
+    ERROR, because a large gap means something systemic broke and re-embedding
+    tens of thousands of chunks unattended would burn API budget without
+    addressing the cause. Run `manage.py reindex_chroma` for that.
+
+    Args:
+        repair_limit: Maximum chunks to re-embed per collection per run.
+                      0 disables repair (report only).
+    """
+    from .models import DocumentChunk, NewsChunk
+
+    logger.info("[CHROMA-RECONCILE] Starting index reconciliation...")
+
+    try:
+        from mcp_servers.rag_utils import RAGManager
+        rag = RAGManager()
+    except Exception as exc:
+        logger.error(f"[CHROMA-RECONCILE] Could not open ChromaDB: {exc}")
+        return {'success': False, 'error': str(exc)}
+
+    collections = [
+        ('document_chunks', rag.collection, DocumentChunk),
+        ('news_chunks', rag.news_collection, NewsChunk),
+    ]
+
+    report = {}
+    healthy = True
+
+    for name, collection, model in collections:
+        pg_count = model.objects.exclude(chroma_id__isnull=True).exclude(chroma_id='').count()
+
+        try:
+            chroma_count = collection.count()
+        except Exception as exc:
+            # A count that aborts means a corrupt segment — that is how the
+            # news_chunks collection failed, and it takes the worker with it.
+            logger.error(
+                f"[CHROMA-RECONCILE] {name}: count() failed ({exc}). "
+                f"Segment may be corrupt — rebuild with "
+                f"`manage.py reindex_chroma --collection {name} --rebuild`."
+            )
+            report[name] = {'postgres': pg_count, 'chroma': None, 'error': str(exc)}
+            healthy = False
+            continue
+
+        drift = pg_count - chroma_count
+        entry = {'postgres': pg_count, 'chroma': chroma_count, 'drift': drift, 'repaired': 0}
+
+        if drift <= 0:
+            logger.info(f"[CHROMA-RECONCILE] {name}: in sync ({pg_count:,})")
+            report[name] = entry
+            continue
+
+        healthy = False
+        pct = (drift / pg_count * 100) if pg_count else 0
+        logger.warning(
+            f"[CHROMA-RECONCILE] {name}: {drift:,} chunks missing "
+            f"({pct:.1f}% of {pg_count:,})"
+        )
+
+        if not repair_limit:
+            report[name] = entry
+            continue
+
+        if drift > repair_limit:
+            logger.error(
+                f"[CHROMA-RECONCILE] {name}: drift of {drift:,} exceeds the "
+                f"{repair_limit:,}-chunk repair limit — not auto-repairing. "
+                f"Investigate, then run `manage.py reindex_chroma`."
+            )
+            report[name] = entry
+            continue
+
+        entry['repaired'] = _repair_chroma_gap(name, collection, repair_limit)
+        entry['drift_after'] = pg_count - entry['repaired'] - chroma_count
+        report[name] = entry
+
+    logger.info(f"[CHROMA-RECONCILE] Done. healthy={healthy} report={report}")
+    return {'success': True, 'healthy': healthy, 'collections': report}
+
+
+def _repair_chroma_gap(name, collection, limit):
+    """
+    Re-embed chunks Postgres claims are indexed but ChromaDB does not hold.
+
+    Returns the number of vectors actually added, measured from the collection
+    itself rather than trusting the command's own tally.
+    """
+    from django.core.management import call_command
+    from io import StringIO
+
+    try:
+        before = collection.count()
+    except Exception as exc:
+        logger.error(f"[CHROMA-RECONCILE] {name}: cannot count before repair: {exc}")
+        return 0
+
+    out = StringIO()
+    try:
+        call_command(
+            'reindex_chroma',
+            collection=('documents' if name == 'document_chunks' else 'news'),
+            limit=limit,
+            batch_size=128,
+            stdout=out,
+            stderr=out,
+        )
+    except Exception as exc:
+        logger.error(f"[CHROMA-RECONCILE] {name}: repair failed: {exc}")
+        return 0
+
+    try:
+        added = max(0, collection.count() - before)
+    except Exception:
+        added = 0
+
+    logger.info(f"[CHROMA-RECONCILE] {name}: re-embedded {added:,} chunks")
+    return added
