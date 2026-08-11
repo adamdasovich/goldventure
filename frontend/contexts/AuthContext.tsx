@@ -139,6 +139,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [refreshAccessToken]);
 
   // Load user from localStorage on mount
+  // Fire the deferred sign_up conversion on the page load that FOLLOWS
+  // registration. register() sets this flag and then reloads; firing the event
+  // before the reload drops it, because the reload wipes gtag's in-memory queue
+  // before analytics.js can dispatch it.
+  useEffect(() => {
+    try {
+      if (sessionStorage.getItem("jmi_pending_signup") === "1") {
+        sessionStorage.removeItem("jmi_pending_signup");
+        trackSignUp("email");
+      }
+    } catch {
+      // sessionStorage unavailable — nothing to do.
+    }
+  }, []);
+
   useEffect(() => {
     const storedToken = localStorage.getItem("accessToken");
     const storedUser = localStorage.getItem("user");
@@ -292,8 +307,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setupTokenRefresh();
 
     // Google Ads / GA4 conversion: free-account registration completed.
-    // Fired before the reload — gtag uses sendBeacon, which survives navigation.
-    trackSignUp("email");
+    // Defer to the next page load — the reload below would otherwise wipe the
+    // event from gtag's queue before it's sent. The effect above fires it.
+    try {
+      sessionStorage.setItem("jmi_pending_signup", "1");
+    } catch {
+      // sessionStorage unavailable — fall back to firing inline (best effort).
+      trackSignUp("email");
+    }
 
     // Force reload to ensure fresh state
     window.location.reload();
