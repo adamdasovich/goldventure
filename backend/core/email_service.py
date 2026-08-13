@@ -727,18 +727,29 @@ class EmailService:
                 else "Your early access is ending"
             )
 
+            from django.utils import timezone as dj_timezone
+
+            # Convert to the site's timezone before taking a date. Stored values
+            # are UTC, and a grant expiring 00:05 UTC is the previous evening in
+            # Toronto - reading .date() off the UTC value tells a customer their
+            # access ends a day later than it does.
+            expiry = subscription.trial_end or subscription.current_period_end
+            expiry_local = dj_timezone.localtime(expiry) if expiry else None
+
             # Not strftime('%B %-d'): the no-pad flag is glibc-only and blows up
             # on Windows, where this gets exercised in development.
-            expiry = subscription.trial_end or subscription.current_period_end
-            expiry_date = f"{expiry.strftime('%B')} {expiry.day}" if expiry else 'shortly'
+            expiry_date = (
+                f"{expiry_local.strftime('%B')} {expiry_local.day}"
+                if expiry_local
+                else 'shortly'
+            )
 
             # Phrase from calendar dates, not elapsed hours: a grant ending in
             # six hours rounds up to "1 day", which would read as "tomorrow"
-            # when it actually ends today.
-            from django.utils import timezone as dj_timezone
-
-            if expiry:
-                delta_days = (expiry.date() - dj_timezone.now().date()).days
+            # when it actually ends today. Both sides are local dates so the
+            # phrase always agrees with the date shown in the subject line.
+            if expiry_local:
+                delta_days = (expiry_local.date() - dj_timezone.localdate()).days
             else:
                 delta_days = days_left
 
