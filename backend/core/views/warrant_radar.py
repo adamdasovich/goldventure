@@ -27,6 +27,8 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
+from ..entitlements import tier_gated
+
 from ..models import Financing, StockPrice
 
 # Half a warrant per unit is the sector norm.
@@ -205,6 +207,7 @@ def _roll_up_companies(tranches):
 
 @api_view(['GET'])
 @permission_classes([AllowAny])
+@tier_gated(stub=('companies', 'tranches'), truncate=('expiry_wall',))
 def warrant_radar(request):
     """
     Live warrant overhang, sector-wide or for one company.

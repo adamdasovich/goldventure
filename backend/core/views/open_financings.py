@@ -15,24 +15,15 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
-from ..models import Financing, PlatformSubscription
+from ..entitlements import PAID_TIERS, resolve_effective_tier
+from ..models import Financing
 
 
 logger = logging.getLogger(__name__)
 
 
+# This list shows more before locking than the investor tools do.
 FREE_PREVIEW_COUNT = 5
-PAID_TIERS = ('prospector', 'miner')
-
-
-def _resolve_effective_tier(user) -> str:
-    """Return the effective tier for `user` ('explorer' if anon or no sub)."""
-    if not user or not user.is_authenticated:
-        return 'explorer'
-    try:
-        return user.platform_subscription.effective_tier
-    except PlatformSubscription.DoesNotExist:
-        return 'explorer'
 
 
 def _full_row(financing) -> dict:
@@ -110,7 +101,7 @@ def open_financings_list(request):
       - sort_by    : announced_date | closing_date | amount | company
       - sort_order : asc | desc (default desc)
     """
-    tier = _resolve_effective_tier(request.user)
+    tier = resolve_effective_tier(request.user)
     is_paid = tier in PAID_TIERS
 
     queryset = Financing.objects.filter(is_closed=False).select_related('company')

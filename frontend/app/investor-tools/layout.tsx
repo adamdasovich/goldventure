@@ -1,5 +1,7 @@
 import { Metadata } from "next";
 
+import TierGateBanner from "@/components/TierGateBanner";
+
 export const metadata: Metadata = {
   title:
     "Investor Tools - Junior Mining Screeners, Analyzers & Portfolio Analytics",
@@ -52,5 +54,13 @@ export default function InvestorToolsLayout({
 }: {
   children: React.ReactNode;
 }) {
-  return children;
+  return (
+    <>
+      {/* Renders itself only when the last tool response came back tier-gated.
+          Lives here rather than in each page because the 17 tools render their
+          results in 17 different shapes. */}
+      <TierGateBanner />
+      {children}
+    </>
+  );
 }

@@ -38,6 +38,8 @@ import type {
   CalculateShippingResponse,
 } from "@/types/api";
 
+import { applyTierGate } from "@/lib/tierGate";
+
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api";
 
@@ -48,17 +50,46 @@ async function apiFetch<T>(
 ): Promise<T> {
   const url = `${API_BASE_URL}${endpoint}`;
 
-  const response = await fetch(url, {
-    ...options,
-    cache: "no-store", // Disable Next.js cache
-    headers: {
-      "Content-Type": "application/json",
-      "Cache-Control": "no-cache, no-store, must-revalidate",
-      Pragma: "no-cache",
-      Expires: "0",
-      ...options?.headers,
-    },
-  });
+  // Attach the stored session token unless the caller passed its own
+  // Authorization header. Tier-gated endpoints return a truncated teaser to
+  // anonymous callers, so a signed-in user has to be identifiable here —
+  // otherwise a paying subscriber gets the free preview.
+  const explicitHeaders = (options?.headers ?? {}) as Record<string, string>;
+  const hasExplicitAuth = Object.keys(explicitHeaders).some(
+    (k) => k.toLowerCase() === "authorization",
+  );
+
+  let authHeader: Record<string, string> = {};
+  if (!hasExplicitAuth && typeof window !== "undefined") {
+    const storedToken = window.localStorage.getItem("accessToken");
+    if (storedToken) {
+      authHeader = { Authorization: `Bearer ${storedToken}` };
+    }
+  }
+
+  const send = (auth: Record<string, string>) =>
+    fetch(url, {
+      ...options,
+      cache: "no-store", // Disable Next.js cache
+      headers: {
+        "Content-Type": "application/json",
+        "Cache-Control": "no-cache, no-store, must-revalidate",
+        Pragma: "no-cache",
+        Expires: "0",
+        ...auth,
+        ...options?.headers,
+      },
+    });
+
+  let response = await send(authHeader);
+
+  // DRF authenticates before it checks permissions, so a stale token in
+  // localStorage 401s even on endpoints that allow anonymous access. When the
+  // token was one we attached automatically, fall back to an anonymous retry so
+  // public pages keep working; AuthContext refreshes the token separately.
+  if (response.status === 401 && Object.keys(authHeader).length > 0) {
+    response = await send({});
+  }
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({}));
@@ -243,7 +274,7 @@ export const claudeAPI = {
       body: JSON.stringify(request),
     }),
 
-  getTools: () => apiFetch<{ tools: any[]; count: number }>("/claude/tools/"),
+  getTools: () => apiFetch<{ tools: any[]; count: number }>("/claude/tools/").then(applyTierGate),
 };
 
 // Metals Pricing API
@@ -325,64 +356,64 @@ export const marketAPI = {
 export const toolsAPI = {
   gradeRanker: (params: Record<string, string> = {}) => {
     const q = new URLSearchParams(params).toString();
-    return apiFetch<any>(`/tools/grade-ranker/${q ? `?${q}` : ""}`);
+    return apiFetch<any>(`/tools/grade-ranker/${q ? `?${q}` : ""}`).then(applyTierGate);
   },
   peerComparison: (params: Record<string, string> = {}) => {
     const q = new URLSearchParams(params).toString();
-    return apiFetch<any>(`/tools/peer-comparison/${q ? `?${q}` : ""}`);
+    return apiFetch<any>(`/tools/peer-comparison/${q ? `?${q}` : ""}`).then(applyTierGate);
   },
   financingFlow: (params: Record<string, string> = {}) => {
     const q = new URLSearchParams(params).toString();
-    return apiFetch<any>(`/tools/financing-flow/${q ? `?${q}` : ""}`);
+    return apiFetch<any>(`/tools/financing-flow/${q ? `?${q}` : ""}`).then(applyTierGate);
   },
-  sectorPulse: () => apiFetch<any>("/tools/sector-pulse/"),
+  sectorPulse: () => apiFetch<any>("/tools/sector-pulse/").then(applyTierGate),
   drillScanner: (params: Record<string, string> = {}) => {
     const q = new URLSearchParams(params).toString();
-    return apiFetch<any>(`/tools/drill-scanner/${q ? `?${q}` : ""}`);
+    return apiFetch<any>(`/tools/drill-scanner/${q ? `?${q}` : ""}`).then(applyTierGate);
   },
   catalystCalendar: (params: Record<string, string> = {}) => {
     const q = new URLSearchParams(params).toString();
-    return apiFetch<any>(`/tools/catalyst-calendar/${q ? `?${q}` : ""}`);
+    return apiFetch<any>(`/tools/catalyst-calendar/${q ? `?${q}` : ""}`).then(applyTierGate);
   },
   portfolioXray: (params: Record<string, string> = {}) => {
     const q = new URLSearchParams(params).toString();
-    return apiFetch<any>(`/tools/portfolio-xray/${q ? `?${q}` : ""}`);
+    return apiFetch<any>(`/tools/portfolio-xray/${q ? `?${q}` : ""}`).then(applyTierGate);
   },
   propertyValuation: (params: Record<string, string> = {}) => {
     const q = new URLSearchParams(params).toString();
-    return apiFetch<any>(`/tools/property-valuation/${q ? `?${q}` : ""}`);
+    return apiFetch<any>(`/tools/property-valuation/${q ? `?${q}` : ""}`).then(applyTierGate);
   },
   stockComparison: (params: Record<string, string> = {}) => {
     const q = new URLSearchParams(params).toString();
-    return apiFetch<any>(`/tools/stock-comparison/${q ? `?${q}` : ""}`);
+    return apiFetch<any>(`/tools/stock-comparison/${q ? `?${q}` : ""}`).then(applyTierGate);
   },
   resourceGrowth: (params: Record<string, string> = {}) => {
     const q = new URLSearchParams(params).toString();
-    return apiFetch<any>(`/tools/resource-growth/${q ? `?${q}` : ""}`);
+    return apiFetch<any>(`/tools/resource-growth/${q ? `?${q}` : ""}`).then(applyTierGate);
   },
   dilutionTracker: (params: Record<string, string> = {}) => {
     const q = new URLSearchParams(params).toString();
-    return apiFetch<any>(`/tools/dilution-tracker/${q ? `?${q}` : ""}`);
+    return apiFetch<any>(`/tools/dilution-tracker/${q ? `?${q}` : ""}`).then(applyTierGate);
   },
   unusualActivity: (params: Record<string, string> = {}) => {
     const q = new URLSearchParams(params).toString();
-    return apiFetch<any>(`/tools/unusual-activity/${q ? `?${q}` : ""}`);
+    return apiFetch<any>(`/tools/unusual-activity/${q ? `?${q}` : ""}`).then(applyTierGate);
   },
   catalystImpact: (params: Record<string, string> = {}) => {
     const q = new URLSearchParams(params).toString();
-    return apiFetch<any>(`/tools/catalyst-impact/${q ? `?${q}` : ""}`);
+    return apiFetch<any>(`/tools/catalyst-impact/${q ? `?${q}` : ""}`).then(applyTierGate);
   },
   dueDiligence: (params: Record<string, string> = {}) => {
     const q = new URLSearchParams(params).toString();
-    return apiFetch<any>(`/tools/due-diligence/${q ? `?${q}` : ""}`);
+    return apiFetch<any>(`/tools/due-diligence/${q ? `?${q}` : ""}`).then(applyTierGate);
   },
   metalCorrelation: (params: Record<string, string> = {}) => {
     const q = new URLSearchParams(params).toString();
-    return apiFetch<any>(`/tools/metal-correlation/${q ? `?${q}` : ""}`);
+    return apiFetch<any>(`/tools/metal-correlation/${q ? `?${q}` : ""}`).then(applyTierGate);
   },
   warrantRadar: (params: Record<string, string> = {}) => {
     const q = new URLSearchParams(params).toString();
-    return apiFetch<any>(`/tools/warrant-radar/${q ? `?${q}` : ""}`);
+    return apiFetch<any>(`/tools/warrant-radar/${q ? `?${q}` : ""}`).then(applyTierGate);
   },
 };
 

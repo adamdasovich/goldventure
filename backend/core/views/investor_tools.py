@@ -16,6 +16,8 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
+from ..entitlements import tier_gated
+
 from ..models import (
     Company, Project, ResourceEstimate, EconomicStudy,
     Financing, MarketData, StockPrice, MetalPrice,
@@ -172,6 +174,7 @@ def grade_ranker(request):
 
 @api_view(['GET'])
 @permission_classes([AllowAny])
+@tier_gated(stub=('peers',))
 def peer_comparison(request):
     """
     Compare a company against auto-detected or manual peer group.
@@ -296,6 +299,7 @@ def peer_comparison(request):
 
 @api_view(['GET'])
 @permission_classes([AllowAny])
+@tier_gated(stub=('top_companies', 'recent'))
 def financing_flow(request):
     """
     Track financing activity trends across the sector.
@@ -521,6 +525,7 @@ def sector_pulse(request):
 
 @api_view(['GET'])
 @permission_classes([AllowAny])
+@tier_gated(stub=('results',))
 def drill_scanner(request):
     """
     Search news releases for drill results. Returns recent drill-related news.
@@ -589,6 +594,7 @@ def drill_scanner(request):
 
 @api_view(['GET'])
 @permission_classes([AllowAny])
+@tier_gated(stub=('companies', 'quiet_companies'))
 def catalyst_calendar(request):
     """
     Recent news releases grouped by company with activity frequency analysis.
@@ -681,6 +687,7 @@ def catalyst_calendar(request):
 
 @api_view(['GET'])
 @permission_classes([AllowAny])
+@tier_gated(stub=('holdings',))
 def portfolio_xray(request):
     """
     Analyze a set of companies for exposure, diversification, and risk.
@@ -775,6 +782,7 @@ def portfolio_xray(request):
 
 @api_view(['GET'])
 @permission_classes([AllowAny])
+@tier_gated(stub=('listings',))
 def property_valuation(request):
     """
     Property comparables and valuation benchmarks.
@@ -864,6 +872,7 @@ def property_valuation(request):
 
 @api_view(['GET'])
 @permission_classes([AllowAny])
+@tier_gated(stub=('series', 'summary'))
 def stock_comparison(request):
     """
     Compare normalized share-price performance of up to 10 companies.
@@ -992,6 +1001,7 @@ _RESERVE_CATEGORIES = ['proven', 'probable']
 
 @api_view(['GET'])
 @permission_classes([AllowAny])
+@tier_gated(stub=('projects',))
 def resource_growth(request):
     """
     Show how a company's mineral resource estimates evolved over time.
@@ -1110,6 +1120,7 @@ def resource_growth(request):
 
 @api_view(['GET'])
 @permission_classes([AllowAny])
+@tier_gated(stub=('financings',))
 def dilution_tracker(request):
     """
     Show a company's share-dilution history from its financing record.
@@ -1221,6 +1232,7 @@ def dilution_tracker(request):
 
 @api_view(['GET'])
 @permission_classes([AllowAny])
+@tier_gated(window=('series',), truncate=('flagged_days',))
 def unusual_activity(request):
     """
     Detect trading-volume spikes for a company and cross-reference news.
@@ -1368,6 +1380,7 @@ def unusual_activity(request):
 
 @api_view(['GET'])
 @permission_classes([AllowAny])
+@tier_gated(stub=('events',))
 def catalyst_impact(request):
     """
     Event study: how a company's share price historically reacted to each
@@ -1527,6 +1540,7 @@ def catalyst_impact(request):
 
 @api_view(['GET'])
 @permission_classes([AllowAny])
+@tier_gated(truncate=('sections', 'source_documents'))
 def due_diligence(request):
     """
     Structured due-diligence retrieval: ranked NI 43-101 report passages that
@@ -1680,6 +1694,7 @@ def _pearson(xs, ys):
 
 @api_view(['GET'])
 @permission_classes([AllowAny])
+@tier_gated(stub=('companies',), truncate=('heatmap',))
 def metal_correlation(request):
     """
     Stock-metal price correlation analytics.

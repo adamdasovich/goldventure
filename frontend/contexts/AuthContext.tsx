@@ -16,7 +16,6 @@ interface SubscriptionFeatures {
   daily_chat_limit: number;
   investor_tools: string[] | "all";
   full_company_data: boolean;
-  metals_history: boolean;
   financing_alerts: boolean;
   csv_export: boolean;
   api_access: boolean;

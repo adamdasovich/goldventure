@@ -301,10 +301,6 @@ function PricingContent() {
               </li>
               <li className="flex items-start gap-2 text-sm text-slate-300">
                 <span className="text-gold-400 mt-0.5">&#10003;</span>
-                Historical metals charts
-              </li>
-              <li className="flex items-start gap-2 text-sm text-slate-300">
-                <span className="text-gold-400 mt-0.5">&#10003;</span>
                 Financing email alerts
               </li>
               <li className="flex items-start gap-2 text-sm text-slate-300">
