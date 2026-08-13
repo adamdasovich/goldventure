@@ -79,6 +79,13 @@
                   {{ greeting }}
                 </h1>
 
+                <!--
+                  Built in Python and emitted as one token. Prose with several
+                  inline variables gets re-wrapped by the formatter, and a
+                  variable tag split across a newline is not matched by Django's
+                  tag regex (it is not DOTALL) - it renders literally into the
+                  email instead of substituting.
+                -->
                 <p
                   style="
                     margin: 0 0 16px;
@@ -87,10 +94,7 @@
                     line-height: 1.6;
                   "
                 >
-                  Your early-access {{ tier_name }} plan ends on
-                  <strong style="color: #f1f5f9">{{ expiry_date }}</strong>{{
-                  days_phrase }}. After that your account moves to Explorer, our
-                  free plan.
+                  {{ expiry_sentence|safe }}
                 </p>
 
                 <p

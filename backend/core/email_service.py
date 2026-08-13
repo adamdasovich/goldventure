@@ -12,7 +12,7 @@ Uses SendGrid Web API for reliable email delivery.
 import logging
 import os
 from django.conf import settings
-from django.utils.html import strip_tags
+from django.utils.html import escape, strip_tags
 
 logger = logging.getLogger(__name__)
 
@@ -766,17 +766,33 @@ class EmailService:
                     '</div></td></tr></table>'
                 )
 
+            tier_name = subscription.get_tier_display().replace(' (Free)', '')
+            expiry_sentence = (
+                f'Your early-access {escape(tier_name)} plan ends on '
+                f'<strong style="color:#f1f5f9">{escape(expiry_date)}</strong>'
+                f'{escape(days_phrase)}. After that your account moves to '
+                'Explorer, our free plan.'
+            )
+
             html_content = render_to_string(
                 'grant_expiry_notice.html',
                 {
                     'greeting': greeting,
-                    'days_phrase': days_phrase,
-                    'expiry_date': expiry_date,
-                    'tier_name': subscription.get_tier_display().replace(' (Free)', ''),
+                    'expiry_sentence': expiry_sentence,
                     'discount_blurb': discount_blurb,
                     'pricing_url': 'https://juniorminingintelligence.com/pricing',
                 },
             )
+
+            # The formatter re-wraps these templates, and a {{ }} broken across
+            # a newline renders literally rather than substituting. Catch it
+            # here instead of mailing "{{ days_phrase }}" to a customer.
+            if '{{' in html_content or '{%' in html_content:
+                logger.error(
+                    "Grant expiry template rendered with unsubstituted tags; "
+                    "not sending. Check for formatter-split template tags."
+                )
+                return False
             text_content = strip_tags(html_content)
 
             message = Mail(
