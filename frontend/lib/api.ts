@@ -656,64 +656,6 @@ export const speakingEventAPI = {
     }),
 };
 
-// Company Portal - Subscription API
-export const subscriptionAPI = {
-  getMySubscription: (accessToken: string) =>
-    apiFetch<CompanySubscription>(
-      `/company-portal/subscriptions/my_subscription/`,
-      {
-        headers: { Authorization: `Bearer ${accessToken}` },
-      },
-    ),
-
-  getInvoices: (accessToken: string) =>
-    apiFetch<{ results: SubscriptionInvoice[] }>(
-      `/company-portal/subscriptions/invoices/`,
-      {
-        headers: { Authorization: `Bearer ${accessToken}` },
-      },
-    ),
-
-  createCheckout: (
-    accessToken: string,
-    successUrl: string,
-    cancelUrl: string,
-  ) =>
-    apiFetch<CheckoutSessionResponse>(
-      `/company-portal/subscriptions/create-checkout/`,
-      {
-        method: "POST",
-        headers: { Authorization: `Bearer ${accessToken}` },
-        body: JSON.stringify({
-          success_url: successUrl,
-          cancel_url: cancelUrl,
-        }),
-      },
-    ),
-
-  openBillingPortal: (accessToken: string, returnUrl: string) =>
-    apiFetch<BillingPortalResponse>(
-      `/company-portal/subscriptions/billing-portal/`,
-      {
-        method: "POST",
-        headers: { Authorization: `Bearer ${accessToken}` },
-        body: JSON.stringify({ return_url: returnUrl }),
-      },
-    ),
-
-  cancel: (accessToken: string) =>
-    apiFetch<CompanySubscription>(`/company-portal/subscriptions/cancel/`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${accessToken}` },
-    }),
-
-  reactivate: (accessToken: string) =>
-    apiFetch<CompanySubscription>(`/company-portal/subscriptions/reactivate/`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${accessToken}` },
-    }),
-};
-
 // Company Portal - Access Request API
 import type {
   CompanyAccessRequest,

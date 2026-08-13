@@ -33,7 +33,6 @@ router.register(r'properties/saved-searches', views.SavedPropertySearchViewSet, 
 # Company Portal ViewSets
 router.register(r'company-portal/resources', views.CompanyResourceViewSet, basename='company-resource')
 router.register(r'company-portal/events', views.SpeakingEventViewSet, basename='speaking-event')
-router.register(r'company-portal/subscriptions', views.CompanySubscriptionViewSet, basename='company-subscription')
 router.register(r'company-portal/access-requests', views.CompanyAccessRequestViewSet, basename='company-access-request')
 
 # Store ViewSets
@@ -135,12 +134,6 @@ urlpatterns = [
     path('news/scrape/status/', views.news_scrape_status, name='news_scrape_status'),
     path('news/scrape/status/<int:job_id>/', views.news_scrape_status, name='news_scrape_status_detail'),
 
-    # Company Portal - Stripe Subscription endpoints
-    path('company-portal/subscriptions/create-checkout/', views.create_checkout_session, name='create_checkout_session'),
-    path('company-portal/subscriptions/billing-portal/', views.create_billing_portal, name='create_billing_portal'),
-    path('company-portal/subscriptions/cancel/', views.cancel_subscription, name='cancel_subscription'),
-    path('company-portal/subscriptions/reactivate/', views.reactivate_subscription, name='reactivate_subscription'),
-    path('company-portal/webhooks/stripe/', views.stripe_webhook, name='stripe_webhook'),
 
     # Investment Interest endpoints
     path('investment-interest/register/', views.register_investment_interest, name='register_investment_interest'),

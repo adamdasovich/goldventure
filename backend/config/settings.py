@@ -206,13 +206,17 @@ AWS_S3_REGION_NAME = os.getenv('AWS_S3_REGION_NAME', 'us-east-1')
 STRIPE_SECRET_KEY = os.getenv('STRIPE_SECRET_KEY', '')
 STRIPE_PUBLISHABLE_KEY = os.getenv('STRIPE_PUBLISHABLE_KEY', '')
 STRIPE_WEBHOOK_SECRET = os.getenv('STRIPE_WEBHOOK_SECRET', '')
-STRIPE_PRICE_ID = os.getenv('STRIPE_PRICE_ID', '')  # Optional: Pre-configured price ID from Stripe Dashboard
 
 # Stripe Store Webhook (separate webhook for e-commerce store)
 STRIPE_STORE_WEBHOOK_SECRET = os.getenv('STRIPE_STORE_WEBHOOK_SECRET', '')
 
 # Stripe Platform Subscription Webhook (user-level subscriptions)
 STRIPE_PLATFORM_WEBHOOK_SECRET = os.getenv('STRIPE_PLATFORM_WEBHOOK_SECRET', '')
+
+# Pin the Stripe Product for platform subscriptions. Optional, but without it
+# _get_or_create_product() falls back to an eventually-consistent metadata
+# search that has previously created duplicate products.
+STRIPE_PLATFORM_PRODUCT_ID = os.getenv('STRIPE_PLATFORM_PRODUCT_ID', '')
 
 # ============================================================================
 # EMAIL CONFIGURATION

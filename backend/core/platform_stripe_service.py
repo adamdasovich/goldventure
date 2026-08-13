@@ -57,11 +57,25 @@ class PlatformStripeService:
 
     @staticmethod
     def _get_or_create_product():
-        """Get or create the Stripe Product for platform subscriptions."""
+        """Get or create the Stripe Product for platform subscriptions.
+
+        Set STRIPE_PLATFORM_PRODUCT_ID to pin this. Without a pin it falls back
+        to a metadata search, which is only eventually consistent in Stripe: a
+        product created moments earlier isn't findable yet, so two calls in
+        quick succession each conclude none exists and create their own. That
+        is how this account ended up with four identically named products.
+
+        The search is also scoped to active products, so archiving a duplicate
+        doesn't leave this handing back a product that Price.create will reject.
+        """
         get_stripe_api_key()
-        # Search for existing product by metadata
+
+        pinned = getattr(settings, 'STRIPE_PLATFORM_PRODUCT_ID', None)
+        if pinned:
+            return stripe.Product.retrieve(pinned)
+
         products = stripe.Product.search(
-            query="metadata['type']:'platform_subscription'"
+            query="metadata['type']:'platform_subscription' AND active:'true'"
         )
         if products.data:
             return products.data[0]
