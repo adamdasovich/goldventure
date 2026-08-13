@@ -438,6 +438,21 @@ class CheckoutSerializer(serializers.Serializer):
     success_url = serializers.URLField()
     cancel_url = serializers.URLField()
 
+    def _validate_redirect(self, value, field_name):
+        """URLField only checks syntax; these become Stripe redirect targets."""
+        from ..security_utils import validate_checkout_redirect
+
+        ok, reason = validate_checkout_redirect(value)
+        if not ok:
+            raise serializers.ValidationError(reason)
+        return value
+
+    def validate_success_url(self, value):
+        return self._validate_redirect(value, 'success_url')
+
+    def validate_cancel_url(self, value):
+        return self._validate_redirect(value, 'cancel_url')
+
     def validate_shipping_address(self, value):
         if value:
             required_fields = ['name', 'line1', 'city', 'state', 'postal_code', 'country']

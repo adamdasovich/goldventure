@@ -4,11 +4,22 @@ import { Suspense, useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
-import { platformAPI } from "@/lib/api";
+import { platformAPI, type PlatformTier } from "@/lib/api";
 import { trackSubscribe } from "@/lib/analytics";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import LogoMono from "@/components/LogoMono";
+
+// Used only if /platform/tiers/ is unreachable. The backend is the authority
+// on price; these exist so the page still renders something sane offline.
+const TIER_FALLBACK: Record<
+  string,
+  { monthly: string; annual: string; savings: string; trialDays: number }
+> = {
+  explorer: { monthly: "Free", annual: "Free", savings: "", trialDays: 0 },
+  prospector: { monthly: "$15", annual: "$150", savings: "$30", trialDays: 7 },
+  miner: { monthly: "$50", annual: "$500", savings: "$100", trialDays: 7 },
+};
 
 // Only differences the backend actually enforces belong in this table. It
 // previously advertised CSV export, an API, email alerts and priority chat -
@@ -79,20 +90,72 @@ function PricingContent() {
   const [successMessage, setSuccessMessage] = useState("");
   const conversionFired = useRef(false);
 
+  // Live pricing from the backend, so the page can't drift from what Stripe
+  // actually charges. TIER_FALLBACK covers the request failing.
+  const [tiers, setTiers] = useState<PlatformTier[] | null>(null);
   useEffect(() => {
-    if (searchParams.get("success") === "true") {
-      setSuccessMessage("Your subscription is now active! Welcome aboard.");
-      // Google Ads / GA4 conversion: paid subscription completed. Ref-guarded
-      // so a re-render can't double-count the conversion.
-      if (!conversionFired.current) {
-        conversionFired.current = true;
-        trackSubscribe();
-      }
-      // Clear after 8 seconds
-      const t = setTimeout(() => setSuccessMessage(""), 8000);
-      return () => clearTimeout(t);
+    let cancelled = false;
+    platformAPI
+      .getTiers()
+      .then((res) => {
+        if (!cancelled) setTiers(res.tiers);
+      })
+      .catch(() => {
+        /* keep the fallback prices */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const priceOf = (id: string) => {
+    const t = tiers?.find((x) => x.id === id);
+    if (!t) return TIER_FALLBACK[id];
+    return {
+      monthly: t.monthly_price,
+      annual: t.annual_price,
+      savings: t.annual_savings ?? "",
+      trialDays: t.trial_days,
+    };
+  };
+
+  useEffect(() => {
+    if (searchParams.get("success") !== "true") return;
+
+    // Google Ads / GA4 conversion: paid subscription completed. Ref-guarded
+    // so a re-render can't double-count the conversion.
+    if (!conversionFired.current) {
+      conversionFired.current = true;
+      trackSubscribe();
     }
-  }, [searchParams]);
+
+    // The webhook is asynchronous, so the tier on /auth/me may still say
+    // Explorer at this point. Reconcile against the session id Stripe put in
+    // the URL rather than claiming success and showing the old tier.
+    const sessionId = searchParams.get("session_id");
+    if (sessionId && accessToken) {
+      setSuccessMessage("Confirming your subscription…");
+      platformAPI
+        .confirmCheckout(accessToken, sessionId)
+        .then((res) => {
+          setSuccessMessage(
+            res.status === "active"
+              ? "Your subscription is now active! Welcome aboard."
+              : "Payment received — your subscription will activate shortly.",
+          );
+        })
+        .catch(() => {
+          setSuccessMessage(
+            "Payment received — your subscription will activate shortly.",
+          );
+        });
+    } else {
+      setSuccessMessage("Your subscription is now active! Welcome aboard.");
+    }
+
+    const t = setTimeout(() => setSuccessMessage(""), 8000);
+    return () => clearTimeout(t);
+  }, [searchParams, accessToken]);
 
   const handleSubscribe = async (tier: string) => {
     if (!accessToken) {
@@ -274,14 +337,16 @@ function PricingContent() {
               </p>
               <div className="mt-4">
                 <span className="text-4xl font-bold text-white">
-                  {interval === "month" ? "$15" : "$150"}
+                  {interval === "month"
+                    ? priceOf("prospector").monthly
+                    : priceOf("prospector").annual}
                 </span>
                 <span className="text-slate-400 ml-1">
                   /{interval === "month" ? "month" : "year"}
                 </span>
                 {interval === "year" && (
                   <span className="block text-xs text-emerald-400 mt-1">
-                    Save $30/year vs monthly
+                    Save {priceOf("prospector").savings}/year vs monthly
                   </span>
                 )}
               </div>
@@ -289,7 +354,8 @@ function PricingContent() {
             <ul className="space-y-3 mb-8 flex-1">
               <li className="flex items-start gap-2 text-sm text-slate-300">
                 <span className="text-gold-400 mt-0.5">&#10003;</span>
-                <strong className="text-white">100</strong>&nbsp;AI chat messages/day
+                <strong className="text-white">100</strong>&nbsp;AI chat
+                messages/day
               </li>
               <li className="flex items-start gap-2 text-sm text-slate-300">
                 <span className="text-gold-400 mt-0.5">&#10003;</span>
@@ -339,14 +405,16 @@ function PricingContent() {
               </p>
               <div className="mt-4">
                 <span className="text-4xl font-bold text-white">
-                  {interval === "month" ? "$50" : "$500"}
+                  {interval === "month"
+                    ? priceOf("miner").monthly
+                    : priceOf("miner").annual}
                 </span>
                 <span className="text-slate-400 ml-1">
                   /{interval === "month" ? "month" : "year"}
                 </span>
                 {interval === "year" && (
                   <span className="block text-xs text-emerald-400 mt-1">
-                    Save $100/year vs monthly
+                    Save {priceOf("miner").savings}/year vs monthly
                   </span>
                 )}
               </div>

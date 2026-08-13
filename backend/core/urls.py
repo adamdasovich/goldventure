@@ -157,6 +157,7 @@ urlpatterns = [
     path('platform/tiers/', views.platform_subscription_tiers, name='platform_subscription_tiers'),
     path('platform/subscription/', views.platform_subscription_status, name='platform_subscription_status'),
     path('platform/checkout/', views.platform_create_checkout, name='platform_create_checkout'),
+    path('platform/checkout/confirm/', views.platform_confirm_checkout, name='platform_confirm_checkout'),
     path('platform/billing-portal/', views.platform_billing_portal, name='platform_billing_portal'),
     path('platform/cancel/', views.platform_cancel_subscription, name='platform_cancel_subscription'),
     path('platform/reactivate/', views.platform_reactivate_subscription, name='platform_reactivate_subscription'),

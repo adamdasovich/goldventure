@@ -11,6 +11,7 @@ from rest_framework.response import Response
 
 from ..entitlements import CHAT_LIMITS, FREE_TOOLS, MINER_TOOLS
 from ..models import PlatformSubscription, PlatformSubscriptionInvoice
+from ..security_utils import validate_checkout_redirect
 from ..platform_stripe_service import (
     PlatformStripeService,
     process_platform_webhook,
@@ -48,7 +49,6 @@ def platform_subscription_tiers(request):
             'features': {
                 'daily_chat_limit': CHAT_LIMITS['explorer'],
                 'investor_tools': list(FREE_TOOLS),
-                'full_company_data': False,
             }
         },
         {
@@ -64,7 +64,6 @@ def platform_subscription_tiers(request):
             'features': {
                 'daily_chat_limit': CHAT_LIMITS['prospector'],
                 'investor_tools': {'excludes': list(MINER_TOOLS)},
-                'full_company_data': True,
             }
         },
         {
@@ -81,7 +80,6 @@ def platform_subscription_tiers(request):
                 'daily_chat_limit': CHAT_LIMITS['miner'],
                 'investor_tools': 'all',
                 'miner_only_tools': list(MINER_TOOLS),
-                'full_company_data': True,
             }
         },
     ]
@@ -133,7 +131,6 @@ def platform_subscription_status(request):
                 'daily_chat_limit': CHAT_LIMITS['explorer'],
                 'investor_tools': list(FREE_TOOLS),
                 'miner_only_tools': list(MINER_TOOLS),
-                'full_company_data': False,
             }
         }
 
@@ -179,7 +176,18 @@ def platform_create_checkout(request):
     except PlatformSubscription.DoesNotExist:
         pass
 
+    # base_url is caller-supplied and ends up as the Stripe redirect target, so
+    # it has to resolve to an origin we control. Unvalidated, this drops a
+    # paying customer wherever the caller likes, straight off a real checkout.
     base_url = request.data.get('base_url', 'https://juniorminingintelligence.com')
+    ok, reason = validate_checkout_redirect(base_url)
+    if not ok:
+        logger.warning(
+            f"Rejected base_url from user {request.user.id}: {reason} ({base_url!r})"
+        )
+        return Response({'error': 'Invalid base_url'}, status=status.HTTP_400_BAD_REQUEST)
+
+    base_url = base_url.rstrip('/')
     success_url = f"{base_url}/pricing?success=true&session_id={{CHECKOUT_SESSION_ID}}"
     cancel_url = f"{base_url}/pricing?canceled=true"
 
@@ -205,6 +213,71 @@ def platform_create_checkout(request):
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
+def platform_confirm_checkout(request):
+    """
+    POST /api/platform/checkout/confirm/
+    Body: { "session_id": "cs_..." }
+
+    Reconcile a just-completed checkout against Stripe.
+
+    The webhook remains the source of truth, but it arrives asynchronously, so
+    a customer redirected back from Stripe can otherwise be shown the free tier
+    seconds after paying. This lets the success page settle the question
+    immediately. Safe to call repeatedly - the underlying upsert is idempotent,
+    and the session must belong to the calling user.
+    """
+    session_id = request.data.get('session_id')
+    if not session_id:
+        return Response({'error': 'session_id is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+    import stripe
+    from ..api_utils import get_stripe_api_key
+    from ..platform_stripe_service import sync_checkout_session
+
+    get_stripe_api_key()
+    try:
+        session = stripe.checkout.Session.retrieve(session_id)
+    except Exception as e:
+        logger.warning(f"Could not retrieve checkout session {session_id!r}: {e}")
+        return Response({'error': 'Unknown checkout session'}, status=status.HTTP_404_NOT_FOUND)
+
+    if session.get('payment_status') not in ('paid', 'no_payment_required'):
+        # Trials complete with no payment taken, hence the second case.
+        return Response(
+            {'status': 'pending', 'detail': 'Checkout is not complete yet.'},
+            status=status.HTTP_202_ACCEPTED
+        )
+
+    try:
+        sync_checkout_session(session, expected_user=request.user)
+    except PermissionError:
+        logger.warning(
+            f"User {request.user.id} tried to confirm session {session_id!r} belonging to another user"
+        )
+        return Response({'error': 'Unknown checkout session'}, status=status.HTTP_404_NOT_FOUND)
+    except ValueError as e:
+        return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+    except Exception as e:
+        logger.error(f"Failed to confirm checkout {session_id!r}: {e}")
+        return Response(
+            {'error': 'Could not confirm checkout. Your subscription will activate shortly.'},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+    sub = PlatformSubscription.objects.get(user=request.user)
+    return Response({
+        'status': 'active',
+        'tier': sub.tier,
+        'effective_tier': sub.effective_tier,
+        'plan_interval': sub.plan_interval,
+        'price_cents': sub.price_cents,
+        'current_period_end': sub.current_period_end.isoformat() if sub.current_period_end else None,
+        'features': sub.features,
+    })
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
 def platform_billing_portal(request):
     """
     POST /api/platform/billing-portal/
@@ -223,11 +296,17 @@ def platform_billing_portal(request):
             status=status.HTTP_404_NOT_FOUND
         )
 
-    base_url = request.data.get('return_url', 'https://juniorminingintelligence.com/pricing')
+    return_url = request.data.get('return_url', 'https://juniorminingintelligence.com/pricing')
+    ok, reason = validate_checkout_redirect(return_url)
+    if not ok:
+        logger.warning(
+            f"Rejected return_url from user {request.user.id}: {reason} ({return_url!r})"
+        )
+        return Response({'error': 'Invalid return_url'}, status=status.HTTP_400_BAD_REQUEST)
 
     try:
         session = PlatformStripeService.create_billing_portal_session(
-            sub.stripe_customer_id, base_url
+            sub.stripe_customer_id, return_url
         )
         return Response({'portal_url': session.url})
     except Exception as e:

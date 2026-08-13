@@ -320,6 +320,83 @@ def plan_from_stripe_subscription(stripe_sub):
     return tier, interval, amount if amount is not None else TIER_PRICING[tier][interval], price_id
 
 
+def sync_checkout_session(session, expected_user=None):
+    """Apply a completed Checkout Session to the local subscription.
+
+    Shared by the webhook and by the post-checkout confirm endpoint. The
+    webhook is the primary path, but Stripe delivers it asynchronously, so a
+    customer can land back on the site before it arrives and be told they're
+    still on the free tier. The confirm endpoint replays this against the
+    session id in the success URL to close that window.
+
+    Idempotent: it's an update_or_create keyed on the user, so whichever path
+    runs second simply rewrites the same values.
+
+    `expected_user` guards the caller-facing path - the session id travels in a
+    URL, so the endpoint must refuse to apply someone else's session.
+    """
+    from .entitlements import CHAT_LIMITS
+    from .models import PlatformSubscription, User, UserAIUsage
+
+    metadata = session.get('metadata') or {}
+    if metadata.get('subscription_type') != 'platform':
+        raise ValueError('Not a platform checkout session')
+
+    user_id = metadata.get('user_id')
+    subscription_id = session.get('subscription')
+    if not user_id or not subscription_id:
+        raise ValueError('Session has no user_id or subscription')
+
+    if expected_user is not None and str(expected_user.id) != str(user_id):
+        raise PermissionError('Checkout session belongs to another user')
+
+    user = expected_user or User.objects.get(id=user_id)
+
+    stripe_sub = stripe.Subscription.retrieve(subscription_id)
+    period_start, period_end = stripe_subscription_period(stripe_sub)
+
+    # Prefer the plan the subscription actually carries; session metadata is
+    # only a fallback for prices that predate the tier metadata convention.
+    tier = metadata.get('tier', 'prospector')
+    interval = metadata.get('interval', 'month')
+    price_cents = TIER_PRICING.get(tier, {}).get(interval, 0)
+    items = (stripe_sub.get('items') or {}).get('data') or []
+    price_id = items[0]['price']['id'] if items else ''
+    plan = plan_from_stripe_subscription(stripe_sub)
+    if plan:
+        tier, interval, price_cents, price_id = plan
+
+    sub, created = PlatformSubscription.objects.update_or_create(
+        user=user,
+        defaults={
+            'tier': tier,
+            'status': stripe_sub.status,
+            'stripe_customer_id': session.get('customer') or '',
+            'stripe_subscription_id': subscription_id,
+            'stripe_price_id': price_id,
+            'plan_interval': interval,
+            'price_cents': price_cents,
+            'trial_start': datetime.fromtimestamp(stripe_sub.trial_start, tz=dt_timezone.utc) if stripe_sub.trial_start else None,
+            'trial_end': datetime.fromtimestamp(stripe_sub.trial_end, tz=dt_timezone.utc) if stripe_sub.trial_end else None,
+            'current_period_start': datetime.fromtimestamp(period_start, tz=dt_timezone.utc),
+            'current_period_end': datetime.fromtimestamp(period_end, tz=dt_timezone.utc),
+            'cancel_at_period_end': False,
+            'canceled_at': None,
+        }
+    )
+
+    ai_usage, _ = UserAIUsage.objects.get_or_create(user=user)
+    ai_usage.daily_message_limit = CHAT_LIMITS.get(tier, CHAT_LIMITS['explorer'])
+    ai_usage.daily_token_limit = 0 if tier == 'miner' else 500000
+    ai_usage.save()
+
+    logger.info(
+        f"Platform subscription {'created' if created else 'updated'} "
+        f"for user {user_id}: {tier}/{interval}"
+    )
+    return sub, created
+
+
 def process_platform_webhook(event):
     """
     Process Stripe webhook events for platform user subscriptions.
@@ -364,58 +441,12 @@ def _dispatch_platform_event(event):
     logger.info(f"Processing platform webhook: {event_type}")
 
     if event_type == 'checkout.session.completed':
-        # Checkout completed - create/update local subscription
         if data.metadata.get('subscription_type') != 'platform':
             return {'success': True, 'skipped': True}
-
-        user_id = data.metadata.get('user_id')
-        tier = data.metadata.get('tier', 'prospector')
-        interval = data.metadata.get('interval', 'month')
-
-        if not user_id or not data.subscription:
-            return {'success': False, 'error': 'Missing user_id or subscription'}
-
-        user = User.objects.get(id=user_id)
-        stripe_sub = stripe.Subscription.retrieve(data.subscription)
-        period_start, period_end = stripe_subscription_period(stripe_sub)
-
-        # Prefer the plan the subscription actually carries; the session
-        # metadata is only a fallback for prices with no tier metadata.
-        price_cents = TIER_PRICING.get(tier, {}).get(interval, 0)
-        price_id = stripe_sub['items']['data'][0]['price']['id'] if stripe_sub['items']['data'] else ''
-        plan = plan_from_stripe_subscription(stripe_sub)
-        if plan:
-            tier, interval, price_cents, price_id = plan
-
-        sub, created = PlatformSubscription.objects.update_or_create(
-            user=user,
-            defaults={
-                'tier': tier,
-                'status': stripe_sub.status,
-                'stripe_customer_id': data.customer,
-                'stripe_subscription_id': data.subscription,
-                'stripe_price_id': price_id,
-                'plan_interval': interval,
-                'price_cents': price_cents,
-                'trial_start': datetime.fromtimestamp(stripe_sub.trial_start, tz=dt_timezone.utc) if stripe_sub.trial_start else None,
-                'trial_end': datetime.fromtimestamp(stripe_sub.trial_end, tz=dt_timezone.utc) if stripe_sub.trial_end else None,
-                'current_period_start': datetime.fromtimestamp(period_start, tz=dt_timezone.utc),
-                'current_period_end': datetime.fromtimestamp(period_end, tz=dt_timezone.utc),
-                'cancel_at_period_end': False,
-                'canceled_at': None,
-            }
-        )
-
-        # Update AI usage limits based on tier. Prospector is capped, Miner is
-        # unlimited - one of the things that makes the two tiers differ.
-        from .entitlements import CHAT_LIMITS
-        from .models import UserAIUsage
-        ai_usage, _ = UserAIUsage.objects.get_or_create(user=user)
-        ai_usage.daily_message_limit = CHAT_LIMITS.get(tier, CHAT_LIMITS['explorer'])
-        ai_usage.daily_token_limit = 0 if tier == 'miner' else 500000
-        ai_usage.save()
-
-        logger.info(f"Platform subscription {'created' if created else 'updated'} for user {user_id}: {tier}")
+        try:
+            sync_checkout_session(data)
+        except ValueError as e:
+            return {'success': False, 'error': str(e)}
 
     elif event_type == 'customer.subscription.updated':
         sub_id = data.id

@@ -1147,7 +1147,6 @@ class PlatformSubscription(models.Model):
             'daily_chat_limit': self.daily_chat_limit,
             'investor_tools': self.allowed_tools,
             'miner_only_tools': list(MINER_TOOLS),
-            'full_company_data': tier in ('prospector', 'miner'),
         }
 
 

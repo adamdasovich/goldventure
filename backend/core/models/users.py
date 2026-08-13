@@ -204,6 +204,10 @@ class Company(models.Model):
             models.Index(fields=['approval_status'], name='idx_company_approval_status'),
             models.Index(fields=['is_active', 'approval_status'], name='idx_company_active_status'),
             models.Index(fields=['ticker_symbol'], name='idx_company_ticker'),
+            # Added by migration 0056 but never declared here, so makemigrations
+            # kept proposing to drop it. Slug is the lookup key for company
+            # URLs, so the index stays and the model now matches the database.
+            models.Index(fields=['slug'], name='idx_company_slug'),
         ]
 
     def __str__(self):

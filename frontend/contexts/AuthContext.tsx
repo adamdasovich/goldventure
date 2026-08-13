@@ -17,7 +17,6 @@ interface SubscriptionFeatures {
   // "all" for Miner, { excludes } for Prospector, an explicit list for Explorer.
   investor_tools: string[] | "all" | { excludes: string[] };
   miner_only_tools?: string[];
-  full_company_data: boolean;
 }
 
 interface SubscriptionInfo {

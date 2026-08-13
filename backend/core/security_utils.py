@@ -364,6 +364,47 @@ def validate_redirect_url(original_url: str, redirect_url: str) -> Tuple[bool, s
     return is_safe_url(redirect_url, resolve_dns=True)
 
 
+def allowed_redirect_origins() -> set:
+    """Origins a user-supplied redirect may point at, from CORS_ALLOWED_ORIGINS."""
+    from django.conf import settings
+
+    origins = set()
+    for origin in getattr(settings, 'CORS_ALLOWED_ORIGINS', None) or []:
+        cleaned = (origin or '').strip().rstrip('/').lower()
+        if cleaned:
+            origins.add(cleaned)
+    return origins
+
+
+def validate_checkout_redirect(url: str) -> Tuple[bool, str]:
+    """Validate a caller-supplied post-checkout redirect target.
+
+    Not the same job as validate_redirect_url(), which guards against SSRF for
+    URLs the *server* will fetch and therefore only rejects internal addresses -
+    an attacker's public domain sails through it.
+
+    Here the URL is handed to Stripe, which sends the customer there after they
+    pay. So the test is an allowlist of our own origins: anything else means a
+    paying customer could be dropped on a site we don't control, arriving with
+    every appearance of having come from a completed checkout.
+    """
+    if not url or not isinstance(url, str):
+        return False, "No redirect URL supplied"
+
+    parsed = urlparse(url.strip())
+
+    if parsed.scheme not in ('http', 'https'):
+        return False, f"Unsupported scheme: {parsed.scheme or 'none'}"
+    if not parsed.netloc:
+        return False, "Redirect URL has no host"
+
+    origin = f"{parsed.scheme}://{parsed.netloc}".lower()
+    if origin not in allowed_redirect_origins():
+        return False, "Redirect URL is not an allowed origin"
+
+    return True, ""
+
+
 # =============================================================================
 # INPUT SANITIZATION
 # =============================================================================

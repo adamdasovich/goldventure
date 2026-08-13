@@ -134,6 +134,20 @@ def create_checkout_session(request):
             status=status.HTTP_400_BAD_REQUEST
         )
 
+    # Stripe sends the customer to these after payment, so they must point at
+    # an origin we control - otherwise this is an open redirect off a payment.
+    from ..security_utils import validate_checkout_redirect
+    for label, candidate in (('success_url', success_url), ('cancel_url', cancel_url)):
+        ok, reason = validate_checkout_redirect(candidate)
+        if not ok:
+            logger.warning(
+                f"Rejected {label} from user {request.user.id}: {reason} ({candidate!r})"
+            )
+            return Response(
+                {'error': f'Invalid {label}'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
     # Check if company already has an active subscription
     try:
         existing_sub = CompanySubscription.objects.get(company=request.user.company)
@@ -208,6 +222,14 @@ def create_billing_portal(request):
             {'error': 'return_url is required'},
             status=status.HTTP_400_BAD_REQUEST
         )
+
+    from ..security_utils import validate_checkout_redirect
+    ok, reason = validate_checkout_redirect(return_url)
+    if not ok:
+        logger.warning(
+            f"Rejected return_url from user {request.user.id}: {reason} ({return_url!r})"
+        )
+        return Response({'error': 'Invalid return_url'}, status=status.HTTP_400_BAD_REQUEST)
 
     try:
         session = StripeService.create_billing_portal_session(
