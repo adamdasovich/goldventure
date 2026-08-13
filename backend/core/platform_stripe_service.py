@@ -200,6 +200,10 @@ class PlatformStripeService:
             managed_payments={'enabled': False},
             line_items=[{'price': price_id, 'quantity': 1}],
             mode='subscription',
+            # Lets the launch code from the grant-expiry email actually be
+            # redeemed. Mutually exclusive with passing `discounts`, so the
+            # code is entered by the customer rather than applied server-side.
+            allow_promotion_codes=True,
             subscription_data=subscription_data,
             success_url=success_url,
             cancel_url=cancel_url,

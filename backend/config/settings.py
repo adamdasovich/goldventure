@@ -218,6 +218,10 @@ STRIPE_PLATFORM_WEBHOOK_SECRET = os.getenv('STRIPE_PLATFORM_WEBHOOK_SECRET', '')
 # search that has previously created duplicate products.
 STRIPE_PLATFORM_PRODUCT_ID = os.getenv('STRIPE_PLATFORM_PRODUCT_ID', '')
 
+# Promotion code offered to early-access users when their comp grant lapses.
+# Empty disables the offer; the expiry email simply omits it.
+STRIPE_LAUNCH_PROMO_CODE = os.getenv('STRIPE_LAUNCH_PROMO_CODE', '')
+
 # ============================================================================
 # EMAIL CONFIGURATION
 # ============================================================================
@@ -380,6 +384,14 @@ CELERY_BROKER_CONNECTION_MAX_RETRIES = 10  # Max retries before giving up
 from celery.schedules import crontab
 
 CELERY_BEAT_SCHEDULE = {
+    # Warn early-access comp-grant holders before their access lapses. Comp
+    # grants have no Stripe subscription, so nothing else would tell them.
+    # 13:00 UTC = 9 AM ET.
+    'notify-expiring-comp-grants': {
+        'task': 'core.tasks.notify_expiring_comp_grants_task',
+        'schedule': crontab(hour=13, minute=30),
+    },
+
     # Scrape Kitco metals prices twice daily (9 AM and 4 PM ET / 14:00 and 21:00 UTC)
     'scrape-metals-prices-morning': {
         'task': 'core.tasks.scrape_metals_prices_task',

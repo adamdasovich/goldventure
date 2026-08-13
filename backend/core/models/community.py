@@ -1026,6 +1026,10 @@ class PlatformSubscription(models.Model):
     cancel_at_period_end = models.BooleanField(default=False)
     canceled_at = models.DateTimeField(null=True, blank=True)
 
+    # Stamped when the comp-grant expiry warning goes out, so the daily task
+    # never emails the same person twice.
+    expiry_notice_sent_at = models.DateTimeField(null=True, blank=True)
+
     # Audit
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

@@ -1,0 +1,221 @@
+<!doctype html>
+<!--
+  Early-access comp grant expiry warning.
+  From: info@juniorminingintelligence.com
+  Sent once per subscription by core.tasks.notify_expiring_comp_grants_task,
+  a few days before the grant lapses back to Explorer.
+
+  Palette matches welcome_email_draft.html: #0f172a bg, #d4af37 gold,
+  #94a3b8 body copy, #334155 rules.
+
+  Context: first_name, days_left, expiry_date, tier_name, promo_code,
+  discount_blurb, pricing_url.
+-->
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Your early access is ending soon</title>
+  </head>
+  <body
+    style="
+      margin: 0;
+      padding: 0;
+      background-color: #0f172a;
+      font-family:
+        -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, Roboto,
+        &quot;Helvetica Neue&quot;, Arial, sans-serif;
+    "
+  >
+    <table
+      role="presentation"
+      width="100%"
+      cellspacing="0"
+      cellpadding="0"
+      style="background-color: #0f172a"
+    >
+      <tr>
+        <td align="center" style="padding: 32px 16px">
+          <table
+            role="presentation"
+            width="100%"
+            cellspacing="0"
+            cellpadding="0"
+            style="max-width: 560px; background: #0f172a"
+          >
+            <!-- Header -->
+            <tr>
+              <td
+                style="
+                  padding: 24px 0 8px;
+                  border-bottom: 1px solid #334155;
+                  text-align: center;
+                "
+              >
+                <div
+                  style="
+                    color: #d4af37;
+                    font-size: 18px;
+                    font-weight: bold;
+                    letter-spacing: 0.5px;
+                  "
+                >
+                  JUNIOR MINING INTELLIGENCE
+                </div>
+              </td>
+            </tr>
+
+            <!-- Body -->
+            <tr>
+              <td style="padding: 32px 0 8px">
+                <h1
+                  style="
+                    margin: 0 0 16px;
+                    color: #f1f5f9;
+                    font-size: 24px;
+                    line-height: 1.3;
+                  "
+                >
+                  {{ greeting }}
+                </h1>
+
+                <p
+                  style="
+                    margin: 0 0 16px;
+                    color: #94a3b8;
+                    font-size: 15px;
+                    line-height: 1.6;
+                  "
+                >
+                  Your early-access {{ tier_name }} plan ends on
+                  <strong style="color: #f1f5f9">{{ expiry_date }}</strong>{{
+                  days_phrase }}. After that your account moves to Explorer, our
+                  free plan.
+                </p>
+
+                <p
+                  style="
+                    margin: 0 0 24px;
+                    color: #94a3b8;
+                    font-size: 15px;
+                    line-height: 1.6;
+                  "
+                >
+                  You don't need to do anything &mdash; nothing will be charged,
+                  and your account stays open. But here's what changes:
+                </p>
+
+                <!-- What changes -->
+                <table
+                  role="presentation"
+                  width="100%"
+                  cellspacing="0"
+                  cellpadding="0"
+                  style="
+                    background: #1e293b;
+                    border: 1px solid #334155;
+                    border-radius: 8px;
+                    margin-bottom: 24px;
+                  "
+                >
+                  <tr>
+                    <td style="padding: 18px 20px">
+                      <div
+                        style="
+                          color: #64748b;
+                          font-size: 11px;
+                          letter-spacing: 1px;
+                          text-transform: uppercase;
+                          margin-bottom: 12px;
+                        "
+                      >
+                        On the free plan
+                      </div>
+                      <div
+                        style="
+                          color: #94a3b8;
+                          font-size: 14px;
+                          line-height: 1.9;
+                        "
+                      >
+                        &bull; AI chat drops to 5 messages a day<br />
+                        &bull; Investor tools drop to 2 of 17<br />
+                        &bull; Open financings show the 5 most recent only
+                      </div>
+                    </td>
+                  </tr>
+                </table>
+
+                {{ discount_blurb|safe }}
+
+                <!-- CTA -->
+                <table
+                  role="presentation"
+                  cellspacing="0"
+                  cellpadding="0"
+                  style="margin: 8px 0 28px"
+                >
+                  <tr>
+                    <td
+                      style="
+                        background: #d4af37;
+                        border-radius: 6px;
+                        text-align: center;
+                      "
+                    >
+                      <a
+                        href="{{ pricing_url }}"
+                        style="
+                          display: inline-block;
+                          padding: 13px 28px;
+                          color: #0f172a;
+                          font-size: 15px;
+                          font-weight: bold;
+                          text-decoration: none;
+                        "
+                        >Keep my access &rarr;</a
+                      >
+                    </td>
+                  </tr>
+                </table>
+
+                <p
+                  style="
+                    margin: 0 0 8px;
+                    color: #94a3b8;
+                    font-size: 15px;
+                    line-height: 1.6;
+                  "
+                >
+                  If it's not for you, no hard feelings &mdash; the free plan
+                  isn't going anywhere, and we'd genuinely like to know what was
+                  missing. Just reply to this email; it reaches a person.
+                </p>
+              </td>
+            </tr>
+
+            <!-- Footer -->
+            <tr>
+              <td
+                style="
+                  padding: 24px 0 8px;
+                  border-top: 1px solid #334155;
+                  text-align: center;
+                "
+              >
+                <p style="margin: 0; color: #64748b; font-size: 12px">
+                  Junior Mining Intelligence &middot;
+                  <a
+                    href="https://juniorminingintelligence.com"
+                    style="color: #94a3b8; text-decoration: none"
+                    >juniorminingintelligence.com</a
+                  >
+                </p>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>

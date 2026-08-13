@@ -693,6 +693,117 @@ class EmailService:
             return False
 
     # ----------------------------------------------------------------------
+    # Early-access comp grant expiry
+    # ----------------------------------------------------------------------
+
+    @staticmethod
+    def send_grant_expiry_notice(user, subscription, days_left, promo_code=None):
+        """Warn a comp-grant holder that their early access is about to lapse.
+
+        Sent once per subscription, a few days out, by
+        core.tasks.notify_expiring_comp_grants_task. Returns True on success.
+
+        `promo_code` is optional: when a launch discount is configured the code
+        is offered here, at the moment the loss of access is concrete.
+        """
+        if not EmailService.is_configured():
+            logger.warning("Email not configured, skipping grant expiry notice")
+            return False
+
+        recipient_email = getattr(user, 'email', None)
+        if not recipient_email:
+            logger.warning(f"No email address for user {getattr(user, 'id', '?')}")
+            return False
+
+        try:
+            from django.template.loader import render_to_string
+            from sendgrid import SendGridAPIClient
+            from sendgrid.helpers.mail import Mail, Email, To, Content, HtmlContent
+
+            first_name = (user.first_name or '').strip()
+            greeting = (
+                f"{first_name}, your early access is ending"
+                if first_name
+                else "Your early access is ending"
+            )
+
+            # Not strftime('%B %-d'): the no-pad flag is glibc-only and blows up
+            # on Windows, where this gets exercised in development.
+            expiry = subscription.trial_end or subscription.current_period_end
+            expiry_date = f"{expiry.strftime('%B')} {expiry.day}" if expiry else 'shortly'
+
+            # Phrase from calendar dates, not elapsed hours: a grant ending in
+            # six hours rounds up to "1 day", which would read as "tomorrow"
+            # when it actually ends today.
+            from django.utils import timezone as dj_timezone
+
+            if expiry:
+                delta_days = (expiry.date() - dj_timezone.now().date()).days
+            else:
+                delta_days = days_left
+
+            if delta_days <= 0:
+                days_phrase = ' — today'
+            elif delta_days == 1:
+                days_phrase = ' — tomorrow'
+            else:
+                days_phrase = f' — {delta_days} days from now'
+
+            # Built here rather than with template {% if %}: these HTML files are
+            # auto-formatted, which mangles multi-token template tags.
+            discount_blurb = ''
+            if promo_code:
+                discount_blurb = (
+                    '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" '
+                    'style="background:#1e293b;border:1px solid #d4af37;border-radius:8px;'
+                    'margin-bottom:24px;"><tr><td style="padding:18px 20px;">'
+                    '<div style="color:#d4af37;font-size:11px;letter-spacing:1px;'
+                    'text-transform:uppercase;margin-bottom:8px;">Early-access offer</div>'
+                    '<div style="color:#94a3b8;font-size:14px;line-height:1.6;">'
+                    'Use code <strong style="color:#f1f5f9;letter-spacing:1px;">'
+                    f'{promo_code}</strong> at checkout to keep going at a discount. '
+                    'Enter it on the payment page.'
+                    '</div></td></tr></table>'
+                )
+
+            html_content = render_to_string(
+                'grant_expiry_notice.html',
+                {
+                    'greeting': greeting,
+                    'days_phrase': days_phrase,
+                    'expiry_date': expiry_date,
+                    'tier_name': subscription.get_tier_display().replace(' (Free)', ''),
+                    'discount_blurb': discount_blurb,
+                    'pricing_url': 'https://juniorminingintelligence.com/pricing',
+                },
+            )
+            text_content = strip_tags(html_content)
+
+            message = Mail(
+                from_email=Email(
+                    'info@juniorminingintelligence.com', 'Junior Mining Intelligence'
+                ),
+                to_emails=To(recipient_email),
+                subject=f"Your early access ends {expiry_date}",
+                plain_text_content=Content("text/plain", text_content),
+                html_content=HtmlContent(html_content),
+            )
+
+            sg = SendGridAPIClient(_get_sendgrid_api_key())
+            response = sg.send(message)
+            logger.info(
+                f"Grant expiry notice sent to {recipient_email} "
+                f"(status: {response.status_code}, days_left: {days_left})"
+            )
+            return True
+
+        except Exception as e:
+            logger.error(
+                f"Failed to send grant expiry notice to {recipient_email}: {str(e)}"
+            )
+            return False
+
+    # ----------------------------------------------------------------------
     # Weekly watchlist briefing
     # ----------------------------------------------------------------------
 

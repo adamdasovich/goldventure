@@ -2380,3 +2380,65 @@ def _repair_chroma_gap(name, collection, limit):
 
     logger.info(f"[CHROMA-RECONCILE] {name}: re-embedded {added:,} chunks")
     return added
+
+
+@shared_task
+def notify_expiring_comp_grants_task(days_ahead: int = 5):
+    """Warn early-access comp-grant holders before their access lapses.
+
+    Comp grants carry no Stripe subscription, so nothing external tells the
+    holder they are about to drop back to Explorer - PlatformSubscription
+    .is_active simply starts returning False once the expiry passes. Without
+    this, the first signal a user gets is the product quietly doing less.
+
+    Runs daily. Each subscription is warned once, tracked by
+    expiry_notice_sent_at, so a longer window or a re-run can't double-send.
+    """
+    from django.conf import settings
+    from datetime import timedelta
+
+    from .email_service import EmailService
+    from .models import PlatformSubscription
+
+    now = timezone.now()
+    cutoff = now + timedelta(days=days_ahead)
+
+    candidates = PlatformSubscription.objects.select_related('user').filter(
+        stripe_subscription_id='',      # comp grants only
+        expiry_notice_sent_at__isnull=True,
+        tier__in=('prospector', 'miner'),
+    )
+
+    promo_code = getattr(settings, 'STRIPE_LAUNCH_PROMO_CODE', '') or None
+
+    sent = skipped = failed = 0
+    for sub in candidates:
+        expiry = sub.trial_end or sub.current_period_end
+        # No expiry means the grant never lapses, so there is nothing to warn about.
+        if expiry is None or expiry > cutoff:
+            skipped += 1
+            continue
+        if not sub.is_active:
+            # Already lapsed - a warning now would be worse than none.
+            skipped += 1
+            continue
+
+        # Round up, don't truncate: timedelta.days on 2.9 days gives 2, and the
+        # email would tell someone with nearly three days left that they have two.
+        import math
+        days_left = max(0, math.ceil((expiry - now).total_seconds() / 86400))
+        ok = EmailService.send_grant_expiry_notice(
+            sub.user, sub, days_left, promo_code=promo_code
+        )
+        if ok:
+            sub.expiry_notice_sent_at = now
+            sub.save(update_fields=['expiry_notice_sent_at', 'updated_at'])
+            sent += 1
+        else:
+            failed += 1
+
+    logger.info(
+        f"[GRANT-EXPIRY] sent={sent} skipped={skipped} failed={failed} "
+        f"(window: {days_ahead}d)"
+    )
+    return {'sent': sent, 'skipped': skipped, 'failed': failed}
