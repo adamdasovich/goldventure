@@ -68,6 +68,7 @@ from .community import (  # noqa: F401
     UserAIUsage,
     PlatformSubscription,
     PlatformSubscriptionInvoice,
+    ProcessedStripeEvent,
 )
 from .properties import (  # noqa: F401
     ProspectorProfile,

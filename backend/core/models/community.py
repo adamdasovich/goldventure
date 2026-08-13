@@ -1174,6 +1174,36 @@ class PlatformSubscriptionInvoice(models.Model):
         return f"{self.subscription.user.username} - ${self.amount_cents / 100:.2f} ({self.status})"
 
 
+class ProcessedStripeEvent(models.Model):
+    """Ledger of Stripe webhook events that have already been handled.
+
+    Stripe retries a webhook until it gets a 2xx and will redeliver an event
+    after a timeout even when the first attempt actually succeeded. Without a
+    record of what's been handled, a redelivery re-runs the handler - which for
+    subscription events means clobbering state that may have moved on since.
+
+    The row is written inside the same transaction as the handler, so a handler
+    that raises rolls the claim back and leaves the event free to retry.
+    """
+    event_id = models.CharField(max_length=255, unique=True)
+    event_type = models.CharField(max_length=100)
+    # Which webhook endpoint handled it - the same event id can legitimately be
+    # delivered to more than one endpoint.
+    handler = models.CharField(max_length=50)
+    processed_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'processed_stripe_events'
+        ordering = ['-processed_at']
+        indexes = [
+            models.Index(fields=['event_id']),
+            models.Index(fields=['processed_at']),
+        ]
+
+    def __str__(self):
+        return f"{self.event_id} ({self.event_type})"
+
+
 # ============================================================================
 # FAILED TASK LOG - Dead Letter Queue for Celery
 # ============================================================================
