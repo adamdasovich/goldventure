@@ -207,7 +207,7 @@ def _roll_up_companies(tranches):
 
 @api_view(['GET'])
 @permission_classes([AllowAny])
-@tier_gated(stub=('companies', 'tranches'), truncate=('expiry_wall',))
+@tier_gated(stub=('companies', 'tranches'), truncate=('expiry_wall',), requires='miner')
 def warrant_radar(request):
     """
     Live warrant overhang, sector-wide or for one company.

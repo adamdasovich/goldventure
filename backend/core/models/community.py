@@ -1112,31 +1112,42 @@ class PlatformSubscription(models.Model):
     @property
     def daily_chat_limit(self):
         """Messages per day for this tier. 0 = unlimited."""
-        limits = {'explorer': 5, 'prospector': 0, 'miner': 0}
-        return limits.get(self.effective_tier, 5)
+        from ..entitlements import CHAT_LIMITS
+        return CHAT_LIMITS.get(self.effective_tier, CHAT_LIMITS['explorer'])
 
     @property
     def allowed_tools(self):
-        """Which investor tools this tier can access."""
-        free_tools = ['grade-ranker', 'sector-pulse']
-        if self.effective_tier in ('prospector', 'miner'):
+        """Which investor tools this tier can access.
+
+        'all' for Miner; Prospector gets everything except the Miner-only set.
+        """
+        from ..entitlements import FREE_TOOLS, MINER_TOOLS
+
+        tier = self.effective_tier
+        if tier == 'miner':
             return 'all'
-        return free_tools
+        if tier == 'prospector':
+            return {'excludes': list(MINER_TOOLS)}
+        return list(FREE_TOOLS)
 
     @property
     def features(self):
-        """Return a dict of feature flags for this tier."""
+        """Return a dict of feature flags for this tier.
+
+        Only flags the backend actually enforces belong here. api_access,
+        ni43101_full_access and priority_chat used to sit in this dict with
+        nothing behind them, which is how Miner ended up costing 3.3x
+        Prospector while delivering exactly the same product.
+        """
+        from ..entitlements import MINER_TOOLS
+
         tier = self.effective_tier
         return {
             'tier': tier,
             'daily_chat_limit': self.daily_chat_limit,
             'investor_tools': self.allowed_tools,
+            'miner_only_tools': list(MINER_TOOLS),
             'full_company_data': tier in ('prospector', 'miner'),
-            'financing_alerts': tier in ('prospector', 'miner'),
-            'csv_export': tier in ('prospector', 'miner'),
-            'api_access': tier == 'miner',
-            'ni43101_full_access': tier == 'miner',
-            'priority_chat': tier == 'miner',
         }
 
 

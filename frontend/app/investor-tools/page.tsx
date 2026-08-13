@@ -10,6 +10,14 @@ import { useAuth } from "@/contexts/AuthContext";
 
 const FREE_TOOL_SLUGS = ["grade-ranker", "sector-pulse"];
 
+// Mirrors MINER_TOOLS in backend/core/entitlements.py, which is the authority.
+const MINER_TOOL_SLUGS = [
+  "warrant-radar",
+  "property-valuation",
+  "due-diligence",
+  "portfolio-xray",
+];
+
 const TOOLS = [
   {
     title: "Stock Performance Comparator",
@@ -199,18 +207,31 @@ const AVAILABLE_COUNT = TOOLS.filter((t) => t.available).length;
 export default function InvestorToolsPage() {
   const { subscription } = useAuth();
   const [showUpgrade, setShowUpgrade] = useState(false);
+  const [upgradeTier, setUpgradeTier] = useState<"prospector" | "miner">(
+    "prospector",
+  );
   const tier = subscription?.effective_tier || "explorer";
   const hasFullAccess = tier === "prospector" || tier === "miner";
 
   const isToolFree = (slug: string) => FREE_TOOL_SLUGS.includes(slug);
+  const isToolMinerOnly = (slug: string) => MINER_TOOL_SLUGS.includes(slug);
+
+  /** The lowest tier that can open this tool, or null if the user already can. */
+  const requiredTierFor = (slug: string): "prospector" | "miner" | null => {
+    if (isToolFree(slug)) return null;
+    if (isToolMinerOnly(slug)) return tier === "miner" ? null : "miner";
+    return hasFullAccess ? null : "prospector";
+  };
 
   const handleToolClick = (
     e: React.MouseEvent,
     tool: (typeof TOOLS)[number],
   ) => {
     if (!tool.available) return;
-    if (!hasFullAccess && !isToolFree(tool.slug)) {
+    const required = requiredTierFor(tool.slug);
+    if (required) {
       e.preventDefault();
+      setUpgradeTier(required);
       setShowUpgrade(true);
     }
   };
@@ -220,8 +241,12 @@ export default function InvestorToolsPage() {
       {showUpgrade && (
         <UpgradeModal
           onClose={() => setShowUpgrade(false)}
-          feature={`All ${AVAILABLE_COUNT} Investor Tools`}
-          requiredTier="prospector"
+          feature={
+            upgradeTier === "miner"
+              ? "Miner-only analysis tools"
+              : `All ${AVAILABLE_COUNT} Investor Tools`
+          }
+          requiredTier={upgradeTier}
         />
       )}
 
@@ -288,7 +313,8 @@ export default function InvestorToolsPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
             {TOOLS.map((tool, i) => {
               const isFree = isToolFree(tool.slug);
-              const isLocked = !hasFullAccess && !isFree && tool.available;
+              const isLocked =
+                tool.available && requiredTierFor(tool.slug) !== null;
 
               return (
                 <Link

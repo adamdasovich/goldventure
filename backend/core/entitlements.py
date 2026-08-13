@@ -12,6 +12,28 @@ import functools
 
 PAID_TIERS = ('prospector', 'miner')
 
+# Tiers are cumulative: Miner gets everything Prospector gets.
+TIER_RANK = {'explorer': 0, 'prospector': 1, 'miner': 2}
+
+# The tool split is the substance of the paid tiers, so it is defined here once
+# and read by the model's feature flags, the public tiers endpoint and the
+# decorators on the views. Anything not listed is Prospector-and-up.
+FREE_TOOLS = ('grade-ranker', 'sector-pulse')
+MINER_TOOLS = (
+    'warrant-radar',
+    'property-valuation',
+    'due-diligence',
+    'portfolio-xray',
+)
+
+# Chat messages per day. 0 means unlimited.
+CHAT_LIMITS = {'explorer': 5, 'prospector': 100, 'miner': 0}
+
+
+def meets_tier(user, required='prospector') -> bool:
+    """True if `user`'s effective tier is at or above `required`."""
+    return TIER_RANK.get(resolve_effective_tier(user), 0) >= TIER_RANK.get(required, 1)
+
 # How many rows a free caller sees in full before the teaser cuts in.
 FREE_PREVIEW_COUNT = 3
 
@@ -64,8 +86,8 @@ def locked_row(row):
     return stub
 
 
-def tier_gated(*, stub=(), truncate=(), window=(), free_count=FREE_PREVIEW_COUNT,
-               window_size=FREE_WINDOW_SIZE):
+def tier_gated(*, stub=(), truncate=(), window=(), requires='prospector',
+               free_count=FREE_PREVIEW_COUNT, window_size=FREE_WINDOW_SIZE):
     """Truncate a tool's response for callers below Prospector.
 
     ``stub``     keys holding row lists whose rows carry identity fields. The
@@ -93,7 +115,7 @@ def tier_gated(*, stub=(), truncate=(), window=(), free_count=FREE_PREVIEW_COUNT
         def wrapper(request, *args, **kwargs):
             response = view(request, *args, **kwargs)
 
-            if is_paid(getattr(request, 'user', None)):
+            if meets_tier(getattr(request, 'user', None), requires):
                 return response
             if getattr(response, 'status_code', 200) != 200:
                 return response
@@ -138,7 +160,7 @@ def tier_gated(*, stub=(), truncate=(), window=(), free_count=FREE_PREVIEW_COUNT
                 gated[key] = rows[-window_size:]
 
             gated['is_locked'] = True
-            gated['required_tier'] = 'prospector'
+            gated['required_tier'] = requires
             gated['preview_count'] = free_count
             gated['locked_count'] = locked_total
 

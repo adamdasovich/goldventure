@@ -14,13 +14,10 @@ import { trackSignUp } from "@/lib/analytics";
 interface SubscriptionFeatures {
   tier: string;
   daily_chat_limit: number;
-  investor_tools: string[] | "all";
+  // "all" for Miner, { excludes } for Prospector, an explicit list for Explorer.
+  investor_tools: string[] | "all" | { excludes: string[] };
+  miner_only_tools?: string[];
   full_company_data: boolean;
-  financing_alerts: boolean;
-  csv_export: boolean;
-  api_access: boolean;
-  ni43101_full_access: boolean;
-  priority_chat: boolean;
 }
 
 interface SubscriptionInfo {

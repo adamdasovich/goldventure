@@ -163,6 +163,20 @@ class PlatformStripeService:
             )
             customer_id = customer.id
 
+        # One trial per customer. Returning subscribers pay from day one.
+        grant_trial = not PlatformStripeService.has_used_trial(user, customer_id)
+
+        subscription_data = {
+            'metadata': {
+                'user_id': str(user.id),
+                'tier': tier,
+                'interval': interval,
+                'subscription_type': 'platform',
+            }
+        }
+        if grant_trial:
+            subscription_data['trial_period_days'] = TRIAL_DAYS
+
         session = stripe.checkout.Session.create(
             customer=customer_id,
             payment_method_types=['card'],
@@ -172,15 +186,7 @@ class PlatformStripeService:
             managed_payments={'enabled': False},
             line_items=[{'price': price_id, 'quantity': 1}],
             mode='subscription',
-            subscription_data={
-                'trial_period_days': TRIAL_DAYS,
-                'metadata': {
-                    'user_id': str(user.id),
-                    'tier': tier,
-                    'interval': interval,
-                    'subscription_type': 'platform',
-                }
-            },
+            subscription_data=subscription_data,
             success_url=success_url,
             cancel_url=cancel_url,
             metadata={
@@ -190,8 +196,46 @@ class PlatformStripeService:
                 'subscription_type': 'platform',
             }
         )
-        logger.info(f"Created platform checkout session {session.id} for user {user.id} ({tier}/{interval})")
+        logger.info(
+            f"Created platform checkout session {session.id} for user {user.id} "
+            f"({tier}/{interval}, trial={'yes' if grant_trial else 'no - returning customer'})"
+        )
         return session
+
+    @staticmethod
+    def has_used_trial(user, customer_id=None):
+        """True if `user` has already had a paid subscription, so no new trial.
+
+        Without this every checkout hands out another free week: cancel,
+        resubscribe, repeat, and the product never costs anything.
+
+        A comp grant from grant_free_month() deliberately does NOT count. Those
+        carry no Stripe subscription and are a marketing gift, not a trial of
+        the paid product, so converting one to a real plan still earns a trial.
+
+        Stripe is consulted as the authority because the local row can be
+        missing or reset; if that call fails we fall back to the local answer
+        rather than block a legitimate checkout.
+        """
+        from .models import PlatformSubscription
+
+        sub = PlatformSubscription.objects.filter(user=user).first()
+        if sub and sub.stripe_subscription_id:
+            return True
+
+        if customer_id:
+            try:
+                prior = stripe.Subscription.list(
+                    customer=customer_id, status='all', limit=1
+                )
+                if prior.data:
+                    return True
+            except stripe.error.StripeError as e:
+                logger.warning(
+                    f"Could not check prior subscriptions for {customer_id}: {e}"
+                )
+
+        return False
 
     @staticmethod
     def create_billing_portal_session(customer_id, return_url):
@@ -362,12 +406,13 @@ def _dispatch_platform_event(event):
             }
         )
 
-        # Update AI usage limits based on tier
+        # Update AI usage limits based on tier. Prospector is capped, Miner is
+        # unlimited - one of the things that makes the two tiers differ.
+        from .entitlements import CHAT_LIMITS
         from .models import UserAIUsage
         ai_usage, _ = UserAIUsage.objects.get_or_create(user=user)
-        if tier in ('prospector', 'miner'):
-            ai_usage.daily_message_limit = 0  # unlimited
-            ai_usage.daily_token_limit = 0
+        ai_usage.daily_message_limit = CHAT_LIMITS.get(tier, CHAT_LIMITS['explorer'])
+        ai_usage.daily_token_limit = 0 if tier == 'miner' else 500000
         ai_usage.save()
 
         logger.info(f"Platform subscription {'created' if created else 'updated'} for user {user_id}: {tier}")
@@ -423,10 +468,13 @@ def _dispatch_platform_event(event):
             sub.canceled_at = timezone.now()
             sub.save()
 
-            # Reset AI usage limits to free tier
+            # Reset AI usage limits to the free tier. This used to hard-code 50
+            # messages/day, ten times the Explorer allowance, so cancelling was
+            # a cheaper way to keep chat than staying subscribed.
+            from .entitlements import CHAT_LIMITS
             from .models import UserAIUsage
             ai_usage, _ = UserAIUsage.objects.get_or_create(user=sub.user)
-            ai_usage.daily_message_limit = 50
+            ai_usage.daily_message_limit = CHAT_LIMITS['explorer']
             ai_usage.daily_token_limit = 100000
             ai_usage.save()
 

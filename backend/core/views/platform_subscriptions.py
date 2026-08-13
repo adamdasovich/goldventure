@@ -9,6 +9,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 
+from ..entitlements import CHAT_LIMITS, FREE_TOOLS, MINER_TOOLS
 from ..models import PlatformSubscription, PlatformSubscriptionInvoice
 from ..platform_stripe_service import (
     PlatformStripeService,
@@ -27,6 +28,13 @@ def platform_subscription_tiers(request):
     GET /api/platform/tiers/
     Public endpoint returning available subscription tiers and pricing.
     """
+    def money(cents):
+        """$15 / $150 - whole dollars, since every plan is priced that way."""
+        return f"${cents // 100:,}"
+
+    prospector = TIER_PRICING['prospector']
+    miner = TIER_PRICING['miner']
+
     tiers = [
         {
             'id': 'explorer',
@@ -38,56 +46,42 @@ def platform_subscription_tiers(request):
             'annual_price': 'Free',
             'trial_days': 0,
             'features': {
-                'daily_chat_limit': 5,
-                'investor_tools': ['grade-ranker', 'sector-pulse'],
+                'daily_chat_limit': CHAT_LIMITS['explorer'],
+                'investor_tools': list(FREE_TOOLS),
                 'full_company_data': False,
-                'financing_alerts': False,
-                'csv_export': False,
-                'api_access': False,
-                'ni43101_full_access': False,
-                'priority_chat': False,
             }
         },
         {
             'id': 'prospector',
             'name': 'Prospector',
             'tagline': 'Full access for serious investors',
-            'monthly_price_cents': TIER_PRICING['prospector']['month'],
-            'annual_price_cents': TIER_PRICING['prospector']['year'],
-            'monthly_price': '$15',
-            'annual_price': '$150',
-            'annual_savings': '$30',
+            'monthly_price_cents': prospector['month'],
+            'annual_price_cents': prospector['year'],
+            'monthly_price': money(prospector['month']),
+            'annual_price': money(prospector['year']),
+            'annual_savings': money(prospector['month'] * 12 - prospector['year']),
             'trial_days': TRIAL_DAYS,
             'features': {
-                'daily_chat_limit': 0,
-                'investor_tools': 'all',
+                'daily_chat_limit': CHAT_LIMITS['prospector'],
+                'investor_tools': {'excludes': list(MINER_TOOLS)},
                 'full_company_data': True,
-                'financing_alerts': True,
-                'csv_export': True,
-                'api_access': False,
-                'ni43101_full_access': False,
-                'priority_chat': False,
             }
         },
         {
             'id': 'miner',
             'name': 'Miner',
             'tagline': 'Maximum power for professionals',
-            'monthly_price_cents': TIER_PRICING['miner']['month'],
-            'annual_price_cents': TIER_PRICING['miner']['year'],
-            'monthly_price': '$50',
-            'annual_price': '$500',
-            'annual_savings': '$100',
+            'monthly_price_cents': miner['month'],
+            'annual_price_cents': miner['year'],
+            'monthly_price': money(miner['month']),
+            'annual_price': money(miner['year']),
+            'annual_savings': money(miner['month'] * 12 - miner['year']),
             'trial_days': TRIAL_DAYS,
             'features': {
-                'daily_chat_limit': 0,
+                'daily_chat_limit': CHAT_LIMITS['miner'],
                 'investor_tools': 'all',
+                'miner_only_tools': list(MINER_TOOLS),
                 'full_company_data': True,
-                'financing_alerts': True,
-                'csv_export': True,
-                'api_access': True,
-                'ni43101_full_access': True,
-                'priority_chat': True,
             }
         },
     ]
@@ -107,6 +101,10 @@ def platform_subscription_status(request):
         data = {
             'tier': sub.tier,
             'effective_tier': sub.effective_tier,
+            # Local check only - no Stripe round-trip on a hot endpoint. Lets
+            # the pricing page stop promising a trial to returning customers,
+            # who no longer get one at checkout.
+            'trial_eligible': not PlatformStripeService.has_used_trial(user),
             'status': sub.status,
             'is_active': sub.is_active,
             'plan_interval': sub.plan_interval,
@@ -121,6 +119,8 @@ def platform_subscription_status(request):
         data = {
             'tier': 'explorer',
             'effective_tier': 'explorer',
+            # No record at all means no prior Stripe subscription.
+            'trial_eligible': True,
             'status': 'active',
             'is_active': True,
             'plan_interval': None,
@@ -130,14 +130,10 @@ def platform_subscription_status(request):
             'cancel_at_period_end': False,
             'features': {
                 'tier': 'explorer',
-                'daily_chat_limit': 5,
-                'investor_tools': ['grade-ranker', 'sector-pulse'],
+                'daily_chat_limit': CHAT_LIMITS['explorer'],
+                'investor_tools': list(FREE_TOOLS),
+                'miner_only_tools': list(MINER_TOOLS),
                 'full_company_data': False,
-                'financing_alerts': False,
-                'csv_export': False,
-                'api_access': False,
-                'ni43101_full_access': False,
-                'priority_chat': False,
             }
         }
 

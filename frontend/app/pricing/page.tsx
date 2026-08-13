@@ -10,57 +10,57 @@ import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import LogoMono from "@/components/LogoMono";
 
+// Only differences the backend actually enforces belong in this table. It
+// previously advertised CSV export, an API, email alerts and priority chat -
+// none of which exist - and claimed both paid tiers had unlimited chat and the
+// same tools, which made Miner a 3.3x price for an identical product.
 const FEATURE_ROWS = [
-  {
-    label: "Company Directory",
-    explorer: "Basic profiles",
-    prospector: "Full profiles + resources",
-    miner: "Full + API access",
-  },
   {
     label: "AI Chat (Claude)",
     explorer: "5 messages/day",
-    prospector: "Unlimited",
-    miner: "Unlimited + priority",
+    prospector: "100 messages/day",
+    miner: "Unlimited",
   },
   {
     label: "Investor Tools",
     explorer: "2 tools",
-    prospector: "All 10 tools",
-    miner: "All 10 tools + export",
-  },
-  { label: "News Feed", explorer: true, prospector: true, miner: true },
-  {
-    label: "Metals Pricing",
-    explorer: "Current only",
-    prospector: "Current + historical",
-    miner: "Current + historical + export",
+    prospector: "13 tools",
+    miner: "All 17 tools",
   },
   {
-    label: "Financing Tracker",
+    label: "Warrant Overhang Radar",
+    explorer: false,
+    prospector: false,
+    miner: true,
+  },
+  {
+    label: "Property Valuation",
+    explorer: false,
+    prospector: false,
+    miner: true,
+  },
+  {
+    label: "Due-Diligence Assistant",
+    explorer: false,
+    prospector: false,
+    miner: true,
+  },
+  { label: "Portfolio X-Ray", explorer: false, prospector: false, miner: true },
+  {
+    label: "Open Financings",
     explorer: "5 latest only",
-    prospector: "All open + email alerts",
-    miner: "All open + alerts + API",
+    prospector: "All open rounds",
+    miner: "All open rounds",
   },
-  {
-    label: "NI 43-101 Reports",
-    explorer: "Titles only",
-    prospector: "Read summaries",
-    miner: "Full report access",
-  },
+  { label: "Company Directory", explorer: true, prospector: true, miner: true },
+  { label: "News Feed", explorer: true, prospector: true, miner: true },
+  { label: "Metals Pricing", explorer: true, prospector: true, miner: true },
   {
     label: "Prospector's Exchange",
-    explorer: "Browse",
-    prospector: "Browse + watchlist",
-    miner: "Browse + priority inquiries",
-  },
-  {
-    label: "CSV / Data Export",
-    explorer: false,
+    explorer: true,
     prospector: true,
     miner: true,
   },
-  { label: "API Access", explorer: false, prospector: false, miner: true },
 ];
 
 export default function PricingPage() {
@@ -177,7 +177,7 @@ function PricingContent() {
           </h1>
           <p className="text-lg text-slate-300 max-w-2xl mx-auto">
             Start free with Explorer. Upgrade when you need unlimited AI chat,
-            all 10 investor tools, and full company data.
+            more investor tools, and every open financing round.
           </p>
         </div>
 
@@ -289,23 +289,19 @@ function PricingContent() {
             <ul className="space-y-3 mb-8 flex-1">
               <li className="flex items-start gap-2 text-sm text-slate-300">
                 <span className="text-gold-400 mt-0.5">&#10003;</span>
-                <strong className="text-white">Unlimited</strong>&nbsp;AI chat
+                <strong className="text-white">100</strong>&nbsp;AI chat messages/day
               </li>
               <li className="flex items-start gap-2 text-sm text-slate-300">
                 <span className="text-gold-400 mt-0.5">&#10003;</span>
-                All 10 investor tools
+                <strong className="text-white">13</strong>&nbsp;investor tools
+              </li>
+              <li className="flex items-start gap-2 text-sm text-slate-300">
+                <span className="text-gold-400 mt-0.5">&#10003;</span>
+                Every open financing round
               </li>
               <li className="flex items-start gap-2 text-sm text-slate-300">
                 <span className="text-gold-400 mt-0.5">&#10003;</span>
                 Full company profiles + resources
-              </li>
-              <li className="flex items-start gap-2 text-sm text-slate-300">
-                <span className="text-gold-400 mt-0.5">&#10003;</span>
-                Financing email alerts
-              </li>
-              <li className="flex items-start gap-2 text-sm text-slate-300">
-                <span className="text-gold-400 mt-0.5">&#10003;</span>
-                CSV data export
               </li>
             </ul>
             {currentTier === "prospector" ? (
@@ -362,19 +358,23 @@ function PricingContent() {
               </li>
               <li className="flex items-start gap-2 text-sm text-slate-300">
                 <span className="text-gold-400 mt-0.5">&#10003;</span>
-                Full NI 43-101 report access
+                <strong className="text-white">Unlimited</strong>&nbsp;AI chat
               </li>
               <li className="flex items-start gap-2 text-sm text-slate-300">
                 <span className="text-gold-400 mt-0.5">&#10003;</span>
-                Priority AI responses
+                Warrant Overhang Radar
               </li>
               <li className="flex items-start gap-2 text-sm text-slate-300">
                 <span className="text-gold-400 mt-0.5">&#10003;</span>
-                REST API access
+                Property Valuation
               </li>
               <li className="flex items-start gap-2 text-sm text-slate-300">
                 <span className="text-gold-400 mt-0.5">&#10003;</span>
-                Priority property inquiries
+                Due-Diligence Assistant
+              </li>
+              <li className="flex items-start gap-2 text-sm text-slate-300">
+                <span className="text-gold-400 mt-0.5">&#10003;</span>
+                Portfolio X-Ray
               </li>
             </ul>
             {currentTier === "miner" ? (
