@@ -405,7 +405,9 @@ def sync_checkout_session(session, expected_user=None):
 
     ai_usage, _ = UserAIUsage.objects.get_or_create(user=user)
     ai_usage.daily_message_limit = CHAT_LIMITS.get(tier, CHAT_LIMITS['explorer'])
-    ai_usage.daily_token_limit = 0 if tier == 'miner' else 500000
+    # Both paid tiers are unlimited: a non-zero token cap blocks in
+    # can_send_message(), which would contradict "Unlimited on Prospector".
+    ai_usage.daily_token_limit = 0 if tier in ('prospector', 'miner') else 100000
     ai_usage.save()
 
     logger.info(

@@ -19,15 +19,19 @@ TIER_RANK = {'explorer': 0, 'prospector': 1, 'miner': 2}
 # and read by the model's feature flags, the public tiers endpoint and the
 # decorators on the views. Anything not listed is Prospector-and-up.
 FREE_TOOLS = ('grade-ranker', 'sector-pulse')
+# Only tools introduced *after* the early-access welcome email of 2026-08-04
+# may sit behind Miner. That email told recipients Prospector included "All 10
+# tools", and property-valuation, portfolio-xray and due-diligence all existed
+# at the time, so they are inside that promise. Warrant Radar shipped on
+# 2026-08-11 and was never promised.
 MINER_TOOLS = (
     'warrant-radar',
-    'property-valuation',
-    'due-diligence',
-    'portfolio-xray',
 )
 
 # Chat messages per day. 0 means unlimited.
-CHAT_LIMITS = {'explorer': 5, 'prospector': 100, 'miner': 0}
+# The same email promised 'Unlimited on Prospector', so Prospector is
+# unlimited and chat volume cannot be a Miner differentiator.
+CHAT_LIMITS = {'explorer': 5, 'prospector': 0, 'miner': 0}
 
 
 def meets_tier(user, required='prospector') -> bool:

@@ -687,7 +687,7 @@ def catalyst_calendar(request):
 
 @api_view(['GET'])
 @permission_classes([AllowAny])
-@tier_gated(stub=('holdings',), requires='miner')
+@tier_gated(stub=('holdings',))
 def portfolio_xray(request):
     """
     Analyze a set of companies for exposure, diversification, and risk.
@@ -782,7 +782,7 @@ def portfolio_xray(request):
 
 @api_view(['GET'])
 @permission_classes([AllowAny])
-@tier_gated(stub=('listings',), requires='miner')
+@tier_gated(stub=('listings',))
 def property_valuation(request):
     """
     Property comparables and valuation benchmarks.
@@ -1540,7 +1540,7 @@ def catalyst_impact(request):
 
 @api_view(['GET'])
 @permission_classes([AllowAny])
-@tier_gated(truncate=('sections', 'source_documents'), requires='miner')
+@tier_gated(truncate=('sections', 'source_documents'))
 def due_diligence(request):
     """
     Structured due-diligence retrieval: ranked NI 43-101 report passages that

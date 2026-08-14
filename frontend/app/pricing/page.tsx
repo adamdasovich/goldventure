@@ -23,19 +23,24 @@ const TIER_FALLBACK: Record<
 
 // Only differences the backend actually enforces belong in this table. It
 // previously advertised CSV export, an API, email alerts and priority chat -
-// none of which exist - and claimed both paid tiers had unlimited chat and the
-// same tools, which made Miner a 3.3x price for an identical product.
+// none of which exist.
+//
+// Miner is deliberately thin right now. The early-access welcome email of
+// 2026-08-04 told recipients Prospector included unlimited chat and all the
+// tools that existed then, so those cannot be moved behind Miner without
+// breaking that promise. Only tools introduced after that date are eligible;
+// Warrant Overhang Radar (2026-08-11) is the first.
 const FEATURE_ROWS = [
   {
     label: "AI Chat (Claude)",
     explorer: "5 messages/day",
-    prospector: "100 messages/day",
+    prospector: "Unlimited",
     miner: "Unlimited",
   },
   {
     label: "Investor Tools",
     explorer: "2 tools",
-    prospector: "13 tools",
+    prospector: "16 tools",
     miner: "All 17 tools",
   },
   {
@@ -44,19 +49,6 @@ const FEATURE_ROWS = [
     prospector: false,
     miner: true,
   },
-  {
-    label: "Property Valuation",
-    explorer: false,
-    prospector: false,
-    miner: true,
-  },
-  {
-    label: "Due-Diligence Assistant",
-    explorer: false,
-    prospector: false,
-    miner: true,
-  },
-  { label: "Portfolio X-Ray", explorer: false, prospector: false, miner: true },
   {
     label: "Open Financings",
     explorer: "5 latest only",
@@ -354,12 +346,11 @@ function PricingContent() {
             <ul className="space-y-3 mb-8 flex-1">
               <li className="flex items-start gap-2 text-sm text-slate-300">
                 <span className="text-gold-400 mt-0.5">&#10003;</span>
-                <strong className="text-white">100</strong>&nbsp;AI chat
-                messages/day
+                <strong className="text-white">Unlimited</strong>&nbsp;AI chat
               </li>
               <li className="flex items-start gap-2 text-sm text-slate-300">
                 <span className="text-gold-400 mt-0.5">&#10003;</span>
-                <strong className="text-white">13</strong>&nbsp;investor tools
+                <strong className="text-white">16</strong>&nbsp;investor tools
               </li>
               <li className="flex items-start gap-2 text-sm text-slate-300">
                 <span className="text-gold-400 mt-0.5">&#10003;</span>
@@ -426,23 +417,7 @@ function PricingContent() {
               </li>
               <li className="flex items-start gap-2 text-sm text-slate-300">
                 <span className="text-gold-400 mt-0.5">&#10003;</span>
-                <strong className="text-white">Unlimited</strong>&nbsp;AI chat
-              </li>
-              <li className="flex items-start gap-2 text-sm text-slate-300">
-                <span className="text-gold-400 mt-0.5">&#10003;</span>
                 Warrant Overhang Radar
-              </li>
-              <li className="flex items-start gap-2 text-sm text-slate-300">
-                <span className="text-gold-400 mt-0.5">&#10003;</span>
-                Property Valuation
-              </li>
-              <li className="flex items-start gap-2 text-sm text-slate-300">
-                <span className="text-gold-400 mt-0.5">&#10003;</span>
-                Due-Diligence Assistant
-              </li>
-              <li className="flex items-start gap-2 text-sm text-slate-300">
-                <span className="text-gold-400 mt-0.5">&#10003;</span>
-                Portfolio X-Ray
               </li>
             </ul>
             {currentTier === "miner" ? (

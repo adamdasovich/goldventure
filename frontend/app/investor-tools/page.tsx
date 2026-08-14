@@ -11,12 +11,7 @@ import { useAuth } from "@/contexts/AuthContext";
 const FREE_TOOL_SLUGS = ["grade-ranker", "sector-pulse"];
 
 // Mirrors MINER_TOOLS in backend/core/entitlements.py, which is the authority.
-const MINER_TOOL_SLUGS = [
-  "warrant-radar",
-  "property-valuation",
-  "due-diligence",
-  "portfolio-xray",
-];
+const MINER_TOOL_SLUGS = ["warrant-radar"];
 
 const TOOLS = [
   {
