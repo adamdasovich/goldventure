@@ -93,6 +93,8 @@ urlpatterns = [
     path('tools/due-diligence/', views.due_diligence, name='due_diligence'),
     path('tools/metal-correlation/', views.metal_correlation, name='metal_correlation'),
     path('tools/warrant-radar/', views.warrant_radar, name='warrant_radar'),
+    path('tools/liquidity-screener/', views.liquidity_screener, name='liquidity_screener'),
+    path('tools/signal-to-noise/', views.signal_to_noise, name='signal_to_noise'),
 
     # User dashboard - watchlist + daily briefing
     path('watchlist/', views.watchlist_detail, name='watchlist_detail'),
