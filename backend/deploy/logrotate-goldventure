@@ -1,0 +1,37 @@
+# /etc/logrotate.d/goldventure
+#
+# Install: cp backend/deploy/logrotate-goldventure /etc/logrotate.d/goldventure
+#          chmod 644 /etc/logrotate.d/goldventure   (logrotate SKIPS group/world-writable configs)
+#
+# /var/log/celery-worker.log reached 2.7 GB unrotated by 2026-08-18.
+#
+# Despite the name it is not a Celery-only log. config/settings.py defines a
+# `celery_file` logging.FileHandler pointing here, and Django builds its LOGGING
+# dictConfig in EVERY process — so gunicorn's workers and daphne open this file
+# at startup too and hold write descriptors on it.
+#
+# That is why `copytruncate` is mandatory. The default rename-then-create cycle
+# would leave all those long-lived processes writing to the orphaned inode: the
+# fresh file stays empty and the disk space is never reclaimed until every
+# process restarts. copytruncate copies the contents out and truncates the
+# original in place, so the existing descriptors keep working.
+#
+# Keep it small enough that a copytruncate is cheap — copying a multi-GB file
+# would stall the box and briefly double its footprint on disk.
+
+/var/log/celery-worker.log
+/var/log/celery-scrape.log
+/var/log/celery-interactive.log
+/var/log/celery-beat.log
+{
+    daily
+    rotate 7
+    maxsize 200M
+    missingok
+    notifempty
+    compress
+    delaycompress
+    copytruncate
+    su root root
+    create 0644 root root
+}

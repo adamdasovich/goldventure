@@ -183,6 +183,16 @@ journalctl -u celery-scrape -n 50 --no-pager     # output goes to journald
 >
 > **NOTE:** `CELERY_TASK_ACKS_LATE = True`, so a task killed by a restart is
 > redelivered rather than lost. Restarting mid-batch is safe.
+>
+> **NOTE:** `/var/log/celery-worker.log` is misnamed — `settings.py` LOGGING
+> defines a `celery_file` FileHandler there, and Django builds its dictConfig in
+> every process, so gunicorn and daphne hold write descriptors on it too. It hit
+> 2.7 GB unrotated before `/etc/logrotate.d/goldventure` was added
+> (`backend/deploy/logrotate-goldventure`). That config MUST keep
+> `copytruncate` — a rename-and-create rotation would leave those long-lived
+> processes writing to the orphaned inode and never reclaim the space.
+> Day-to-day worker output goes to journald, not these files:
+> `journalctl -u celery-scrape -n 50 --no-pager`.
 
 ---
 
