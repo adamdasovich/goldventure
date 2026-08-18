@@ -1,6 +1,7 @@
 import { MetadataRoute } from "next";
 import { companyHref } from "@/lib/companyUrl";
 import { indexableFacets } from "@/lib/commodityFacets";
+import { TOOLS } from "./investor-tools/tools";
 
 const RESOLVED_API_BASE_URL =
   process.env.API_BASE_URL || process.env.NEXT_PUBLIC_API_URL;
@@ -224,108 +225,15 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       changeFrequency: "monthly",
       priority: 0.8,
     },
-    {
-      url: `${baseUrl}/investor-tools/grade-ranker`,
+    // Derived from the tool catalogue rather than listed by hand — the
+    // hand-maintained version silently omitted liquidity-screener and
+    // signal-to-noise, so two live tools were never submitted.
+    ...TOOLS.filter((t) => t.available).map((t) => ({
+      url: `${baseUrl}${t.href}`,
       lastModified: new Date(),
-      changeFrequency: "weekly",
+      changeFrequency: "weekly" as const,
       priority: 0.7,
-    },
-    {
-      url: `${baseUrl}/investor-tools/peer-comparison`,
-      lastModified: new Date(),
-      changeFrequency: "weekly",
-      priority: 0.7,
-    },
-    {
-      url: `${baseUrl}/investor-tools/financing-flow`,
-      lastModified: new Date(),
-      changeFrequency: "weekly",
-      priority: 0.7,
-    },
-    {
-      url: `${baseUrl}/investor-tools/sector-pulse`,
-      lastModified: new Date(),
-      changeFrequency: "daily",
-      priority: 0.7,
-    },
-    {
-      url: `${baseUrl}/investor-tools/ni43-101-analyzer`,
-      lastModified: new Date(),
-      changeFrequency: "weekly",
-      priority: 0.7,
-    },
-    {
-      url: `${baseUrl}/investor-tools/drill-scanner`,
-      lastModified: new Date(),
-      changeFrequency: "weekly",
-      priority: 0.7,
-    },
-    {
-      url: `${baseUrl}/investor-tools/catalyst-calendar`,
-      lastModified: new Date(),
-      changeFrequency: "weekly",
-      priority: 0.7,
-    },
-    {
-      url: `${baseUrl}/investor-tools/property-valuation`,
-      lastModified: new Date(),
-      changeFrequency: "weekly",
-      priority: 0.7,
-    },
-    {
-      url: `${baseUrl}/investor-tools/portfolio-xray`,
-      lastModified: new Date(),
-      changeFrequency: "weekly",
-      priority: 0.7,
-    },
-    {
-      url: `${baseUrl}/investor-tools/warrant-radar`,
-      lastModified: new Date(),
-      changeFrequency: "weekly",
-      priority: 0.7,
-    },
-    {
-      url: `${baseUrl}/investor-tools/metal-correlation`,
-      lastModified: new Date(),
-      changeFrequency: "weekly",
-      priority: 0.7,
-    },
-    {
-      url: `${baseUrl}/investor-tools/dilution-tracker`,
-      lastModified: new Date(),
-      changeFrequency: "weekly",
-      priority: 0.7,
-    },
-    {
-      url: `${baseUrl}/investor-tools/stock-comparator`,
-      lastModified: new Date(),
-      changeFrequency: "weekly",
-      priority: 0.7,
-    },
-    {
-      url: `${baseUrl}/investor-tools/resource-growth`,
-      lastModified: new Date(),
-      changeFrequency: "weekly",
-      priority: 0.7,
-    },
-    {
-      url: `${baseUrl}/investor-tools/unusual-activity`,
-      lastModified: new Date(),
-      changeFrequency: "daily",
-      priority: 0.7,
-    },
-    {
-      url: `${baseUrl}/investor-tools/catalyst-impact`,
-      lastModified: new Date(),
-      changeFrequency: "weekly",
-      priority: 0.7,
-    },
-    {
-      url: `${baseUrl}/investor-tools/due-diligence`,
-      lastModified: new Date(),
-      changeFrequency: "weekly",
-      priority: 0.7,
-    },
+    })),
     {
       url: `${baseUrl}/open-financings`,
       lastModified: new Date(),

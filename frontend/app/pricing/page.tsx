@@ -3,6 +3,11 @@
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useAuth } from "@/contexts/AuthContext";
+import {
+  AVAILABLE_COUNT,
+  FREE_TOOL_SLUGS,
+  PROSPECTOR_COUNT,
+} from "@/app/investor-tools/tools";
 import { platformAPI, type PlatformTier } from "@/lib/api";
 import { trackSubscribe } from "@/lib/analytics";
 import { Button } from "@/components/ui/Button";
@@ -37,10 +42,13 @@ const FEATURE_ROWS = [
     miner: "Unlimited",
   },
   {
+    // Derived from the tool catalogue, not hand-counted. These said
+    // "2 / 16 / All 17" while 19 tools were live — the same drift that put
+    // stale counts in the sitemap.
     label: "Investor Tools",
-    explorer: "2 tools",
-    prospector: "16 tools",
-    miner: "All 17 tools",
+    explorer: `${FREE_TOOL_SLUGS.length} tools`,
+    prospector: `${PROSPECTOR_COUNT} tools`,
+    miner: `All ${AVAILABLE_COUNT} tools`,
   },
   {
     label: "Warrant Overhang Radar",
