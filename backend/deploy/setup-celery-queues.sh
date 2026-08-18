@@ -18,13 +18,21 @@
 # three sum to 3.55G rather than tripling it. Chromium children live in the
 # spawning unit's cgroup, so the scrape worker gets the biggest share.
 #
-# `default` was first set to High=400M/Max=500M, which was too tight — three
-# Django processes idle at ~130M each, and cgroup memory.events showed 3091
-# `high` reclaim events within minutes. MemoryHigh throttles rather than kills,
-# so it silently slowed the very tasks this split exists to keep responsive.
+# Both ceilings were tuned down from a first pass that was too aggressive.
 # Check `cat /sys/fs/cgroup/system.slice/<unit>.service/memory.events` after
-# changing these: a climbing `high` means throttling, `oom_kill` means the wall
-# was hit. Some `high` on `scrape` is intended — it is the browser worker.
+# changing them: a climbing `high` means throttling, `oom_kill` means the hard
+# wall was hit. MemoryHigh only throttles, so an undersized limit degrades
+# throughput silently — there is no error to notice.
+#
+#   default  400M/500M  -> 650M/850M    3091 `high` events in minutes; three
+#                                       Django processes idle at ~130M each, so
+#                                       it was throttling the very tasks this
+#                                       split exists to keep responsive.
+#   scrape   1500M/1800M -> 2000M/2400M 118370 `high` events in under a minute.
+#                                       Pre-split, browser work drew on the
+#                                       single unit's 2500M; 1500M was a real
+#                                       cut, and the reclaim thrash burned CPU
+#                                       on an already loaded 4-core box.
 #
 # Node names MUST be distinct — two workers sharing one produces
 # DuplicateNodenameWarning and silently breaks `celery inspect` (cost a day on
@@ -112,7 +120,7 @@ UNIT
 
 write_unit celery-scrape.service \
   "Celery Worker (scrape queue) for GoldVenture" \
-  "scrape,celery" "scrape@%%h" 2 "1500M" "1800M"
+  "scrape,celery" "scrape@%%h" 2 "2000M" "2400M"
 
 write_unit celery-interactive.service \
   "Celery Worker (interactive queue) for GoldVenture" \
