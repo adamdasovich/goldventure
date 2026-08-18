@@ -1,442 +1,232 @@
-"use client";
-
-import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
-import { Badge } from "@/components/ui/Badge";
-import { Button } from "@/components/ui/Button";
-import LogoMono from "@/components/LogoMono";
-import { toolsAPI } from "@/lib/api";
+import ToolPageLayout from "../ToolPageLayout";
+import ResourceGrowthClient from "./ResourceGrowthClient";
 
-/* ---------- types ---------- */
-
-interface AvailableCompany {
-  id: number;
-  name: string;
-  ticker: string;
-  exchange: string;
-}
-
-interface ResourceCategory {
-  category: string;
-  tonnes: number;
-  gold_grade_gpt: number | null;
-  gold_ounces: number | null;
-  silver_ounces: number | null;
-  copper_grade_pct: number | null;
-}
-
-interface TimelineEntry {
-  report_date: string;
-  standard: string;
-  categories: ResourceCategory[];
-  resource_gold_oz: number;
-  resource_silver_oz: number;
-  resource_tonnes: number;
-  reserve_gold_oz: number;
-}
-
-interface ProjectData {
-  project_id: number;
-  project_name: string;
-  primary_commodity: string;
-  estimate_count: number;
-  timeline: TimelineEntry[];
-}
-
-interface ResourceData {
-  available_companies: AvailableCompany[];
-  company?: { id: number; name: string; ticker: string };
-  projects: ProjectData[];
-}
-
-/* ---------- helpers ---------- */
-
-function fmtNum(v: number | null | undefined): string {
-  if (!v) return "—";
-  if (v >= 1_000_000) return `${(v / 1_000_000).toFixed(2)}M`;
-  if (v >= 1_000) return `${(v / 1_000).toFixed(0)}K`;
-  return Math.round(v).toLocaleString();
-}
-
-function fmtDate(iso: string): string {
-  return new Date(iso).toLocaleDateString("en-US", {
-    month: "short",
-    year: "numeric",
-  });
-}
+export const revalidate = 3600;
 
 /**
- * Pick the resource metric to chart based on the project's commodity.
- * Gold/silver projects chart contained ounces; everything else (copper,
- * lithium, etc.) charts tonnage, since contained-metal figures for
- * non-precious metals are not stored.
+ * Content checked against resource_growth in core/views/investor_tools.py:
+ * ResourceEstimate rows per project ordered by report_date and grouped by
+ * report, with the category breakdown from ResourceEstimate.RESOURCE_CATEGORIES.
+ * Only companies with resource estimates on record appear in the picker.
  */
-function metricFor(commodity: string): {
-  key: "resource_gold_oz" | "resource_silver_oz" | "resource_tonnes";
-  label: string;
-  unit: string;
-} {
-  const c = (commodity || "").toLowerCase();
-  if (c.includes("gold"))
-    return { key: "resource_gold_oz", label: "Contained Gold", unit: "oz" };
-  if (c.includes("silver"))
-    return { key: "resource_silver_oz", label: "Contained Silver", unit: "oz" };
-  return { key: "resource_tonnes", label: "Resource Tonnage", unit: "t" };
-}
-
-/* ---------- page ---------- */
-
 export default function ResourceGrowthPage() {
-  const [available, setAvailable] = useState<AvailableCompany[]>([]);
-  const [search, setSearch] = useState("");
-  const [selected, setSelected] = useState<AvailableCompany | null>(null);
-  const [data, setData] = useState<ResourceData | null>(null);
-  const [initialLoading, setInitialLoading] = useState(true);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    (async () => {
-      try {
-        const res = (await toolsAPI.resourceGrowth({})) as ResourceData;
-        setAvailable(res.available_companies || []);
-      } catch {
-        setError("Failed to load the company list. Please refresh.");
-      } finally {
-        setInitialLoading(false);
-      }
-    })();
-  }, []);
-
-  const searchMatches = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    if (!q) return [];
-    return available
-      .filter(
-        (c) =>
-          c.name.toLowerCase().includes(q) ||
-          (c.ticker || "").toLowerCase().includes(q),
-      )
-      .slice(0, 8);
-  }, [search, available]);
-
-  const selectCompany = async (c: AvailableCompany) => {
-    setSelected(c);
-    setSearch("");
-    setLoading(true);
-    setError(null);
-    setData(null);
-    try {
-      const res = (await toolsAPI.resourceGrowth({
-        company_id: String(c.id),
-      })) as ResourceData;
-      setData(res);
-    } catch (e: any) {
-      setError(e?.message || "Failed to load resource history.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
   return (
-    <div className="min-h-screen bg-slate-900">
-      {/* Nav */}
-      <nav className="glass-nav sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <Link href="/" className="flex items-center">
-              <LogoMono className="h-10" />
-            </Link>
-            <div className="flex items-center gap-2">
-              <Link href="/investor-tools">
-                <Button variant="ghost" size="sm">
-                  All Tools
-                </Button>
-              </Link>
-              <Link href="/">
-                <Button variant="ghost" size="sm">
-                  Home
-                </Button>
-              </Link>
-            </div>
-          </div>
-        </div>
-      </nav>
-
-      {/* Header */}
-      <section className="py-8 px-4 sm:px-6 lg:px-8 bg-gradient-to-b from-[#0a0e1a] to-slate-900">
-        <div className="max-w-7xl mx-auto text-center">
-          <Badge variant="gold" className="mb-3">
-            Resource Analysis
-          </Badge>
-          <h1 className="text-3xl sm:text-4xl font-bold text-gradient-gold mb-3">
-            Resource Growth Tracker
-          </h1>
-          <p className="text-slate-300 max-w-xl mx-auto">
-            See how a company&apos;s mineral resource estimates have evolved
-            across successive NI 43-101 reports — contained ounces, grade and
-            tonnage over time.
-          </p>
-        </div>
-      </section>
-
-      {/* Company picker */}
-      <section className="px-4 sm:px-6 lg:px-8 py-6">
-        <div className="max-w-7xl mx-auto">
-          <div className="glass-card rounded-xl p-5 sm:p-6">
-            <label className="block text-xs text-slate-400 uppercase tracking-wider mb-2">
-              Company
-            </label>
-            {selected ? (
-              <div className="flex items-center gap-3">
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-gold-500/15 border border-gold-500/30 text-sm text-gold-300">
-                  {selected.name}
-                  {selected.ticker && (
-                    <span className="text-gold-400/60">{selected.ticker}</span>
-                  )}
-                </span>
-                <button
-                  onClick={() => {
-                    setSelected(null);
-                    setData(null);
-                  }}
-                  className="text-sm text-slate-400 hover:text-gold-400"
-                >
-                  Change
-                </button>
-              </div>
-            ) : (
-              <div className="relative">
-                <input
-                  type="text"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder={
-                    initialLoading
-                      ? "Loading companies…"
-                      : "Search a company by name or ticker…"
-                  }
-                  disabled={initialLoading}
-                  className="w-full bg-slate-800/60 border border-slate-700/50 text-slate-200 text-sm rounded-md px-3 py-2 focus:border-gold-500/50 focus:outline-none disabled:opacity-50"
-                />
-                {searchMatches.length > 0 && (
-                  <div className="absolute z-10 mt-1 w-full bg-slate-800 border border-slate-700 rounded-md shadow-xl max-h-64 overflow-y-auto">
-                    {searchMatches.map((c) => (
-                      <button
-                        key={c.id}
-                        onClick={() => selectCompany(c)}
-                        className="block w-full text-left px-3 py-2 text-sm hover:bg-slate-700/60 transition-colors"
-                      >
-                        <span className="text-slate-200">{c.name}</span>
-                        {c.ticker && (
-                          <span className="text-slate-500 ml-2">
-                            {c.ticker}
-                          </span>
-                        )}
-                      </button>
-                    ))}
-                  </div>
-                )}
-                {!initialLoading && (
-                  <p className="text-xs text-slate-500 mt-2">
-                    {available.length} companies have resource estimates on
-                    record.
-                  </p>
-                )}
-              </div>
-            )}
-            {error && <p className="text-sm text-red-400 mt-3">{error}</p>}
-          </div>
-        </div>
-      </section>
-
-      {/* Results */}
-      <section className="px-4 sm:px-6 lg:px-8 pb-16">
-        <div className="max-w-7xl mx-auto space-y-8">
-          {loading && (
-            <div className="glass-card rounded-xl p-10 text-center text-slate-400">
-              Loading resource history…
-            </div>
-          )}
-
-          {!loading && data && data.projects.length === 0 && (
-            <div className="glass-card rounded-xl p-10 text-center text-slate-400">
-              No resource estimates are on record for{" "}
-              {data.company?.name || "this company"} yet.
-            </div>
-          )}
-
-          {!loading &&
-            data &&
-            data.projects.map((project) => {
-              const metric = metricFor(project.primary_commodity);
-              const values = project.timeline.map((t) => t[metric.key]);
-              const maxVal = Math.max(...values, 1);
-              let growth: { first: number; last: number; pct: number } | null =
-                null;
-              if (values.length >= 2) {
-                const first = values[0];
-                const last = values[values.length - 1];
-                if (first && last) {
-                  growth = {
-                    first,
-                    last,
-                    pct: Math.round(((last - first) / first) * 1000) / 10,
-                  };
-                }
-              }
-              return (
-                <div
-                  key={project.project_id}
-                  className="glass-card rounded-xl p-6"
-                >
-                  {/* Project header */}
-                  <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
-                    <div className="flex items-center gap-2">
-                      <h2 className="text-lg font-semibold text-slate-100">
-                        {project.project_name}
-                      </h2>
-                      <Badge variant="slate" className="capitalize">
-                        {project.primary_commodity.replace(/_/g, " ")}
-                      </Badge>
-                    </div>
-                    {growth && (
-                      <div className="text-sm text-slate-400">
-                        <span
-                          className={
-                            growth.pct >= 0
-                              ? "text-emerald-400 font-semibold"
-                              : "text-red-400 font-semibold"
-                          }
-                        >
-                          {growth.pct >= 0 ? "+" : ""}
-                          {growth.pct}%
-                        </span>{" "}
-                        {metric.label.toLowerCase()} ({fmtNum(growth.first)} →{" "}
-                        {fmtNum(growth.last)} {metric.unit})
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Bar chart: primary resource metric per report */}
-                  <div className="text-xs text-slate-500 mb-2">
-                    {metric.label} ({metric.unit}) per NI 43-101 report
-                  </div>
-                  <div className="flex items-end gap-3 h-48 mb-6">
-                    {project.timeline.map((t) => {
-                      const val = t[metric.key];
-                      const pct = (val / maxVal) * 100;
-                      return (
-                        <div
-                          key={t.report_date}
-                          className="flex-1 flex flex-col items-center gap-1 min-w-0"
-                        >
-                          <span className="text-[10px] text-slate-400">
-                            {fmtNum(val)} {metric.unit}
-                          </span>
-                          <div
-                            className="w-full flex justify-center"
-                            style={{ height: "150px" }}
-                          >
-                            <div
-                              className="w-full max-w-[64px] rounded-t bg-gradient-to-t from-gold-600 to-gold-400 self-end transition-all duration-500"
-                              style={{ height: `${Math.max(pct, 2)}%` }}
-                              title={`${fmtNum(val)} ${metric.unit} ${metric.label.toLowerCase()}`}
-                            />
-                          </div>
-                          <span className="text-[10px] text-slate-500">
-                            {fmtDate(t.report_date)}
-                          </span>
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  {/* Timeline table */}
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="text-slate-400 text-xs uppercase tracking-wider border-b border-slate-700/50">
-                          <th className="text-left pb-2 pr-4">Report Date</th>
-                          <th className="text-left pb-2 pr-4">Category</th>
-                          <th className="text-right pb-2 pr-4">Tonnes</th>
-                          <th className="text-right pb-2 pr-4">Grade</th>
-                          <th className="text-right pb-2 pr-4">Gold (oz)</th>
-                          <th className="text-right pb-2">Silver (oz)</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {project.timeline.flatMap((t) =>
-                          t.categories.map((c, ci) => (
-                            <tr
-                              key={`${t.report_date}-${ci}`}
-                              className="border-b border-slate-800/40"
-                            >
-                              <td className="py-2 pr-4 text-slate-400">
-                                {ci === 0 ? (
-                                  <>
-                                    {new Date(t.report_date).toLocaleDateString(
-                                      "en-US",
-                                      {
-                                        month: "short",
-                                        day: "numeric",
-                                        year: "numeric",
-                                      },
-                                    )}
-                                    <span className="block text-[10px] text-slate-600">
-                                      {t.standard}
-                                    </span>
-                                  </>
-                                ) : (
-                                  ""
-                                )}
-                              </td>
-                              <td className="py-2 pr-4 text-slate-300">
-                                {c.category}
-                              </td>
-                              <td className="py-2 pr-4 text-right text-slate-400">
-                                {c.tonnes
-                                  ? Math.round(c.tonnes).toLocaleString()
-                                  : "—"}
-                              </td>
-                              <td className="py-2 pr-4 text-right text-slate-400">
-                                {c.gold_grade_gpt != null
-                                  ? `${c.gold_grade_gpt.toFixed(2)} g/t`
-                                  : c.copper_grade_pct != null
-                                    ? `${c.copper_grade_pct.toFixed(2)} %`
-                                    : "—"}
-                              </td>
-                              <td className="py-2 pr-4 text-right text-gold-400">
-                                {fmtNum(c.gold_ounces)}
-                              </td>
-                              <td className="py-2 text-right text-slate-400">
-                                {fmtNum(c.silver_ounces)}
-                              </td>
-                            </tr>
-                          )),
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
-                  <p className="text-xs text-slate-500 mt-3">
-                    Bars sum the Inferred + Indicated + Measured resource for
-                    the project&apos;s primary metal — contained gold or silver
-                    ounces, or tonnage for other commodities. Measured &amp;
-                    Indicated (combined) and reserve categories appear in the
-                    table but are excluded from the bar total to avoid
-                    double-counting.
-                  </p>
-                </div>
-              );
-            })}
-
-          {!loading && !data && !error && (
-            <div className="glass-card rounded-xl p-10 text-center text-slate-400">
-              Search and select a company above to see its resource history.
-            </div>
-          )}
-        </div>
-      </section>
-    </div>
+    <ToolPageLayout
+      slug="resource-growth"
+      badge="Resource Analysis"
+      title="Resource Growth Tracker"
+      intro="Watch how a company's mineral resource has changed across successive NI 43-101 reports — contained ounces, grade and tonnage — so genuine discovery can be told apart from reclassification and cut-off changes."
+      tool={<ResourceGrowthClient />}
+      related={["peer-comparison", "dilution-tracker", "grade-ranker"]}
+      relatedNote={
+        <>
+          Resource growth is only good news if it outpaced the share count —
+          check the{" "}
+          <Link
+            href="/investor-tools/dilution-tracker"
+            className="text-gold-400 hover:underline"
+          >
+            Dilution Tracker
+          </Link>
+          . For what the categories mean, see{" "}
+          <Link
+            href="/guides/inferred-vs-indicated-vs-measured-resources"
+            className="text-gold-400 hover:underline"
+          >
+            inferred vs indicated vs measured
+          </Link>
+          .
+        </>
+      }
+      sections={[
+        {
+          id: "what-it-does",
+          heading: "What this tool does",
+          body: (
+            <>
+              <p>
+                A resource estimate is a snapshot, and companies quote the
+                latest one. What they rarely present is the sequence — how this
+                estimate compares with the one before it, and the one before
+                that.
+              </p>
+              <p>
+                The sequence is where the information is. &ldquo;Two million
+                ounces&rdquo; means something quite different depending on
+                whether the last estimate said one million or three. And a
+                headline increase can be produced without any new discovery at
+                all: reclassify inferred material into indicated, lower the
+                cut-off grade so marginal rock qualifies, or fold in an acquired
+                deposit, and the ounce count rises without a drill turning.
+              </p>
+              <p>
+                This tool lines up every resource estimate a company has filed
+                and shows contained ounces, average grade and tonnage across
+                them — so the question &ldquo;did the deposit actually
+                grow?&rdquo; can be answered rather than assumed.
+              </p>
+            </>
+          ),
+        },
+        {
+          id: "how-to-read",
+          heading: "How to read the output",
+          body: (
+            <>
+              <p>
+                <strong className="text-slate-100">Contained ounces</strong> is
+                the headline figure and the one companies lead with. Read it
+                alongside the other two columns rather than alone.
+              </p>
+              <p>
+                <strong className="text-slate-100">Average grade</strong> is the
+                critical companion. If ounces rose and grade fell materially,
+                the additional ounces are lower quality than the original ones —
+                often the signature of a reduced cut-off grade rather than a
+                better deposit.
+              </p>
+              <p>
+                <strong className="text-slate-100">Tonnage</strong> completes
+                the picture. Ounces are grade multiplied by tonnage, so a rise
+                in ounces driven entirely by tonnage at falling grade is a
+                different event from one driven by both rising together.
+              </p>
+              <p>
+                <strong className="text-slate-100">Category breakdown</strong>{" "}
+                shows how much sits in each confidence class. Movement from
+                inferred into indicated and measured is real progress even
+                without a single extra ounce, because it means the geology is
+                better understood and the material can be used in economic
+                studies. Growth that stays entirely in the inferred column is
+                the least valuable kind.
+              </p>
+              <p>
+                <strong className="text-slate-100">Report dates</strong> matter
+                because they set the pace. A resource that has not been updated
+                in several years suggests drilling stopped, which is usually a
+                funding story rather than a geological one.
+              </p>
+            </>
+          ),
+        },
+        {
+          id: "what-good-looks-like",
+          heading: "What good looks like",
+          body: (
+            <>
+              <p>
+                The best pattern is ounces rising while grade holds steady or
+                improves. That means the company is finding more of the same
+                quality material, or better — genuine discovery rather than
+                accounting.
+              </p>
+              <p>
+                Equally valuable, and much less celebrated, is material
+                migrating up the confidence categories. A resource moving from
+                mostly inferred to mostly indicated has become usable in a
+                feasibility study, which is the gateway to financing and
+                permitting. Nothing about the deposit changed; what changed is
+                how well it is known, and that is what turns ounces into a
+                project.
+              </p>
+              <p>
+                Treat rising ounces at falling grade with suspicion. It is often
+                legitimate — a lower metal price environment genuinely changes
+                what is economic — but it is also the easiest way to manufacture
+                a growth headline. Check whether the cut-off grade changed
+                between reports.
+              </p>
+              <p>
+                Finally, set resource growth against share count growth. A
+                company that doubled its resource while tripling its shares has
+                gone backwards on a per-share basis, which is the number that
+                actually determines your return.
+              </p>
+            </>
+          ),
+        },
+        {
+          id: "method",
+          heading: "Method and limitations",
+          body: (
+            <>
+              <p>
+                Resource estimates are taken from filed NI 43-101 technical
+                reports, grouped by project and ordered by report date. A single
+                report typically lists several categories, which are combined
+                for the totals and also shown separately so the confidence mix
+                is visible. Only companies with resource estimates on record can
+                be charted.
+              </p>
+              <p>The limits worth knowing:</p>
+              <ul className="list-disc pl-6 flex flex-col gap-3">
+                <li>
+                  <strong className="text-slate-100">
+                    Cut-off grade changes are not automatically flagged.
+                  </strong>{" "}
+                  A change in cut-off between reports can move ounces
+                  substantially with no new drilling. The cut-off is stated in
+                  the report itself, and comparing two estimates on different
+                  cut-offs is not a like-for-like comparison.
+                </li>
+                <li>
+                  <strong className="text-slate-100">
+                    Metal price assumptions differ between reports.
+                  </strong>{" "}
+                  An estimate prepared at a higher assumed price will classify
+                  more material as economic, so part of any increase may simply
+                  reflect a more optimistic input.
+                </li>
+                <li>
+                  <strong className="text-slate-100">
+                    Acquisitions appear as growth.
+                  </strong>{" "}
+                  Ounces added by buying a deposit look identical to ounces
+                  added by drilling one, and cost shareholders very differently.
+                </li>
+                <li>
+                  <strong className="text-slate-100">
+                    Resources are not reserves.
+                  </strong>{" "}
+                  A resource says material exists; a reserve says it can be
+                  mined economically under a specific plan. Growth in resources
+                  does not imply growth in anything anyone will ever extract.
+                </li>
+                <li>
+                  <strong className="text-slate-100">
+                    Coverage depends on reports being filed and processed.
+                  </strong>{" "}
+                  Companies that have never published a resource estimate cannot
+                  appear, and a very recent report may not yet be reflected.
+                </li>
+              </ul>
+            </>
+          ),
+        },
+      ]}
+      faqs={[
+        {
+          q: "How can a mining company's resource grow without new drilling?",
+          a: "Several ways. Reclassifying inferred material into indicated or measured raises the confidence categories without adding ounces. Lowering the cut-off grade brings previously uneconomic rock into the estimate. Raising the assumed metal price has the same effect. Acquiring another deposit adds ounces outright. All produce a larger headline number, and none require a drill to turn.",
+        },
+        {
+          q: "Why does average grade matter when ounces are rising?",
+          a: "Because ounces are grade multiplied by tonnage, so the same ounce increase can mean very different things. Ounces up with grade steady means more of the same quality material. Ounces up with grade materially down usually means lower-quality rock has been brought into the estimate, most often through a reduced cut-off grade.",
+        },
+        {
+          q: "Is moving ounces from inferred to indicated actually progress?",
+          a: "Yes, and it is undervalued. Inferred material cannot be used in a feasibility study, so it cannot support financing or a mine plan. Converting it to indicated or measured makes it usable — the deposit has not changed but its economic status has, which is the step that turns ounces into a project.",
+        },
+        {
+          q: "What is the difference between a resource and a reserve?",
+          a: "A resource is a statement that mineralised material exists in a defined quantity and grade. A reserve is the portion of it demonstrated to be economically mineable under a specific plan, with the necessary studies and permits behind it. Resource growth does not imply that anything will ever be extracted.",
+        },
+        {
+          q: "How often should a company update its resource estimate?",
+          a: "There is no fixed schedule; updates follow meaningful drilling. A gap of several years usually indicates that drilling stopped, which more often reflects the state of the treasury than the state of the geology. A steady cadence of updates suggests a funded, active programme.",
+        },
+      ]}
+    />
   );
 }

@@ -1,328 +1,218 @@
-"use client";
-
-import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Badge } from "@/components/ui/Badge";
-import { Button } from "@/components/ui/Button";
-import ExportButton from "@/components/ui/ExportButton";
-import EmptyState from "@/components/ui/EmptyState";
-import LogoMono from "@/components/LogoMono";
-import { toolsAPI } from "@/lib/api";
+import ToolPageLayout from "../ToolPageLayout";
+import SignalToNoiseClient from "./SignalToNoiseClient";
 
-interface Row {
-  company_id: number;
-  company_name: string;
-  ticker: string;
-  exchange: string;
-  total_releases: number;
-  hard_releases: number;
-  drill_releases: number;
-  financing_releases: number;
-  signal_pct: number;
-  financing_pct: number;
-}
+export const revalidate = 3600;
 
-interface Data {
-  results: Row[];
-  count: number;
-  summary: {
-    companies: number;
-    sector_signal_pct: number;
-    total_releases: number;
-    hard_releases: number;
-    min_releases: number;
-    months: number;
-  };
-  assumptions: { hard_news_types: string[]; method: string; caveat: string };
-}
-
+/**
+ * Content checked against signal_to_noise in core/views/market_quality.py:
+ * HARD_NEWS_TYPES = drill_results, resource_update, study_results, and the
+ * minimum release count below which a company is excluded.
+ */
 export default function SignalToNoisePage() {
-  const [data, setData] = useState<Data | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [minReleases, setMinReleases] = useState("10");
-  const [months, setMonths] = useState("0");
-  const [search, setSearch] = useState("");
-
-  useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    setError(null);
-    toolsAPI
-      .signalToNoise({ min_releases: minReleases, months })
-      .then((d) => !cancelled && setData(d))
-      .catch(
-        (e) =>
-          !cancelled && setError(e?.message || "Could not load news data."),
-      )
-      .finally(() => !cancelled && setLoading(false));
-    return () => {
-      cancelled = true;
-    };
-  }, [minReleases, months]);
-
-  const rows = useMemo(() => {
-    if (!data) return [];
-    const q = search.trim().toLowerCase();
-    if (!q) return data.results;
-    return data.results.filter(
-      (r) =>
-        r.company_name.toLowerCase().includes(q) ||
-        (r.ticker || "").toLowerCase().includes(q),
-    );
-  }, [data, search]);
-
-  const sector = data?.summary.sector_signal_pct ?? 0;
-
   return (
-    <div className="min-h-screen bg-slate-900">
-      <nav className="glass-nav sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <Link href="/" className="flex items-center">
-              <LogoMono className="h-10" />
-            </Link>
-            <Link href="/investor-tools">
-              <Button variant="ghost" size="sm">
-                All Tools
-              </Button>
-            </Link>
-          </div>
-        </div>
-      </nav>
-
-      <section className="py-10 px-4 sm:px-6 lg:px-8 bg-gradient-to-b from-[#0a0e1a] to-slate-900">
-        <div className="max-w-7xl mx-auto">
-          <Badge variant="gold" className="mb-3">
-            Market Quality
-          </Badge>
-          <h1 className="text-3xl sm:text-4xl font-bold text-gradient-gold mb-3">
-            Signal-to-Noise Ratio
-          </h1>
-          <p className="text-slate-300 max-w-3xl">
-            Some juniors drill. Some issue press releases. This measures the
-            share of each company&rsquo;s news that reports an actual result —
-            drill intercepts, resource updates, study results — rather than
-            corporate housekeeping.
-          </p>
-        </div>
-      </section>
-
-      <section className="px-4 sm:px-6 lg:px-8 pb-16">
-        <div className="max-w-7xl mx-auto">
-          {loading && (
-            <div className="glass-card rounded-xl p-10 text-center text-slate-400">
-              Reading the news archive…
-            </div>
-          )}
-
-          {error && !loading && (
-            <div className="glass-card rounded-xl p-6 border-red-500/30">
-              <p className="text-red-300 font-medium mb-1">
-                Could not load news data
-              </p>
-              <p className="text-sm text-slate-400">{error}</p>
-            </div>
-          )}
-
-          {data && !loading && (
+    <ToolPageLayout
+      slug="signal-to-noise"
+      badge="Market Quality"
+      title="Signal-to-Noise Ratio"
+      intro="Measure what share of a company's announcements report an actual result — drill intercepts, resource updates, economic studies — rather than corporate housekeeping. It separates the companies exploring from the companies announcing."
+      tool={<SignalToNoiseClient />}
+      related={["drill-scanner", "catalyst-calendar", "liquidity-screener"]}
+      relatedNote={
+        <>
+          Pair this with the{" "}
+          <Link
+            href="/investor-tools/catalyst-calendar"
+            className="text-gold-400 hover:underline"
+          >
+            News Catalyst Calendar
+          </Link>{" "}
+          to separate cadence from substance: a company can be both prolific and
+          empty. See also{" "}
+          <Link
+            href="/investor-tools"
+            className="text-gold-400 hover:underline"
+          >
+            all investor tools
+          </Link>
+          .
+        </>
+      }
+      sections={[
+        {
+          id: "what-it-does",
+          heading: "What this tool does",
+          body: (
             <>
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-                <div className="glass-card rounded-xl p-4">
-                  <div className="text-[11px] uppercase tracking-wider text-slate-500 mb-1">
-                    Sector signal
-                  </div>
-                  <div className="text-xl font-semibold text-amber-300 tabular-nums">
-                    {sector}%
-                  </div>
-                  <div className="text-[11px] text-slate-500 mt-1">
-                    of all releases are results
-                  </div>
-                </div>
-                <div className="glass-card rounded-xl p-4">
-                  <div className="text-[11px] uppercase tracking-wider text-slate-500 mb-1">
-                    Companies ranked
-                  </div>
-                  <div className="text-xl font-semibold text-slate-200 tabular-nums">
-                    {data.summary.companies}
-                  </div>
-                </div>
-                <div className="glass-card rounded-xl p-4">
-                  <div className="text-[11px] uppercase tracking-wider text-slate-500 mb-1">
-                    Releases analyzed
-                  </div>
-                  <div className="text-xl font-semibold text-slate-200 tabular-nums">
-                    {data.summary.total_releases.toLocaleString()}
-                  </div>
-                </div>
-                <div className="glass-card rounded-xl p-4">
-                  <div className="text-[11px] uppercase tracking-wider text-slate-500 mb-1">
-                    Hard results
-                  </div>
-                  <div className="text-xl font-semibold text-emerald-300 tabular-nums">
-                    {data.summary.hard_releases.toLocaleString()}
-                  </div>
-                </div>
-              </div>
-
-              <div className="glass-card rounded-xl p-4 mb-6 flex flex-wrap items-end gap-4">
-                <div>
-                  <label className="block text-xs text-slate-400 mb-1">
-                    Minimum releases
-                  </label>
-                  <select
-                    value={minReleases}
-                    onChange={(e) => setMinReleases(e.target.value)}
-                    className="bg-slate-800/60 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-gold-500/50"
-                  >
-                    {["5", "10", "20", "50"].map((v) => (
-                      <option key={v} value={v}>
-                        {v}+
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs text-slate-400 mb-1">
-                    Window
-                  </label>
-                  <select
-                    value={months}
-                    onChange={(e) => setMonths(e.target.value)}
-                    className="bg-slate-800/60 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-gold-500/50"
-                  >
-                    <option value="0">All history</option>
-                    <option value="12">Last 12 months</option>
-                    <option value="24">Last 24 months</option>
-                  </select>
-                </div>
-                <div className="flex-1 min-w-[180px]">
-                  <label className="block text-xs text-slate-400 mb-1">
-                    Search
-                  </label>
-                  <input
-                    type="text"
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    placeholder="Company or ticker"
-                    className="w-full bg-slate-800/60 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-gold-500/50"
-                  />
-                </div>
-                <ExportButton
-                  filename="signal-to-noise"
-                  rows={rows}
-                  columns={[
-                    { label: "Company", value: (r) => r.company_name },
-                    { label: "Ticker", value: (r) => r.ticker },
-                    { label: "Exchange", value: (r) => r.exchange },
-                    { label: "Signal %", value: (r) => r.signal_pct },
-                    { label: "Total releases", value: (r) => r.total_releases },
-                    { label: "Hard results", value: (r) => r.hard_releases },
-                    { label: "Drill results", value: (r) => r.drill_releases },
-                    {
-                      label: "Financing releases",
-                      value: (r) => r.financing_releases,
-                    },
-                    { label: "Financing %", value: (r) => r.financing_pct },
-                  ]}
-                />
-              </div>
-
-              {rows.length === 0 ? (
-                <EmptyState
-                  title="No companies match"
-                  detail="Lower the minimum-releases threshold or widen the window. Companies below the threshold are excluded because a ratio from a handful of releases says more about the sample than the company."
-                />
-              ) : (
-                <div className="glass-card rounded-xl overflow-hidden">
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm min-w-[700px]">
-                      <thead>
-                        <tr className="border-b border-slate-700/60 text-[11px] uppercase tracking-wider text-slate-500">
-                          <th className="text-left px-4 py-3">Company</th>
-                          <th className="text-left px-3 py-3 w-56">
-                            Signal vs noise
-                          </th>
-                          <th className="text-right px-3 py-3">Signal</th>
-                          <th className="text-right px-3 py-3">Results</th>
-                          <th className="text-right px-3 py-3">Drill</th>
-                          <th className="text-right px-4 py-3">Total</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {rows.map((r) => (
-                          <tr
-                            key={r.company_id}
-                            className="border-b border-slate-800/60 hover:bg-slate-800/30"
-                          >
-                            <td className="px-4 py-3">
-                              <div className="font-medium text-slate-200">
-                                {r.company_name}
-                              </div>
-                              <div className="text-xs text-slate-500">
-                                {r.ticker}
-                              </div>
-                            </td>
-                            <td className="px-3 py-3">
-                              <div
-                                className="h-2 w-full rounded bg-slate-800 overflow-hidden"
-                                title={`${r.signal_pct}% results, ${(100 - r.signal_pct).toFixed(1)}% other`}
-                              >
-                                <div
-                                  className={
-                                    r.signal_pct >= sector
-                                      ? "h-full bg-emerald-500/70"
-                                      : "h-full bg-amber-500/60"
-                                  }
-                                  style={{ width: `${r.signal_pct}%` }}
-                                />
-                              </div>
-                            </td>
-                            <td className="px-3 py-3 text-right tabular-nums">
-                              <span
-                                className={
-                                  r.signal_pct >= sector
-                                    ? "text-emerald-300"
-                                    : "text-slate-400"
-                                }
-                              >
-                                {r.signal_pct.toFixed(1)}%
-                              </span>
-                            </td>
-                            <td className="px-3 py-3 text-right tabular-nums text-slate-300">
-                              {r.hard_releases}
-                            </td>
-                            <td className="px-3 py-3 text-right tabular-nums text-slate-400">
-                              {r.drill_releases}
-                            </td>
-                            <td className="px-4 py-3 text-right tabular-nums text-slate-400">
-                              {r.total_releases}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
-
-              <div className="mt-6 glass-card rounded-xl p-5">
-                <h3 className="text-sm font-semibold text-slate-300 mb-2">
-                  How to read this
-                </h3>
-                <ul className="text-xs text-slate-400 space-y-2 leading-relaxed">
-                  <li>{data.assumptions.method}</li>
-                  <li>{data.assumptions.caveat}</li>
-                  <li>
-                    The bar is shaded green when a company beats the sector
-                    average of {sector}% and amber when it does not.
-                  </li>
-                </ul>
-              </div>
+              <p>
+                Exploration companies communicate constantly. They have to —
+                raising money requires visibility, and visibility requires a
+                steady flow of announcements. But there is a large difference
+                between a company announcing that it has hit twelve metres of
+                good grade, and a company announcing that its chief executive
+                will be attending a conference in Zurich.
+              </p>
+              <p>
+                Both arrive through the same channel, in the same format, with
+                the same air of significance. Read enough of them and the
+                distinction blurs, which is precisely the effect a
+                promotion-heavy company depends on. A newsfeed that looks busy
+                feels like progress.
+              </p>
+              <p>
+                Every release is classified by type, so the distinction can be
+                measured rather than sensed. This tool reports, per company,
+                what proportion of announcements report a genuine result — and
+                compares it against the sector, where only about a quarter of
+                junior mining news does.
+              </p>
             </>
-          )}
-        </div>
-      </section>
-    </div>
+          ),
+        },
+        {
+          id: "how-to-read",
+          heading: "How to read the output",
+          body: (
+            <>
+              <p>
+                <strong className="text-slate-100">
+                  The signal percentage
+                </strong>{" "}
+                is the share of a company&apos;s releases in the window that
+                report drill results, a resource update, or study results.
+                Everything else — financings, appointments, grants, conference
+                attendance, corporate updates — counts as noise. The word is not
+                pejorative; these announcements can be necessary. They simply do
+                not tell you anything about what is in the ground.
+              </p>
+              <p>
+                <strong className="text-slate-100">
+                  The comparison against the sector
+                </strong>{" "}
+                matters more than the absolute number. Roughly a quarter is
+                normal. A company well above that is spending its announcements
+                on results; a company well below is spending them on itself.
+              </p>
+              <p>
+                <strong className="text-slate-100">Total release count</strong>{" "}
+                is the context that stops the ratio being misread. A company
+                with a high percentage across a handful of releases is not
+                demonstrating much, which is why very quiet companies are
+                excluded entirely.
+              </p>
+            </>
+          ),
+        },
+        {
+          id: "what-good-looks-like",
+          heading: "What good looks like",
+          body: (
+            <>
+              <p>
+                Above the sector average is the simple reading, but the more
+                useful signal is the combination of ratio and volume. A company
+                with a high ratio and a healthy number of releases is drilling
+                and reporting. A company with a high ratio and very few releases
+                is probably doing one programme a year and going quiet in
+                between — not necessarily bad, but a different proposition.
+              </p>
+              <p>
+                The pattern that should give pause is a high volume of releases
+                with a low signal ratio. That is a company generating attention
+                without generating results, and it is the profile of an issuer
+                whose primary activity is raising the next round rather than
+                spending the last one in the ground.
+              </p>
+              <p>
+                Read the ratio alongside the capital structure. A company
+                announcing frequently, reporting little, and steadily issuing
+                shares is telling you what it is. The{" "}
+                <Link
+                  href="/investor-tools/dilution-tracker"
+                  className="text-gold-400 hover:underline"
+                >
+                  Dilution Tracker
+                </Link>{" "}
+                supplies the other half of that picture.
+              </p>
+            </>
+          ),
+        },
+        {
+          id: "method",
+          heading: "Method and limitations",
+          body: (
+            <>
+              <p>
+                Every press release we hold is classified by type. Three types
+                count as signal — drill results, resource updates, and study
+                results — and the ratio is the count of those divided by total
+                releases over the window. Companies with fewer than ten releases
+                are excluded, because a ratio computed on a handful of items is
+                noise itself.
+              </p>
+              <p>The limits worth knowing:</p>
+              <ul className="list-disc pl-6 flex flex-col gap-3">
+                <li>
+                  <strong className="text-slate-100">
+                    It measures category, not quality.
+                  </strong>{" "}
+                  A release reporting poor drill results counts exactly the same
+                  as one reporting excellent results. High signal means a
+                  company is reporting on the ground, not that what it found is
+                  good.
+                </li>
+                <li>
+                  <strong className="text-slate-100">
+                    Classification is automated and imperfect.
+                  </strong>{" "}
+                  A release combining a financing announcement with drill
+                  results receives a single type, and occasional
+                  misclassification is inevitable.
+                </li>
+                <li>
+                  <strong className="text-slate-100">
+                    A low ratio is not automatically damning.
+                  </strong>{" "}
+                  A developer working through permitting has genuinely little
+                  drilling to report; its announcements are legitimately
+                  corporate. Stage matters, and the ratio is most meaningful
+                  between companies at similar stages.
+                </li>
+                <li>
+                  <strong className="text-slate-100">
+                    It depends on our news coverage being complete.
+                  </strong>{" "}
+                  Releases are scraped from company websites daily. A company
+                  publishing somewhere we do not reach would be under-counted.
+                </li>
+              </ul>
+            </>
+          ),
+        },
+      ]}
+      faqs={[
+        {
+          q: "What counts as signal rather than noise?",
+          a: "Three categories of announcement count as signal: drill results, resource estimate updates, and study results such as a PEA, pre-feasibility or feasibility study. Everything else counts as noise — financings, management appointments, government grants, conference attendance, and general corporate updates. Noise is not a judgement about whether the announcement mattered, only about whether it told you anything new about the deposit.",
+        },
+        {
+          q: "What is a normal signal-to-noise ratio for a junior mining company?",
+          a: "Across the companies we track, only about a quarter of junior mining announcements report an actual result. That makes roughly 25% the sector benchmark, and it is a lower bar than most investors assume before they see the number.",
+        },
+        {
+          q: "Does a high ratio mean the company is a good investment?",
+          a: "No. The ratio measures what a company reports on, not what it found. A company diligently publishing consistently disappointing drill results will score well. Treat it as a filter for whether the company is doing exploration work at all, then assess the results themselves.",
+        },
+        {
+          q: "Why are companies with few releases excluded?",
+          a: "Because a percentage computed on a very small number of releases is unstable — one announcement either way swings it dramatically. Companies below ten releases in the window are left out rather than shown with a misleadingly precise figure.",
+        },
+        {
+          q: "Can a low signal ratio be legitimate?",
+          a: "Yes. A company in permitting or construction has little drilling to report, so its announcements are genuinely corporate. The ratio is most useful when comparing companies at a similar stage — one explorer against another — rather than across the whole sector.",
+        },
+      ]}
+    />
   );
 }

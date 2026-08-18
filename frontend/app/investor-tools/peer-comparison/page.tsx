@@ -1,542 +1,251 @@
-"use client";
-
-import { useState, useCallback } from "react";
 import Link from "next/link";
-import { Badge } from "@/components/ui/Badge";
-import { Button } from "@/components/ui/Button";
-import CompanyMultiPicker from "@/components/ui/CompanyMultiPicker";
-import type { PickableCompany } from "@/components/ui/CompanyPicker";
-import ExportButton from "@/components/ui/ExportButton";
-import LogoMono from "@/components/LogoMono";
-import { toolsAPI } from "@/lib/api";
-import { useCompanyList } from "@/lib/useCompanyList";
+import ToolPageLayout from "../ToolPageLayout";
+import PeerComparisonClient from "./PeerComparisonClient";
 
-interface Peer {
-  company_id: number;
-  company_name: string;
-  ticker: string;
-  exchange: string;
-  stock_price: number | null;
-  currency: string;
-  market_cap_usd: number | null;
-  total_gold_oz: number | null;
-  total_silver_oz: number | null;
-  avg_grade_gpt: number | null;
-  total_tonnes: number | null;
-  ev_per_oz: number | null;
-  npv_usd_m: number | null;
-  p_nav: number | null;
-  irr_pct: number | null;
-  aisc: number | null;
-  total_financing_usd: number | null;
-  project_count: number | null;
-  flagship_stage: string | null;
-}
+export const revalidate = 3600;
 
-interface PeerComparisonResponse {
-  peers: Peer[];
-  count: number;
-  target_id: number;
-}
-
-type MetricKey = keyof Peer;
-
-interface MetricRow {
-  label: string;
-  key: MetricKey;
-  format: (v: unknown) => string;
-  bestFn: "max" | "min" | "none";
-}
-
-const fmt = {
-  usd: (v: unknown) =>
-    v != null
-      ? `$${Number(v).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-      : "--",
-  usdShort: (v: unknown) =>
-    v != null
-      ? `$${(Number(v) / 1e6).toLocaleString("en-US", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}M`
-      : "--",
-  usdM: (v: unknown) =>
-    v != null
-      ? `$${Number(v).toLocaleString("en-US", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}M`
-      : "--",
-  number: (v: unknown) =>
-    v != null ? Number(v).toLocaleString("en-US") : "--",
-  decimal: (v: unknown) =>
-    v != null
-      ? Number(v).toLocaleString("en-US", {
-          minimumFractionDigits: 2,
-          maximumFractionDigits: 2,
-        })
-      : "--",
-  pct: (v: unknown) => (v != null ? `${Number(v).toFixed(1)}%` : "--"),
-  ratio: (v: unknown) => (v != null ? `${Number(v).toFixed(2)}x` : "--"),
-  text: (v: unknown) => (v != null && v !== "" ? String(v) : "--"),
-  int: (v: unknown) => (v != null ? String(Math.round(Number(v))) : "--"),
-  grade: (v: unknown) => (v != null ? `${Number(v).toFixed(2)} g/t` : "--"),
-};
-
-const METRICS: MetricRow[] = [
-  { label: "Stock Price", key: "stock_price", format: fmt.usd, bestFn: "max" },
-  {
-    label: "Market Cap",
-    key: "market_cap_usd",
-    format: fmt.usdShort,
-    bestFn: "max",
-  },
-  {
-    label: "Total Gold Oz",
-    key: "total_gold_oz",
-    format: fmt.number,
-    bestFn: "max",
-  },
-  {
-    label: "Avg Grade",
-    key: "avg_grade_gpt",
-    format: fmt.grade,
-    bestFn: "max",
-  },
-  { label: "EV/oz", key: "ev_per_oz", format: fmt.usd, bestFn: "min" },
-  { label: "NPV ($M)", key: "npv_usd_m", format: fmt.usdM, bestFn: "max" },
-  { label: "P/NAV", key: "p_nav", format: fmt.ratio, bestFn: "min" },
-  { label: "IRR%", key: "irr_pct", format: fmt.pct, bestFn: "max" },
-  { label: "AISC", key: "aisc", format: fmt.usd, bestFn: "min" },
-  {
-    label: "Total Financing",
-    key: "total_financing_usd",
-    format: fmt.usdShort,
-    bestFn: "max",
-  },
-  {
-    label: "Project Count",
-    key: "project_count",
-    format: fmt.int,
-    bestFn: "max",
-  },
-  {
-    label: "Flagship Stage",
-    key: "flagship_stage",
-    format: fmt.text,
-    bestFn: "none",
-  },
-];
-
-function getBestIndex(
-  peers: Peer[],
-  key: MetricKey,
-  bestFn: "max" | "min" | "none",
-): number | null {
-  if (bestFn === "none") return null;
-  let bestIdx: number | null = null;
-  let bestVal: number | null = null;
-  for (let i = 0; i < peers.length; i++) {
-    const raw = peers[i][key];
-    if (raw == null) continue;
-    const v = Number(raw);
-    if (isNaN(v)) continue;
-    if (bestVal === null || (bestFn === "max" ? v > bestVal : v < bestVal)) {
-      bestVal = v;
-      bestIdx = i;
-    }
-  }
-  return bestIdx;
-}
-
-function SkeletonTable() {
-  return (
-    <div className="glass-card rounded-xl p-6 animate-pulse">
-      <div className="h-6 w-48 bg-slate-700/50 rounded mb-6" />
-      <div className="space-y-3">
-        {Array.from({ length: 12 }).map((_, i) => (
-          <div key={i} className="flex gap-4">
-            <div className="h-5 w-32 bg-slate-700/40 rounded" />
-            <div className="h-5 flex-1 bg-slate-700/30 rounded" />
-            <div className="h-5 flex-1 bg-slate-700/30 rounded" />
-            <div className="h-5 flex-1 bg-slate-700/30 rounded" />
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
+/**
+ * Content checked against peer_comparison in core/views/investor_tools.py:
+ * peers are auto-detected by the flagship project's primary commodity and the
+ * company's exchange; ev_per_oz is market_cap / contained gold oz (NOT true
+ * enterprise value) and p_nav is market_cap / (npv_5_usd * 1e6). The EV/oz
+ * caveat is stated plainly because the field name implies otherwise.
+ */
 export default function PeerComparisonPage() {
-  const [searchInput, setSearchInput] = useState("");
-  const { companies, loading: companiesLoading } = useCompanyList();
-  const [manualPeers, setManualPeers] = useState<PickableCompany[]>([]);
-  const [data, setData] = useState<PeerComparisonResponse | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const fetchComparison = useCallback(
-    async (params: Record<string, string>) => {
-      setLoading(true);
-      setError(null);
-      setData(null);
-      try {
-        const result = await toolsAPI.peerComparison(params);
-        setData(result as PeerComparisonResponse);
-      } catch (err: unknown) {
-        setError(
-          err instanceof Error
-            ? err.message
-            : "Failed to load peer comparison data.",
-        );
-      } finally {
-        setLoading(false);
-      }
-    },
-    [],
-  );
-
-  const handleCompare = () => {
-    const trimmed = searchInput.trim();
-    if (!trimmed) return;
-    fetchComparison({ company_id: trimmed });
-  };
-
-  const handleManualCompare = () => {
-    if (manualPeers.length === 0) return;
-    fetchComparison({ company_ids: manualPeers.map((c) => c.id).join(",") });
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent, handler: () => void) => {
-    if (e.key === "Enter") handler();
-  };
-
   return (
-    <div className="min-h-screen bg-slate-900">
-      {/* Nav */}
-      <nav className="glass-nav sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <Link href="/" className="flex items-center">
-              <LogoMono className="h-10" />
-            </Link>
-            <div className="flex items-center gap-2">
-              <Link href="/investor-tools">
-                <Button variant="ghost" size="sm">
-                  All Tools
-                </Button>
-              </Link>
-              <Link href="/">
-                <Button variant="ghost" size="sm">
-                  Home
-                </Button>
-              </Link>
-            </div>
-          </div>
-        </div>
-      </nav>
-
-      {/* Header */}
-      <section className="py-8 px-4 sm:px-6 lg:px-8 bg-gradient-to-b from-[#0a0e1a] to-slate-900">
-        <div className="max-w-5xl mx-auto text-center">
-          <Badge variant="gold" className="mb-3">
-            Analysis
-          </Badge>
-          <h1 className="text-3xl sm:text-4xl font-bold text-gradient-gold mb-3">
-            Peer Comparison Engine
-          </h1>
-          <p className="text-slate-300 max-w-xl mx-auto">
-            Compare any company against auto-detected peers on EV/oz, P/NAV,
-            grade, AISC, and financing history. Find mispriced opportunities.
-          </p>
-        </div>
-      </section>
-
-      {/* Search Controls */}
-      <section className="px-4 sm:px-6 lg:px-8 pb-6">
-        <div className="max-w-5xl mx-auto space-y-4">
-          {/* Primary: single company lookup */}
-          <div className="glass-card rounded-xl p-5">
-            <label className="block text-sm font-medium text-slate-300 mb-2">
-              Search by Company Name or ID
-            </label>
-            <div className="flex gap-3">
-              <input
-                type="text"
-                value={searchInput}
-                onChange={(e) => setSearchInput(e.target.value)}
-                onKeyDown={(e) => handleKeyDown(e, handleCompare)}
-                placeholder="e.g. Barrick Gold or 42"
-                className="flex-1 bg-slate-800/60 border border-slate-700 rounded-lg px-4 py-2.5 text-slate-200 placeholder-slate-500 focus:outline-none focus:border-gold-500/60 focus:ring-1 focus:ring-gold-500/30 transition-all"
-              />
-              <Button
-                variant="primary"
-                size="md"
-                onClick={handleCompare}
-                disabled={loading || !searchInput.trim()}
-              >
-                {loading ? (
-                  <span className="flex items-center gap-2">
-                    <svg
-                      className="animate-spin h-4 w-4"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                    >
-                      <circle
-                        className="opacity-25"
-                        cx="12"
-                        cy="12"
-                        r="10"
-                        stroke="currentColor"
-                        strokeWidth="4"
-                      />
-                      <path
-                        className="opacity-75"
-                        fill="currentColor"
-                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-                      />
-                    </svg>
-                    Loading
-                  </span>
-                ) : (
-                  "Compare"
-                )}
-              </Button>
-            </div>
-          </div>
-
-          {/* Secondary: manual multi-company */}
-          <div className="glass-card rounded-xl p-5">
-            <label className="block text-sm font-medium text-slate-300 mb-2">
-              Build your own peer group
-            </label>
-            <div className="flex flex-col sm:flex-row gap-3 sm:items-end">
-              <div className="flex-1">
-                <CompanyMultiPicker
-                  companies={companies}
-                  selected={manualPeers}
-                  onChange={setManualPeers}
-                  label=""
-                  max={10}
-                  disabled={companiesLoading}
-                />
-              </div>
-              <Button
-                variant="secondary"
-                size="md"
-                onClick={handleManualCompare}
-                disabled={loading || manualPeers.length === 0}
-              >
-                Compare
-              </Button>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Error */}
-      {error && (
-        <section className="px-4 sm:px-6 lg:px-8 pb-6">
-          <div className="max-w-5xl mx-auto">
-            <div className="glass-card rounded-xl p-5 border-error/30">
-              <p className="text-error text-sm">{error}</p>
-            </div>
-          </div>
-        </section>
-      )}
-
-      {/* Loading Skeleton */}
-      {loading && (
-        <section className="px-4 sm:px-6 lg:px-8 pb-8">
-          <div className="max-w-5xl mx-auto">
-            <SkeletonTable />
-          </div>
-        </section>
-      )}
-
-      {/* Results Table */}
-      {data && !loading && (
-        <section className="px-4 sm:px-6 lg:px-8 pb-12">
-          <div className="max-w-[90rem] mx-auto">
-            <div className="flex items-center gap-3 mb-4">
-              <h2 className="text-lg font-semibold text-slate-200">
-                Comparison Results
-              </h2>
-              <Badge variant="slate">{data.count} companies</Badge>
-              <ExportButton
-                className="ml-auto"
-                filename="peer-comparison"
-                rows={data.peers}
-                columns={[
-                  { label: "Company", value: (p) => p.company_name },
-                  { label: "Ticker", value: (p) => p.ticker },
-                  { label: "Exchange", value: (p) => p.exchange },
-                  { label: "Price", value: (p) => p.stock_price },
-                  { label: "Currency", value: (p) => p.currency },
-                  { label: "Market cap USD", value: (p) => p.market_cap_usd },
-                  { label: "Gold oz", value: (p) => p.total_gold_oz },
-                  { label: "Silver oz", value: (p) => p.total_silver_oz },
-                  { label: "Avg grade g/t", value: (p) => p.avg_grade_gpt },
-                  { label: "Tonnes", value: (p) => p.total_tonnes },
-                  { label: "EV/oz", value: (p) => p.ev_per_oz },
-                  { label: "NPV USD M", value: (p) => p.npv_usd_m },
-                  { label: "P/NAV", value: (p) => p.p_nav },
-                  { label: "IRR %", value: (p) => p.irr_pct },
-                  { label: "AISC", value: (p) => p.aisc },
-                  {
-                    label: "Financing USD",
-                    value: (p) => p.total_financing_usd,
-                  },
-                  { label: "Projects", value: (p) => p.project_count },
-                  { label: "Flagship stage", value: (p) => p.flagship_stage },
-                ]}
-              />
-            </div>
-
-            <div className="glass-card rounded-xl overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  {/* Column Headers: Company Names */}
-                  <thead>
-                    <tr className="border-b border-slate-700/50">
-                      <th className="text-left px-4 py-3 text-slate-400 font-medium sticky left-0 bg-slate-900/90 backdrop-blur-sm z-10 min-w-[150px]">
-                        Metric
-                      </th>
-                      {data.peers.map((peer) => {
-                        const isTarget = peer.company_id === data.target_id;
-                        return (
-                          <th
-                            key={peer.company_id}
-                            className={`text-center px-4 py-3 min-w-[140px] ${
-                              isTarget
-                                ? "bg-gold-500/10 border-x border-gold-500/20"
-                                : ""
-                            }`}
-                          >
-                            <div className="flex flex-col items-center gap-1">
-                              <span
-                                className={`font-semibold ${
-                                  isTarget ? "text-gold-400" : "text-slate-200"
-                                }`}
-                              >
-                                {peer.company_name}
-                              </span>
-                              <span className="text-xs text-slate-500">
-                                {peer.exchange}:{peer.ticker}
-                              </span>
-                              {isTarget && (
-                                <Badge
-                                  variant="gold"
-                                  className="text-[9px] mt-0.5"
-                                >
-                                  Target
-                                </Badge>
-                              )}
-                            </div>
-                          </th>
-                        );
-                      })}
-                    </tr>
-                  </thead>
-
-                  {/* Metric Rows */}
-                  <tbody>
-                    {METRICS.map((metric, rowIdx) => {
-                      const bestIdx = getBestIndex(
-                        data.peers,
-                        metric.key,
-                        metric.bestFn,
-                      );
-                      return (
-                        <tr
-                          key={metric.key}
-                          className={`border-b border-slate-800/50 ${
-                            rowIdx % 2 === 0 ? "bg-slate-800/10" : ""
-                          } hover:bg-slate-800/30 transition-colors`}
-                        >
-                          <td className="px-4 py-3 text-slate-300 font-medium sticky left-0 bg-slate-900/90 backdrop-blur-sm z-10">
-                            {metric.label}
-                          </td>
-                          {data.peers.map((peer, colIdx) => {
-                            const isTarget = peer.company_id === data.target_id;
-                            const isBest = bestIdx === colIdx;
-                            const value = peer[metric.key];
-                            return (
-                              <td
-                                key={peer.company_id}
-                                className={`px-4 py-3 text-center font-mono text-sm ${
-                                  isTarget
-                                    ? "bg-gold-500/10 border-x border-gold-500/20"
-                                    : ""
-                                } ${
-                                  isBest && value != null
-                                    ? "text-emerald-400"
-                                    : "text-slate-300"
-                                }`}
-                              >
-                                <span
-                                  className={
-                                    isBest && value != null
-                                      ? "bg-emerald-500/10 px-2 py-0.5 rounded"
-                                      : ""
-                                  }
-                                >
-                                  {metric.format(value)}
-                                </span>
-                              </td>
-                            );
-                          })}
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
-            {/* Legend */}
-            <div className="flex items-center gap-6 mt-4 text-xs text-slate-500">
-              <div className="flex items-center gap-2">
-                <span className="w-3 h-3 rounded bg-gold-500/20 border border-gold-500/30" />
-                Target company
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="w-3 h-3 rounded bg-emerald-500/20 border border-emerald-500/30" />
-                Best in class
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-slate-500">--</span>
-                Data unavailable
-              </div>
-            </div>
-          </div>
-        </section>
-      )}
-
-      {/* Empty state */}
-      {!data && !loading && !error && (
-        <section className="px-4 sm:px-6 lg:px-8 pb-12">
-          <div className="max-w-5xl mx-auto">
-            <div className="glass-card rounded-xl p-12 text-center">
-              <svg
-                className="w-16 h-16 mx-auto text-slate-600 mb-4"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={1.5}
-                  d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
-                />
-              </svg>
-              <h3 className="text-lg font-medium text-slate-300 mb-2">
-                Search for a company to get started
-              </h3>
-              <p className="text-sm text-slate-500 max-w-md mx-auto">
-                Enter a company name or ID above and we will automatically find
-                similar peers for a side-by-side comparison across key valuation
-                metrics.
+    <ToolPageLayout
+      slug="peer-comparison"
+      badge="Analysis"
+      title="Peer Comparison Engine"
+      intro="Benchmark a junior mining company against automatically detected peers on market cap per ounce, price to NAV, grade, AISC and financing history — because a valuation only means something relative to something else."
+      tool={<PeerComparisonClient />}
+      related={["grade-ranker", "resource-growth", "warrant-radar"]}
+      relatedNote={
+        <>
+          A cheap-looking multiple usually has a reason. Check whether the
+          resource is genuinely growing with the{" "}
+          <Link
+            href="/investor-tools/resource-growth"
+            className="text-gold-400 hover:underline"
+          >
+            Resource Growth Tracker
+          </Link>
+          , and read{" "}
+          <Link
+            href="/guides/how-to-read-ni-43-101-report"
+            className="text-gold-400 hover:underline"
+          >
+            how to read an NI 43-101 report
+          </Link>{" "}
+          before trusting an NPV.
+        </>
+      }
+      sections={[
+        {
+          id: "what-it-does",
+          heading: "What this tool does",
+          body: (
+            <>
+              <p>
+                No junior mining company is cheap or expensive in isolation. A
+                market capitalisation of $40 million tells you nothing until you
+                know what it buys — how many ounces, at what grade, in which
+                country, at what stage of development. The only way that figure
+                becomes meaningful is alongside companies that are broadly
+                comparable.
               </p>
-            </div>
-          </div>
-        </section>
-      )}
-    </div>
+              <p>
+                Assembling that comparison by hand is the tedious part of the
+                work. It means finding companies with similar deposits, pulling
+                resource figures out of technical reports, and normalising
+                everything to a per-ounce basis before the numbers can even be
+                lined up.
+              </p>
+              <p>
+                This tool does that automatically. Give it a company and it
+                identifies a peer group, then lays out the valuation multiples,
+                grade, cost figures and financing history side by side — so the
+                question becomes why a gap exists rather than whether one does.
+              </p>
+            </>
+          ),
+        },
+        {
+          id: "how-to-read",
+          heading: "How to read the output",
+          body: (
+            <>
+              <p>
+                <strong className="text-slate-100">
+                  Market cap per contained ounce
+                </strong>{" "}
+                is what the market is paying for each ounce in the ground. Lower
+                looks cheaper, but the number is meaningless without context: an
+                inferred ounce in a difficult jurisdiction genuinely should
+                trade at a fraction of a permitted ounce in a stable one.
+              </p>
+              <p>
+                <strong className="text-slate-100">P/NAV</strong> compares the
+                market capitalisation against the after-tax net present value
+                from the company&apos;s own technical study. Below 1.0 means the
+                market values the company at less than its study says the
+                project is worth. Developers with completed studies commonly
+                trade well below 1.0, reflecting the risk that the study&apos;s
+                assumptions do not survive contact with reality.
+              </p>
+              <p>
+                <strong className="text-slate-100">Grade</strong> is the
+                clearest single indicator of deposit quality, because it drives
+                everything downstream — strip ratio, processing cost, and
+                whether marginal ounces are economic at a lower metal price.
+              </p>
+              <p>
+                <strong className="text-slate-100">AISC</strong>, all-in
+                sustaining cost per ounce, is what it costs to produce an ounce
+                including sustaining capital. The gap between AISC and the metal
+                price is the margin, and it is what determines survival in a
+                downturn.
+              </p>
+              <p>
+                <strong className="text-slate-100">Financing history</strong>{" "}
+                shows how much capital each company has consumed to reach its
+                current position. Two companies with identical resources but
+                very different funding histories are not equivalent.
+              </p>
+            </>
+          ),
+        },
+        {
+          id: "what-good-looks-like",
+          heading: "What good looks like",
+          body: (
+            <>
+              <p>
+                You are not looking for the lowest multiple. You are looking for
+                a gap you can explain — and then for evidence that the
+                explanation is wrong.
+              </p>
+              <p>
+                A company trading at half its peer group&apos;s market cap per
+                ounce is either mispriced or correctly priced for a reason you
+                have not found yet. The reason is usually one of a short list:
+                jurisdiction risk, metallurgy that does not work, a resource
+                dominated by the inferred category, no route to permitting, a
+                capital structure loaded with overhang, or management with a
+                history of destroying value. Work through that list before
+                concluding the market is wrong.
+              </p>
+              <p>
+                The most reliable use is the opposite direction. When a company
+                trades at a large premium to comparable peers, the market is
+                pricing in something — usually a discovery, a takeover, or a
+                permitting milestone. Identifying what, and judging whether it
+                is likely, is often easier than finding a bargain nobody else
+                has noticed.
+              </p>
+              <p>
+                Ounces are not fungible. Before drawing conclusions from a
+                per-ounce figure, check the resource category split — see{" "}
+                <Link
+                  href="/guides/inferred-vs-indicated-vs-measured-resources"
+                  className="text-gold-400 hover:underline"
+                >
+                  inferred vs indicated vs measured
+                </Link>{" "}
+                for why an inferred ounce and a measured ounce should not carry
+                the same price.
+              </p>
+            </>
+          ),
+        },
+        {
+          id: "method",
+          heading: "Method and limitations",
+          body: (
+            <>
+              <p>
+                Peers are detected automatically from the company&apos;s
+                flagship project: companies sharing its primary commodity and
+                listed on the same exchange. You can override the group and
+                specify companies manually, which is worth doing whenever the
+                automatic set looks wrong.
+              </p>
+              <p>
+                Resource figures, grades, NPV, IRR and AISC come from filed NI
+                43-101 technical reports. Financing totals come from the
+                company&apos;s announced raises.
+              </p>
+              <p>The limits worth knowing:</p>
+              <ul className="list-disc pl-6 flex flex-col gap-3">
+                <li>
+                  <strong className="text-slate-100">
+                    &ldquo;EV/oz&rdquo; here is market capitalisation per ounce,
+                    not true enterprise value per ounce.
+                  </strong>{" "}
+                  Cash and debt are not netted out. A company holding a large
+                  treasury after a recent raise looks more expensive than it is;
+                  an indebted one looks cheaper.
+                </li>
+                <li>
+                  <strong className="text-slate-100">
+                    P/NAV uses the company&apos;s own NPV.
+                  </strong>{" "}
+                  That figure comes from its own study, at its own metal price
+                  and cost assumptions, and studies are not written by
+                  disinterested parties. It is a starting point for
+                  investigation, not an independent valuation.
+                </li>
+                <li>
+                  <strong className="text-slate-100">
+                    Automatic peer detection is crude.
+                  </strong>{" "}
+                  Same commodity and same exchange is a reasonable first pass,
+                  but it will group an early-stage explorer with a permitted
+                  developer, and it takes no account of jurisdiction. Check the
+                  group before trusting the comparison.
+                </li>
+                <li>
+                  <strong className="text-slate-100">
+                    Contained ounces mix resource categories.
+                  </strong>{" "}
+                  A per-ounce multiple built largely on inferred material is not
+                  comparable to one built on measured and indicated.
+                </li>
+                <li>
+                  <strong className="text-slate-100">
+                    Companies without technical reports cannot be scored on
+                    every metric.
+                  </strong>{" "}
+                  Early explorers with no resource estimate will show gaps
+                  rather than zeroes.
+                </li>
+              </ul>
+            </>
+          ),
+        },
+      ]}
+      faqs={[
+        {
+          q: "What is a good EV per ounce for a junior mining company?",
+          a: "There is no absolute figure, because the range across stages is enormous. An early explorer with an inferred resource in a difficult jurisdiction may trade at a few dollars per ounce, while a permitted developer in a stable one trades at many times that. The number only becomes useful against a peer group at a similar stage — which is what this tool assembles.",
+        },
+        {
+          q: "Is your EV/oz calculated from true enterprise value?",
+          a: "No, and this is worth knowing before you use it. The figure is market capitalisation divided by contained ounces; cash and debt are not netted out. A company that has just closed a large financing will therefore look more expensive than a true enterprise value calculation would show, and a company carrying debt will look cheaper.",
+        },
+        {
+          q: "What does a P/NAV below 1.0 mean?",
+          a: "That the market is valuing the company at less than the net present value its own technical study assigns to the project. This is common rather than exceptional among developers, because it reflects the real risk that the study's assumptions on metal price, capital cost, permitting and timeline do not hold. A very low P/NAV is a prompt to find out which assumption the market disbelieves.",
+        },
+        {
+          q: "How are peers selected?",
+          a: "Automatically, from the flagship project's primary commodity and the company's exchange. It is a reasonable first pass but a blunt one — it takes no account of development stage or jurisdiction, so it may group an early explorer with a permitted developer. You can override the group and choose companies yourself, and it is worth doing whenever the automatic set looks unlike the company you are studying.",
+        },
+        {
+          q: "Why does one company trade at a much lower multiple than its peers?",
+          a: "Usually for a reason worth finding before concluding it is mispriced. The common explanations are jurisdiction risk, metallurgy that does not work, a resource weighted towards the inferred category, no clear permitting route, heavy warrant or share overhang, or a management record of dilution. Occasionally the market really has missed something, but that should be the conclusion after checking the list, not before.",
+        },
+      ]}
+    />
   );
 }
