@@ -101,39 +101,83 @@ const METAL_ICONS: Record<string, string> = {
 /*  Skeleton                                                           */
 /* ------------------------------------------------------------------ */
 
+/**
+ * Nav + header. Rendered in every state — loading, error, and loaded.
+ *
+ * The page used to return a bare <Skeleton /> while `loading` was true, and
+ * since the data fetch only runs in an effect, that skeleton was the entire
+ * server-rendered HTML: 8 words, no <h1>. Google reads that as a soft 404.
+ * Keeping the chrome outside the loading gate means the crawler always gets
+ * the heading and description, and only the data region is deferred.
+ */
+function Chrome({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="min-h-screen bg-slate-900">
+      {/* Nav */}
+      <nav className="glass-nav sticky top-0 z-50">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between h-16">
+            <Link href="/" className="flex items-center">
+              <LogoMono className="h-10" />
+            </Link>
+            <div className="flex items-center gap-2">
+              <Link href="/investor-tools">
+                <Button variant="ghost" size="sm">
+                  All Tools
+                </Button>
+              </Link>
+              <Link href="/">
+                <Button variant="ghost" size="sm">
+                  Home
+                </Button>
+              </Link>
+            </div>
+          </div>
+        </div>
+      </nav>
+
+      {/* Header */}
+      <section className="py-8 px-4 sm:px-6 lg:px-8 bg-gradient-to-b from-[#0a0e1a] to-slate-900">
+        <div className="max-w-7xl mx-auto text-center">
+          <Badge variant="gold" className="mb-3">
+            Dashboard
+          </Badge>
+          <h1 className="text-3xl sm:text-4xl font-bold text-gradient-gold mb-3">
+            Sector Pulse
+          </h1>
+          <p className="text-slate-300 max-w-xl mx-auto">
+            Real-time overview of the junior mining sector — metals prices,
+            market breadth, top movers, financing activity, and news volume.
+          </p>
+        </div>
+      </section>
+
+      {children}
+    </div>
+  );
+}
+
 function Skeleton() {
   return (
-    <div className="min-h-screen bg-slate-900 animate-pulse">
-      {/* skeleton nav */}
-      <div className="h-16 glass-nav" />
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8 animate-pulse">
+      {/* metals row */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} className="glass-card rounded-xl p-5 h-28" />
+        ))}
+      </div>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 space-y-8">
-        {/* header skeleton */}
-        <div className="text-center space-y-3">
-          <div className="h-5 w-24 bg-slate-700/60 rounded mx-auto" />
-          <div className="h-9 w-72 bg-slate-700/60 rounded mx-auto" />
-          <div className="h-4 w-96 bg-slate-700/40 rounded mx-auto" />
-        </div>
+      {/* middle row */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div className="glass-card rounded-xl p-5 h-64" />
+        <div className="glass-card rounded-xl p-5 h-64" />
+        <div className="glass-card rounded-xl p-5 h-64" />
+      </div>
 
-        {/* metals row */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="glass-card rounded-xl p-5 h-28" />
-          ))}
-        </div>
-
-        {/* middle row */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          <div className="glass-card rounded-xl p-5 h-64" />
-          <div className="glass-card rounded-xl p-5 h-64" />
-          <div className="glass-card rounded-xl p-5 h-64" />
-        </div>
-
-        {/* bottom row */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div className="glass-card rounded-xl p-5 h-36" />
-          <div className="glass-card rounded-xl p-5 h-36" />
-        </div>
+      {/* bottom row */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="glass-card rounded-xl p-5 h-36" />
+        <div className="glass-card rounded-xl p-5 h-36" />
       </div>
     </div>
   );
@@ -210,65 +254,33 @@ export default function SectorPulsePage() {
     return () => clearInterval(interval);
   }, [fetchData]);
 
-  if (loading) return <Skeleton />;
+  if (loading)
+    return (
+      <Chrome>
+        <Skeleton />
+      </Chrome>
+    );
 
   if (error || !data) {
     return (
-      <div className="min-h-screen bg-slate-900 flex items-center justify-center">
-        <div className="glass-card rounded-xl p-8 text-center max-w-md">
-          <p className="text-red-400 text-lg font-semibold mb-2">
-            Unable to load Sector Pulse
-          </p>
-          <p className="text-slate-400 text-sm mb-4">{error}</p>
-          <Button variant="secondary" size="sm" onClick={fetchData}>
-            Retry
-          </Button>
+      <Chrome>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 flex justify-center">
+          <div className="glass-card rounded-xl p-8 text-center max-w-md">
+            <p className="text-red-400 text-lg font-semibold mb-2">
+              Unable to load Sector Pulse
+            </p>
+            <p className="text-slate-400 text-sm mb-4">{error}</p>
+            <Button variant="secondary" size="sm" onClick={fetchData}>
+              Retry
+            </Button>
+          </div>
         </div>
-      </div>
+      </Chrome>
     );
   }
 
   return (
-    <div className="min-h-screen bg-slate-900">
-      {/* Nav */}
-      <nav className="glass-nav sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <Link href="/" className="flex items-center">
-              <LogoMono className="h-10" />
-            </Link>
-            <div className="flex items-center gap-2">
-              <Link href="/investor-tools">
-                <Button variant="ghost" size="sm">
-                  All Tools
-                </Button>
-              </Link>
-              <Link href="/">
-                <Button variant="ghost" size="sm">
-                  Home
-                </Button>
-              </Link>
-            </div>
-          </div>
-        </div>
-      </nav>
-
-      {/* Header */}
-      <section className="py-8 px-4 sm:px-6 lg:px-8 bg-gradient-to-b from-[#0a0e1a] to-slate-900">
-        <div className="max-w-7xl mx-auto text-center">
-          <Badge variant="gold" className="mb-3">
-            Dashboard
-          </Badge>
-          <h1 className="text-3xl sm:text-4xl font-bold text-gradient-gold mb-3">
-            Sector Pulse
-          </h1>
-          <p className="text-slate-300 max-w-xl mx-auto">
-            Real-time overview of the junior mining sector — metals prices,
-            market breadth, top movers, financing activity, and news volume.
-          </p>
-        </div>
-      </section>
-
+    <Chrome>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
         {/* ============================================================= */}
         {/*  Metals Prices                                                 */}
@@ -498,6 +510,6 @@ export default function SectorPulsePage() {
           </p>
         </footer>
       </div>
-    </div>
+    </Chrome>
   );
 }
