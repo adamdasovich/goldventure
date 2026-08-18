@@ -160,7 +160,7 @@ for hours. `CELERY_TASK_ROUTES` in `config/settings.py` splits the work:
 | ------------- | ---------------------------- | ----------- | --------- | ------------------------------------------------- |
 | `scrape`      | `celery-scrape.service`      | 2           | 1800M     | Bulk crawling. Browser-heavy, runs all day.       |
 | `interactive` | `celery-interactive.service` | 2           | 900M      | User-triggered onboarding/manual scrapes.         |
-| `default`     | `celery-worker.service`      | 2           | 500M      | Health checks, cleanups, prices, emails, reports. |
+| `default`     | `celery-worker.service`      | 2           | 850M      | Health checks, cleanups, prices, emails, reports. |
 
 ```bash
 systemctl status celery-worker celery-scrape celery-interactive celery-beat

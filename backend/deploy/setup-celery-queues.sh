@@ -13,10 +13,18 @@
 #                must never queue behind `scrape`.
 #   default      health checks, cleanups, prices, emails, reports. Light.
 #
-# Memory: the box is 7.8 GB with ~2.4 GB free and has OOM-killed Celery twice
+# Memory: the box is 7.8 GB with ~2 GB free and has OOM-killed Celery twice
 # (2026-08-03, 2026-08-10). The old single unit capped at MemoryMax=3G; these
-# three sum to 3.2G rather than tripling it. Chromium children live in the
+# three sum to 3.55G rather than tripling it. Chromium children live in the
 # spawning unit's cgroup, so the scrape worker gets the biggest share.
+#
+# `default` was first set to High=400M/Max=500M, which was too tight — three
+# Django processes idle at ~130M each, and cgroup memory.events showed 3091
+# `high` reclaim events within minutes. MemoryHigh throttles rather than kills,
+# so it silently slowed the very tasks this split exists to keep responsive.
+# Check `cat /sys/fs/cgroup/system.slice/<unit>.service/memory.events` after
+# changing these: a climbing `high` means throttling, `oom_kill` means the wall
+# was hit. Some `high` on `scrape` is intended — it is the browser worker.
 #
 # Node names MUST be distinct — two workers sharing one produces
 # DuplicateNodenameWarning and silently breaks `celery inspect` (cost a day on
@@ -112,7 +120,7 @@ write_unit celery-interactive.service \
 
 write_unit celery-worker.service \
   "Celery Worker (default queue) for GoldVenture" \
-  "default" "default@%%h" 2 "400M" "500M"
+  "default" "default@%%h" 2 "650M" "850M"
 
 echo "==> daemon-reload"
 systemctl daemon-reload
