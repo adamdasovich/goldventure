@@ -29,8 +29,8 @@ git add -A && git commit -m "Description" && git push
 ssh root@137.184.168.166
 cd /var/www/goldventure && git pull
 
-# 3. Restart services (if backend changes)
-systemctl restart celery-worker celery-beat
+# 3. Restart services (if backend changes) — THREE workers, not one
+systemctl restart celery-worker celery-scrape celery-interactive celery-beat
 
 # 4. Reload Gunicorn (zero-downtime, picks up new code)
 systemctl reload gunicorn
@@ -150,7 +150,39 @@ Single button click: scrape website → save to DB → scrape news → Claude-po
 | `cleanup_stuck_jobs_task`                  | Every 15 min          |
 | `auto_discover_and_process_documents_task` | Monday 2 AM           |
 
-Celery managed by systemd: `systemctl status celery-worker celery-beat`
+### Celery Workers — three queues, one worker each
+
+Everything used to share a single queue, so the 7 AM batch (~400 scrape tasks,
+concurrency 2) starved everything behind it — health checks and onboarding sat
+for hours. `CELERY_TASK_ROUTES` in `config/settings.py` splits the work:
+
+| Queue         | Unit                         | Concurrency | MemoryMax | Carries                                           |
+| ------------- | ---------------------------- | ----------- | --------- | ------------------------------------------------- |
+| `scrape`      | `celery-scrape.service`      | 2           | 1800M     | Bulk crawling. Browser-heavy, runs all day.       |
+| `interactive` | `celery-interactive.service` | 2           | 900M      | User-triggered onboarding/manual scrapes.         |
+| `default`     | `celery-worker.service`      | 2           | 500M      | Health checks, cleanups, prices, emails, reports. |
+
+```bash
+systemctl status celery-worker celery-scrape celery-interactive celery-beat
+journalctl -u celery-scrape -n 50 --no-pager     # output goes to journald
+```
+
+> **CRITICAL:** A task routed to a queue with no consumer is silently swallowed
+> — no error, it just never runs. If you add a queue to `CELERY_TASK_ROUTES`,
+> create its worker FIRST. Re-provision all three with
+> `bash backend/deploy/setup-celery-queues.sh` (idempotent; it writes the unit
+> files, reloads systemd, and prints which queues have live consumers).
+>
+> **CRITICAL:** Each worker needs a DISTINCT `-n` node name. Two sharing one
+> produces `DuplicateNodenameWarning` and silently breaks `celery inspect`
+> (that bug cost a day on 2026-08-14).
+>
+> **NOTE:** `celery-scrape` also consumes the legacy `celery` queue to drain
+> pre-split tasks. Drop `,celery` from its `-Q` once `redis-cli llen celery`
+> reaches 0.
+>
+> **NOTE:** `CELERY_TASK_ACKS_LATE = True`, so a task killed by a restart is
+> redelivered rather than lost. Restarting mid-batch is safe.
 
 ---
 
@@ -177,9 +209,14 @@ cd /var/www/goldventure/backend && source venv/bin/activate
 # Django shell
 DJANGO_SETTINGS_MODULE=config.settings python -c "import django; django.setup(); from core.models import *; ..."
 
-# Check Celery
-systemctl status celery-worker celery-beat
-tail -50 /var/log/celery-worker.log
+# Check Celery (three workers — see the Celery Workers section)
+systemctl status celery-worker celery-scrape celery-interactive celery-beat
+journalctl -u celery-scrape -n 50 --no-pager
+
+# Confirm every queue has a live consumer (a queue without one eats tasks)
+cd /var/www/goldventure/backend && source venv/bin/activate
+celery -A config inspect active_queues --timeout 45
+for q in celery default scrape interactive; do echo "$q $(redis-cli llen $q)"; done
 
 # Manual news scrape
 curl -X POST "https://juniorminingintelligence.com/api/companies/{id}/scrape-news/" -H "Authorization: Token $ADMIN_API_TOKEN"

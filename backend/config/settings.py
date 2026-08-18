@@ -380,6 +380,46 @@ CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True  # Retry Redis connection on st
 CELERY_BROKER_CONNECTION_RETRY = True  # Keep retrying broker connection
 CELERY_BROKER_CONNECTION_MAX_RETRIES = 10  # Max retries before giving up
 
+# ----------------------------------------------------------------------------
+# Task routing — three queues, one dedicated worker each.
+#
+# Everything used to share a single queue, so the 7 AM daily batch (~400
+# scrape_single_company_news_task, ~9 hours at concurrency 2) starved every
+# other task behind it: on 2026-08-18 there were 26 health checks and 9 browser
+# cleanups queued for hours, and onboarding a company meant waiting behind the
+# whole batch.
+#
+#   scrape       bulk background crawling. Slow, browser-heavy, can run all day.
+#   interactive  user-triggered onboarding/manual scrapes. Also browser-heavy,
+#                but a person is waiting, so it must never queue behind `scrape`.
+#   default      everything light: health checks, cleanups, price fetches,
+#                emails, the Friday report. Must never be starved.
+#
+# Tasks NOT listed here fall through to CELERY_TASK_DEFAULT_QUEUE.
+# Each queue needs its own worker with a DISTINCT -n node name; two workers
+# sharing a node name produces DuplicateNodenameWarning and silently breaks
+# `celery inspect` (that bug cost a day on 2026-08-14).
+# ----------------------------------------------------------------------------
+CELERY_TASK_DEFAULT_QUEUE = 'default'
+
+CELERY_TASK_ROUTES = {
+    # --- bulk crawling -------------------------------------------------------
+    'core.tasks.scrape_all_companies_news_task':        {'queue': 'scrape'},
+    'core.tasks.scrape_single_company_news_task':       {'queue': 'scrape'},
+    'core.tasks.scrape_mining_news_task':               {'queue': 'scrape'},
+    'core.tasks.auto_discover_and_process_documents_task': {'queue': 'scrape'},
+    'core.tasks.reconcile_chroma_index_task':           {'queue': 'scrape'},
+    'core.tasks.process_company_news_for_rag_task':     {'queue': 'scrape'},
+    'core.tasks.store_company_profile_in_rag_task':     {'queue': 'scrape'},
+
+    # --- user-triggered, someone is watching a spinner ------------------------
+    # scrape_company_news_task is dispatched from the onboarding views AND from
+    # inside scrape_and_save_company_task, so both paths stay interactive.
+    'core.tasks.scrape_and_save_company_task':          {'queue': 'interactive'},
+    'core.tasks.scrape_company_website_task':           {'queue': 'interactive'},
+    'core.tasks.scrape_company_news_task':              {'queue': 'interactive'},
+}
+
 # Celery Beat Schedule - Periodic Tasks
 from celery.schedules import crontab
 

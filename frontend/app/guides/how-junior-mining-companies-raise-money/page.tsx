@@ -714,18 +714,16 @@ export default function FinancingPillarGuide() {
                 deals routinely close at 70–90% premiums to the underlying share
                 price.
               </p>
+              {/* The companion deep-dive is not written yet. Do NOT link it
+                  until /guides/flow-through-shares-explained exists — a live
+                  <Link> to a missing route is a hard 404 to Googlebot, which
+                  reads none of the "(coming soon)" reassurance a human does.
+                  This one showed up in Search Console's Not-found report. */}
               <p className="text-slate-300 mb-4 leading-relaxed">
                 Flow-through is one of the most under-explained financing
-                instruments online. We have a dedicated deep-dive covering CEE
-                vs CDE, the look-back rule, super flow-through, and
-                province-by-province credit calculations in our companion piece:{" "}
-                <Link
-                  href="/guides/flow-through-shares-explained"
-                  className="text-gold-400 hover:underline"
-                >
-                  Flow-Through Shares Explained
-                </Link>{" "}
-                <span className="text-slate-500 text-sm">(coming soon)</span>.
+                instruments online. A dedicated deep-dive covering CEE vs CDE,
+                the look-back rule, super flow-through, and province-by-province
+                credit calculations is in the works.
               </p>
             </section>
 
