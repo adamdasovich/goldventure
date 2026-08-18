@@ -4,6 +4,7 @@ import { Fragment, useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
+import ExportButton from "@/components/ui/ExportButton";
 import LogoMono from "@/components/LogoMono";
 import { toolsAPI } from "@/lib/api";
 
@@ -114,42 +115,6 @@ function fmtDate(iso: string): string {
   });
 }
 
-function toCSV(rows: CompanyRow[]): string {
-  const head = [
-    "Company",
-    "Ticker",
-    "Price",
-    "Tranches",
-    "In the money",
-    "Est warrants",
-    "Est proceeds if all exercised",
-    "Est proceeds in the money",
-    "Est dilution %",
-    "Lowest strike",
-    "Fully funded price",
-    "% to fully funded",
-    "Next expiry",
-  ];
-  const body = rows.map((r) =>
-    [
-      `"${r.company_name.replace(/"/g, '""')}"`,
-      r.ticker,
-      r.current_price ?? "",
-      r.tranches,
-      r.in_the_money_tranches,
-      r.est_warrants,
-      r.est_proceeds_if_all_exercised,
-      r.est_proceeds_in_the_money,
-      r.est_dilution_pct ?? "",
-      r.lowest_strike,
-      r.fully_funded_price,
-      r.pct_to_fully_funded ?? "",
-      r.next_expiry,
-    ].join(","),
-  );
-  return [head.join(","), ...body].join("\n");
-}
-
 /* ---------- page ---------- */
 
 export default function WarrantRadarPage() {
@@ -198,18 +163,6 @@ export default function WarrantRadarPage() {
     () => Math.max(1, ...(data?.expiry_wall || []).map((w) => w.est_proceeds)),
     [data],
   );
-
-  const downloadCSV = () => {
-    const blob = new Blob([toCSV(companies)], {
-      type: "text/csv;charset=utf-8;",
-    });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `warrant-overhang-${new Date().toISOString().slice(0, 10)}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
 
   const s = data?.summary;
 
@@ -378,9 +331,43 @@ export default function WarrantRadarPage() {
                   />
                   In the money only
                 </label>
-                <Button variant="ghost" size="sm" onClick={downloadCSV}>
-                  Export CSV
-                </Button>
+                <ExportButton
+                  filename="warrant-overhang"
+                  rows={companies}
+                  columns={[
+                    { label: "Company", value: (r) => r.company_name },
+                    { label: "Ticker", value: (r) => r.ticker },
+                    { label: "Price", value: (r) => r.current_price },
+                    { label: "Tranches", value: (r) => r.tranches },
+                    {
+                      label: "In the money",
+                      value: (r) => r.in_the_money_tranches,
+                    },
+                    { label: "Est warrants", value: (r) => r.est_warrants },
+                    {
+                      label: "Est proceeds if all exercised",
+                      value: (r) => r.est_proceeds_if_all_exercised,
+                    },
+                    {
+                      label: "Est proceeds in the money",
+                      value: (r) => r.est_proceeds_in_the_money,
+                    },
+                    {
+                      label: "Est dilution %",
+                      value: (r) => r.est_dilution_pct,
+                    },
+                    { label: "Lowest strike", value: (r) => r.lowest_strike },
+                    {
+                      label: "Fully funded price",
+                      value: (r) => r.fully_funded_price,
+                    },
+                    {
+                      label: "% to fully funded",
+                      value: (r) => r.pct_to_fully_funded,
+                    },
+                    { label: "Next expiry", value: (r) => r.next_expiry },
+                  ]}
+                />
               </div>
 
               {/* Company table */}

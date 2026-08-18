@@ -4,8 +4,12 @@ import { useState, useCallback } from "react";
 import Link from "next/link";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
+import CompanyMultiPicker from "@/components/ui/CompanyMultiPicker";
+import type { PickableCompany } from "@/components/ui/CompanyPicker";
+import ExportButton from "@/components/ui/ExportButton";
 import LogoMono from "@/components/LogoMono";
 import { toolsAPI } from "@/lib/api";
+import { useCompanyList } from "@/lib/useCompanyList";
 
 interface Peer {
   company_id: number;
@@ -159,7 +163,8 @@ function SkeletonTable() {
 
 export default function PeerComparisonPage() {
   const [searchInput, setSearchInput] = useState("");
-  const [manualIds, setManualIds] = useState("");
+  const { companies, loading: companiesLoading } = useCompanyList();
+  const [manualPeers, setManualPeers] = useState<PickableCompany[]>([]);
   const [data, setData] = useState<PeerComparisonResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -192,14 +197,8 @@ export default function PeerComparisonPage() {
   };
 
   const handleManualCompare = () => {
-    const trimmed = manualIds.trim();
-    if (!trimmed) return;
-    const ids = trimmed
-      .split(",")
-      .map((s) => s.trim())
-      .filter(Boolean)
-      .join(",");
-    fetchComparison({ company_ids: ids });
+    if (manualPeers.length === 0) return;
+    fetchComparison({ company_ids: manualPeers.map((c) => c.id).join(",") });
   };
 
   const handleKeyDown = (e: React.KeyboardEvent, handler: () => void) => {
@@ -303,24 +302,26 @@ export default function PeerComparisonPage() {
           {/* Secondary: manual multi-company */}
           <div className="glass-card rounded-xl p-5">
             <label className="block text-sm font-medium text-slate-300 mb-2">
-              Manual Comparison (comma-separated IDs)
+              Build your own peer group
             </label>
-            <div className="flex gap-3">
-              <input
-                type="text"
-                value={manualIds}
-                onChange={(e) => setManualIds(e.target.value)}
-                onKeyDown={(e) => handleKeyDown(e, handleManualCompare)}
-                placeholder="e.g. 12, 45, 78, 103"
-                className="flex-1 bg-slate-800/60 border border-slate-700 rounded-lg px-4 py-2.5 text-slate-200 placeholder-slate-500 focus:outline-none focus:border-gold-500/60 focus:ring-1 focus:ring-gold-500/30 transition-all"
-              />
+            <div className="flex flex-col sm:flex-row gap-3 sm:items-end">
+              <div className="flex-1">
+                <CompanyMultiPicker
+                  companies={companies}
+                  selected={manualPeers}
+                  onChange={setManualPeers}
+                  label=""
+                  max={10}
+                  disabled={companiesLoading}
+                />
+              </div>
               <Button
                 variant="secondary"
                 size="md"
                 onClick={handleManualCompare}
-                disabled={loading || !manualIds.trim()}
+                disabled={loading || manualPeers.length === 0}
               >
-                Compare IDs
+                Compare
               </Button>
             </div>
           </div>
@@ -356,6 +357,34 @@ export default function PeerComparisonPage() {
                 Comparison Results
               </h2>
               <Badge variant="slate">{data.count} companies</Badge>
+              <ExportButton
+                className="ml-auto"
+                filename="peer-comparison"
+                rows={data.peers}
+                columns={[
+                  { label: "Company", value: (p) => p.company_name },
+                  { label: "Ticker", value: (p) => p.ticker },
+                  { label: "Exchange", value: (p) => p.exchange },
+                  { label: "Price", value: (p) => p.stock_price },
+                  { label: "Currency", value: (p) => p.currency },
+                  { label: "Market cap USD", value: (p) => p.market_cap_usd },
+                  { label: "Gold oz", value: (p) => p.total_gold_oz },
+                  { label: "Silver oz", value: (p) => p.total_silver_oz },
+                  { label: "Avg grade g/t", value: (p) => p.avg_grade_gpt },
+                  { label: "Tonnes", value: (p) => p.total_tonnes },
+                  { label: "EV/oz", value: (p) => p.ev_per_oz },
+                  { label: "NPV USD M", value: (p) => p.npv_usd_m },
+                  { label: "P/NAV", value: (p) => p.p_nav },
+                  { label: "IRR %", value: (p) => p.irr_pct },
+                  { label: "AISC", value: (p) => p.aisc },
+                  {
+                    label: "Financing USD",
+                    value: (p) => p.total_financing_usd,
+                  },
+                  { label: "Projects", value: (p) => p.project_count },
+                  { label: "Flagship stage", value: (p) => p.flagship_stage },
+                ]}
+              />
             </div>
 
             <div className="glass-card rounded-xl overflow-hidden">

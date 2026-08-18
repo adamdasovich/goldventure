@@ -4,8 +4,12 @@ import { useState } from "react";
 import Link from "next/link";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
+import CompanyMultiPicker from "@/components/ui/CompanyMultiPicker";
+import type { PickableCompany } from "@/components/ui/CompanyPicker";
+import ExportButton from "@/components/ui/ExportButton";
 import LogoMono from "@/components/LogoMono";
 import { toolsAPI } from "@/lib/api";
+import { useCompanyList } from "@/lib/useCompanyList";
 
 /* ---------- types ---------- */
 
@@ -150,22 +154,18 @@ function ExposureChart({
 /* ---------- page ---------- */
 
 export default function PortfolioXrayPage() {
-  const [companyIds, setCompanyIds] = useState("");
+  const { companies, loading: companiesLoading } = useCompanyList();
+  const [selected, setSelected] = useState<PickableCompany[]>([]);
   const [data, setData] = useState<XrayData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function handleAnalyze() {
-    const cleaned = companyIds
-      .split(/[,\s]+/)
-      .map((s) => s.trim())
-      .filter((s) => /^\d+$/.test(s))
-      .join(",");
-
-    if (!cleaned) {
-      setError("Please enter at least one valid company ID.");
+    if (selected.length === 0) {
+      setError("Add at least one company to analyze.");
       return;
     }
+    const cleaned = selected.map((c) => c.id).join(",");
 
     setLoading(true);
     setError(null);
@@ -226,39 +226,26 @@ export default function PortfolioXrayPage() {
       <section className="px-4 sm:px-6 lg:px-8 py-6">
         <div className="max-w-7xl mx-auto">
           <div className="glass-card rounded-xl p-6">
-            <label
-              htmlFor="company-ids"
-              className="block text-sm font-medium text-slate-300 mb-2"
-            >
-              Company IDs
-            </label>
             <p className="text-xs text-slate-500 mb-3">
-              Enter company IDs separated by commas (find them on the{" "}
-              <Link
-                href="/companies"
-                className="text-gold-400 hover:text-gold-300 underline"
-              >
-                Companies page
-              </Link>
-              )
+              Add the companies you hold, then analyze the set for commodity,
+              geographic and stage concentration.
             </p>
-            <div className="flex flex-col sm:flex-row gap-3">
-              <input
-                id="company-ids"
-                type="text"
-                value={companyIds}
-                onChange={(e) => setCompanyIds(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") handleAnalyze();
-                }}
-                placeholder="e.g. 1, 2, 3, 15, 42"
-                className="flex-1 bg-slate-800/60 border border-slate-700/50 text-slate-200 text-sm rounded-lg px-4 py-2.5 placeholder:text-slate-600 focus:border-gold-500/50 focus:outline-none focus:ring-1 focus:ring-gold-500/30"
-              />
+            <div className="flex flex-col sm:flex-row gap-3 sm:items-end">
+              <div className="flex-1">
+                <CompanyMultiPicker
+                  companies={companies}
+                  selected={selected}
+                  onChange={setSelected}
+                  label="Portfolio"
+                  max={25}
+                  disabled={companiesLoading}
+                />
+              </div>
               <Button
                 variant="primary"
                 size="md"
                 onClick={handleAnalyze}
-                disabled={loading || !companyIds.trim()}
+                disabled={loading || selected.length === 0}
               >
                 {loading ? (
                   <span className="flex items-center gap-2">
@@ -346,9 +333,36 @@ export default function PortfolioXrayPage() {
             {/* ---- Holdings Table ---- */}
             {data.holdings.length > 0 && (
               <div className="glass-card rounded-xl p-6">
-                <h2 className="text-sm font-semibold text-gold-400 mb-4">
-                  Holdings
-                </h2>
+                <div className="flex items-center justify-between mb-4 gap-3">
+                  <h2 className="text-sm font-semibold text-gold-400">
+                    Holdings
+                  </h2>
+                  <ExportButton
+                    filename="portfolio-xray"
+                    rows={data.holdings}
+                    columns={[
+                      { label: "Company", value: (h) => h.company_name },
+                      { label: "Ticker", value: (h) => h.ticker },
+                      { label: "Exchange", value: (h) => h.exchange },
+                      { label: "Price", value: (h) => h.stock_price },
+                      { label: "Change %", value: (h) => h.change_pct },
+                      {
+                        label: "Market cap USD",
+                        value: (h) => h.market_cap_usd,
+                      },
+                      { label: "Commodity", value: (h) => h.commodity },
+                      { label: "Country", value: (h) => h.country },
+                      { label: "Stage", value: (h) => h.stage },
+                      { label: "Projects", value: (h) => h.project_count },
+                      { label: "Gold oz", value: (h) => h.gold_oz },
+                      { label: "Silver oz", value: (h) => h.silver_oz },
+                      {
+                        label: "Open financings",
+                        value: (h) => h.open_financings,
+                      },
+                    ]}
+                  />
+                </div>
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
