@@ -45,6 +45,26 @@ const TOOLS = [
     available: true,
   },
   {
+    title: "Liquidity & Days to Exit",
+    slug: "liquidity-screener",
+    description:
+      "How long it would actually take to sell a position. Median daily volume, sellable-per-day, and days-to-exit for any position size — the risk no other screener shows.",
+    href: "/investor-tools/liquidity-screener",
+    badge: "Market Quality",
+    icon: "M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z",
+    available: true,
+  },
+  {
+    title: "Signal-to-Noise Ratio",
+    slug: "signal-to-noise",
+    description:
+      "What share of a company's news reports an actual result — drill intercepts, resource updates, studies — versus corporate filler. Tells explorers from promoters.",
+    href: "/investor-tools/signal-to-noise",
+    badge: "Market Quality",
+    icon: "M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3",
+    available: true,
+  },
+  {
     title: "Warrant Overhang Radar",
     slug: "warrant-radar",
     description:

@@ -442,6 +442,18 @@ export const toolsAPI = {
       applyTierGate,
     );
   },
+  liquidityScreener: (params: Record<string, string> = {}) => {
+    const q = new URLSearchParams(params).toString();
+    return apiFetch<any>(`/tools/liquidity-screener/${q ? `?${q}` : ""}`).then(
+      applyTierGate,
+    );
+  },
+  signalToNoise: (params: Record<string, string> = {}) => {
+    const q = new URLSearchParams(params).toString();
+    return apiFetch<any>(`/tools/signal-to-noise/${q ? `?${q}` : ""}`).then(
+      applyTierGate,
+    );
+  },
   warrantRadar: (params: Record<string, string> = {}) => {
     const q = new URLSearchParams(params).toString();
     return apiFetch<any>(`/tools/warrant-radar/${q ? `?${q}` : ""}`).then(
