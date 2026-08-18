@@ -69,7 +69,15 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     // Thin profiles (no real description or zero projects) read as soft-404s to
     // Google. Keep them reachable for users but out of the index — this is the
     // page-level counterpart to the sitemap inclusion bar.
-    const isThin = !company.description || (company.project_count ?? 0) === 0;
+    //
+    // NOTE: the DETAIL endpoint serializes `projects` (an array); only the LIST
+    // endpoint carries `project_count`. Reading `project_count` alone here made
+    // `isThin` unconditionally true and noindexed every company page on the
+    // site — count the array first and keep the scalar as a fallback.
+    const projectCount = Array.isArray(company.projects)
+      ? company.projects.length
+      : (company.project_count ?? 0);
+    const isThin = !company.description || projectCount === 0;
 
     return {
       title,

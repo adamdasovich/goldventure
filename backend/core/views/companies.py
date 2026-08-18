@@ -143,12 +143,18 @@ class CompanyViewSet(viewsets.ModelViewSet):
         # Filter by commodity - find companies with projects in specified commodity
         commodity = self.request.query_params.get('commodity')
         if commodity:
-            # Support comma-separated commodities for multi-select
+            # Support comma-separated commodities for multi-select.
             commodities = [c.strip() for c in commodity.split(',') if c.strip()]
             if commodities:
-                queryset = queryset.filter(
-                    projects__primary_commodity__in=commodities
-                ).distinct()
+                # Case-insensitive: `__in` is an exact match, but stored
+                # primary_commodity values are lowercase while callers pass
+                # title-case labels ("Rare Earths", "Lithium"). That mismatch
+                # silently returned zero companies and noindexed the commodity
+                # landing pages that depend on this filter.
+                commodity_q = Q()
+                for c in commodities:
+                    commodity_q |= Q(projects__primary_commodity__iexact=c)
+                queryset = queryset.filter(commodity_q).distinct()
 
         # Annotate counts to avoid N+1 in serializers
         queryset = queryset.annotate(

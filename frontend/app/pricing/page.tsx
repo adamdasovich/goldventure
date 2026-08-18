@@ -1,8 +1,7 @@
 "use client";
 
-import { Suspense, useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
 import { platformAPI, type PlatformTier } from "@/lib/api";
 import { trackSubscribe } from "@/lib/analytics";
@@ -67,16 +66,7 @@ const FEATURE_ROWS = [
 ];
 
 export default function PricingPage() {
-  return (
-    <Suspense>
-      <PricingContent />
-    </Suspense>
-  );
-}
-
-function PricingContent() {
   const { user, accessToken, subscription } = useAuth();
-  const searchParams = useSearchParams();
   const [interval, setInterval] = useState<"month" | "year">("year");
   const [loadingTier, setLoadingTier] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState("");
@@ -112,7 +102,13 @@ function PricingContent() {
   };
 
   useEffect(() => {
-    if (searchParams.get("success") !== "true") return;
+    // Read the query string off `window` rather than `useSearchParams()` — the
+    // hook opts this statically-rendered page out of prerendering, and the
+    // Suspense boundary it forced had no fallback, so the whole pricing page
+    // was served to crawlers as an empty <body>. This effect is client-only
+    // anyway, so nothing is lost.
+    const query = new URLSearchParams(window.location.search);
+    if (query.get("success") !== "true") return;
 
     // Google Ads / GA4 conversion: paid subscription completed. Ref-guarded
     // so a re-render can't double-count the conversion.
@@ -124,7 +120,7 @@ function PricingContent() {
     // The webhook is asynchronous, so the tier on /auth/me may still say
     // Explorer at this point. Reconcile against the session id Stripe put in
     // the URL rather than claiming success and showing the old tier.
-    const sessionId = searchParams.get("session_id");
+    const sessionId = query.get("session_id");
     if (sessionId && accessToken) {
       setSuccessMessage("Confirming your subscription…");
       platformAPI
@@ -147,7 +143,7 @@ function PricingContent() {
 
     const t = setTimeout(() => setSuccessMessage(""), 8000);
     return () => clearTimeout(t);
-  }, [searchParams, accessToken]);
+  }, [accessToken]);
 
   const handleSubscribe = async (tier: string) => {
     if (!accessToken) {

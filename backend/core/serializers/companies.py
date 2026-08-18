@@ -289,6 +289,9 @@ class CompanyDetailSerializer(serializers.ModelSerializer):
     """Detailed company serializer with nested projects"""
     projects = ProjectSerializer(many=True, read_only=True)
     financings = FinancingSerializer(many=True, read_only=True)
+    # Mirrors CompanySerializer so callers can read the same field off either
+    # endpoint — the frontend's indexability check relied on it being here.
+    project_count = serializers.SerializerMethodField()
     presentation_url = serializers.SerializerMethodField()
     fact_sheet_url = serializers.SerializerMethodField()
     technical_report_url = serializers.SerializerMethodField()
@@ -312,9 +315,15 @@ class CompanyDetailSerializer(serializers.ModelSerializer):
             # Nested serializers
             'projects', 'financings',
             # Method fields
+            'project_count',
             'presentation_url', 'fact_sheet_url', 'technical_report_url',
         ]
         read_only_fields = ['id', 'slug', 'created_at', 'updated_at', 'data_completeness_score']
+
+    def get_project_count(self, obj):
+        if hasattr(obj, '_project_count'):
+            return obj._project_count
+        return obj.projects.filter(is_active=True).count()
 
     def get_presentation_url(self, obj):
         """Get the latest corporate presentation URL"""

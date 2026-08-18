@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { useParams, useRouter, useSearchParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import {
   Card,
   CardHeader,
@@ -57,47 +57,70 @@ interface CompanyDetailClientProps {
   initialProjects?: Project[];
 }
 
+const TAB_IDS = [
+  "overview",
+  "events",
+  "news",
+  "financings",
+  "resources",
+  "forum",
+] as const;
+type TabId = (typeof TAB_IDS)[number];
+
+function readTabFromUrl(): TabId {
+  if (typeof window === "undefined") return "overview";
+  const tab = new URLSearchParams(window.location.search).get("tab");
+  return tab && (TAB_IDS as readonly string[]).includes(tab)
+    ? (tab as TabId)
+    : "overview";
+}
+
 export default function CompanyDetailClient({
   initialCompany,
   initialProjects,
 }: CompanyDetailClientProps) {
   const params = useParams();
   const router = useRouter();
-  const searchParams = useSearchParams();
   // params.id may be `{numericId}-{slug}` — strip everything after the leading
   // integer for API lookups. The internal API only knows numeric ids.
   const rawIdSegment = params.id as string;
   const companyId = (rawIdSegment || "").split("-")[0];
   const { user, accessToken, logout } = useAuth();
 
-  // Tab state — kept in the URL (?tab=forum) so the discovery pill, FAB,
+  // Tab state — mirrored into the URL (?tab=forum) so the discovery pill, FAB,
   // and external links can deep-link straight into a tab and the choice
   // survives refresh / back-forward navigation.
-  const TAB_IDS = [
-    "overview",
-    "events",
-    "news",
-    "financings",
-    "resources",
-    "forum",
-  ] as const;
-  type TabId = (typeof TAB_IDS)[number];
-  const urlTab = searchParams?.get("tab") as TabId | null;
-  const activeTab: TabId =
-    urlTab && (TAB_IDS as readonly string[]).includes(urlTab)
-      ? urlTab
-      : "overview";
+  //
+  // Deliberately NOT `useSearchParams()`. This route is statically prerendered
+  // (generateStaticParams + revalidate), and reading that hook opts the whole
+  // subtree out of prerendering — every company page shipped loading.tsx's
+  // skeleton to Googlebot instead of the profile (7 words, no <h1>). Seeding
+  // from "overview" and syncing after mount keeps the server render intact,
+  // and "overview" is the tab holding the indexable content anyway.
+  const [activeTab, setActiveTabState] = useState<TabId>("overview");
+
+  useEffect(() => {
+    const syncFromUrl = () => setActiveTabState(readTabFromUrl());
+    // Deep links (?tab=forum) land on "overview" for one paint, then correct.
+    syncFromUrl();
+    // Back/forward across tabs came free with useSearchParams; restore it.
+    window.addEventListener("popstate", syncFromUrl);
+    return () => window.removeEventListener("popstate", syncFromUrl);
+  }, []);
 
   const setActiveTab = useCallback(
     (tab: TabId, opts?: { scrollIntoView?: string }) => {
-      const next = new URLSearchParams(searchParams?.toString() || "");
+      setActiveTabState(tab);
+      const next = new URLSearchParams(window.location.search);
       if (tab === "overview") {
         next.delete("tab");
       } else {
         next.set("tab", tab);
       }
       const qs = next.toString();
-      router.replace(`/companies/${companyId}${qs ? `?${qs}` : ""}`, {
+      // Keep the `{id}-{slug}` segment. Rewriting to the bare numeric id sent
+      // every tab click through middleware's 308 back to the canonical URL.
+      router.replace(`/companies/${rawIdSegment}${qs ? `?${qs}` : ""}`, {
         scroll: false,
       });
       if (opts?.scrollIntoView) {
@@ -108,7 +131,7 @@ export default function CompanyDetailClient({
         });
       }
     },
-    [companyId, router, searchParams],
+    [rawIdSegment, router],
   );
 
   const jumpToForum = useCallback(() => {

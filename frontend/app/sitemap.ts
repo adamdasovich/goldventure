@@ -1,5 +1,6 @@
 import { MetadataRoute } from "next";
 import { companyHref } from "@/lib/companyUrl";
+import { indexableFacets } from "@/lib/commodityFacets";
 
 const RESOLVED_API_BASE_URL =
   process.env.API_BASE_URL || process.env.NEXT_PUBLIC_API_URL;
@@ -278,6 +279,66 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       priority: 0.7,
     },
     {
+      url: `${baseUrl}/investor-tools/warrant-radar`,
+      lastModified: new Date(),
+      changeFrequency: "weekly",
+      priority: 0.7,
+    },
+    {
+      url: `${baseUrl}/investor-tools/metal-correlation`,
+      lastModified: new Date(),
+      changeFrequency: "weekly",
+      priority: 0.7,
+    },
+    {
+      url: `${baseUrl}/investor-tools/dilution-tracker`,
+      lastModified: new Date(),
+      changeFrequency: "weekly",
+      priority: 0.7,
+    },
+    {
+      url: `${baseUrl}/investor-tools/stock-comparator`,
+      lastModified: new Date(),
+      changeFrequency: "weekly",
+      priority: 0.7,
+    },
+    {
+      url: `${baseUrl}/investor-tools/resource-growth`,
+      lastModified: new Date(),
+      changeFrequency: "weekly",
+      priority: 0.7,
+    },
+    {
+      url: `${baseUrl}/investor-tools/unusual-activity`,
+      lastModified: new Date(),
+      changeFrequency: "daily",
+      priority: 0.7,
+    },
+    {
+      url: `${baseUrl}/investor-tools/catalyst-impact`,
+      lastModified: new Date(),
+      changeFrequency: "weekly",
+      priority: 0.7,
+    },
+    {
+      url: `${baseUrl}/investor-tools/due-diligence`,
+      lastModified: new Date(),
+      changeFrequency: "weekly",
+      priority: 0.7,
+    },
+    {
+      url: `${baseUrl}/open-financings`,
+      lastModified: new Date(),
+      changeFrequency: "daily",
+      priority: 0.8,
+    },
+    {
+      url: `${baseUrl}/reports/weekly`,
+      lastModified: new Date(),
+      changeFrequency: "weekly",
+      priority: 0.7,
+    },
+    {
       url: `${baseUrl}/about`,
       lastModified: new Date(),
       changeFrequency: "monthly",
@@ -324,28 +385,20 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   }));
 
   // Faceted commodity landing pages — mid-tail keyword targets
-  // ("gold mining companies", "lithium exploration stocks", etc.). Keep this
-  // list in sync with FACETS in app/companies/commodity/[commodity]/page.tsx.
-  const commodityFacets = [
-    "gold",
-    "silver",
-    "copper",
-    "lithium",
-    "nickel",
-    "cobalt",
-    "uranium",
-    "rare-earths",
-    "graphite",
-    "critical-minerals",
-  ];
-  const commodityFacetRoutes: MetadataRoute.Sitemap = commodityFacets.map(
-    (slug) => ({
-      url: `${baseUrl}/companies/commodity/${slug}`,
-      lastModified: new Date(),
-      changeFrequency: "weekly" as const,
-      priority: 0.8,
-    }),
-  );
+  // ("gold mining companies", "lithium exploration stocks", etc.).
+  //
+  // Derived from the same config the pages render from, and filtered by the
+  // same MIN_INDEXABLE bar they apply. A hardcoded list here drifted out of
+  // sync and submitted facets that were noindexing themselves for having no
+  // companies — submitted-plus-noindexed is a quality signal against the domain.
+  const commodityFacetRoutes: MetadataRoute.Sitemap = (
+    await indexableFacets()
+  ).map((facet) => ({
+    url: `${baseUrl}/companies/commodity/${facet.slug}`,
+    lastModified: new Date(),
+    changeFrequency: "weekly" as const,
+    priority: 0.8,
+  }));
 
   // Weekly financing roundup pages (native SEO archive)
   let financingWeeks: any[] = [];
