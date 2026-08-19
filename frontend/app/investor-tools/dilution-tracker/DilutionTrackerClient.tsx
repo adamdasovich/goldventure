@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
-import { useSearchParams } from "next/navigation";
 import { toolsAPI } from "@/lib/api";
 import { Badge } from "@/components/ui/Badge";
 import CompanyActions from "@/components/ui/CompanyActions";
@@ -116,17 +115,21 @@ export default function DilutionTrackerClient() {
       .slice(0, 8);
   }, [search, available]);
 
+
   // Adopt ?company_id= so links from other tools land on the right company
-  // instead of an empty picker. Runs once the list is loaded and only when
-  // nothing has been chosen yet, so it never fights a manual selection.
-  const searchParams = useSearchParams();
+  // instead of an empty picker. Read straight off window.location rather than
+  // useSearchParams: this page is statically prerendered, and that hook forces
+  // the whole client tree into a Suspense boundary to satisfy the build.
   useEffect(() => {
-    const requested = searchParams.get("company_id");
+    if (typeof window === "undefined") return;
+    const requested = new URLSearchParams(window.location.search).get(
+      "company_id",
+    );
     if (!requested || selected || available.length === 0) return;
     const match = available.find((c) => String(c.id) === requested);
     if (match) selectCompany(match);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchParams, available, selected]);
+  }, [available, selected]);
 
   const selectCompany = async (c: AvailableCompany) => {
     setSelected(c);
