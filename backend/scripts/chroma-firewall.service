@@ -1,0 +1,15 @@
+[Unit]
+# iptables rules do not survive a reboot and iptables-persistent is not
+# installed, so without this the Chroma port would quietly reopen to the
+# internet the next time the box restarts.
+Description=Restrict ChromaDB port 8002 to localhost and allowed GPU droplets
+After=network-pre.target
+Before=network.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/var/www/goldventure/backend/scripts/chroma_firewall.sh init
+
+[Install]
+WantedBy=multi-user.target
