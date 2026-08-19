@@ -226,9 +226,15 @@ class Command(BaseCommand):
 
     def _ask_claude(self, context):
         """Call Claude and return parsed JSON, or None."""
+        # max_tokens caps thinking AND response text together on Claude Opus 5,
+        # where thinking is on by default. At 8000 the reasoning ate the budget
+        # and the JSON came back truncated mid-object — which surfaced as
+        # "Claude did not return JSON" against a fragment like "the JSON:",
+        # i.e. the tail of a cut-off response rather than a model that ignored
+        # the format instruction.
         message = self.client.messages.create(
             model=self.model,
-            max_tokens=8000,
+            max_tokens=16000,
             system=EXTRACTION_PROMPT,
             messages=[{"role": "user", "content": f"Report excerpts:\n\n{context}"}],
         )
@@ -240,6 +246,11 @@ class Command(BaseCommand):
         )
         usage = (message.usage.input_tokens, message.usage.output_tokens)
 
+        if message.stop_reason == 'max_tokens':
+            raise ValueError(
+                "response truncated at max_tokens — raise the cap or send fewer chunks"
+            )
+
         cleaned = text.strip()
         if cleaned.startswith('```'):
             cleaned = re.sub(r'^```(?:json)?\s*|\s*```$', '', cleaned)
@@ -249,7 +260,7 @@ class Command(BaseCommand):
             start, end = cleaned.find('{'), cleaned.rfind('}') + 1
             if start != -1 and end > start:
                 return json.loads(cleaned[start:end]), usage
-            raise ValueError(f"Claude did not return JSON: {cleaned[:160]}")
+            raise ValueError(f"Claude did not return JSON: {cleaned[:160]!r}")
 
     def _extract_one(self, document, label, stats):
         context, used, available = self._select_context(document)
@@ -341,8 +352,19 @@ class Command(BaseCommand):
     def _save_resources(self, document, project, data, resources):
         report_date = self._date(data.get('report_date'), document.document_date)
         effective = self._date(data.get('effective_date'), report_date)
-        saved = 0
 
+        # Replace this document's rows wholesale rather than upserting each one.
+        #
+        # (project, category, report_date) is not unique: one report routinely
+        # states an Indicated resource for several deposits or zones, so
+        # update_or_create raised MultipleObjectsReturned on exactly the
+        # multi-deposit reports that carry the most data. Keying on the
+        # document's provenance marker instead keeps reruns idempotent while
+        # letting a report contribute as many rows as it actually states.
+        marker = f"doc:{document.id}"
+        ResourceEstimate.objects.filter(project=project, report_url=marker).delete()
+
+        saved = 0
         for row in resources:
             tonnes = self._decimal(row.get('tonnes'), '0.01')
             if not tonnes or tonnes <= 0:
@@ -353,24 +375,21 @@ class Command(BaseCommand):
             if category not in dict(ResourceEstimate.RESOURCE_CATEGORIES):
                 continue
 
-            ResourceEstimate.objects.update_or_create(
+            ResourceEstimate.objects.create(
                 project=project,
                 category=category,
                 report_date=report_date,
-                defaults={
-                    'standard': 'ni43101',
-                    'tonnes': tonnes,
-                    'gold_grade_gpt': self._decimal(row.get('gold_grade_gpt')),
-                    'gold_ounces': self._decimal(row.get('gold_ounces'), '0.01'),
-                    'silver_grade_gpt': self._decimal(row.get('silver_grade_gpt')),
-                    'silver_ounces': self._decimal(row.get('silver_ounces'), '0.01'),
-                    'copper_grade_pct': self._decimal(row.get('copper_grade_pct')),
-                    'cutoff_grade': self._decimal(row.get('cutoff_grade')),
-                    'effective_date': effective,
-                    'qualified_person': (data.get('qualified_person') or '')[:200],
-                    # Marks provenance and makes reruns idempotent.
-                    'report_url': f"doc:{document.id}",
-                },
+                standard='ni43101',
+                tonnes=tonnes,
+                gold_grade_gpt=self._decimal(row.get('gold_grade_gpt')),
+                gold_ounces=self._decimal(row.get('gold_ounces'), '0.01'),
+                silver_grade_gpt=self._decimal(row.get('silver_grade_gpt')),
+                silver_ounces=self._decimal(row.get('silver_ounces'), '0.01'),
+                copper_grade_pct=self._decimal(row.get('copper_grade_pct')),
+                cutoff_grade=self._decimal(row.get('cutoff_grade')),
+                effective_date=effective,
+                qualified_person=(data.get('qualified_person') or '')[:200],
+                report_url=marker,
             )
             saved += 1
         return saved
@@ -381,11 +400,15 @@ class Command(BaseCommand):
             return 0
 
         release = self._date(study.get('release_date'), document.document_date)
-        EconomicStudy.objects.update_or_create(
+        # Same reasoning as _save_resources: key on the document, not on
+        # (project, study_type, release_date), which is not unique either.
+        marker = f"doc:{document.id}"
+        EconomicStudy.objects.filter(project=project, report_url=marker).delete()
+        EconomicStudy.objects.create(
             project=project,
             study_type=study_type,
             release_date=release,
-            defaults={
+            **{
                 'npv_5_usd': self._decimal(study.get('npv_5_usd_millions'), '0.01'),
                 'irr_percent': self._decimal(study.get('irr_percent'), '0.01'),
                 'payback_years': self._decimal(study.get('payback_years'), '0.1'),
