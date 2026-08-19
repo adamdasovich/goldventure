@@ -72,7 +72,10 @@ class Document(models.Model):
     document_type = models.CharField(max_length=30, choices=DOCUMENT_TYPES)
     document_date = models.DateField()
 
-    file_url = models.URLField()
+    # 500, not Django's 200 default: 25 GPU jobs failed outright on
+    # "value too long for type character varying(200)" because SEDAR and
+    # investor-relations PDF links routinely run past 200 characters.
+    file_url = models.URLField(max_length=500)
     file_size_mb = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
 
     description = models.TextField(blank=True)
