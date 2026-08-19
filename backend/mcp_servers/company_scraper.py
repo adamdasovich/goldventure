@@ -14,6 +14,11 @@ from datetime import datetime
 from bs4 import BeautifulSoup
 from crawl4ai import AsyncWebCrawler, BrowserConfig, CrawlerRunConfig
 from core.security_utils import check_url_safety as is_safe_url
+# Shared with website_crawler deliberately. The two scrapers are otherwise
+# independent (see CLAUDE.md), but both had to infer a year for dates published
+# without one, and both got it wrong the same way. One implementation so the
+# next fix cannot land in only half the codebase.
+from mcp_servers.website_crawler import infer_year_for_month_day
 
 logger = logging.getLogger(__name__)
 
@@ -3201,7 +3206,6 @@ class CompanyDataScraper:
             #            <a class="read-more" href="...">Read More</a>
             #          </div>
             # Note: Year is NOT in the date element, infer from current context
-            current_year = datetime.now().year
             posts = soup.find_all('div', class_='post')
             for post in posts[:50]:  # Limit to 50 posts
                 # Find month and day spans
@@ -3226,10 +3230,12 @@ class CompanyDataScraper:
 
                 day = day_text.zfill(2)
 
-                # Determine year - if month is in the future, use previous year
-                current_month = datetime.now().month
-                post_month = int(month)
-                year = current_year if post_month <= current_month else current_year - 1
+                # Year is not in the markup, so infer it. Compare month AND
+                # day: comparing month alone returns the current year for any
+                # date later this month, which is in the future. Same defect
+                # existed in website_crawler.parse_date_comprehensive and put
+                # seven future-dated releases in the database.
+                year = infer_year_for_month_day(int(month), int(day))
                 pub_date = f"{year}-{month}-{day}"
 
                 # Find title in h3

@@ -38,13 +38,67 @@ MONTH_MAP = {
     'dec': '12', 'december': '12'
 }
 
+# Slack allowed on future dates: timezone skew plus the occasional release
+# published under tomorrow's date. Anything beyond this is a parse error.
+FUTURE_DATE_SLACK_DAYS = 7
+
+
+def infer_year_for_month_day(month: int, day: int, today=None) -> int:
+    """Year for a month/day that was published without one.
+
+    A site showing "21 Aug" means the most recent 21 August, which is last
+    year's if this year's has not happened yet.
+
+    Compare BOTH month and day. Comparing month alone — `year = current_year
+    if month <= current_month else current_year - 1` — returns the current
+    year for any date later this month, which is in the future. That produced
+    seven future-dated releases, including a Kuya Silver item stored as
+    2026-08-21 while it was still 2026-08-19.
+    """
+    today = today or datetime.now().date()
+    if (month, day) > (today.month, today.day):
+        return today.year - 1
+    return today.year
+
+
+def reject_if_future(date_str: Optional[str]) -> Optional[str]:
+    """Drop a parsed date that lands beyond today + FUTURE_DATE_SLACK_DAYS.
+
+    A press release cannot meaningfully be in the future, and a future date
+    sorts to the top of every news-driven tool and poisons sitemap lastmod.
+    `parse_date_standalone` has always applied this; `parse_date_comprehensive`
+    did not, which is how the bad rows reached the database.
+    """
+    if not date_str:
+        return None
+    try:
+        d = datetime.strptime(date_str, '%Y-%m-%d').date()
+    except ValueError:
+        return None
+    if d > datetime.now().date() + timedelta(days=FUTURE_DATE_SLACK_DAYS):
+        return None
+    if d.year < 1990:
+        return None
+    return date_str
+
 
 def parse_date_comprehensive(text: str) -> Tuple[Optional[str], str]:
     """
     Extract date from text using all known patterns.
     Returns (date_str in YYYY-MM-DD, cleaned_text with date removed from start).
     Handles: MM.DD.YYYY, Month DD YYYY, DDMonTitle, YYYYMMDD, etc.
+
+    Wraps the format-matching half with the same future-date clamp
+    `parse_date_standalone` applies. This function had no clamp, so a
+    mis-inferred year went straight into the database; the cleaned title is
+    still returned when the date is rejected, since callers rely on it.
     """
+    date_str, cleaned = _parse_date_comprehensive_raw(text)
+    return reject_if_future(date_str), cleaned
+
+
+def _parse_date_comprehensive_raw(text: str) -> Tuple[Optional[str], str]:
+    """Format-matching half of `parse_date_comprehensive` — no validation."""
     if not text:
         return None, text
 
@@ -93,10 +147,7 @@ def parse_date_comprehensive(text: str) -> Tuple[Optional[str], str]:
         day = match.group(1).zfill(2)
         month = MONTH_MAP.get(match.group(2).lower(), '01')
         remaining_title = match.group(3)
-        # Determine year - if month is in future, use last year
-        current_year = datetime.now().year
-        current_month = datetime.now().month
-        year = current_year if int(month) <= current_month else current_year - 1
+        year = infer_year_for_month_day(int(month), int(day))
         date_str = f"{year}-{month}-{day}"
         return date_str, remaining_title
 
@@ -234,21 +285,7 @@ def parse_date_standalone(text: str) -> Optional[str]:
     meaningfully in the future, so anything past today+7d is rejected rather
     than stored. Future-dated rows sort to the top of every news-driven tool.
     """
-    parsed = _parse_date_standalone_raw(text)
-    if not parsed:
-        return None
-    try:
-        d = datetime.strptime(parsed, '%Y-%m-%d').date()
-    except ValueError:
-        return None
-    today = datetime.now().date()
-    # Allow a week of slack for timezone skew and embargoed releases.
-    if d > today + timedelta(days=7):
-        return None
-    # Nothing in this corpus predates modern electronic filing.
-    if d.year < 1990:
-        return None
-    return parsed
+    return reject_if_future(_parse_date_standalone_raw(text))
 
 
 def _parse_date_standalone_raw(text: str) -> Optional[str]:
