@@ -300,12 +300,13 @@ class Command(BaseCommand):
     # ------------------------------------------------------------------
 
     # Words that carry no identity — reports name the same asset "Ixtaca",
-    # "Ixtaca Project", "Ixtaca Gold-Silver Project" and "Ixtaca (Tuligtic
-    # Property)" interchangeably.
+    # "Ixtaca Project" and "Ixtaca (Tuligtic Property)" interchangeably.
+    # Structural words only. Commodity names are deliberately NOT noise:
+    # stripping them collapses "Nickel Island Property" to "Island", which then
+    # matches the unrelated "Rice Island Property".
     _NOISE_WORDS = {
-        'project', 'property', 'properties', 'deposit', 'deposits', 'mine',
-        'mines', 'complex', 'claims', 'claim', 'gold', 'silver', 'copper',
-        'zinc', 'lead', 'nickel', 'lithium', 'uranium', 'the', 'and',
+        'project', 'projects', 'property', 'properties', 'deposit', 'deposits',
+        'mine', 'mines', 'complex', 'claims', 'claim', 'the', 'and',
     }
 
     @classmethod
@@ -341,10 +342,11 @@ class Command(BaseCommand):
                     tokens = self._normalize_project_name(project.name)
                     if not tokens:
                         continue
-                    # Equal, or one is a strict subset of the other
-                    # ("true north" vs "true north gold mine"). Unrelated names
-                    # such as "ixtaca" and "tuligtic" stay separate.
-                    if tokens == candidate or tokens < candidate or candidate < tokens:
+                    # Equality only. A subset rule looks tempting ("true
+                    # north" vs "true north gold mine") but merges distinct
+                    # siblings — "Northern Uravan District" and "Central
+                    # Uravan District" both contain "Uravan Properties".
+                    if tokens == candidate:
                         return project
 
         # Fall back to the company's flagship before inventing a project —

@@ -9,11 +9,17 @@ it through Grade Ranker and made Resource Growth read as six one-report
 projects.
 
 Projects are grouped per company by their identifying tokens (parentheticals,
-punctuation and generic words like "project"/"gold" removed), merging a group
-when the token sets are equal or one is a strict subset of another. That keeps
-"True North Gold Mine" and "True North Gold Project" together while leaving
-genuinely different names — "Ixtaca" and "Tuligtic" — apart, because
-over-merging two real projects is worse than leaving two rows for one.
+punctuation and structural words like "project"/"property" removed), merging
+only when the token sets are *equal*. That keeps "True North Gold Mine" and
+"True North Gold Project" together while leaving genuinely different names —
+"Ixtaca" and "Tuligtic" — apart.
+
+An earlier version also merged on strict subset. It over-merged: "Uravan
+Properties" reduces to {uravan}, a subset of all three of Urano's Northern,
+Central and Southern Uravan Districts, so union-find pulled three distinct
+districts into one row. Equality-only leaves a few variants unmerged
+("Ixtaca Gold-Silver Project" keeps its own row) — the right trade, since
+merging two real projects destroys data while a leftover duplicate does not.
 
 Within a group the survivor is the project with the most resource estimates,
 tie-broken by lowest id, so the longest history wins.
@@ -35,9 +41,11 @@ from core.models import (
 )
 
 NOISE_WORDS = {
-    'project', 'property', 'properties', 'deposit', 'deposits', 'mine',
-    'mines', 'complex', 'claims', 'claim', 'gold', 'silver', 'copper',
-    'zinc', 'lead', 'nickel', 'lithium', 'uranium', 'the', 'and',
+    # Structural words only. Commodity names are deliberately NOT noise:
+    # stripping them collapsed "Nickel Island Property" to "Island", which then
+    # matched "Rice Island Property" — two unrelated Wolfden assets.
+    'project', 'projects', 'property', 'properties', 'deposit', 'deposits',
+    'mine', 'mines', 'complex', 'claims', 'claim', 'the', 'and',
 }
 
 
@@ -96,8 +104,9 @@ class Command(BaseCommand):
         tokenized = [(p, identity_tokens(p.name)) for p in projects]
         tokenized = [(p, t) for p, t in tokenized if t]
 
-        # Union-find over the equal-or-subset relation, so a chain of variants
-        # ("north", "true north", "true north gold mine") lands in one group.
+        # Union-find over token-set equality. Equality is transitive, so this is
+        # just a grouping; it stays as union-find only so a looser relation
+        # can be reintroduced later without restructuring.
         parent = {p.id: p.id for p, _ in tokenized}
 
         def find(x):
@@ -113,7 +122,10 @@ class Command(BaseCommand):
 
         for i, (pa, ta) in enumerate(tokenized):
             for pb, tb in tokenized[i + 1:]:
-                if ta == tb or ta < tb or tb < ta:
+                # Equality only. The subset rule let a short generic name
+                # ("Uravan Properties") bridge three distinct districts through
+                # union-find, and produced 131 merges where many were wrong.
+                if ta == tb:
                     union(pa.id, pb.id)
 
         clusters = defaultdict(list)
