@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import Link from "next/link";
 import { Badge } from "@/components/ui/Badge";
+import ExportButton from "@/components/ui/ExportButton";
 import { Button } from "@/components/ui/Button";
 import { toolsAPI } from "@/lib/api";
 
@@ -459,9 +460,30 @@ export default function StockComparatorClient() {
 
               {/* Ranking table */}
               <div className="glass-card rounded-xl p-6">
-                <h2 className="text-sm font-semibold text-gold-400 mb-4">
-                  Performance Ranking
-                </h2>
+                <div className="flex items-center justify-between gap-3 mb-4">
+                  <h2 className="text-sm font-semibold text-gold-400">
+                    Performance Ranking
+                  </h2>
+                  <ExportButton
+                    filename="stock-comparison"
+                    rows={data.summary}
+                    columns={[
+                      { label: "Company", value: (r) => r.company_name },
+                      { label: "Ticker", value: (r) => r.ticker },
+                      { label: "Currency", value: (r) => r.currency },
+                      { label: "Start date", value: (r) => r.start_date },
+                      { label: "Start price", value: (r) => r.start_price },
+                      { label: "End date", value: (r) => r.end_date },
+                      { label: "End price", value: (r) => r.end_price },
+                      { label: "Change %", value: (r) => r.pct_change },
+                      {
+                        label: "Daily volatility %",
+                        value: (r) => r.daily_volatility_pct,
+                      },
+                      { label: "Data points", value: (r) => r.data_points },
+                    ]}
+                  />
+                </div>
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>

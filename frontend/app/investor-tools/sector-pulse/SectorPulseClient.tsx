@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/Button";
+import ExportButton from "@/components/ui/ExportButton";
 import { toolsAPI } from "@/lib/api";
 
 /* ------------------------------------------------------------------ */
@@ -303,9 +304,28 @@ export default function SectorPulseClient() {
 
             {/* Top 5 Gainers */}
             <div className="glass-card rounded-xl p-5">
-              <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-4">
-                Top 5 Gainers
-              </h2>
+              <div className="flex items-center justify-between gap-3 mb-4">
+                <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wider">
+                  Top 5 Gainers
+                </h2>
+                {/* Exports gainers and losers together — a movers list split
+                    across two files is more annoying than useful. */}
+                <ExportButton
+                  label="Export movers"
+                  filename="sector-movers"
+                  rows={[
+                    ...data.gainers.map((m) => ({ ...m, direction: "gainer" })),
+                    ...data.losers.map((m) => ({ ...m, direction: "loser" })),
+                  ]}
+                  columns={[
+                    { label: "Direction", value: (m) => m.direction },
+                    { label: "Company", value: (m) => m.company_name },
+                    { label: "Ticker", value: (m) => m.ticker },
+                    { label: "Price", value: (m) => m.price },
+                    { label: "Change %", value: (m) => m.change_pct },
+                  ]}
+                />
+              </div>
               <ul className="space-y-3">
                 {data.gainers.map((g, i) => (
                   <li key={g.company_id}>

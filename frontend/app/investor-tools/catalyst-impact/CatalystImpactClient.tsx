@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { Badge } from "@/components/ui/Badge";
+import CompanyActions from "@/components/ui/CompanyActions";
 import ExportButton from "@/components/ui/ExportButton";
 import { toolsAPI } from "@/lib/api";
 
@@ -151,6 +152,22 @@ export default function CatalystImpactClient() {
       .slice(0, 8);
   }, [search, available]);
 
+  // Adopt ?company_id= so links from other tools land on the right company
+  // instead of an empty picker. Read off window.location rather than
+  // useSearchParams, which would force this prerendered page's client tree
+  // into a Suspense boundary just to satisfy the build.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const requested = new URLSearchParams(window.location.search).get(
+      "company_id",
+    );
+    if (!requested || selected || available.length === 0) return;
+    const match = available.find((c) => String(c.id) === requested);
+    if (match) setSelected(match);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [available, selected]);
+
+
   const runStudy = useCallback(async () => {
     if (!selected) return;
     setLoading(true);
@@ -253,6 +270,16 @@ export default function CatalystImpactClient() {
                 </div>
               )}
             </div>
+
+            {selected && (
+              <div className="border-t border-slate-700/40 pt-3">
+                <CompanyActions
+                  companyId={selected.id}
+                  companyName={selected.name}
+                  currentSlug="catalyst-impact"
+                />
+              </div>
+            )}
 
             {/* Window */}
             <div className="flex items-center gap-1">

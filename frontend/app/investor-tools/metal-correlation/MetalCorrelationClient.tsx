@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { Badge } from "@/components/ui/Badge";
+import ExportButton from "@/components/ui/ExportButton";
 import { toolsAPI } from "@/lib/api";
 import Link from "next/link";
 import { Button } from "@/components/ui/Button";
@@ -719,9 +720,38 @@ export default function MetalCorrelationClient() {
 
               {/* Leverage table */}
               <div className="glass-card rounded-xl p-6">
-                <h2 className="text-sm font-semibold text-gold-400 mb-4">
-                  Leverage &amp; Sensitivity Metrics
-                </h2>
+                <div className="flex items-center justify-between gap-3 mb-4">
+                  <h2 className="text-sm font-semibold text-gold-400">
+                    Leverage &amp; Sensitivity Metrics
+                  </h2>
+                  <ExportButton
+                    filename={`metal-leverage-${data.metal?.symbol ?? "metal"}`}
+                    rows={data.companies}
+                    columns={[
+                      { label: "Company", value: (c) => c.company_name },
+                      { label: "Ticker", value: (c) => c.ticker },
+                      { label: "Correlation", value: (c) => c.correlation },
+                      { label: "R squared", value: (c) => c.r_squared },
+                      { label: "Beta", value: (c) => c.beta },
+                      {
+                        label: "Stock volatility %",
+                        value: (c) => c.stock_volatility_pct,
+                      },
+                      {
+                        label: "Metal volatility %",
+                        value: (c) => c.metal_volatility_pct,
+                      },
+                      { label: "Leverage ratio", value: (c) => c.leverage_ratio },
+                      { label: "t-stat", value: (c) => c.t_stat },
+                      {
+                        label: "Significant",
+                        value: (c) => (c.significant ? "yes" : "no"),
+                      },
+                      { label: "Stock change %", value: (c) => c.stock_pct_change },
+                      { label: "Data points", value: (c) => c.data_points },
+                    ]}
+                  />
+                </div>
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
