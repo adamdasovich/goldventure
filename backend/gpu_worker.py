@@ -922,15 +922,37 @@ class GPUWorker:
                 for i in range(len(chunks))
             ]
 
+            # ProcessingJob.company_id is never populated — document_processing_jobs
+            # has no such column, so it is always None. ChromaDB rejects null
+            # metadata values outright ("data did not match any variant of
+            # untagged enum MetadataValue"), which failed the whole batch and
+            # left documents chunked in Postgres but absent from the vector
+            # index while the job still reported success. Take the company from
+            # the document record, which ensure_document_record has just
+            # resolved, and drop any key that is still empty.
+            company_id = None
+            with self.db.cursor() as cur:
+                cur.execute(
+                    "SELECT company_id FROM documents WHERE id = %s", (document_id,)
+                )
+                row = cur.fetchone()
+                if row:
+                    company_id = row['company_id']
+
+            base_metadata = {
+                'document_id': document_id,
+                'company_id': company_id,
+                'company_name': job.company_name,
+                'document_type': job.document_type,
+            }
+            # Chroma only accepts str/int/float/bool.
+            base_metadata = {
+                k: v for k, v in base_metadata.items()
+                if v is not None and v != ''
+            }
+
             metadatas = [
-                {
-                    'document_id': document_id,
-                    'company_id': job.company_id,
-                    'company_name': job.company_name,
-                    'document_type': job.document_type,
-                    'chunk_index': i
-                }
-                for i in range(len(chunks))
+                {**base_metadata, 'chunk_index': i} for i in range(len(chunks))
             ]
 
             texts = [c['text'] for c in chunks]
