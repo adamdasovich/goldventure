@@ -77,6 +77,59 @@ ALLOWED_URL_DOMAINS = [
 # Security: Maximum file size to prevent disk exhaustion (500 MB)
 MAX_FILE_SIZE_BYTES = 500 * 1024 * 1024
 
+# Hostnames taken from companies.website, loaded once per worker run.
+#
+# ALLOWED_URL_DOMAINS hardcodes eight mining companies and the comment above it
+# promised the rest would be "validated against company domains in DB" — that was
+# never implemented, so every other company's own website was rejected. Combined
+# with the fallback below, which only admits a URL when ".pdf" appears in the
+# path, a presentation hosted at /presentations/deck was unreachable. 662 of
+# 1,070 processing-job failures were this: 647 on api.* document hosts and the
+# remainder on ordinary company domains.
+#
+# Fetching from a domain we already store as a company's own website is the same
+# trust decision as storing it, so this widens the allowlist without loosening
+# the SSRF posture: localhost, metadata endpoints, literal private IPs and DNS
+# rebinding are all still rejected before this point.
+_COMPANY_DOMAINS: set = set()
+
+
+def load_company_domains(db) -> int:
+    """Populate the company-website allowlist. Returns how many were loaded."""
+    global _COMPANY_DOMAINS
+    domains = set()
+    try:
+        with db.cursor() as cur:
+            cur.execute(
+                "SELECT website FROM companies "
+                "WHERE website IS NOT NULL AND website <> '' AND is_active"
+            )
+            for row in cur.fetchall():
+                website = row[0] if isinstance(row, (list, tuple)) else row.get('website')
+                if not website:
+                    continue
+                host = (urlparse(website).hostname or '').lower()
+                if host.startswith('www.'):
+                    host = host[4:]
+                # A bare TLD or empty parse would allow far too much.
+                if host and '.' in host:
+                    domains.add(host)
+    except Exception as exc:
+        logger.warning(f"Could not load company domains, falling back to static allowlist: {exc}")
+        return 0
+
+    _COMPANY_DOMAINS = domains
+    logger.info(f"Loaded {len(domains)} company domains into the URL allowlist")
+    return len(domains)
+
+
+def _matches_company_domain(hostname_lower: str) -> Optional[str]:
+    """Return the company domain this hostname belongs to, if any."""
+    for domain in _COMPANY_DOMAINS:
+        if hostname_lower == domain or hostname_lower.endswith('.' + domain):
+            return domain
+    return None
+
 
 def is_private_ip(ip_str: str) -> bool:
     """Check if an IP address is private/internal (IPv4 or IPv6)."""
@@ -154,12 +207,24 @@ def is_url_allowed(url: str, resolve_dns: bool = True) -> Tuple[bool, str]:
         if hostname_lower in CLOUD_METADATA_HOSTS:
             return False, "Blocked: cloud metadata access"
 
-        # Check if hostname is an IP address
+        # Check if hostname is a literal IP address.
+        #
+        # This must parse the hostname as an IP *first*. is_private_ip() catches
+        # the ValueError internally and returns True — "treat an unparseable
+        # value as unsafe" is the right call for an IP checker, but it means the
+        # function returns True for every ordinary hostname, and the except
+        # clause below never fires because nothing propagates. The effect was
+        # that every hostname-based URL was rejected as a private IP: 837 of
+        # 1,070 processing-job failures were "Blocked: private IP address
+        # www.1911gold.com" and similar. security_utils.is_safe_url has the
+        # parse and does not have the bug.
         try:
+            ipaddress.ip_address(hostname)
+        except ValueError:
+            pass  # Not a literal IP — hostname validation continues below.
+        else:
             if is_private_ip(hostname):
                 return False, f"Blocked: private IP address {hostname}"
-        except ValueError:
-            pass  # Not an IP, continue with hostname validation
 
         # Block encoded IP addresses (hex, octal, decimal)
         # e.g., 0x7f.0.0.1, 017700000001, 2130706433
@@ -184,6 +249,11 @@ def is_url_allowed(url: str, resolve_dns: bool = True) -> Tuple[bool, str]:
         for allowed_domain in ALLOWED_URL_DOMAINS:
             if hostname_lower == allowed_domain or hostname_lower.endswith('.' + allowed_domain):
                 return True, f"Allowed: {allowed_domain}"
+
+        # Check against the company websites we already track.
+        matched = _matches_company_domain(hostname_lower)
+        if matched:
+            return True, f"Allowed: company domain {matched}"
 
         # Allow any HTTPS URL to a .com/.ca/.gov/.io/.net/.org domain with PDF in path
         # This allows company websites we haven't explicitly listed
@@ -1004,6 +1074,9 @@ class GPUWorker:
         logger.info(f"Supported job types: {self.SUPPORTED_JOB_TYPES}")
         logger.info(f"Poll interval: {self.POLL_INTERVAL}s")
         logger.info(f"Idle shutdown after: {self.IDLE_SHUTDOWN_AFTER}s")
+        # Loaded here rather than at import so a DB hiccup degrades to the
+        # static allowlist instead of preventing the worker from starting.
+        load_company_domains(self.db)
         logger.info("=" * 60)
 
         while self.running:
