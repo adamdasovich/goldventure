@@ -1731,10 +1731,19 @@ def cleanup_stuck_jobs_task(self):
             job.save()
             scraping_fixed += 1
 
-    # Cleanup stuck DocumentProcessingJobs
+    # Cleanup stuck DocumentProcessingJobs.
+    #
+    # These get their own, much longer threshold. GPU document processing is
+    # legitimately slow — Docling with OCR runs around 5 seconds per page, so a
+    # 300-page NI 43-101 takes roughly half an hour of honest work. The shared
+    # 15-minute scraping threshold was killing exactly the largest and most
+    # valuable documents mid-conversion and recording them as "Job stuck in
+    # processing state... Likely worker crash", which then looked like a worker
+    # problem rather than a timeout that was too short.
+    document_stuck_threshold = now - timedelta(minutes=90)
     stuck_processing = DocumentProcessingJob.objects.filter(
         status='processing',
-        started_at__lt=stuck_running_threshold
+        started_at__lt=document_stuck_threshold
     )
 
     processing_fixed = 0
