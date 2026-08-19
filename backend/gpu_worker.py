@@ -763,21 +763,92 @@ class GPUWorker:
 
             logger.info(f"Updated job {job_id} status to {status}")
 
+    @staticmethod
+    def _resolve_company_id(cur, job: 'ProcessingJob') -> Optional[int]:
+        """
+        Find the company a job belongs to.
+
+        job.company_name comes from scraped page titles, so it is frequently
+        decorated — "AuMEGA Metals • ASX:AAM", "SEGO Resources (TSX-V",
+        occasionally a marketing tagline. An exact-match lookup failed for 451
+        of the 1,139 jobs without a document_id, and a job that cannot resolve
+        its company downloads and processes the PDF, then throws away the result
+        with "Cannot store chunks". So the URL is tried first: the host a
+        document is served from is far more reliable than a scraped title.
+        """
+        # 1. The document's own host, matched against companies.website.
+        host = (urlparse(job.file_url).hostname or '').lower()
+        if host.startswith('www.'):
+            host = host[4:]
+        if host and '.' in host:
+            cur.execute(
+                """
+                SELECT id FROM companies
+                WHERE website <> '' AND is_active
+                  AND (
+                    lower(regexp_replace(website, '^https?://(www\\.)?([^/:]+).*', '\\2')) = %s
+                    OR %s LIKE '%%.' || lower(regexp_replace(website, '^https?://(www\\.)?([^/:]+).*', '\\2'))
+                  )
+                ORDER BY length(website)
+                LIMIT 1
+                """,
+                (host, host),
+            )
+            row = cur.fetchone()
+            if row:
+                return row['id']
+
+        name = (job.company_name or '').strip()
+        if not name:
+            return None
+
+        # 2. Exact name.
+        cur.execute("SELECT id FROM companies WHERE name = %s LIMIT 1", (name,))
+        row = cur.fetchone()
+        if row:
+            return row['id']
+
+        # 3. Name with scraped decoration stripped — everything from the first
+        #    bullet, pipe, or opening bracket onwards.
+        stripped = re.split(r'\s*[•|(\[]', name)[0].strip().rstrip(',-–—')
+        if stripped and stripped != name:
+            cur.execute(
+                "SELECT id FROM companies WHERE lower(name) = lower(%s) LIMIT 1",
+                (stripped,),
+            )
+            row = cur.fetchone()
+            if row:
+                return row['id']
+
+        # 4. Case-insensitive prefix, but only when it resolves to exactly one
+        #    company — a loose match that hits several is worse than none,
+        #    because it files the document under the wrong issuer.
+        probe = stripped or name
+        if len(probe) >= 6:
+            cur.execute(
+                "SELECT id FROM companies WHERE lower(name) LIKE lower(%s) || '%%' LIMIT 2",
+                (probe,),
+            )
+            rows = cur.fetchall()
+            if len(rows) == 1:
+                return rows[0]['id']
+
+        return None
+
     def ensure_document_record(self, job: ProcessingJob) -> int:
         """Create document record if it doesn't exist, return document_id"""
         if job.document_id:
             return job.document_id
 
         with self.db.cursor() as cur:
-            # Get company_id from company name
-            cur.execute("""
-                SELECT id FROM companies WHERE name = %s LIMIT 1
-            """, (job.company_name,))
-            row = cur.fetchone()
-            company_id = row['id'] if row else None
+            company_id = self._resolve_company_id(cur, job)
 
             if not company_id:
-                logger.warning(f"Company '{job.company_name}' not found, skipping document creation")
+                logger.warning(
+                    f"Could not resolve a company for job {job.id} "
+                    f"(name={job.company_name!r}, url={job.file_url!r}) — "
+                    "skipping document creation"
+                )
                 return None
 
             # Extract title from URL
