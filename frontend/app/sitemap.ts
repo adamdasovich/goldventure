@@ -305,9 +305,14 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     }));
 
   // Dynamic property routes
+  // Property `updated_at` IS a meaningful signal — listings are edited by their
+  // owners, not rewritten nightly by a scraper the way company rows are.
+  // Listings without one emit no lastmod rather than today's date.
   const propertyRoutes: MetadataRoute.Sitemap = properties.map((property) => ({
     url: `${baseUrl}/properties/${property.slug}`,
-    lastModified: new Date(property.updated_at || new Date()),
+    ...(property.updated_at
+      ? { lastModified: new Date(property.updated_at) }
+      : {}),
     changeFrequency: "weekly" as const,
     priority: 0.7,
   }));
@@ -323,7 +328,9 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     await indexableFacets()
   ).map((facet) => ({
     url: `${baseUrl}/companies/commodity/${facet.slug}`,
-    lastModified: lastModifiedFor("/companies/commodity/${facet.slug}"),
+    // No lastmod: a facet page's content changes whenever any listed company
+    // changes, which we cannot date honestly. Omitting is correct — Google
+    // falls back to its own heuristics rather than being told something false.
     changeFrequency: "weekly" as const,
     priority: 0.8,
   }));
