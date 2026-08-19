@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { Badge } from "@/components/ui/Badge";
+import EmptyState from "@/components/ui/EmptyState";
 import { toolsAPI } from "@/lib/api";
 
 /* ---------- types ---------- */
@@ -137,7 +138,6 @@ export default function ResourceGrowthClient() {
 
   return (
     <>
-
       {/* Company picker */}
       <section className="px-4 sm:px-6 lg:px-8 py-6">
         <div className="max-w-7xl mx-auto">
@@ -218,10 +218,14 @@ export default function ResourceGrowthClient() {
           )}
 
           {!loading && data && data.projects.length === 0 && (
-            <div className="glass-card rounded-xl p-10 text-center text-slate-400">
-              No resource estimates are on record for{" "}
-              {data.company?.name || "this company"} yet.
-            </div>
+            <EmptyState
+              title={`No resource estimates on record for ${data.company?.name || "this company"}`}
+              detail={`Only ${data.available_companies.length} of the companies tracked here have filed a resource estimate we hold in structured form — a resource estimate requires a completed NI 43-101, which most explorers have not reached. This is a coverage limit, not a fault with the company.`}
+              action={{
+                label: "Compare grades across the companies we do have",
+                href: "/investor-tools/grade-ranker",
+              }}
+            />
           )}
 
           {!loading &&

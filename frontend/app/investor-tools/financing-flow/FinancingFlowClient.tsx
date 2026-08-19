@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
+import ExportButton from "@/components/ui/ExportButton";
 import { toolsAPI } from "@/lib/api";
 
 /* ---------- types ---------- */
@@ -174,7 +175,6 @@ export default function FinancingFlowClient() {
 
   return (
     <>
-
       {/* Filters */}
       <section className="px-4 sm:px-6 lg:px-8 py-4">
         <div className="max-w-7xl mx-auto flex flex-wrap items-center gap-3">
@@ -387,9 +387,21 @@ export default function FinancingFlowClient() {
             {/* ---- Top 10 Companies ---- */}
             {data.top_companies.length > 0 && (
               <div className="glass-card rounded-xl p-6">
-                <h2 className="text-sm font-semibold text-gold-400 mb-4">
-                  Top 10 Companies by Capital Raised
-                </h2>
+                <div className="flex items-center justify-between gap-3 mb-4">
+                  <h2 className="text-sm font-semibold text-gold-400">
+                    Top 10 Companies by Capital Raised
+                  </h2>
+                  <ExportButton
+                    filename="financing-flow-top-companies"
+                    rows={data.top_companies}
+                    columns={[
+                      { label: "Company", value: (c) => c.company_name },
+                      { label: "Ticker", value: (c) => c.ticker },
+                      { label: "Financings", value: (c) => c.count },
+                      { label: "Total raised", value: (c) => c.total_usd },
+                    ]}
+                  />
+                </div>
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>

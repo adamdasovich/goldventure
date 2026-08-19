@@ -5,6 +5,7 @@ import Link from "next/link";
 import { toolsAPI } from "@/lib/api";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
+import ExportButton from "@/components/ui/ExportButton";
 
 interface GradeResult {
   company_id: number;
@@ -133,7 +134,6 @@ export default function GradeRankerClient() {
 
   return (
     <>
-
       {/* Filters */}
       <section className="px-4 sm:px-6 lg:px-8 pb-4">
         <div className="max-w-7xl mx-auto">
@@ -238,6 +238,31 @@ export default function GradeRankerClient() {
                   : ""}
             </p>
             {commodity && <Badge variant="gold">{commodity}</Badge>}
+            <ExportButton
+              className="ml-auto"
+              filename="grade-ranker"
+              rows={data?.results ?? []}
+              columns={[
+                { label: "Company", value: (r) => r.company_name },
+                { label: "Ticker", value: (r) => r.ticker },
+                { label: "Exchange", value: (r) => r.exchange },
+                { label: "Project", value: (r) => r.project_name },
+                { label: "Stage", value: (r) => r.project_stage },
+                { label: "Country", value: (r) => r.country },
+                { label: "Commodity", value: (r) => r.commodity },
+                { label: "Grade", value: (r) => r.grade },
+                { label: "Grade unit", value: (r) => r.grade_unit },
+                { label: "Ounces", value: (r) => r.ounces },
+                { label: "Tonnes", value: (r) => r.tonnes },
+                { label: "Gold oz", value: (r) => r.gold_oz },
+                { label: "Silver oz", value: (r) => r.silver_oz },
+                { label: "NPV USD M", value: (r) => r.npv_usd_m },
+                { label: "IRR %", value: (r) => r.irr_pct },
+                { label: "AISC", value: (r) => r.aisc },
+                { label: "Price", value: (r) => r.stock_price },
+                { label: "Currency", value: (r) => r.currency },
+              ]}
+            />
           </div>
 
           {/* Error */}

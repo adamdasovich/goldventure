@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
+import ExportButton from "@/components/ui/ExportButton";
 import { toolsAPI } from "@/lib/api";
 import Link from "next/link";
 
@@ -204,13 +205,26 @@ export default function DrillScannerClient() {
             <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-6">
               {/* Main results list */}
               <div>
-                <p className="text-sm text-slate-400 mb-4">
-                  <span className="text-gold-400 font-semibold">
-                    {data.count.toLocaleString()}
-                  </span>{" "}
-                  drill result{data.count !== 1 ? "s" : ""} in the last{" "}
-                  {data.period_days} days
-                </p>
+                <div className="flex items-center justify-between gap-3 mb-4">
+                  <p className="text-sm text-slate-400">
+                    <span className="text-gold-400 font-semibold">
+                      {data.count.toLocaleString()}
+                    </span>{" "}
+                    drill result{data.count !== 1 ? "s" : ""} in the last{" "}
+                    {data.period_days} days
+                  </p>
+                  <ExportButton
+                    filename="drill-results"
+                    rows={data.results}
+                    columns={[
+                      { label: "Date", value: (r) => r.published_date },
+                      { label: "Company", value: (r) => r.company_name },
+                      { label: "Ticker", value: (r) => r.ticker },
+                      { label: "Headline", value: (r) => r.title },
+                      { label: "URL", value: (r) => r.url },
+                    ]}
+                  />
+                </div>
 
                 <div className="space-y-3">
                   {data.results.map((r) => (

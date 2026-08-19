@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
+import ExportButton from "@/components/ui/ExportButton";
 import { toolsAPI } from "@/lib/api";
 
 /* ------------------------------------------------------------------ */
@@ -95,7 +96,6 @@ function sortCompanies(
 /* ------------------------------------------------------------------ */
 /*  Skeleton                                                           */
 /* ------------------------------------------------------------------ */
-
 
 function Skeleton() {
   return (
@@ -411,9 +411,29 @@ export default function CatalystCalendarClient() {
         <section>
           <div className="glass-card rounded-xl p-5">
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-4">
-              <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wider">
-                Company Activity
-              </h2>
+              <div className="flex items-center gap-3">
+                <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wider">
+                  Company Activity
+                </h2>
+                <ExportButton
+                  filename="catalyst-calendar"
+                  rows={data?.companies ?? []}
+                  columns={[
+                    { label: "Company", value: (c) => c.company_name },
+                    { label: "Ticker", value: (c) => c.ticker },
+                    { label: "Releases", value: (c) => c.count },
+                    { label: "Latest release", value: (c) => c.latest_date },
+                    {
+                      label: "Days since last",
+                      value: (c) => c.days_since_last,
+                    },
+                    {
+                      label: "Avg days between",
+                      value: (c) => c.avg_days_between,
+                    },
+                  ]}
+                />
+              </div>
               <div className="flex rounded-lg overflow-hidden border border-slate-700 text-xs">
                 {(
                   [

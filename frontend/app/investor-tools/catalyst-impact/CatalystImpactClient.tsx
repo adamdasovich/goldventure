@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { Badge } from "@/components/ui/Badge";
+import ExportButton from "@/components/ui/ExportButton";
 import { toolsAPI } from "@/lib/api";
 
 /* ---------- types ---------- */
@@ -185,7 +186,6 @@ export default function CatalystImpactClient() {
 
   return (
     <>
-
       {/* Controls */}
       <section className="px-4 sm:px-6 lg:px-8 py-6">
         <div className="max-w-7xl mx-auto">
@@ -387,9 +387,24 @@ export default function CatalystImpactClient() {
                 {/* Event-level table */}
                 {data.events.length > 0 && (
                   <div className="glass-card rounded-xl p-6">
-                    <h2 className="text-sm font-semibold text-gold-400 mb-4">
-                      Individual News Events
-                    </h2>
+                    <div className="flex items-center justify-between gap-3 mb-4">
+                      <h2 className="text-sm font-semibold text-gold-400">
+                        Individual News Events
+                      </h2>
+                      <ExportButton
+                        filename={`catalyst-impact-${data.company?.ticker || "company"}`}
+                        rows={data.events}
+                        columns={[
+                          { label: "Date", value: (e) => e.date },
+                          { label: "Type", value: (e) => e.release_type },
+                          { label: "Headline", value: (e) => e.title },
+                          { label: "1d change %", value: (e) => e.change_1d },
+                          { label: "5d change %", value: (e) => e.change_5d },
+                          { label: "20d change %", value: (e) => e.change_20d },
+                          { label: "URL", value: (e) => e.url },
+                        ]}
+                      />
+                    </div>
                     <div className="overflow-x-auto">
                       <table className="w-full text-sm">
                         <thead>

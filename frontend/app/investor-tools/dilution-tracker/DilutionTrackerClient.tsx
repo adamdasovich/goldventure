@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { toolsAPI } from "@/lib/api";
 import { Badge } from "@/components/ui/Badge";
+import ExportButton from "@/components/ui/ExportButton";
 
 /* ---------- types ---------- */
 
@@ -133,7 +134,6 @@ export default function DilutionTrackerClient() {
 
   return (
     <>
-
       {/* Company picker */}
       <section className="px-4 sm:px-6 lg:px-8 py-6">
         <div className="max-w-7xl mx-auto">
@@ -304,9 +304,45 @@ export default function DilutionTrackerClient() {
 
               {/* Financings table */}
               <div className="glass-card rounded-xl p-6">
-                <h2 className="text-sm font-semibold text-gold-400 mb-4">
-                  Financing History
-                </h2>
+                <div className="flex items-center justify-between gap-3 mb-4">
+                  <h2 className="text-sm font-semibold text-gold-400">
+                    Financing History
+                  </h2>
+                  <ExportButton
+                    filename={`dilution-${selected?.ticker || "company"}`}
+                    rows={data.financings}
+                    columns={[
+                      { label: "Announced", value: (f) => f.announced_date },
+                      { label: "Type", value: (f) => f.financing_type },
+                      { label: "Status", value: (f) => f.status },
+                      {
+                        label: "Amount raised",
+                        value: (f) => f.amount_raised_usd,
+                      },
+                      {
+                        label: "Price per share",
+                        value: (f) => f.price_per_share,
+                      },
+                      { label: "Shares issued", value: (f) => f.shares_issued },
+                      {
+                        label: "Cumulative shares",
+                        value: (f) => f.cumulative_shares,
+                      },
+                      {
+                        label: "Has warrants",
+                        value: (f) => (f.has_warrants ? "yes" : "no"),
+                      },
+                      {
+                        label: "Warrant strike",
+                        value: (f) => f.warrant_strike_price,
+                      },
+                      {
+                        label: "Warrant expiry",
+                        value: (f) => f.warrant_expiry_date,
+                      },
+                    ]}
+                  />
+                </div>
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
