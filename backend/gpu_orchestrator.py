@@ -440,6 +440,14 @@ class GPUOrchestrator:
 
         logger.info("Starting GPU worker...")
 
+        # Credentials are only transferred on the create path, so a worker
+        # started from the health-check restart path can find an empty .env —
+        # cloud-init only touches the file. The worker then dies on
+        # "fe_sendauth: no password supplied" while the droplet bills at
+        # $1.57/h. Re-send them if they are missing.
+        if not self._ensure_credentials():
+            return False
+
         try:
             # First check if worker is already running - don't restart if it is
             check_result = subprocess.run(
@@ -477,6 +485,29 @@ class GPUOrchestrator:
                  'bash -c "cd /opt/goldventure && source venv/bin/activate && nohup python gpu_worker.py > /var/log/gpu_worker.log 2>&1 &"'],
                 timeout=60
             )
+
+            # Confirm the process actually survived. Launching it always
+            # "succeeds" — nohup returns immediately — so a worker that dies on
+            # a bad config used to report success, reset worker_start_failures,
+            # and be restarted every 60s forever without MAX_WORKER_FAILURES
+            # ever tripping.
+            time.sleep(10)
+            alive = subprocess.run(
+                ['ssh', '-o', 'StrictHostKeyChecking=accept-new', '-o', 'ConnectTimeout=10',
+                 f'root@{self.gpu_droplet_ip}', 'pgrep -f "python gpu_worker.py"'],
+                capture_output=True,
+                timeout=20
+            )
+            if alive.returncode != 0:
+                tail = subprocess.run(
+                    ['ssh', '-o', 'StrictHostKeyChecking=accept-new', '-o', 'ConnectTimeout=10',
+                     f'root@{self.gpu_droplet_ip}', 'tail -5 /var/log/gpu_worker.log'],
+                    capture_output=True,
+                    timeout=20
+                )
+                logger.error("GPU worker exited immediately after start. Worker log:\n%s",
+                             tail.stdout.decode(errors='replace').strip())
+                return False
 
             logger.info("GPU worker started")
             return True
@@ -683,6 +714,38 @@ touch /opt/goldventure/.ready
 
         logger.error(f"Cloud-init timed out after {timeout}s")
         return False
+
+    def _ensure_credentials(self) -> bool:
+        """Make sure the droplet has a populated .env, transferring if not.
+
+        Cheap to call on every worker start: it only re-sends when the remote
+        file is missing or empty, so the normal path costs one SSH round trip.
+        """
+        if not self.gpu_droplet_ip:
+            return False
+
+        is_valid, reason = validate_ip_for_ssh(self.gpu_droplet_ip)
+        if not is_valid:
+            logger.error(f"Cannot check credentials - IP validation failed: {reason}")
+            return False
+
+        try:
+            result = subprocess.run(
+                ['ssh', '-o', 'StrictHostKeyChecking=accept-new', '-o', 'ConnectTimeout=10',
+                 f'root@{self.gpu_droplet_ip}',
+                 'test -s /opt/goldventure/.env && echo populated || echo empty'],
+                capture_output=True,
+                timeout=20
+            )
+            if b'populated' in result.stdout:
+                return True
+            logger.warning("GPU droplet has no credentials — transferring before start")
+        except (subprocess.SubprocessError, OSError) as e:
+            # Fall through and transfer: an unreachable droplet fails the scp
+            # too, and a re-transfer is harmless if the file was in fact fine.
+            logger.warning(f"Could not verify droplet credentials ({e}); transferring anyway")
+
+        return self._transfer_credentials()
 
     def _transfer_credentials(self) -> bool:
         """Securely transfer credentials to GPU droplet via SCP.
