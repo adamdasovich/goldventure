@@ -7,6 +7,7 @@ Uses Voyage AI for fast embeddings when available, falls back to local model.
 """
 
 import logging
+import os
 
 import chromadb
 from chromadb.config import Settings
@@ -30,14 +31,31 @@ class RAGManager:
 
     def __init__(self):
         """Initialize ChromaDB client and embedding model"""
-        # Initialize ChromaDB (persistent storage)
-        chroma_path = Path(settings.BASE_DIR) / "chroma_db"
-        chroma_path.mkdir(exist_ok=True)
+        # Talk to the chromadb.service HTTP server rather than opening the
+        # on-disk store directly.
+        #
+        # Both were happening at once: `chroma run --path ./chroma_db` serves
+        # the GPU worker over :8002, while every Django and Celery process also
+        # held a PersistentClient on the same directory. Chroma's persistent
+        # client assumes exclusive access to its SQLite file and HNSW segments,
+        # so two independent writers can interleave — which is the most likely
+        # explanation for the news_chunks segment that later aborted the
+        # process with SIGSEGV on any read.
+        #
+        # Routing through the server leaves exactly one process with file
+        # handles. Embeddings are still computed client-side by the embedding
+        # function, so retrieval behaviour is unchanged.
+        host = os.environ.get('CHROMA_HOST', 'localhost')
+        port = int(os.environ.get('CHROMA_PORT', 8002))
 
-        self.chroma_client = chromadb.PersistentClient(
-            path=str(chroma_path),
-            settings=Settings(anonymized_telemetry=False)
+        self.chroma_client = chromadb.HttpClient(
+            host=host,
+            port=port,
+            settings=Settings(anonymized_telemetry=False),
         )
+        # Fail here rather than at first query, so a stopped chromadb.service is
+        # an obvious startup error instead of a confusing retrieval failure.
+        self.chroma_client.heartbeat()
 
         # Get embedding function (Voyage AI if available, else ChromaDB default)
         self.embedding_function = get_embedding_function()
