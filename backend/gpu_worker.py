@@ -65,13 +65,29 @@ ALLOWED_URL_DOMAINS = [
     'prnewswire.com',
     'accesswire.com',
     'newsfilecorp.com',
-    # Company websites (will be validated against company domains in DB)
-    # Cloud storage (for internal uploads)
-    's3.amazonaws.com',
+    # Company websites are resolved from companies.website at runtime — see
+    # load_company_domains() below.
+    # Investor-relations platforms that host company documents on the company's
+    # behalf. api.investi.com.au alone accounted for 647 blocked jobs (ASX
+    # issuers publish their announcements through it).
+    'investi.com.au',
+    # Cloud storage (for internal uploads).
     'storage.googleapis.com',
     'blob.core.windows.net',
     'digitaloceanspaces.com',
-    # Allow any .pdf direct links from mining company sites
+]
+
+# Object-store and CDN hosts, matched by pattern rather than suffix.
+#
+# The plain 's3.amazonaws.com' entry above never matched the regional endpoints
+# companies actually use — 'wp-pelangio-exp-2025.s3.ca-central-1.amazonaws.com'
+# does not end in '.s3.amazonaws.com' — so WordPress media buckets were blocked.
+# These are public object stores; the SSRF checks that matter (localhost,
+# link-local, cloud metadata, private ranges, DNS rebinding) all run before this
+# point and still apply.
+ALLOWED_HOST_PATTERNS = [
+    re.compile(r'(^|\.)s3([.-][a-z0-9-]+)?\.amazonaws\.com$', re.IGNORECASE),
+    re.compile(r'(^|\.)cloudfront\.net$', re.IGNORECASE),
 ]
 
 # Security: Maximum file size to prevent disk exhaustion (500 MB)
@@ -254,6 +270,11 @@ def is_url_allowed(url: str, resolve_dns: bool = True) -> Tuple[bool, str]:
         matched = _matches_company_domain(hostname_lower)
         if matched:
             return True, f"Allowed: company domain {matched}"
+
+        # Object stores and CDNs that host company documents.
+        for pattern in ALLOWED_HOST_PATTERNS:
+            if pattern.search(hostname_lower):
+                return True, f"Allowed: object store/CDN {hostname}"
 
         # Allow any HTTPS URL to a .com/.ca/.gov/.io/.net/.org domain with PDF in path
         # This allows company websites we haven't explicitly listed
