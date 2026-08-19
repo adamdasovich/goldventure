@@ -55,6 +55,29 @@ def identity_tokens(name):
     return frozenset(t for t in text.split() if t and t not in NOISE_WORDS)
 
 
+# Cases where one asset is reported under names that share no identifying token,
+# so no automatic rule can connect them without also merging real neighbours.
+# Each entry is (company name, [names that are the same asset]); the names are
+# matched case-insensitively and exactly, so this cannot drift onto a new
+# project. Add an entry only after confirming the asset from the reports —
+# Erdene's "Bayan Khundii" and "Bayan Khundii and Dark Horse" are deliberately
+# absent, because Dark Horse is a separate deposit.
+CURATED_ALIASES = [
+    # Ixtaca is the deposit; Tuligtic is the property that hosts it.
+    ('Almaden Minerals', [
+        'Ixtaca Project',
+        'Ixtaca Gold-Silver Project',
+        'Tuligtic Project',
+    ]),
+    # 1911 Gold's True North mine and mill are reported as both "Mine" and
+    # "Complex". Ogama-Rockland is a separate deposit and stays out.
+    ('1911 Gold Corporation', [
+        'True North Gold Mine',
+        'True North Complex',
+    ]),
+]
+
+
 class Command(BaseCommand):
     help = "Merge duplicate Project rows created from naming variants."
 
@@ -103,6 +126,17 @@ class Command(BaseCommand):
         """Return [(survivor, [duplicates])] for one company."""
         tokenized = [(p, identity_tokens(p.name)) for p in projects]
         tokenized = [(p, t) for p, t in tokenized if t]
+
+        # A curated alias forces one shared token set across its listed names,
+        # which then flows through the normal equality grouping below.
+        company_name = projects[0].company.name
+        for alias_company, names in CURATED_ALIASES:
+            if alias_company.lower() != company_name.lower():
+                continue
+            lowered = {n.lower() for n in names}
+            shared = frozenset({'curated-alias', alias_company.lower(), names[0].lower()})
+            tokenized = [(p, shared if p.name.lower() in lowered else t)
+                         for p, t in tokenized]
 
         # Union-find over token-set equality. Equality is transitive, so this is
         # just a grouping; it stays as union-find only so a looser relation

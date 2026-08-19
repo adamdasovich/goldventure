@@ -3,6 +3,7 @@ DRF Serializers for GoldVenture Platform
 Convert Django models to/from JSON
 """
 
+from django.db.models import Max
 from rest_framework import serializers
 from ..models import (
     User, Company, Project, ResourceEstimate, EconomicStudy,
@@ -38,6 +39,7 @@ from ..models import (
 class CompanySerializer(serializers.ModelSerializer):
     """Serializer for Company model"""
     project_count = serializers.SerializerMethodField()
+    latest_news_date = serializers.SerializerMethodField()
 
     class Meta:
         model = Company
@@ -54,7 +56,7 @@ class CompanySerializer(serializers.ModelSerializer):
             'street_address', 'postal_code',
             'approval_status', 'company_size', 'industry', 'contact_email',
             'brief_description', 'is_user_submitted',
-            'created_at', 'updated_at', 'project_count',
+            'created_at', 'updated_at', 'project_count', 'latest_news_date',
         ]
         read_only_fields = ['id', 'slug', 'created_at', 'updated_at', 'data_completeness_score']
         extra_kwargs = {
@@ -65,6 +67,20 @@ class CompanySerializer(serializers.ModelSerializer):
         if hasattr(obj, '_project_count'):
             return obj._project_count
         return obj.projects.filter(is_active=True).count()
+
+    def get_latest_news_date(self, obj):
+        """Date of the most recent press release, or None.
+
+        Exists so the sitemap can emit a truthful `lastmod`. `updated_at` is
+        rewritten by the daily scrape regardless of whether anything changed,
+        which makes every company page look modified every day — the pattern
+        that causes Google to distrust and ignore lastmod entirely.
+        """
+        if hasattr(obj, '_latest_news_date'):
+            latest = obj._latest_news_date
+        else:
+            latest = obj.news_releases.aggregate(d=Max('release_date'))['d']
+        return latest.isoformat() if latest else None
 
 
 

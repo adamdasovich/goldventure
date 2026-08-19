@@ -1,6 +1,7 @@
 import { MetadataRoute } from "next";
 import { companyHref } from "@/lib/companyUrl";
 import { indexableFacets } from "@/lib/commodityFacets";
+import { lastModifiedFor } from "@/lib/routeLastModified";
 import { TOOLS } from "./investor-tools/tools";
 
 const RESOLVED_API_BASE_URL =
@@ -95,133 +96,141 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const staticRoutes: MetadataRoute.Sitemap = [
     {
       url: baseUrl,
-      lastModified: new Date(),
+      lastModified: lastModifiedFor("/"),
       changeFrequency: "daily",
       priority: 1,
     },
     {
       url: `${baseUrl}/companies`,
-      lastModified: new Date(),
+      lastModified: lastModifiedFor("/companies"),
       changeFrequency: "daily",
       priority: 0.9,
     },
     {
       url: `${baseUrl}/glossary`,
-      lastModified: new Date(),
+      lastModified: lastModifiedFor("/glossary"),
       changeFrequency: "monthly",
       priority: 0.9,
     },
     {
       url: `${baseUrl}/metals`,
-      lastModified: new Date(),
+      lastModified: lastModifiedFor("/metals"),
       changeFrequency: "hourly",
       priority: 0.8,
     },
     {
       url: `${baseUrl}/financial-hub`,
-      lastModified: new Date(),
+      lastModified: lastModifiedFor("/financial-hub"),
       changeFrequency: "weekly",
       priority: 0.8,
     },
     {
       url: `${baseUrl}/pricing`,
-      lastModified: new Date(),
+      lastModified: lastModifiedFor("/pricing"),
       changeFrequency: "monthly",
       priority: 0.8,
     },
     {
       url: `${baseUrl}/properties`,
-      lastModified: new Date(),
+      lastModified: lastModifiedFor("/properties"),
       changeFrequency: "daily",
       priority: 0.8,
     },
     {
       url: `${baseUrl}/store`,
-      lastModified: new Date(),
+      lastModified: lastModifiedFor("/store"),
       changeFrequency: "weekly",
       priority: 0.7,
     },
     {
       url: `${baseUrl}/store/vault`,
-      lastModified: new Date(),
+      lastModified: lastModifiedFor("/store/vault"),
       changeFrequency: "weekly",
       priority: 0.6,
     },
     {
       url: `${baseUrl}/store/field-gear`,
-      lastModified: new Date(),
+      lastModified: lastModifiedFor("/store/field-gear"),
       changeFrequency: "weekly",
       priority: 0.6,
     },
     {
       url: `${baseUrl}/store/resource-library`,
-      lastModified: new Date(),
+      lastModified: lastModifiedFor("/store/resource-library"),
       changeFrequency: "weekly",
       priority: 0.6,
     },
     {
       url: `${baseUrl}/closed-financings`,
-      lastModified: new Date(),
+      lastModified: lastModifiedFor("/closed-financings"),
       changeFrequency: "daily",
       priority: 0.7,
     },
     {
       url: `${baseUrl}/guides`,
-      lastModified: new Date(),
+      lastModified: lastModifiedFor("/guides"),
       changeFrequency: "monthly",
       priority: 0.7,
     },
     {
       url: `${baseUrl}/guides/junior-gold-mining-companies-guide`,
-      lastModified: new Date(),
+      lastModified: lastModifiedFor(
+        "/guides/junior-gold-mining-companies-guide",
+      ),
       changeFrequency: "monthly",
       priority: 0.7,
     },
     {
       url: `${baseUrl}/guides/critical-minerals-guide`,
-      lastModified: new Date(),
+      lastModified: lastModifiedFor("/guides/critical-minerals-guide"),
       changeFrequency: "monthly",
       priority: 0.7,
     },
     {
       url: `${baseUrl}/guides/how-to-read-ni-43-101-report`,
-      lastModified: new Date(),
+      lastModified: lastModifiedFor("/guides/how-to-read-ni-43-101-report"),
       changeFrequency: "monthly",
       priority: 0.8,
     },
     {
       url: `${baseUrl}/guides/inferred-vs-indicated-vs-measured-resources`,
-      lastModified: new Date(),
+      lastModified: lastModifiedFor(
+        "/guides/inferred-vs-indicated-vs-measured-resources",
+      ),
       changeFrequency: "monthly",
       priority: 0.7,
     },
     {
       url: `${baseUrl}/guides/how-to-interpret-mining-drill-results`,
-      lastModified: new Date(),
+      lastModified: lastModifiedFor(
+        "/guides/how-to-interpret-mining-drill-results",
+      ),
       changeFrequency: "monthly",
       priority: 0.8,
     },
     {
       url: `${baseUrl}/guides/gold-grade-explained`,
-      lastModified: new Date(),
+      lastModified: lastModifiedFor("/guides/gold-grade-explained"),
       changeFrequency: "monthly",
       priority: 0.7,
     },
     {
       url: `${baseUrl}/guides/how-junior-mining-companies-raise-money`,
-      lastModified: new Date(),
+      lastModified: lastModifiedFor(
+        "/guides/how-junior-mining-companies-raise-money",
+      ),
       changeFrequency: "monthly",
       priority: 0.8,
     },
     {
       url: `${baseUrl}/guides/private-placements-and-warrants`,
-      lastModified: new Date(),
+      lastModified: lastModifiedFor("/guides/private-placements-and-warrants"),
       changeFrequency: "monthly",
       priority: 0.7,
     },
     {
       url: `${baseUrl}/investor-tools`,
-      lastModified: new Date(),
+      lastModified: lastModifiedFor("/investor-tools"),
       changeFrequency: "monthly",
       priority: 0.8,
     },
@@ -230,37 +239,39 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     // signal-to-noise, so two live tools were never submitted.
     ...TOOLS.filter((t) => t.available).map((t) => ({
       url: `${baseUrl}${t.href}`,
-      lastModified: new Date(),
+      lastModified: lastModifiedFor(t.href),
       changeFrequency: "weekly" as const,
       priority: 0.7,
     })),
     {
       url: `${baseUrl}/open-financings`,
-      lastModified: new Date(),
+      lastModified: lastModifiedFor("/open-financings"),
       changeFrequency: "daily",
       priority: 0.8,
     },
     {
       url: `${baseUrl}/reports/weekly`,
-      lastModified: new Date(),
+      lastModified: lastModifiedFor("/reports/weekly"),
       changeFrequency: "weekly",
       priority: 0.7,
     },
     {
       url: `${baseUrl}/about`,
-      lastModified: new Date(),
+      lastModified: lastModifiedFor("/about"),
       changeFrequency: "monthly",
       priority: 0.5,
     },
     {
       url: `${baseUrl}/financial-hub/private-placements-guide`,
-      lastModified: new Date(),
+      lastModified: lastModifiedFor("/financial-hub/private-placements-guide"),
       changeFrequency: "monthly",
       priority: 0.6,
     },
     {
       url: `${baseUrl}/financial-hub/subscription-agreements-guide`,
-      lastModified: new Date(),
+      lastModified: lastModifiedFor(
+        "/financial-hub/subscription-agreements-guide",
+      ),
       changeFrequency: "monthly",
       priority: 0.6,
     },
@@ -279,7 +290,16 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     )
     .map((company) => ({
       url: `${baseUrl}${companyHref(company)}`,
-      lastModified: new Date(company.updated_at || new Date()),
+      // The company page's content changes when the company publishes news, so
+      // that date is the honest lastmod. NOT `updated_at`: the daily scrape
+      // rewrites every company row whether or not anything changed — 89% of
+      // companies carried an updated_at within two days on 2026-08-18 — which
+      // told Google all 379 profiles change daily and is why lastmod was being
+      // ignored. Companies with no news emit no lastmod rather than a made-up
+      // one; an absent date is honest, a fabricated one poisons the rest.
+      ...(company.latest_news_date
+        ? { lastModified: new Date(`${company.latest_news_date}T00:00:00Z`) }
+        : {}),
       changeFrequency: "weekly" as const,
       priority: 0.8,
     }));
@@ -303,7 +323,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     await indexableFacets()
   ).map((facet) => ({
     url: `${baseUrl}/companies/commodity/${facet.slug}`,
-    lastModified: new Date(),
+    lastModified: lastModifiedFor("/companies/commodity/${facet.slug}"),
     changeFrequency: "weekly" as const,
     priority: 0.8,
   }));
@@ -324,7 +344,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const financingRoundupRoutes: MetadataRoute.Sitemap = [
     {
       url: `${baseUrl}/reports/financings`,
-      lastModified: new Date(),
+      lastModified: lastModifiedFor("/reports/financings"),
       changeFrequency: "weekly",
       priority: 0.7,
     },

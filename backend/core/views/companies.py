@@ -15,7 +15,7 @@ from rest_framework.decorators import api_view, permission_classes, action
 from rest_framework.permissions import IsAuthenticated, AllowAny, IsAuthenticatedOrReadOnly
 from rest_framework.response import Response
 from rest_framework.pagination import PageNumberPagination
-from django.db.models import Count, Q
+from django.db.models import Count, Max, Q
 
 
 
@@ -158,7 +158,13 @@ class CompanyViewSet(viewsets.ModelViewSet):
 
         # Annotate counts to avoid N+1 in serializers
         queryset = queryset.annotate(
-            _project_count=Count('projects', filter=Q(projects__is_active=True))
+            _project_count=Count('projects', filter=Q(projects__is_active=True)),
+            # Date of the company's most recent press release. `updated_at` is
+            # useless as a freshness signal because the daily scrape rewrites
+            # the row whether or not anything changed — 89% of companies carried
+            # an updated_at within two days on 2026-08-18. The sitemap needs a
+            # date that reflects an actual change to the page.
+            _latest_news_date=Max('news_releases__release_date'),
         )
 
         # For list views, defer heavy text fields not needed in the list response
