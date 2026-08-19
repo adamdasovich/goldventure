@@ -1,7 +1,7 @@
 import { MetadataRoute } from "next";
 import { companyHref } from "@/lib/companyUrl";
 import { indexableFacets } from "@/lib/commodityFacets";
-import { lastModifiedFor } from "@/lib/routeLastModified";
+import { lastModifiedFor, safeLastModified } from "@/lib/routeLastModified";
 import { TOOLS } from "./investor-tools/tools";
 
 const RESOLVED_API_BASE_URL =
@@ -297,8 +297,8 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       // told Google all 379 profiles change daily and is why lastmod was being
       // ignored. Companies with no news emit no lastmod rather than a made-up
       // one; an absent date is honest, a fabricated one poisons the rest.
-      ...(company.latest_news_date
-        ? { lastModified: new Date(`${company.latest_news_date}T00:00:00Z`) }
+      ...(safeLastModified(company.latest_news_date)
+        ? { lastModified: safeLastModified(company.latest_news_date) }
         : {}),
       changeFrequency: "weekly" as const,
       priority: 0.8,
@@ -310,8 +310,8 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   // Listings without one emit no lastmod rather than today's date.
   const propertyRoutes: MetadataRoute.Sitemap = properties.map((property) => ({
     url: `${baseUrl}/properties/${property.slug}`,
-    ...(property.updated_at
-      ? { lastModified: new Date(property.updated_at) }
+    ...(safeLastModified(property.updated_at)
+      ? { lastModified: safeLastModified(property.updated_at) }
       : {}),
     changeFrequency: "weekly" as const,
     priority: 0.7,
@@ -357,7 +357,9 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     },
     ...financingWeeks.map((w: any) => ({
       url: `${baseUrl}/reports/financings/${w.week_ending}`,
-      lastModified: new Date(w.generated_at || `${w.week_ending}T12:00:00Z`),
+      lastModified:
+        safeLastModified(w.generated_at) ??
+        safeLastModified(`${w.week_ending}T12:00:00Z`),
       changeFrequency: "monthly" as const,
       priority: 0.6,
     })),

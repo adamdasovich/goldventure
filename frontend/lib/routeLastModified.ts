@@ -91,3 +91,24 @@ export function lastModifiedFor(path: string): Date | undefined {
   const iso = ROUTE_LAST_MODIFIED[path];
   return iso ? new Date(`${iso}T00:00:00Z`) : undefined;
 }
+
+/**
+ * Turn a date coming from the API into a lastmod we are willing to publish.
+ *
+ * Returns undefined for anything missing or unparseable, and clamps future
+ * dates to now. Four companies were emitting a lastmod ahead of today —
+ * 2026-11-02 in the worst case — because a mis-parsed release_date had put a
+ * press release in the future. A lastmod that has not happened yet is invalid
+ * and undermines the credibility of every other date in the file, so the
+ * sitemap defends against bad upstream data rather than trusting it.
+ *
+ * The underlying date-parsing bug is a separate matter; this stops it reaching
+ * Google either way.
+ */
+export function safeLastModified(value?: string | null): Date | undefined {
+  if (!value) return undefined;
+  const d = new Date(value.length === 10 ? `${value}T00:00:00Z` : value);
+  if (Number.isNaN(d.getTime())) return undefined;
+  const now = new Date();
+  return d > now ? now : d;
+}
