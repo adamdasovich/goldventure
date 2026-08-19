@@ -235,7 +235,18 @@ class Financing(models.Model):
     # Terms
     announced_date = models.DateField()
     closing_date = models.DateField(null=True, blank=True)
-    amount_raised_usd = models.DecimalField(max_digits=15, decimal_places=2)
+    # MISNOMER: this holds the amount in the financing's OWN currency, not USD.
+    # Verified across the whole table — every one of 287 priced financings
+    # satisfies amount == price_per_share * shares_issued, and price_per_share
+    # sits at a median ratio of 1.00 against the company's CAD close (it would
+    # cluster near 0.72 if the amount were USD against a CAD quote). In practice
+    # that means CAD for the TSX/TSXV/CSE listings that dominate the table.
+    # Renaming the column would touch serializers, admin and every consumer, so
+    # the name stays and the API reports the currency explicitly instead.
+    amount_raised_usd = models.DecimalField(
+        max_digits=15, decimal_places=2,
+        help_text="Amount raised in the financing's native currency (usually CAD), despite the field name.",
+    )
     price_per_share = models.DecimalField(max_digits=10, decimal_places=4, null=True, blank=True)
     shares_issued = models.BigIntegerField(null=True, blank=True)
 

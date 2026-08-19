@@ -1,8 +1,10 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
+import { useSearchParams } from "next/navigation";
 import { toolsAPI } from "@/lib/api";
 import { Badge } from "@/components/ui/Badge";
+import CompanyActions from "@/components/ui/CompanyActions";
 import ExportButton from "@/components/ui/ExportButton";
 
 /* ---------- types ---------- */
@@ -47,7 +49,12 @@ interface DilutionData {
 
 /* ---------- helpers ---------- */
 
-function fmtUSD(v: number): string {
+/**
+ * Financing amounts are stored in the deal's own currency (usually CAD) under a
+ * field named amount_raised_usd. Render them as plain dollars rather than
+ * asserting USD.
+ */
+function fmtMoney(v: number): string {
   if (v >= 1_000_000_000) return `$${(v / 1_000_000_000).toFixed(1)}B`;
   if (v >= 1_000_000) return `$${(v / 1_000_000).toFixed(1)}M`;
   if (v >= 1_000) return `$${(v / 1_000).toFixed(0)}K`;
@@ -108,6 +115,18 @@ export default function DilutionTrackerClient() {
       )
       .slice(0, 8);
   }, [search, available]);
+
+  // Adopt ?company_id= so links from other tools land on the right company
+  // instead of an empty picker. Runs once the list is loaded and only when
+  // nothing has been chosen yet, so it never fights a manual selection.
+  const searchParams = useSearchParams();
+  useEffect(() => {
+    const requested = searchParams.get("company_id");
+    if (!requested || selected || available.length === 0) return;
+    const match = available.find((c) => String(c.id) === requested);
+    if (match) selectCompany(match);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams, available, selected]);
 
   const selectCompany = async (c: AvailableCompany) => {
     setSelected(c);
@@ -198,6 +217,15 @@ export default function DilutionTrackerClient() {
                 )}
               </div>
             )}
+            {selected && (
+              <div className="mt-4 border-t border-slate-700/40 pt-3">
+                <CompanyActions
+                  companyId={selected.id}
+                  companyName={selected.name}
+                  currentSlug="dilution-tracker"
+                />
+              </div>
+            )}
             {error && <p className="text-sm text-red-400 mt-3">{error}</p>}
           </div>
         </div>
@@ -235,7 +263,7 @@ export default function DilutionTrackerClient() {
                     Total Raised
                   </p>
                   <p className="text-2xl font-bold text-gold-400">
-                    {fmtUSD(data.summary.total_capital_raised_usd)}
+                    {fmtMoney(data.summary.total_capital_raised_usd)}
                   </p>
                 </div>
                 <div className="glass-card rounded-xl p-5">
@@ -369,7 +397,7 @@ export default function DilutionTrackerClient() {
                             {fmtType(f.financing_type)}
                           </td>
                           <td className="py-2 pr-4 text-right text-gold-400 font-medium">
-                            {fmtUSD(f.amount_raised_usd)}
+                            {fmtMoney(f.amount_raised_usd)}
                           </td>
                           <td className="py-2 pr-4 text-right text-slate-300">
                             {fmtShares(f.shares_issued)}

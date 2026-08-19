@@ -56,12 +56,20 @@ interface FlowData {
   top_companies: TopCompany[];
   recent: RecentDeal[];
   summary: { total_count: number; total_usd: number; period_months: number };
+  currency?: string;
+  currency_note?: string;
   financing_types: string[];
 }
 
 /* ---------- helpers ---------- */
 
-function formatUSD(value: number): string {
+/**
+ * Amounts come from Financing.amount_raised_usd, which despite its name holds
+ * the raise in its own currency — CAD for the listings that dominate this data.
+ * Rendering them with a bare "$" and declaring the currency alongside is
+ * accurate; calling them USD was not.
+ */
+function formatMoney(value: number): string {
   if (value >= 1_000_000_000) return `$${(value / 1_000_000_000).toFixed(1)}B`;
   if (value >= 1_000_000) return `$${(value / 1_000_000).toFixed(1)}M`;
   if (value >= 1_000) return `$${(value / 1_000).toFixed(0)}K`;
@@ -259,7 +267,10 @@ export default function FinancingFlowClient() {
                   Total Raised
                 </p>
                 <p className="text-2xl font-bold text-gold-400">
-                  {formatUSD(data.summary.total_usd)}
+                  {formatMoney(data.summary.total_usd)}
+                  <span className="ml-1 text-xs text-slate-500 align-middle">
+                    {data.currency ?? "CAD"}
+                  </span>
                 </p>
                 <p className="text-xs text-slate-500 mt-1">
                   last {data.summary.period_months} months
@@ -271,7 +282,7 @@ export default function FinancingFlowClient() {
                 </p>
                 <p className="text-2xl font-bold text-white">
                   {data.summary.total_count > 0
-                    ? formatUSD(
+                    ? formatMoney(
                         data.summary.total_usd / data.summary.total_count,
                       )
                     : "$0"}
@@ -295,7 +306,7 @@ export default function FinancingFlowClient() {
                         className="flex-1 flex flex-col items-center gap-1 min-w-0"
                       >
                         <span className="text-[10px] text-slate-400 truncate">
-                          {formatUSD(m.total_usd)}
+                          {formatMoney(m.total_usd)}
                         </span>
                         <div
                           className="w-full flex justify-center"
@@ -304,7 +315,7 @@ export default function FinancingFlowClient() {
                           <div
                             className="w-full max-w-[48px] rounded-t bg-gradient-to-t from-gold-600 to-gold-400 transition-all duration-500 self-end"
                             style={{ height: `${Math.max(pct, 2)}%` }}
-                            title={`${m.count} deals - ${formatUSD(m.total_usd)}`}
+                            title={`${m.count} deals - ${formatMoney(m.total_usd)}`}
                           />
                         </div>
                         <span className="text-[10px] text-slate-500">
@@ -335,7 +346,7 @@ export default function FinancingFlowClient() {
                               {formatType(t.type)}
                             </span>
                             <span className="text-slate-400 whitespace-nowrap">
-                              {t.count} deals &middot; {formatUSD(t.total_usd)}
+                              {t.count} deals &middot; {formatMoney(t.total_usd)}
                             </span>
                           </div>
                           <div className="w-full h-2 rounded-full bg-slate-800/80">
@@ -367,7 +378,7 @@ export default function FinancingFlowClient() {
                               {c.commodity}
                             </span>
                             <span className="text-slate-400 whitespace-nowrap">
-                              {c.count} deals &middot; {formatUSD(c.total_usd)}
+                              {c.count} deals &middot; {formatMoney(c.total_usd)}
                             </span>
                           </div>
                           <div className="w-full h-2 rounded-full bg-slate-800/80">
@@ -435,7 +446,7 @@ export default function FinancingFlowClient() {
                             {c.count}
                           </td>
                           <td className="py-2 text-right font-medium text-gold-400">
-                            {formatUSD(c.total_usd)}
+                            {formatMoney(c.total_usd)}
                           </td>
                         </tr>
                       ))}
@@ -477,7 +488,7 @@ export default function FinancingFlowClient() {
                       <div className="flex items-center gap-4 sm:text-right shrink-0">
                         <div>
                           <p className="text-sm font-semibold text-gold-400">
-                            {formatUSD(d.amount_usd)}
+                            {formatMoney(d.amount_usd)}
                           </p>
                           {d.price_per_share != null && (
                             <p className="text-[11px] text-slate-500">

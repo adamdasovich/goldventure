@@ -1,7 +1,9 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
+import { useSearchParams } from "next/navigation";
 import { Badge } from "@/components/ui/Badge";
+import CompanyActions from "@/components/ui/CompanyActions";
 import EmptyState from "@/components/ui/EmptyState";
 import { toolsAPI } from "@/lib/api";
 
@@ -118,6 +120,18 @@ export default function ResourceGrowthClient() {
       .slice(0, 8);
   }, [search, available]);
 
+  // Adopt ?company_id= so links from other tools land on the right company
+  // instead of an empty picker. Runs once the list is loaded and only when
+  // nothing has been chosen yet, so it never fights a manual selection.
+  const searchParams = useSearchParams();
+  useEffect(() => {
+    const requested = searchParams.get("company_id");
+    if (!requested || selected || available.length === 0) return;
+    const match = available.find((c) => String(c.id) === requested);
+    if (match) selectCompany(match);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams, available, selected]);
+
   const selectCompany = async (c: AvailableCompany) => {
     setSelected(c);
     setSearch("");
@@ -201,6 +215,15 @@ export default function ResourceGrowthClient() {
                     record.
                   </p>
                 )}
+              </div>
+            )}
+            {selected && (
+              <div className="mt-4 border-t border-slate-700/40 pt-3">
+                <CompanyActions
+                  companyId={selected.id}
+                  companyName={selected.name}
+                  currentSlug="resource-growth"
+                />
               </div>
             )}
             {error && <p className="text-sm text-red-400 mt-3">{error}</p>}

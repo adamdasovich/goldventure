@@ -404,6 +404,17 @@ def financing_flow(request):
             'period_months': months,
         },
         'financing_types': [t[0] for t in Financing.FINANCING_TYPES],
+        # Financing.amount_raised_usd is a misnomer — it stores the raise in the
+        # deal's own currency, which for this universe is overwhelmingly CAD.
+        # Reporting these totals as USD overstated them by the CAD/USD spread,
+        # so the currency is declared rather than assumed. The `*_usd` keys keep
+        # their names to avoid breaking existing callers.
+        'currency': 'CAD',
+        'currency_note': (
+            "Amounts are in each financing's own currency, which for the "
+            "TSX/TSXV/CSE listings that dominate this data is Canadian dollars. "
+            "They are not converted to USD."
+        ),
     }
 
     cache.set(cached_key, data, 600)
