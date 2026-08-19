@@ -299,6 +299,23 @@ class Command(BaseCommand):
 
     # ------------------------------------------------------------------
 
+    # Words that carry no identity — reports name the same asset "Ixtaca",
+    # "Ixtaca Project", "Ixtaca Gold-Silver Project" and "Ixtaca (Tuligtic
+    # Property)" interchangeably.
+    _NOISE_WORDS = {
+        'project', 'property', 'properties', 'deposit', 'deposits', 'mine',
+        'mines', 'complex', 'claims', 'claim', 'gold', 'silver', 'copper',
+        'zinc', 'lead', 'nickel', 'lithium', 'uranium', 'the', 'and',
+    }
+
+    @classmethod
+    def _normalize_project_name(cls, name):
+        """Reduce a project name to its identifying tokens."""
+        text = re.sub(r'\([^)]*\)', ' ', name or '')          # drop parentheticals
+        text = re.sub(r'[^a-z0-9\s]', ' ', text.lower())      # drop punctuation
+        tokens = [t for t in text.split() if t and t not in cls._NOISE_WORDS]
+        return frozenset(tokens)
+
     def _resolve_project(self, document, data):
         """Find or create the project this report covers."""
         if document.project_id:
@@ -313,6 +330,22 @@ class Command(BaseCommand):
             ).first()
             if existing:
                 return existing
+
+            # Fall back to identity-token matching before creating anything.
+            # Exact-name matching alone split Almaden's single Ixtaca deposit
+            # across six Project rows, which duplicated it through Grade Ranker
+            # and made Resource Growth read as six one-report projects.
+            candidate = self._normalize_project_name(name)
+            if candidate:
+                for project in Project.objects.filter(company=company):
+                    tokens = self._normalize_project_name(project.name)
+                    if not tokens:
+                        continue
+                    # Equal, or one is a strict subset of the other
+                    # ("true north" vs "true north gold mine"). Unrelated names
+                    # such as "ixtaca" and "tuligtic" stay separate.
+                    if tokens == candidate or tokens < candidate or candidate < tokens:
+                        return project
 
         # Fall back to the company's flagship before inventing a project —
         # a duplicate project would split its resource history in two.
