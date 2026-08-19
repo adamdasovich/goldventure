@@ -1,515 +1,175 @@
-"use client";
-
-import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
-import { Badge } from "@/components/ui/Badge";
-import { Button } from "@/components/ui/Button";
-import LogoMono from "@/components/LogoMono";
-import { toolsAPI } from "@/lib/api";
+import ToolPageLayout from "../ToolPageLayout";
+import SectorPulseClient from "./SectorPulseClient";
 
-/* ------------------------------------------------------------------ */
-/*  Types                                                              */
-/* ------------------------------------------------------------------ */
-
-interface Metal {
-  symbol: string;
-  name: string;
-  price: number;
-  change_pct: number;
-  updated: string;
-}
-
-interface Breadth {
-  date: string;
-  total_stocks: number;
-  up: number;
-  down: number;
-  flat: number;
-  up_pct: number;
-  avg_change_pct: number;
-}
-
-interface Mover {
-  company_id: number;
-  company_name: string;
-  ticker: string;
-  price: number;
-  change_pct: number;
-}
-
-interface FinancingData {
-  count_30d: number;
-  total_usd_30d: number;
-}
-
-interface NewsData {
-  press_releases_7d: number;
-  articles_7d: number;
-}
-
-interface SectorPulseData {
-  metals: Metal[];
-  breadth: Breadth;
-  gainers: Mover[];
-  losers: Mover[];
-  financing: FinancingData;
-  news: NewsData;
-  timestamp: string;
-}
-
-/* ------------------------------------------------------------------ */
-/*  Helpers                                                            */
-/* ------------------------------------------------------------------ */
-
-function formatUSD(n: number): string {
-  if (n >= 1_000_000_000) return `$${(n / 1_000_000_000).toFixed(1)}B`;
-  if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `$${(n / 1_000).toFixed(1)}K`;
-  return `$${n.toFixed(0)}`;
-}
-
-function formatPrice(n: number): string {
-  return n >= 100
-    ? `$${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-    : `$${n.toFixed(2)}`;
-}
-
-function changeBadge(pct: number) {
-  const positive = pct > 0;
-  const zero = pct === 0;
-  const arrow = positive ? "\u25B2" : zero ? "\u2013" : "\u25BC";
-  const color = positive
-    ? "text-emerald-400"
-    : zero
-      ? "text-slate-400"
-      : "text-red-400";
-  return (
-    <span className={`${color} font-semibold text-sm`}>
-      {arrow} {Math.abs(pct).toFixed(2)}%
-    </span>
-  );
-}
-
-const METAL_ICONS: Record<string, string> = {
-  Gold: "XAU",
-  Silver: "XAG",
-  Platinum: "XPT",
-  Palladium: "XPD",
-};
-
-/* ------------------------------------------------------------------ */
-/*  Skeleton                                                           */
-/* ------------------------------------------------------------------ */
+export const revalidate = 3600;
 
 /**
- * Nav + header. Rendered in every state — loading, error, and loaded.
- *
- * The page used to return a bare <Skeleton /> while `loading` was true, and
- * since the data fetch only runs in an effect, that skeleton was the entire
- * server-rendered HTML: 8 words, no <h1>. Google reads that as a soft 404.
- * Keeping the chrome outside the loading gate means the crawler always gets
- * the heading and description, and only the data region is deferred.
+ * The Chrome wrapper added during the soft-404 fix is gone — ToolPageLayout
+ * now supplies the nav and header, so the client renders only the dashboard.
  */
-function Chrome({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="min-h-screen bg-slate-900">
-      {/* Nav */}
-      <nav className="glass-nav sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <Link href="/" className="flex items-center">
-              <LogoMono className="h-10" />
-            </Link>
-            <div className="flex items-center gap-2">
-              <Link href="/investor-tools">
-                <Button variant="ghost" size="sm">
-                  All Tools
-                </Button>
-              </Link>
-              <Link href="/">
-                <Button variant="ghost" size="sm">
-                  Home
-                </Button>
-              </Link>
-            </div>
-          </div>
-        </div>
-      </nav>
-
-      {/* Header */}
-      <section className="py-8 px-4 sm:px-6 lg:px-8 bg-gradient-to-b from-[#0a0e1a] to-slate-900">
-        <div className="max-w-7xl mx-auto text-center">
-          <Badge variant="gold" className="mb-3">
-            Dashboard
-          </Badge>
-          <h1 className="text-3xl sm:text-4xl font-bold text-gradient-gold mb-3">
-            Sector Pulse
-          </h1>
-          <p className="text-slate-300 max-w-xl mx-auto">
-            Real-time overview of the junior mining sector — metals prices,
-            market breadth, top movers, financing activity, and news volume.
-          </p>
-        </div>
-      </section>
-
-      {children}
-    </div>
-  );
-}
-
-function Skeleton() {
-  return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8 animate-pulse">
-      {/* metals row */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {Array.from({ length: 4 }).map((_, i) => (
-          <div key={i} className="glass-card rounded-xl p-5 h-28" />
-        ))}
-      </div>
-
-      {/* middle row */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <div className="glass-card rounded-xl p-5 h-64" />
-        <div className="glass-card rounded-xl p-5 h-64" />
-        <div className="glass-card rounded-xl p-5 h-64" />
-      </div>
-
-      {/* bottom row */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div className="glass-card rounded-xl p-5 h-36" />
-        <div className="glass-card rounded-xl p-5 h-36" />
-      </div>
-    </div>
-  );
-}
-
-/* ------------------------------------------------------------------ */
-/*  Donut Chart (CSS-only)                                             */
-/* ------------------------------------------------------------------ */
-
-function DonutChart({
-  up,
-  down,
-  flat,
-}: {
-  up: number;
-  down: number;
-  flat: number;
-}) {
-  const total = up + down + flat || 1;
-  const upPct = (up / total) * 100;
-  const downPct = (down / total) * 100;
-  // flat fills the remainder
-
-  // conic-gradient segments: up (green), down (red), flat (slate)
-  const gradient = `conic-gradient(
-    #34d399 0% ${upPct}%,
-    #f87171 ${upPct}% ${upPct + downPct}%,
-    #64748b ${upPct + downPct}% 100%
-  )`;
-
-  return (
-    <div className="relative w-40 h-40 mx-auto">
-      <div
-        className="w-full h-full rounded-full"
-        style={{ background: gradient }}
-      />
-      {/* inner cutout */}
-      <div className="absolute inset-4 rounded-full bg-slate-900 flex items-center justify-center">
-        <div className="text-center">
-          <span className="text-xl font-bold text-emerald-400">
-            {upPct.toFixed(0)}%
-          </span>
-          <p className="text-[10px] text-slate-400 mt-0.5">advancing</p>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/* ------------------------------------------------------------------ */
-/*  Main Component                                                     */
-/* ------------------------------------------------------------------ */
-
 export default function SectorPulsePage() {
-  const [data, setData] = useState<SectorPulseData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  const fetchData = useCallback(async () => {
-    try {
-      const res = await toolsAPI.sectorPulse();
-      setData(res);
-      setError(null);
-    } catch (err: any) {
-      setError(err?.message || "Failed to load sector data");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchData();
-    const interval = setInterval(fetchData, 5 * 60 * 1000);
-    return () => clearInterval(interval);
-  }, [fetchData]);
-
-  if (loading)
-    return (
-      <Chrome>
-        <Skeleton />
-      </Chrome>
-    );
-
-  if (error || !data) {
-    return (
-      <Chrome>
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 flex justify-center">
-          <div className="glass-card rounded-xl p-8 text-center max-w-md">
-            <p className="text-red-400 text-lg font-semibold mb-2">
-              Unable to load Sector Pulse
-            </p>
-            <p className="text-slate-400 text-sm mb-4">{error}</p>
-            <Button variant="secondary" size="sm" onClick={fetchData}>
-              Retry
-            </Button>
-          </div>
-        </div>
-      </Chrome>
-    );
-  }
-
   return (
-    <Chrome>
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
-        {/* ============================================================= */}
-        {/*  Metals Prices                                                 */}
-        {/* ============================================================= */}
-        <section>
-          <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-3">
-            Metals Prices
-          </h2>
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            {data.metals.map((m) => (
-              <div
-                key={m.symbol}
-                className="glass-card rounded-xl p-5 flex flex-col justify-between"
-              >
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs text-slate-500 font-medium">
-                    {METAL_ICONS[m.name] || m.symbol}
-                  </span>
-                  {changeBadge(m.change_pct)}
-                </div>
-                <p className="text-2xl font-bold text-slate-100">
-                  {formatPrice(m.price)}
-                </p>
-                <p className="text-sm text-gold-400 font-medium mt-1">
-                  {m.name}
-                </p>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        {/* ============================================================= */}
-        {/*  Market Breadth + Gainers + Losers                             */}
-        {/* ============================================================= */}
-        <section>
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-            {/* Market Breadth */}
-            <div className="glass-card rounded-xl p-5">
-              <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-4">
-                Market Breadth
-              </h2>
-              <DonutChart
-                up={data.breadth.up}
-                down={data.breadth.down}
-                flat={data.breadth.flat}
-              />
-              <div className="mt-4 grid grid-cols-3 gap-2 text-center text-xs">
-                <div>
-                  <span className="block text-emerald-400 font-bold text-base">
-                    {data.breadth.up}
-                  </span>
-                  <span className="text-slate-500">Up</span>
-                </div>
-                <div>
-                  <span className="block text-red-400 font-bold text-base">
-                    {data.breadth.down}
-                  </span>
-                  <span className="text-slate-500">Down</span>
-                </div>
-                <div>
-                  <span className="block text-slate-400 font-bold text-base">
-                    {data.breadth.flat}
-                  </span>
-                  <span className="text-slate-500">Flat</span>
-                </div>
-              </div>
-              <div className="mt-3 pt-3 border-t border-slate-700/50 text-center">
-                <span className="text-xs text-slate-500">Avg Change</span>
-                <p className="text-lg font-bold">
-                  {changeBadge(data.breadth.avg_change_pct)}
-                </p>
-              </div>
-              <p className="text-[10px] text-slate-600 text-center mt-1">
-                {data.breadth.total_stocks} stocks tracked
+    <ToolPageLayout
+      slug="sector-pulse"
+      badge="Dashboard"
+      title="Sector Pulse Dashboard"
+      intro="A single view of the junior mining sector: metals prices, market breadth, the day's biggest movers, financing activity and news volume — free to use, no account required."
+      tool={<SectorPulseClient />}
+      related={["financing-flow", "unusual-activity", "catalyst-calendar"]}
+      relatedNote={
+        <>
+          For the metals themselves in more detail, see{" "}
+          <Link href="/metals" className="text-gold-400 hover:underline">
+            live metals prices
+          </Link>
+          , and for the companies behind the moves,{" "}
+          <Link href="/companies" className="text-gold-400 hover:underline">
+            browse the directory
+          </Link>
+          .
+        </>
+      }
+      sections={[
+        {
+          id: "what-it-does",
+          heading: "What this tool does",
+          body: (
+            <>
+              <p>
+                Junior mining is a sentiment-driven sector. Individual companies
+                rise and fall on their own results, but the tide underneath them
+                — whether capital is flowing in, whether metals are strong,
+                whether anyone is paying attention — determines most of what
+                happens to most of them in any given month.
               </p>
-            </div>
-
-            {/* Top 5 Gainers */}
-            <div className="glass-card rounded-xl p-5">
-              <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-4">
-                Top 5 Gainers
-              </h2>
-              <ul className="space-y-3">
-                {data.gainers.map((g, i) => (
-                  <li key={g.company_id}>
-                    <Link
-                      href={`/companies/${g.company_id}`}
-                      className="flex items-center justify-between group"
-                    >
-                      <div className="flex items-center gap-2 min-w-0">
-                        <span className="text-xs text-slate-600 w-4 shrink-0">
-                          {i + 1}.
-                        </span>
-                        <div className="min-w-0">
-                          <p className="text-sm text-slate-200 truncate group-hover:text-gold-400 transition-colors">
-                            {g.company_name}
-                          </p>
-                          <p className="text-xs text-slate-500">{g.ticker}</p>
-                        </div>
-                      </div>
-                      <div className="text-right shrink-0 ml-2">
-                        <p className="text-sm text-slate-300">
-                          {formatPrice(g.price)}
-                        </p>
-                        <span className="text-xs font-semibold text-emerald-400">
-                          +{g.change_pct.toFixed(2)}%
-                        </span>
-                      </div>
-                    </Link>
-                  </li>
-                ))}
-                {data.gainers.length === 0 && (
-                  <li className="text-sm text-slate-500 text-center py-4">
-                    No data available
-                  </li>
-                )}
+              <p>
+                That tide is normally assembled by hand from half a dozen
+                sources: a metals price site, an exchange screener, a news feed,
+                somewhere to see financings. This dashboard puts them in one
+                place and refreshes automatically.
+              </p>
+              <p>
+                It is one of the two tools available without an account,
+                deliberately, because it is the orientation layer. Everything
+                else on the platform is easier to use once you know what the
+                sector is doing.
+              </p>
+            </>
+          ),
+        },
+        {
+          id: "how-to-read",
+          heading: "How to read the dashboard",
+          body: (
+            <>
+              <p>
+                <strong className="text-slate-100">Metals prices</strong> set
+                the backdrop. Junior valuations key off the underlying commodity
+                with a lag, and a sustained move in the metal usually shows up
+                in the explorers well after it shows up in the producers.
+              </p>
+              <p>
+                <strong className="text-slate-100">Market breadth</strong> — how
+                many companies rose versus fell — is the most useful single
+                number here. A day where the metal is up but breadth is negative
+                describes a sector where money is concentrating in a few names
+                rather than lifting everything, which is a very different market
+                from a broad rally.
+              </p>
+              <p>
+                <strong className="text-slate-100">Top movers</strong> are
+                usually reacting to something specific. A name at the top of the
+                list is worth checking against its news, and if there is none,
+                against the{" "}
+                <Link
+                  href="/investor-tools/unusual-activity"
+                  className="text-gold-400 hover:underline"
+                >
+                  Unusual Activity Detector
+                </Link>
+                .
+              </p>
+              <p>
+                <strong className="text-slate-100">Financing activity</strong>{" "}
+                indicates whether the capital window is open. It is the slowest
+                of these signals to move and the most consequential when it
+                does.
+              </p>
+              <p>
+                <strong className="text-slate-100">News volume</strong> tracks
+                how much the sector is communicating. Sustained high volume
+                usually accompanies drilling season and rising interest.
+              </p>
+            </>
+          ),
+        },
+        {
+          id: "method",
+          heading: "Method and limitations",
+          body: (
+            <>
+              <p>
+                Metals prices are scraped on a schedule, company prices and
+                volumes come from exchange market data updated after each close,
+                and financing and news figures are computed from the same
+                records that drive the rest of the platform. The dashboard
+                refreshes itself every five minutes.
+              </p>
+              <ul className="list-disc pl-6 flex flex-col gap-3">
+                <li>
+                  <strong className="text-slate-100">
+                    Company prices are end-of-day, not live.
+                  </strong>{" "}
+                  Stock figures update after the close rather than intraday, so
+                  the movers list describes the last completed session.
+                </li>
+                <li>
+                  <strong className="text-slate-100">
+                    Breadth is distorted by illiquidity.
+                  </strong>{" "}
+                  A great many tracked listings barely trade, so a stock showing
+                  no change may simply not have traded rather than having held
+                  its price.
+                </li>
+                <li>
+                  <strong className="text-slate-100">
+                    Percentage movers favour the smallest companies.
+                  </strong>{" "}
+                  On a stock priced at two cents, a one-cent move is 50%. The
+                  top of the movers list is frequently dominated by names where
+                  very little money actually changed hands.
+                </li>
+                <li>
+                  <strong className="text-slate-100">
+                    Coverage is the companies we track,
+                  </strong>{" "}
+                  not the entire sector, so breadth describes this universe
+                  rather than every listed junior.
+                </li>
               </ul>
-            </div>
-
-            {/* Top 5 Losers */}
-            <div className="glass-card rounded-xl p-5">
-              <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-4">
-                Top 5 Losers
-              </h2>
-              <ul className="space-y-3">
-                {data.losers.map((l, i) => (
-                  <li key={l.company_id}>
-                    <Link
-                      href={`/companies/${l.company_id}`}
-                      className="flex items-center justify-between group"
-                    >
-                      <div className="flex items-center gap-2 min-w-0">
-                        <span className="text-xs text-slate-600 w-4 shrink-0">
-                          {i + 1}.
-                        </span>
-                        <div className="min-w-0">
-                          <p className="text-sm text-slate-200 truncate group-hover:text-gold-400 transition-colors">
-                            {l.company_name}
-                          </p>
-                          <p className="text-xs text-slate-500">{l.ticker}</p>
-                        </div>
-                      </div>
-                      <div className="text-right shrink-0 ml-2">
-                        <p className="text-sm text-slate-300">
-                          {formatPrice(l.price)}
-                        </p>
-                        <span className="text-xs font-semibold text-red-400">
-                          {l.change_pct.toFixed(2)}%
-                        </span>
-                      </div>
-                    </Link>
-                  </li>
-                ))}
-                {data.losers.length === 0 && (
-                  <li className="text-sm text-slate-500 text-center py-4">
-                    No data available
-                  </li>
-                )}
-              </ul>
-            </div>
-          </div>
-        </section>
-
-        {/* ============================================================= */}
-        {/*  Financing Activity + News Volume                              */}
-        {/* ============================================================= */}
-        <section>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {/* Financing Activity */}
-            <div className="glass-card rounded-xl p-5">
-              <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-4">
-                Financing Activity
-                <span className="text-slate-600 normal-case ml-1">(30d)</span>
-              </h2>
-              <div className="flex items-end justify-between">
-                <div>
-                  <p className="text-3xl font-bold text-gold-400">
-                    {data.financing.count_30d}
-                  </p>
-                  <p className="text-xs text-slate-500 mt-1">deals closed</p>
-                </div>
-                <div className="text-right">
-                  <p className="text-3xl font-bold text-slate-100">
-                    {formatUSD(data.financing.total_usd_30d)}
-                  </p>
-                  <p className="text-xs text-slate-500 mt-1">total raised</p>
-                </div>
-              </div>
-            </div>
-
-            {/* News Volume */}
-            <div className="glass-card rounded-xl p-5">
-              <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-4">
-                News Volume
-                <span className="text-slate-600 normal-case ml-1">(7d)</span>
-              </h2>
-              <div className="flex items-end justify-between">
-                <div>
-                  <p className="text-3xl font-bold text-gold-400">
-                    {data.news.press_releases_7d}
-                  </p>
-                  <p className="text-xs text-slate-500 mt-1">press releases</p>
-                </div>
-                <div className="text-right">
-                  <p className="text-3xl font-bold text-slate-100">
-                    {data.news.articles_7d}
-                  </p>
-                  <p className="text-xs text-slate-500 mt-1">articles</p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* ============================================================= */}
-        {/*  Footer / Last Updated                                         */}
-        {/* ============================================================= */}
-        <footer className="pt-4 pb-8 border-t border-slate-800 text-center">
-          <p className="text-xs text-slate-600">
-            Last updated:{" "}
-            {new Date(data.timestamp).toLocaleString("en-US", {
-              dateStyle: "medium",
-              timeStyle: "short",
-            })}
-            <span className="mx-2 text-slate-700">|</span>
-            Auto-refreshes every 5 minutes
-          </p>
-        </footer>
-      </div>
-    </Chrome>
+            </>
+          ),
+        },
+      ]}
+      faqs={[
+        {
+          q: "Is the Sector Pulse Dashboard free?",
+          a: "Yes. It is one of two tools available without an account, alongside the Resource Grade Ranker, because it is the orientation layer that makes the rest of the platform easier to use.",
+        },
+        {
+          q: "What does market breadth tell me?",
+          a: "Whether a move is broad or narrow. If the metal is up and most companies are up with it, capital is flowing into the sector generally. If the metal is up while more companies fall than rise, money is concentrating into a handful of favoured names — a much less healthy market, and one where index-level optimism does not reach most holdings.",
+        },
+        {
+          q: "Why are the top movers usually tiny companies?",
+          a: "Because percentage moves scale inversely with share price. On a two-cent stock a single cent is a 50% gain, so the top of any percentage-ranked list is dominated by the smallest and thinnest listings, often on trivial dollar volume. Check the absolute turnover before reading anything into it.",
+        },
+        {
+          q: "How often does the data update?",
+          a: "The dashboard refreshes every five minutes. Metals prices are scraped on a schedule through the day; company prices and volumes are end-of-day rather than intraday, so the movers list reflects the last completed session.",
+        },
+      ]}
+    />
   );
 }

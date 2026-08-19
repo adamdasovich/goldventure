@@ -1,508 +1,214 @@
-"use client";
-
-import { useState, useEffect, useMemo, useCallback } from "react";
 import Link from "next/link";
-import { Badge } from "@/components/ui/Badge";
-import { Button } from "@/components/ui/Button";
-import LogoMono from "@/components/LogoMono";
-import { toolsAPI } from "@/lib/api";
+import ToolPageLayout from "../ToolPageLayout";
+import CatalystImpactClient from "./CatalystImpactClient";
 
-/* ---------- types ---------- */
+export const revalidate = 3600;
 
-interface AvailableCompany {
-  id: number;
-  name: string;
-  ticker: string;
-  exchange: string;
-}
-
-interface CatalystType {
-  release_type: string;
-  event_count: number;
-  avg_1d: number | null;
-  avg_5d: number | null;
-  avg_20d: number | null;
-  sample_1d: number;
-  sample_5d: number;
-  sample_20d: number;
-}
-
-interface CatalystEvent {
-  date: string;
-  title: string;
-  release_type: string;
-  url: string;
-  change_1d: number | null;
-  change_5d: number | null;
-  change_20d: number | null;
-}
-
-interface CatalystData {
-  available_companies: AvailableCompany[];
-  company?: { id: number; name: string; ticker: string };
-  window_days: number;
-  total_events: number;
-  by_catalyst_type: CatalystType[];
-  events: CatalystEvent[];
-  message?: string;
-}
-
-/* ---------- constants ---------- */
-
-const DAYS_OPTIONS = [
-  { label: "6M", value: 180 },
-  { label: "1Y", value: 365 },
-  { label: "2Y", value: 730 },
-  { label: "3Y", value: 1095 },
-] as const;
-
-const HORIZONS = [
-  { key: "1d", label: "+1 day" },
-  { key: "5d", label: "+5 days" },
-  { key: "20d", label: "+20 days" },
-] as const;
-
-/* ---------- helpers ---------- */
-
-function fmtPct(v: number | null | undefined): string {
-  if (v == null) return "—";
-  return `${v > 0 ? "+" : ""}${v.toFixed(2)}%`;
-}
-
-function pctColor(v: number | null | undefined): string {
-  if (v == null) return "text-slate-500";
-  if (v > 0) return "text-emerald-400";
-  if (v < 0) return "text-red-400";
-  return "text-slate-300";
-}
-
-function fmtDate(iso: string): string {
-  return new Date(iso).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-}
-
-/* ---------- diverging reaction bar ---------- */
-
-function ReactionBar({
-  value,
-  maxAbs,
-}: {
-  value: number | null;
-  maxAbs: number;
-}) {
-  if (value == null || maxAbs <= 0) {
-    return <div className="h-2 rounded-full bg-slate-800/80" />;
-  }
-  const half = Math.min(Math.abs(value) / maxAbs, 1) * 50;
-  const positive = value >= 0;
-  return (
-    <div className="relative h-2 rounded-full bg-slate-800/80">
-      {/* center line */}
-      <div className="absolute left-1/2 top-0 bottom-0 w-px bg-slate-600" />
-      <div
-        className={`absolute top-0 bottom-0 rounded-full ${
-          positive ? "bg-emerald-500" : "bg-red-500"
-        }`}
-        style={
-          positive
-            ? { left: "50%", width: `${half}%` }
-            : { right: "50%", width: `${half}%` }
-        }
-      />
-    </div>
-  );
-}
-
-/* ---------- page ---------- */
-
+/**
+ * Checked against catalyst_impact in core/views/investor_tools.py: an event
+ * study measuring price reaction at 1, 5 and 20 TRADING days after each
+ * release, grouped by news type, over a 90-1095 day window (default 365).
+ */
 export default function CatalystImpactPage() {
-  const [available, setAvailable] = useState<AvailableCompany[]>([]);
-  const [search, setSearch] = useState("");
-  const [selected, setSelected] = useState<AvailableCompany | null>(null);
-  const [days, setDays] = useState<number>(365);
-  const [data, setData] = useState<CatalystData | null>(null);
-  const [initialLoading, setInitialLoading] = useState(true);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    (async () => {
-      try {
-        const res = (await toolsAPI.catalystImpact({})) as CatalystData;
-        setAvailable(res.available_companies || []);
-      } catch {
-        setError("Failed to load the company list. Please refresh.");
-      } finally {
-        setInitialLoading(false);
-      }
-    })();
-  }, []);
-
-  const searchMatches = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    if (!q) return [];
-    return available
-      .filter(
-        (c) =>
-          c.name.toLowerCase().includes(q) ||
-          (c.ticker || "").toLowerCase().includes(q),
-      )
-      .slice(0, 8);
-  }, [search, available]);
-
-  const runStudy = useCallback(async () => {
-    if (!selected) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const res = (await toolsAPI.catalystImpact({
-        company_id: String(selected.id),
-        days: String(days),
-      })) as CatalystData;
-      setData(res);
-    } catch (e: any) {
-      setError(e?.message || "Failed to run the catalyst study.");
-    } finally {
-      setLoading(false);
-    }
-  }, [selected, days]);
-
-  useEffect(() => {
-    if (selected) runStudy();
-  }, [selected, days, runStudy]);
-
-  // Largest absolute average reaction — scales every diverging bar.
-  const maxAbs = useMemo(() => {
-    if (!data?.by_catalyst_type?.length) return 1;
-    const vals: number[] = [];
-    data.by_catalyst_type.forEach((t) => {
-      [t.avg_1d, t.avg_5d, t.avg_20d].forEach((v) => {
-        if (v != null) vals.push(Math.abs(v));
-      });
-    });
-    return Math.max(...vals, 1);
-  }, [data]);
-
   return (
-    <div className="min-h-screen bg-slate-900">
-      {/* Nav */}
-      <nav className="glass-nav sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <Link href="/" className="flex items-center">
-              <LogoMono className="h-10" />
-            </Link>
-            <div className="flex items-center gap-2">
-              <Link href="/investor-tools">
-                <Button variant="ghost" size="sm">
-                  All Tools
-                </Button>
-              </Link>
-              <Link href="/">
-                <Button variant="ghost" size="sm">
-                  Home
-                </Button>
-              </Link>
-            </div>
-          </div>
-        </div>
-      </nav>
-
-      {/* Header */}
-      <section className="py-8 px-4 sm:px-6 lg:px-8 bg-gradient-to-b from-[#0a0e1a] to-slate-900">
-        <div className="max-w-7xl mx-auto text-center">
-          <Badge variant="gold" className="mb-3">
-            Event Study
-          </Badge>
-          <h1 className="text-3xl sm:text-4xl font-bold text-gradient-gold mb-3">
-            Catalyst Impact Analyzer
-          </h1>
-          <p className="text-slate-300 max-w-xl mx-auto">
-            See how each type of news has historically moved a company&apos;s
-            share price — at 1, 5 and 20 trading days after the release.
-            Separates the catalysts that move the stock from the ones that
-            don&apos;t.
-          </p>
-        </div>
-      </section>
-
-      {/* Controls */}
-      <section className="px-4 sm:px-6 lg:px-8 py-6">
-        <div className="max-w-7xl mx-auto">
-          <div className="glass-card rounded-xl p-5 sm:p-6 space-y-5">
-            {/* Company picker */}
-            <div>
-              <label className="block text-xs text-slate-400 uppercase tracking-wider mb-2">
-                Company
-              </label>
-              {selected ? (
-                <div className="flex items-center gap-3">
-                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-gold-500/15 border border-gold-500/30 text-sm text-gold-300">
-                    {selected.name}
-                    {selected.ticker && (
-                      <span className="text-gold-400/60">
-                        {selected.ticker}
-                      </span>
-                    )}
-                  </span>
-                  <button
-                    onClick={() => {
-                      setSelected(null);
-                      setData(null);
-                    }}
-                    className="text-sm text-slate-400 hover:text-gold-400"
-                  >
-                    Change
-                  </button>
-                </div>
-              ) : (
-                <div className="relative">
-                  <input
-                    type="text"
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    placeholder={
-                      initialLoading
-                        ? "Loading companies…"
-                        : "Search a company by name or ticker…"
-                    }
-                    disabled={initialLoading}
-                    className="w-full bg-slate-800/60 border border-slate-700/50 text-slate-200 text-sm rounded-md px-3 py-2 focus:border-gold-500/50 focus:outline-none disabled:opacity-50"
-                  />
-                  {searchMatches.length > 0 && (
-                    <div className="absolute z-10 mt-1 w-full bg-slate-800 border border-slate-700 rounded-md shadow-xl max-h-64 overflow-y-auto">
-                      {searchMatches.map((c) => (
-                        <button
-                          key={c.id}
-                          onClick={() => {
-                            setSelected(c);
-                            setSearch("");
-                          }}
-                          className="block w-full text-left px-3 py-2 text-sm hover:bg-slate-700/60 transition-colors"
-                        >
-                          <span className="text-slate-200">{c.name}</span>
-                          {c.ticker && (
-                            <span className="text-slate-500 ml-2">
-                              {c.ticker}
-                            </span>
-                          )}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-
-            {/* Window */}
-            <div className="flex items-center gap-1">
-              <span className="text-xs text-slate-400 mr-1">News window:</span>
-              {DAYS_OPTIONS.map((d) => (
-                <button
-                  key={d.value}
-                  onClick={() => setDays(d.value)}
-                  className={`px-3 py-1 text-sm rounded-md transition-colors ${
-                    days === d.value
-                      ? "bg-gold-500/20 text-gold-400 border border-gold-500/40"
-                      : "bg-slate-800/60 text-slate-400 border border-slate-700/50 hover:text-slate-200"
-                  }`}
-                >
-                  {d.label}
-                </button>
-              ))}
-            </div>
-
-            {error && <p className="text-sm text-red-400">{error}</p>}
-          </div>
-        </div>
-      </section>
-
-      {/* Results */}
-      <section className="px-4 sm:px-6 lg:px-8 pb-16">
-        <div className="max-w-7xl mx-auto space-y-8">
-          {!selected && (
-            <div className="glass-card rounded-xl p-10 text-center text-slate-400">
-              Search and select a company above to study how its news moves the
-              stock.
-            </div>
-          )}
-
-          {selected && loading && (
-            <div className="glass-card rounded-xl p-10 text-center text-slate-400">
-              Running event study…
-            </div>
-          )}
-
-          {selected && !loading && data && data.message && (
-            <div className="glass-card rounded-xl p-10 text-center text-slate-400">
-              {data.message}
-            </div>
-          )}
-
-          {selected &&
-            !loading &&
-            data &&
-            !data.message &&
-            data.by_catalyst_type.length === 0 && (
-              <div className="glass-card rounded-xl p-10 text-center text-slate-400">
-                No news releases found for {data.company?.name} in this window.
-                Try a longer window.
-              </div>
-            )}
-
-          {selected &&
-            !loading &&
-            data &&
-            !data.message &&
-            data.by_catalyst_type.length > 0 && (
-              <>
-                {/* By catalyst type */}
-                <div className="glass-card rounded-xl p-6">
-                  <h2 className="text-sm font-semibold text-gold-400 mb-1">
-                    Average Price Reaction by Catalyst Type
-                  </h2>
-                  <p className="text-xs text-slate-500 mb-5">
-                    Based on {data.total_events} news releases over the last{" "}
-                    {data.window_days} days.
-                  </p>
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                    {data.by_catalyst_type.map((t) => (
-                      <div
-                        key={t.release_type}
-                        className="rounded-lg bg-slate-800/40 border border-slate-700/40 p-4"
-                      >
-                        <div className="flex items-center justify-between mb-3">
-                          <span className="text-sm font-medium text-slate-200">
-                            {t.release_type}
-                          </span>
-                          <Badge variant="slate">
-                            {t.event_count}{" "}
-                            {t.event_count === 1 ? "event" : "events"}
-                          </Badge>
-                        </div>
-                        <div className="space-y-2.5">
-                          {HORIZONS.map((h) => {
-                            const avg = t[
-                              `avg_${h.key}` as keyof CatalystType
-                            ] as number | null;
-                            const sample = t[
-                              `sample_${h.key}` as keyof CatalystType
-                            ] as number;
-                            return (
-                              <div
-                                key={h.key}
-                                className="flex items-center gap-3"
-                              >
-                                <span className="text-xs text-slate-500 w-16 shrink-0">
-                                  {h.label}
-                                </span>
-                                <div className="flex-1">
-                                  <ReactionBar value={avg} maxAbs={maxAbs} />
-                                </div>
-                                <span
-                                  className={`text-sm font-semibold w-20 text-right shrink-0 ${pctColor(
-                                    avg,
-                                  )}`}
-                                >
-                                  {fmtPct(avg)}
-                                </span>
-                                <span className="text-[10px] text-slate-600 w-8 shrink-0">
-                                  n={sample}
-                                </span>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                  <p className="text-xs text-slate-500 mt-4">
-                    Each bar is the average % share-price change measured 1, 5
-                    and 20 trading days after a release of that type. Small
-                    samples (n &lt; 4) are weak evidence — treat as directional
-                    only.
-                  </p>
-                </div>
-
-                {/* Event-level table */}
-                {data.events.length > 0 && (
-                  <div className="glass-card rounded-xl p-6">
-                    <h2 className="text-sm font-semibold text-gold-400 mb-4">
-                      Individual News Events
-                    </h2>
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-sm">
-                        <thead>
-                          <tr className="text-slate-400 text-xs uppercase tracking-wider border-b border-slate-700/50">
-                            <th className="text-left pb-2 pr-4">Date</th>
-                            <th className="text-left pb-2 pr-4">Release</th>
-                            <th className="text-left pb-2 pr-4">Type</th>
-                            <th className="text-right pb-2 pr-4">+1d</th>
-                            <th className="text-right pb-2 pr-4">+5d</th>
-                            <th className="text-right pb-2">+20d</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {data.events.map((ev, i) => (
-                            <tr
-                              key={i}
-                              className="border-b border-slate-800/40 hover:bg-slate-800/30 transition-colors"
-                            >
-                              <td className="py-2 pr-4 text-slate-400 whitespace-nowrap">
-                                {fmtDate(ev.date)}
-                              </td>
-                              <td className="py-2 pr-4 text-slate-300 max-w-md">
-                                {ev.url ? (
-                                  <a
-                                    href={ev.url}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="hover:text-gold-400"
-                                  >
-                                    {ev.title}
-                                  </a>
-                                ) : (
-                                  ev.title
-                                )}
-                              </td>
-                              <td className="py-2 pr-4">
-                                <Badge variant="slate">{ev.release_type}</Badge>
-                              </td>
-                              <td
-                                className={`py-2 pr-4 text-right ${pctColor(
-                                  ev.change_1d,
-                                )}`}
-                              >
-                                {fmtPct(ev.change_1d)}
-                              </td>
-                              <td
-                                className={`py-2 pr-4 text-right ${pctColor(
-                                  ev.change_5d,
-                                )}`}
-                              >
-                                {fmtPct(ev.change_5d)}
-                              </td>
-                              <td
-                                className={`py-2 text-right ${pctColor(
-                                  ev.change_20d,
-                                )}`}
-                              >
-                                {fmtPct(ev.change_20d)}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                )}
-              </>
-            )}
-        </div>
-      </section>
-    </div>
+    <ToolPageLayout
+      slug="catalyst-impact"
+      badge="Event Study"
+      title="Catalyst Impact Analyzer"
+      intro="See how a company's share price has historically reacted to each type of announcement — drill results, financings, resource updates — measured at one, five and twenty trading days after the release."
+      tool={<CatalystImpactClient />}
+      related={["unusual-activity", "catalyst-calendar", "signal-to-noise"]}
+      relatedNote={
+        <>
+          Historical reaction is one input; whether the company produces
+          catalysts at all is another. Check its cadence with the{" "}
+          <Link
+            href="/investor-tools/catalyst-calendar"
+            className="text-gold-400 hover:underline"
+          >
+            News Catalyst Calendar
+          </Link>
+          .
+        </>
+      }
+      sections={[
+        {
+          id: "what-it-does",
+          heading: "What this tool does",
+          body: (
+            <>
+              <p>
+                Junior mining investors spend a great deal of energy
+                anticipating catalysts — the drill result, the resource update,
+                the study — on the assumption that a good one will move the
+                share price. The assumption is rarely tested against the
+                company&apos;s own history.
+              </p>
+              <p>
+                It should be, because the answer varies enormously between
+                companies. Some stocks reliably move on drill results and ignore
+                everything else. Some barely respond to anything, because the
+                shareholder base is inattentive or the float is too tight to
+                trade. Some sell off on any announcement at all, which usually
+                means the market expects every release to be followed by a
+                financing.
+              </p>
+              <p>
+                This is an event study. For each type of announcement, it
+                measures what the share price actually did afterwards across the
+                company&apos;s own history — turning &ldquo;drill results should
+                move this stock&rdquo; into a measured average.
+              </p>
+            </>
+          ),
+        },
+        {
+          id: "how-to-read",
+          heading: "How to read the output",
+          body: (
+            <>
+              <p>
+                <strong className="text-slate-100">By catalyst type</strong> is
+                the core of it: average price reaction grouped by the kind of
+                announcement. The comparison between types is what matters — a
+                company whose drill results move the price 8% while financings
+                move it -4% is telling you how its shareholders think.
+              </p>
+              <p>
+                <strong className="text-slate-100">
+                  One, five and twenty trading days
+                </strong>{" "}
+                capture different things. The one-day figure is the immediate
+                reaction, which on an illiquid stock can be an artefact of a
+                single trade. Five days shows whether the move held once the
+                initial excitement passed. Twenty days shows whether it was a
+                genuine repricing or a spike that faded.
+              </p>
+              <p>
+                The relationship between the three is often more informative
+                than any one. A large one-day move that has entirely decayed by
+                day twenty describes a stock that gets traded on news rather
+                than held on it.
+              </p>
+              <p>
+                <strong className="text-slate-100">Sample size</strong> governs
+                how much weight any of this deserves. An average drawn from
+                three events is an anecdote.
+              </p>
+            </>
+          ),
+        },
+        {
+          id: "what-good-looks-like",
+          heading: "What good looks like",
+          body: (
+            <>
+              <p>
+                The encouraging profile is a positive and durable response to
+                exploration results — a move at day one that is still largely
+                intact at day twenty. That describes a shareholder base paying
+                attention to the geology and repricing the company when the
+                asset improves.
+              </p>
+              <p>
+                A negative average response to financings is normal rather than
+                alarming; dilution is genuinely bad news for existing holders.
+                What matters is the magnitude. A stock that falls heavily on
+                every raise has a shareholder base that fears dilution more than
+                it values the exploration the money funds, which makes each
+                subsequent raise more expensive.
+              </p>
+              <p>
+                Muted responses across every category are the least attractive
+                pattern. A company whose share price does not respond to good
+                news has an audience problem, and no amount of drilling fixes it
+                until someone is watching. That is often a liquidity condition
+                rather than a company one.
+              </p>
+            </>
+          ),
+        },
+        {
+          id: "method",
+          heading: "Method and limitations",
+          body: (
+            <>
+              <p>
+                Each classified press release is matched to the company&apos;s
+                price history, and the return is measured from the release date
+                to one, five and twenty <em>trading</em> days afterwards — not
+                calendar days, so weekends and holidays do not distort the
+                windows. Results are averaged by announcement type over a window
+                of between 90 days and three years, defaulting to one year.
+              </p>
+              <ul className="list-disc pl-6 flex flex-col gap-3">
+                <li>
+                  <strong className="text-slate-100">
+                    Small samples dominate the averages.
+                  </strong>{" "}
+                  Most juniors publish few releases of any given type in a year,
+                  so a single dramatic event can define the average for that
+                  category. Always read the count alongside the number.
+                </li>
+                <li>
+                  <strong className="text-slate-100">
+                    Market-wide moves are not stripped out.
+                  </strong>{" "}
+                  A drill result published on a day the whole gold sector
+                  rallied will show a strong reaction that had little to do with
+                  the drilling. There is no adjustment for sector or index
+                  movement.
+                </li>
+                <li>
+                  <strong className="text-slate-100">
+                    Announcement type does not capture whether the news was
+                    good.
+                  </strong>{" "}
+                  Excellent and disappointing drill results are averaged
+                  together, so a weak average may mean poor results rather than
+                  an inattentive market.
+                </li>
+                <li>
+                  <strong className="text-slate-100">
+                    Past reaction does not predict future reaction.
+                  </strong>{" "}
+                  Shareholder bases change, and a stock that ignored news for
+                  two years can reprice violently once it is discovered.
+                </li>
+                <li>
+                  <strong className="text-slate-100">
+                    Thin trading distorts short windows.
+                  </strong>{" "}
+                  On an illiquid stock the one-day figure may reflect a single
+                  small trade rather than a market judgement.
+                </li>
+              </ul>
+            </>
+          ),
+        },
+      ]}
+      faqs={[
+        {
+          q: "What is an event study?",
+          a: "A method for measuring how an asset's price reacts to a particular category of event, by looking at returns over fixed windows following each occurrence and averaging across them. Here the events are press releases grouped by type, and the windows are one, five and twenty trading days after publication.",
+        },
+        {
+          q: "Why measure at one, five and twenty days rather than just one?",
+          a: "Because they answer different questions. One day captures the immediate reaction, which on a thin stock can be a single trade. Five days shows whether the move survived the initial excitement. Twenty days shows whether the market genuinely repriced the company or simply traded around the announcement before drifting back.",
+        },
+        {
+          q: "Why does my company show a negative reaction to financings?",
+          a: "Because financings dilute existing shareholders, and that is legitimately bad news for them. A modest negative reaction is normal. A large one indicates a shareholder base that fears dilution more than it values the exploration being funded — which tends to make each subsequent raise more expensive.",
+        },
+        {
+          q: "Can I use this to predict how the next announcement will be received?",
+          a: "Only loosely. It describes how this shareholder base has behaved, which is genuine information, but shareholder bases change and samples are small. A stock that ignored news for two years can reprice sharply once it attracts attention. Treat it as a description of the past rather than a forecast.",
+        },
+        {
+          q: "Does it separate good drill results from bad ones?",
+          a: "No. Announcements are grouped by type, not by whether the content was favourable. A weak average reaction to drill results may mean the market is inattentive, or it may simply mean the results have been disappointing. The tool cannot tell you which.",
+        },
+      ]}
+    />
   );
 }

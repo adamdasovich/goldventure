@@ -1,516 +1,201 @@
-"use client";
-
-import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
-import { toolsAPI } from "@/lib/api";
-import { Badge } from "@/components/ui/Badge";
-import { Button } from "@/components/ui/Button";
-import LogoMono from "@/components/LogoMono";
+import ToolPageLayout from "../ToolPageLayout";
+import PropertyValuationClient from "./PropertyValuationClient";
 
-interface Listing {
-  id: number;
-  slug: string;
-  title: string;
-  location: string;
-  country: string;
-  primary_mineral: string;
-  exploration_stage: string;
-  total_hectares: number;
-  asking_price: number;
-  price_currency: string;
-  price_per_hectare: number;
-  listing_type: string;
-}
+export const revalidate = 3600;
 
-interface Benchmarks {
-  avg_price_per_ha: number;
-  min_price_per_ha: number;
-  max_price_per_ha: number;
-  median_price_per_ha: number;
-  sample_size: number;
-}
-
-interface ValuationResponse {
-  listings: Listing[];
-  count: number;
-  benchmarks: Benchmarks;
-  filters: {
-    minerals: string[];
-    countries: string[];
-  };
-}
-
-function formatPrice(val: number | null | undefined): string {
-  if (val == null || isNaN(val)) return "--";
-  if (val >= 1_000_000) return `$${(val / 1_000_000).toFixed(1)}M`;
-  if (val >= 1_000) return `$${(val / 1_000).toFixed(1)}K`;
-  return `$${val.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
-}
-
-function formatPricePerHa(val: number | null | undefined): string {
-  if (val == null || isNaN(val)) return "--";
-  if (val >= 1_000_000) return `$${(val / 1_000_000).toFixed(2)}M`;
-  if (val >= 1_000) return `$${(val / 1_000).toFixed(1)}K`;
-  return `$${val.toFixed(0)}`;
-}
-
-function formatHectares(val: number | null | undefined): string {
-  if (val == null || isNaN(val)) return "--";
-  return val.toLocaleString(undefined, { maximumFractionDigits: 0 });
-}
-
-function priceColorClass(pricePerHa: number, median: number): string {
-  if (median <= 0) return "text-slate-300";
-  if (pricePerHa <= median) return "text-emerald-400 font-semibold";
-  return "text-amber-400 font-semibold";
-}
-
-function SkeletonCard() {
-  return (
-    <div className="glass-card rounded-xl p-5">
-      <div className="h-3 w-20 bg-slate-700/60 rounded animate-pulse mb-3" />
-      <div className="h-7 w-28 bg-slate-700/60 rounded animate-pulse" />
-    </div>
-  );
-}
-
-function SkeletonRow() {
-  return (
-    <tr className="border-b border-slate-700/50">
-      {Array.from({ length: 9 }).map((_, i) => (
-        <td key={i} className="px-4 py-3">
-          <div className="h-4 bg-slate-700/60 rounded animate-pulse" />
-        </td>
-      ))}
-    </tr>
-  );
-}
-
+/**
+ * Checked against property_valuation in core/views/investor_tools.py: active
+ * PropertyListing rows only, capped at 30, filtered by primary mineral and
+ * country, with price per hectare derived from asking price / total hectares.
+ */
 export default function PropertyValuationPage() {
-  const [data, setData] = useState<ValuationResponse | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  const [mineral, setMineral] = useState("");
-  const [country, setCountry] = useState("");
-
-  const [availableMinerals, setAvailableMinerals] = useState<string[]>([]);
-  const [availableCountries, setAvailableCountries] = useState<string[]>([]);
-
-  const fetchData = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const params: Record<string, string> = {};
-      if (mineral) params.mineral = mineral;
-      if (country) params.country = country;
-
-      const res = await toolsAPI.propertyValuation(params);
-      setData(res);
-      if (res.filters?.minerals?.length)
-        setAvailableMinerals(res.filters.minerals);
-      if (res.filters?.countries?.length)
-        setAvailableCountries(res.filters.countries);
-    } catch (err: any) {
-      setError(err?.message || "Failed to load valuation data");
-    } finally {
-      setLoading(false);
-    }
-  }, [mineral, country]);
-
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
-
-  const median = data?.benchmarks?.median_price_per_ha ?? 0;
-
-  const benchmarkCards = data?.benchmarks
-    ? [
-        {
-          label: "Avg $/Hectare",
-          value: formatPricePerHa(data.benchmarks.avg_price_per_ha),
-        },
-        {
-          label: "Min $/Hectare",
-          value: formatPricePerHa(data.benchmarks.min_price_per_ha),
-        },
-        {
-          label: "Max $/Hectare",
-          value: formatPricePerHa(data.benchmarks.max_price_per_ha),
-        },
-        {
-          label: "Median $/Hectare",
-          value: formatPricePerHa(data.benchmarks.median_price_per_ha),
-        },
-        {
-          label: "Sample Size",
-          value: data.benchmarks.sample_size.toLocaleString(),
-        },
-      ]
-    : [];
-
   return (
-    <div className="min-h-screen bg-slate-900">
-      {/* Nav */}
-      <nav className="glass-nav sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <Link href="/" className="flex items-center">
-              <LogoMono className="h-10" />
-            </Link>
-            <div className="flex items-center gap-2">
-              <Link href="/investor-tools">
-                <Button variant="ghost" size="sm">
-                  All Tools
-                </Button>
-              </Link>
-              <Link href="/">
-                <Button variant="ghost" size="sm">
-                  Home
-                </Button>
-              </Link>
-            </div>
-          </div>
-        </div>
-      </nav>
-
-      {/* Header */}
-      <section className="py-10 px-4 sm:px-6 lg:px-8 bg-gradient-to-b from-[#0a0e1a] to-slate-900">
-        <div className="max-w-7xl mx-auto">
-          <Link
-            href="/investor-tools"
-            className="inline-flex items-center text-sm text-slate-400 hover:text-gold-400 transition-colors mb-4"
-          >
-            <svg
-              className="w-4 h-4 mr-1"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M15 19l-7-7 7-7"
-              />
-            </svg>
-            Investor Tools
+    <ToolPageLayout
+      slug="property-valuation"
+      badge="Marketplace"
+      title="Property Valuation Tool"
+      intro="Benchmark mineral property listings on a dollar-per-hectare basis by mineral and jurisdiction, so an asking price can be judged against comparable ground rather than accepted on its own terms."
+      tool={<PropertyValuationClient />}
+      related={["grade-ranker", "peer-comparison", "due-diligence"]}
+      relatedNote={
+        <>
+          Browse the listings themselves on the{" "}
+          <Link href="/properties" className="text-gold-400 hover:underline">
+            Prospector&apos;s Property Exchange
           </Link>
-          <div className="flex items-center gap-3 mb-2">
-            <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-gold-500/15 border border-gold-500/30">
-              <svg
-                className="w-5 h-5 text-gold-400"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"
-                />
-              </svg>
-            </div>
-            <h1 className="text-3xl sm:text-4xl font-bold text-gradient-gold">
-              Property Valuation
-            </h1>
-          </div>
-          <p className="text-slate-400 max-w-2xl">
-            Compare mining property valuations with price-per-hectare benchmarks
-            across minerals and countries. Identify undervalued opportunities.
-          </p>
-        </div>
-      </section>
-
-      {/* Filters */}
-      <section className="px-4 sm:px-6 lg:px-8 pb-4">
-        <div className="max-w-7xl mx-auto">
-          <div className="glass-card rounded-xl p-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 items-end">
-              {/* Mineral */}
-              <div>
-                <label className="block text-xs font-medium text-slate-400 mb-1.5">
-                  Mineral
-                </label>
-                <select
-                  value={mineral}
-                  onChange={(e) => setMineral(e.target.value)}
-                  className="w-full bg-slate-800/80 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-gold-500 transition-colors"
-                >
-                  <option value="">All Minerals</option>
-                  {availableMinerals.map((m) => (
-                    <option key={m} value={m}>
-                      {m}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Country */}
-              <div>
-                <label className="block text-xs font-medium text-slate-400 mb-1.5">
-                  Country
-                </label>
-                <select
-                  value={country}
-                  onChange={(e) => setCountry(e.target.value)}
-                  className="w-full bg-slate-800/80 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-gold-500 transition-colors"
-                >
-                  <option value="">All Countries</option>
-                  {availableCountries.map((c) => (
-                    <option key={c} value={c}>
-                      {c}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Apply */}
-              <div>
-                <Button
-                  variant="primary"
-                  size="sm"
-                  className="w-full"
-                  onClick={fetchData}
-                >
-                  Apply Filters
-                </Button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Benchmarks */}
-      <section className="px-4 sm:px-6 lg:px-8 pb-4">
-        <div className="max-w-7xl mx-auto">
-          <h2 className="text-sm font-medium text-slate-400 uppercase tracking-wider mb-3">
-            Valuation Benchmarks
-          </h2>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-            {loading &&
-              Array.from({ length: 5 }).map((_, i) => <SkeletonCard key={i} />)}
-            {!loading &&
-              benchmarkCards.map((card) => (
-                <div key={card.label} className="glass-card rounded-xl p-5">
-                  <p className="text-xs text-slate-400 mb-1">{card.label}</p>
-                  <p className="text-xl font-bold text-gold-400">
-                    {card.value}
-                  </p>
-                </div>
-              ))}
-            {!loading && !data?.benchmarks && (
-              <div className="col-span-full glass-card rounded-xl p-5 text-center text-slate-500">
-                No benchmark data available
-              </div>
-            )}
-          </div>
-        </div>
-      </section>
-
-      {/* Results */}
-      <section className="px-4 sm:px-6 lg:px-8 pb-16">
-        <div className="max-w-7xl mx-auto">
-          {/* Count */}
-          <div className="flex items-center justify-between mb-3">
-            <p className="text-sm text-slate-400">
-              {loading
-                ? "Loading listings..."
-                : data
-                  ? `${data.count} listing${data.count !== 1 ? "s" : ""} found`
-                  : ""}
-            </p>
-            <div className="flex items-center gap-2">
-              {mineral && <Badge variant="gold">{mineral}</Badge>}
-              {country && <Badge variant="info">{country}</Badge>}
-            </div>
-          </div>
-
-          {/* Error */}
-          {error && (
-            <div className="glass-card rounded-xl p-6 text-center">
-              <p className="text-red-400 mb-3">{error}</p>
-              <Button variant="secondary" size="sm" onClick={fetchData}>
-                Retry
-              </Button>
-            </div>
-          )}
-
-          {/* Table */}
-          {!error && (
-            <div className="glass-card rounded-xl overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-slate-700">
-                      <th className="px-4 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
-                        Property
-                      </th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
-                        Location
-                      </th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
-                        Country
-                      </th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
-                        Mineral
-                      </th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
-                        Stage
-                      </th>
-                      <th className="px-4 py-3 text-right text-xs font-medium text-slate-400 uppercase tracking-wider">
-                        Hectares
-                      </th>
-                      <th className="px-4 py-3 text-right text-xs font-medium text-slate-400 uppercase tracking-wider">
-                        Asking Price
-                      </th>
-                      <th className="px-4 py-3 text-right text-xs font-medium text-slate-400 uppercase tracking-wider">
-                        $/Hectare
-                      </th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
-                        Type
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {loading &&
-                      Array.from({ length: 8 }).map((_, i) => (
-                        <SkeletonRow key={i} />
-                      ))}
-
-                    {!loading &&
-                      data?.listings?.map((row) => (
-                        <tr
-                          key={row.id}
-                          className="border-b border-slate-700/50 hover:bg-slate-800/40 transition-colors"
-                        >
-                          {/* Property title */}
-                          <td className="px-4 py-3">
-                            <Link
-                              href={`/properties/${row.slug}`}
-                              className="text-gold-400 hover:text-gold-300 font-medium transition-colors"
-                            >
-                              {row.title}
-                            </Link>
-                          </td>
-
-                          {/* Location */}
-                          <td className="px-4 py-3 text-slate-300">
-                            {row.location || "--"}
-                          </td>
-
-                          {/* Country */}
-                          <td className="px-4 py-3 text-slate-300">
-                            {row.country || "--"}
-                          </td>
-
-                          {/* Mineral */}
-                          <td className="px-4 py-3">
-                            <Badge variant="gold">
-                              {row.primary_mineral || "--"}
-                            </Badge>
-                          </td>
-
-                          {/* Stage */}
-                          <td className="px-4 py-3">
-                            <Badge
-                              variant={
-                                row.exploration_stage
-                                  ?.toLowerCase()
-                                  .includes("produc")
-                                  ? "success"
-                                  : row.exploration_stage
-                                        ?.toLowerCase()
-                                        .includes("feasib")
-                                    ? "info"
-                                    : "slate"
-                              }
-                            >
-                              {row.exploration_stage || "--"}
-                            </Badge>
-                          </td>
-
-                          {/* Hectares */}
-                          <td className="px-4 py-3 text-right text-slate-300 font-mono">
-                            {formatHectares(row.total_hectares)}
-                          </td>
-
-                          {/* Asking Price */}
-                          <td className="px-4 py-3 text-right text-slate-200 font-mono">
-                            {formatPrice(row.asking_price)}
-                            {row.price_currency &&
-                              row.price_currency !== "USD" && (
-                                <span className="text-xs text-slate-500 ml-1">
-                                  {row.price_currency}
-                                </span>
-                              )}
-                          </td>
-
-                          {/* $/Hectare - color-coded */}
-                          <td
-                            className={`px-4 py-3 text-right font-mono ${priceColorClass(row.price_per_hectare ?? 0, median)}`}
-                          >
-                            {formatPricePerHa(row.price_per_hectare)}
-                          </td>
-
-                          {/* Listing Type */}
-                          <td className="px-4 py-3">
-                            <Badge variant="slate">
-                              {row.listing_type || "--"}
-                            </Badge>
-                          </td>
-                        </tr>
-                      ))}
-
-                    {!loading && data?.listings?.length === 0 && (
-                      <tr>
-                        <td
-                          colSpan={9}
-                          className="px-4 py-12 text-center text-slate-500"
-                        >
-                          <div className="flex flex-col items-center gap-3">
-                            <svg
-                              className="w-10 h-10 text-slate-600"
-                              fill="none"
-                              stroke="currentColor"
-                              viewBox="0 0 24 24"
-                            >
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth={1.5}
-                                d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"
-                              />
-                            </svg>
-                            <p>
-                              No listings found. Try adjusting your filters.
-                            </p>
-                          </div>
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-
-          {/* Legend */}
-          {!loading && data && data.listings.length > 0 && (
-            <div className="flex items-center gap-4 mt-3 text-xs text-slate-500">
-              <span className="flex items-center gap-1.5">
-                <span className="w-2.5 h-2.5 rounded-full bg-emerald-400" />
-                Below median (good value)
-              </span>
-              <span className="flex items-center gap-1.5">
-                <span className="w-2.5 h-2.5 rounded-full bg-amber-400" />
-                Above median
-              </span>
-            </div>
-          )}
-        </div>
-      </section>
-    </div>
+          .
+        </>
+      }
+      sections={[
+        {
+          id: "what-it-does",
+          heading: "What this tool does",
+          body: (
+            <>
+              <p>
+                Mineral properties change hands constantly and almost none of
+                the pricing is public. Unlike listed companies, where a market
+                sets a value every second, a claim block is worth whatever a
+                buyer and seller agree — and neither side usually has much of a
+                reference point.
+              </p>
+              <p>
+                Dollar per hectare is the crudest possible normalisation and
+                also the only one generally available. It ignores everything
+                that actually determines value, but it puts an asking price into
+                a range, which is more than most buyers start with.
+              </p>
+              <p>
+                This tool computes that figure across active listings and lets
+                you filter by mineral and country, so a price can be read
+                against the ground it is competing with.
+              </p>
+            </>
+          ),
+        },
+        {
+          id: "how-to-read",
+          heading: "How to read the output",
+          body: (
+            <>
+              <p>
+                <strong className="text-slate-100">Price per hectare</strong> is
+                the asking price divided by the property&apos;s area. Treat it
+                as a bucket rather than a valuation: it separates properties
+                priced in the tens of dollars per hectare from those in the
+                thousands, which is a real distinction, and says nothing within
+                a bucket.
+              </p>
+              <p>
+                <strong className="text-slate-100">
+                  Mineral and jurisdiction filters
+                </strong>{" "}
+                are what make the comparison meaningful at all. Gold ground in
+                Nevada and lithium ground in Manitoba are not substitutes, and
+                comparing across them produces a number with no content.
+              </p>
+              <p>
+                <strong className="text-slate-100">Size</strong> matters to the
+                metric itself. Large land packages almost always price lower per
+                hectare than small ones, because much of a big package is
+                untested ground carried along with the prospective part. A small
+                high-priced block may be perfectly reasonable if the value is
+                concentrated.
+              </p>
+              <p>
+                <strong className="text-slate-100">
+                  What the listing says about work done
+                </strong>{" "}
+                dominates everything above. Ground with historical drilling,
+                geophysics or a known showing is a different asset from
+                unexplored claims, at any price per hectare.
+              </p>
+            </>
+          ),
+        },
+        {
+          id: "what-good-looks-like",
+          heading: "What good looks like",
+          body: (
+            <>
+              <p>
+                Look for the property whose price sits below comparable ground
+                for a reason you can dismiss, rather than the lowest price per
+                hectare on the list. The cheapest ground is usually cheapest
+                because nobody wants it — remote, unexplored, or in a
+                jurisdiction where permitting is difficult.
+              </p>
+              <p>
+                Prior exploration expenditure is the strongest value indicator
+                available. Ground carrying historical drill data, geophysical
+                surveys or documented showings has had money spent on reducing
+                its uncertainty, and that work is expensive to reproduce. A
+                property priced similarly to unexplored claims but carrying a
+                real dataset is where genuine value tends to sit.
+              </p>
+              <p>
+                Access and infrastructure change economics more than most buyers
+                expect. A property on a road with power nearby can be explored
+                for a fraction of what an equivalent fly-in package costs, and
+                that difference persists through every future programme.
+              </p>
+            </>
+          ),
+        },
+        {
+          id: "method",
+          heading: "Method and limitations",
+          body: (
+            <>
+              <p>
+                Active listings on the exchange are filtered by primary mineral
+                and country, and price per hectare is computed as asking price
+                divided by total hectares wherever both are stated. The result
+                set is capped, so the view is a sample of current listings
+                rather than a complete market survey.
+              </p>
+              <ul className="list-disc pl-6 flex flex-col gap-3">
+                <li>
+                  <strong className="text-slate-100">
+                    These are asking prices, not transaction prices.
+                  </strong>{" "}
+                  This is the central limitation. What a seller asks and what a
+                  property sells for are different numbers, and only the first
+                  is visible here.
+                </li>
+                <li>
+                  <strong className="text-slate-100">
+                    Per-hectare pricing ignores everything that matters.
+                  </strong>{" "}
+                  Geology, prior work, access, infrastructure and permitting
+                  status all dominate value, and none of them are in the metric.
+                </li>
+                <li>
+                  <strong className="text-slate-100">
+                    The sample is small.
+                  </strong>{" "}
+                  Benchmarks drawn from a handful of current listings are
+                  indicative at best, and a single unusual listing can shift the
+                  apparent range.
+                </li>
+                <li>
+                  <strong className="text-slate-100">
+                    Listings without a price or area are excluded
+                  </strong>{" "}
+                  from the per-hectare calculation, which biases the sample
+                  towards sellers willing to state a number.
+                </li>
+                <li>
+                  <strong className="text-slate-100">
+                    Jurisdiction is captured at country level,
+                  </strong>{" "}
+                  while permitting regimes and claim rules vary substantially by
+                  province and state.
+                </li>
+              </ul>
+            </>
+          ),
+        },
+      ]}
+      faqs={[
+        {
+          q: "What is a mineral property worth per hectare?",
+          a: "The range is enormous and the metric is crude. Unexplored claims in remote areas can trade for tens of dollars per hectare, while ground with historical drilling near infrastructure reaches thousands. The figure is only useful within a single mineral and jurisdiction, and even then it is a bucket rather than a valuation.",
+        },
+        {
+          q: "Why do larger properties usually cost less per hectare?",
+          a: "Because a large package carries a great deal of untested ground alongside the prospective part. Value tends to concentrate in a small area — a showing, a structural target, a drilled zone — and the surrounding claims are staked to protect it. A small block at a high per-hectare price may be entirely reasonable if that is where the value sits.",
+        },
+        {
+          q: "What actually determines a mineral property's value?",
+          a: "Prior exploration work above all — drill data, geophysics and documented showings represent money already spent reducing uncertainty, and reproducing it is expensive. After that: access and infrastructure, which determine what every future programme costs, and permitting regime, which determines whether the work can happen at all.",
+        },
+        {
+          q: "Are these prices what properties actually sold for?",
+          a: "No. These are asking prices from current listings. Transaction prices in mineral property deals are rarely disclosed, so what is visible here is what sellers hope to achieve rather than what buyers have paid.",
+        },
+      ]}
+    />
   );
 }
