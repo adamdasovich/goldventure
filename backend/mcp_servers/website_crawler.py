@@ -40,7 +40,12 @@ MONTH_MAP = {
 
 # Slack allowed on future dates: timezone skew plus the occasional release
 # published under tomorrow's date. Anything beyond this is a parse error.
-FUTURE_DATE_SLACK_DAYS = 7
+#
+# Tightened from 7 to 2. A week of slack let a Targa release dated five days
+# ahead survive the clamp on 2026-08-20, so a bad year inference reached the
+# database twice. Juniors do not publish a week early; two days covers
+# timezone skew and an overnight embargo, and nothing legitimate needs more.
+FUTURE_DATE_SLACK_DAYS = 2
 
 
 def infer_year_for_month_day(month: int, day: int, today=None) -> int:
@@ -3573,11 +3578,13 @@ async def crawl_html_news_pages(url: str, months: int = 6, custom_news_url: str 
                                 # Try abbreviated month
                                 month_num = MONTH_MAP.get(month_text[:3], None)
                             day = day_text.zfill(2)
-                            # Infer year: if the month is in the future, use previous year
-                            current_year = datetime.now().year
-                            current_month = datetime.now().month
+                            # Infer year from month AND day. Comparing month
+                            # alone returns the current year for any date later
+                            # this month, i.e. the future — on 2026-08-20 a
+                            # Targa release headed "August 25" became
+                            # 2026-08-25 when the page plainly said 2025.
                             post_month = int(month_num) if month_num else 0
-                            year = current_year if post_month <= current_month else current_year - 1
+                            year = infer_year_for_month_day(post_month, int(day)) if month_num else datetime.now().year
 
                         if not month_num:
                             continue
