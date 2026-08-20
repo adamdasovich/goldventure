@@ -177,6 +177,14 @@ class GPUOrchestrator:
     GPU_IDLE_TIMEOUT = 300  # Destroy after 5 minutes idle
     MAX_GPU_RUNTIME = 7200  # Force destroy after 2 hours (safety)
 
+    # Droplets are identified by this name prefix rather than by a DO tag.
+    # Tagging at creation needs the tag:create permission, which a
+    # least-privilege token scoped to droplet create/read/delete does not carry,
+    # and the whole creation 403s without it. The name is generated here, so it
+    # identifies our droplets just as reliably — and the orphan sweep that
+    # depends on it keeps working with droplet:read alone.
+    DROPLET_NAME_PREFIX = 'goldventure-gpu-worker-'
+
     # Job types that require GPU processing
     # NOTE: company_scrape removed - it's just HTTP/BeautifulSoup, no GPU needed
     HEAVY_JOB_TYPES = ['ni43101', 'pea', 'presentation', 'fact_sheet', 'news_release']
@@ -272,13 +280,12 @@ class GPUOrchestrator:
         user_data = self._get_cloud_init_script()
 
         droplet_config = {
-            "name": f"goldventure-gpu-worker-{datetime.now().strftime('%Y%m%d%H%M%S')}",
+            "name": f"{self.DROPLET_NAME_PREFIX}{datetime.now().strftime('%Y%m%d%H%M%S')}",
             "region": self.GPU_REGION,
             "size": self.GPU_SIZE,
             "image": self.GPU_IMAGE,
             "ssh_keys": [self.ssh_key_id] if self.ssh_key_id else [],
             "user_data": user_data,
-            "tags": ["goldventure", "gpu-worker", "auto-created"],
             "monitoring": True
         }
 
@@ -793,8 +800,12 @@ DB_PASSWORD={db_password}
         """Destroy any GPU droplets that are orphaned OR older than MAX_GPU_RUNTIME.
         This is a hard safety limit that works even if the orchestrator restarts."""
         try:
-            response = self._api_request('GET', 'droplets?tag_name=gpu-worker&per_page=100')
-            droplets = response.get('droplets', [])
+            # Filter by name rather than tag_name: see DROPLET_NAME_PREFIX.
+            response = self._api_request('GET', 'droplets?per_page=200')
+            droplets = [
+                d for d in response.get('droplets', [])
+                if str(d.get('name', '')).startswith(self.DROPLET_NAME_PREFIX)
+            ]
 
             for droplet in droplets:
                 droplet_id = str(droplet.get('id'))
