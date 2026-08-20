@@ -541,7 +541,12 @@ JUNK_TITLE_PATTERNS = [
     'older entries', 'newer entries', 'corporate presentation',
     'investor presentation', 'fact sheet', 'news release +',
     'view all', 'see all', 'load more news', 'more news', 'all news',
-    'pdf', 'view pdf', 'download pdf', 'view', 'more'
+    'pdf', 'view pdf', 'download pdf', 'view', 'more',
+    # Link furniture long enough to clear the 20-char minimum. Founders Metals
+    # renders a featured item as "Read the news release <date>", which was
+    # stored verbatim as a headline.
+    'read the news release', 'read the full release', 'read the release',
+    'read full story', 'continue reading', 'view the news release'
 ]
 
 
