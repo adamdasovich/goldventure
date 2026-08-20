@@ -578,14 +578,76 @@ def is_valid_news_title(title):
     return True
 
 
+# Path segments that name a listing or section page rather than an article.
+LISTING_PATH_SEGMENTS = {
+    "news", "news-releases", "news-release", "newsroom", "news-media",
+    "news-and-updates", "news-events", "news-and-media", "press", "press-release",
+    "press-releases", "press-room", "pressroom", "media", "media-centre",
+    "media-center", "investors", "investor-relations", "investor-centre",
+    "investor-center", "investor", "about", "about-us", "updates",
+    "announcements", "releases", "latest-news", "company-news", "en", "fr",
+}
+
+# Filenames that name the template, not the article. Q4-style IR platforms end
+# real article URLs with these, so they must be stripped before judging a path.
+GENERIC_PAGE_FILENAMES = {
+    "default.aspx", "index.php", "index.html", "index.htm", "index.aspx",
+    "default.htm", "default.html",
+}
+
+
 def is_valid_news_url(url):
+    """Reject URLs that point at a listing/section page rather than an article.
+
+    A listing URL stored as an article is doubly damaging: the page is not
+    indexable, and because every listing variant a site exposes yields the same
+    articles, URL-based dedup cannot tell they are the same. Nevada Lithium had
+    one release stored eight times under eight different listing paths.
+
+    Two rules that matter, both learned from the live data:
+
+    * Strip a trailing generic filename before judging. Q4-style IR platforms
+      end real article URLs with default.aspx, and 47 legitimate releases look
+      like listings until that is removed.
+
+    * An identifier in the query string makes a generic path specific. PHP
+      sites serve articles as index.php?content_id=123; 91 valid releases
+      depend on this.
+    """
     if not url:
         return False
-    url_lower = url.lower().rstrip('/')
-    if url_lower.endswith('/news') or url_lower.endswith('/press-releases') or url_lower.endswith('/press-release') or url_lower.endswith('/press') or url_lower.endswith('/news-releases') or url_lower.endswith('/media'):
+
+    parsed = urlparse(url.lower())
+    path = parsed.path.rstrip('/')
+
+    has_id_param = bool(
+        re.search(r'\b(id|content_id|news_id|article|post|release)=', parsed.query or '')
+    )
+
+    segments = [s for s in path.split('/') if s]
+    while segments and segments[-1] in GENERIC_PAGE_FILENAMES:
+        segments.pop()
+
+    if not segments:
+        # Bare domain, or nothing but a generic filename.
+        return has_id_param
+
+    last = segments[-1]
+
+    if last in LISTING_PATH_SEGMENTS and not has_id_param:
         return False
-    if re.search(r'/news/\d{4}$', url_lower) or re.search(r'/\d{4}/news$', url_lower):
+
+    # Archive indexes: /news/2026 and /2026/news. An id in the query still
+    # makes the URL specific -- Aztec serves articles as
+    # /news/2026/index.php?content_id=694, which is an article, not an index.
+    if (
+        len(segments) >= 2
+        and not has_id_param
+        and re.fullmatch(r'(19|20)\d{2}', last)
+        and segments[-2] in LISTING_PATH_SEGMENTS
+    ):
         return False
+
     return True
 
 
