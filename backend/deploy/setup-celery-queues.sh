@@ -76,9 +76,9 @@ chmod 0755 /usr/local/sbin/celery-reap.sh
 
 # Emit one unit file.
 #   $1 unit name  $2 description  $3 -Q value  $4 node name
-#   $5 concurrency  $6 MemoryHigh  $7 MemoryMax
+#   $5 concurrency  $6 MemoryHigh  $7 MemoryMax  $8 max-tasks-per-child
 write_unit() {
-  local unit="$1" desc="$2" queues="$3" node="$4" conc="$5" high="$6" max="$7"
+  local unit="$1" desc="$2" queues="$3" node="$4" conc="$5" high="$6" max="$7" maxtasks="$8"
   echo "==> Writing /etc/systemd/system/${unit}"
   cat > "/etc/systemd/system/${unit}" <<UNIT
 [Unit]
@@ -95,6 +95,7 @@ ExecStart=${VENV} -A config worker \\
     -Q ${queues} \\
     -n ${node} \\
     --concurrency=${conc} \\
+    --max-tasks-per-child=${maxtasks} \\
     --logfile=/var/log/${unit%.service}.log
 
 # Graceful shutdown - let running tasks finish. CELERY_TASK_ACKS_LATE=True, so
@@ -118,25 +119,37 @@ WantedBy=multi-user.target
 UNIT
 }
 
+# --max-tasks-per-child recycles a pool child after N tasks, so leaked memory is
+# returned to the OS instead of accumulating for the life of the worker. Added
+# 2026-08-20: with no recycling the box sat at 383 MB available and PSI
+# `full avg300=31` (31% of every 5 min with ALL work stalled on memory) during
+# the daily batch. Chromium/Playwright is the main leaker, so `scrape` recycles
+# hardest. Cost is a Django re-import per respawn (a few seconds), which is why
+# the light `default` queue recycles far less often than the browser queues.
+# CELERY_TASK_ACKS_LATE=True, so a task in flight at recycle time is redelivered.
+
 write_unit celery-scrape.service \
   "Celery Worker (scrape queue) for GoldVenture" \
-  "scrape,celery" "scrape@%%h" 2 "2000M" "2400M"
+  "scrape,celery" "scrape@%%h" 2 "2000M" "2400M" 25
 
 write_unit celery-interactive.service \
   "Celery Worker (interactive queue) for GoldVenture" \
-  "interactive" "interactive@%%h" 2 "700M" "900M"
+  "interactive" "interactive@%%h" 2 "700M" "900M" 25
 
 write_unit celery-worker.service \
   "Celery Worker (default queue) for GoldVenture" \
-  "default" "default@%%h" 2 "650M" "850M"
+  "default" "default@%%h" 2 "650M" "850M" 200
 
 echo "==> daemon-reload"
 systemctl daemon-reload
 
 echo "==> Enabling + starting"
 systemctl enable celery-scrape celery-interactive >/dev/null 2>&1
-systemctl restart celery-worker
-systemctl start celery-scrape celery-interactive
+# restart, NOT start: `start` on an already-running unit is a no-op, so on a
+# re-provision the new unit files would be written and daemon-reloaded but never
+# actually picked up -- the script would report success while the old config
+# kept running. ACKS_LATE=True means in-flight tasks are redelivered, not lost.
+systemctl restart celery-worker celery-scrape celery-interactive
 
 sleep 12
 
