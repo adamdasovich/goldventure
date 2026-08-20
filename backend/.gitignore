@@ -63,3 +63,9 @@ htmlcov/
 
 # Temporary files
 NUL
+
+# Read by gpu-orchestrator.service via EnvironmentFile; holds the DO API token.
+# Untracked but previously un-ignored, so a `git add -A` would have committed it.
+gpu_orchestrator.env
+gpu_orchestrator.env.bak-*
+.env.bak*
