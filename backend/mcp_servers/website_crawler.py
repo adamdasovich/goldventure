@@ -556,6 +556,20 @@ JUNK_TITLE_PATTERNS = [
 
 
 def is_valid_news_title(title):
+    """Reject navigation and link furniture, but not real headlines.
+
+    Pattern matching is word-boundary aware. The previous version used a naive
+    `startswith` and substring test, which rejected genuine headlines whenever
+    a company name began with a junk word:
+
+        "Homeland Reports up to 1,820 ppm U ..."   matched 'home'
+        "Searchlight Begins Airborne Surveys ..."  matched 'search'
+        "Annual Report to shareholders"            matched 'share'
+
+    That was survivable while each strategy validated inline, but this is now
+    the central gate in _add_news_item, so it would have permanently blocked
+    every future release from those companies. 243 stored rows were affected.
+    """
     if not title:
         return False
     title_clean = title.strip()
@@ -563,9 +577,25 @@ def is_valid_news_title(title):
     if len(title_clean) < 20:  # Reduced from 25 for better coverage
         return False
     for pattern in JUNK_TITLE_PATTERNS:
-        if title_lower == pattern or title_lower.startswith(pattern):
+        if title_lower == pattern:
             return False
-        if pattern in title_lower and len(title_clean) < 35:
+        # A single-word pattern is an ordinary English word that can legitimately
+        # open a headline -- "More Antimony Intersections on the Bald Hill Main
+        # Zone" is a real Globex release, not a "more" link. Those match only
+        # exactly, or as a whole word inside a short title (below).
+        if ' ' in pattern:
+            # Multi-word furniture: prefix match on a word boundary.
+            if re.match(re.escape(pattern) + r'(?![a-z0-9])', title_lower):
+                return False
+            # Long phrases also match as a plain prefix, because sites
+            # concatenate without a space: "Read the news releaseAugust 18,
+            # 2026" offers no boundary to find.
+            if len(pattern) >= 12 and title_lower.startswith(pattern):
+                return False
+        # Short titles containing the pattern as a whole word.
+        if len(title_clean) < 35 and re.search(
+            r'(?<![a-z0-9])' + re.escape(pattern) + r'(?![a-z0-9])', title_lower
+        ):
             return False
     if re.match(r'^(january|february|march|april|may|june|july|august|september|october|november|december)[\s,]+\d{1,2}[\s,]+\d{4}$', title_lower, re.IGNORECASE):
         return False
