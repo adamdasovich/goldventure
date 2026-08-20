@@ -498,16 +498,21 @@ CELERY_BEAT_SCHEDULE = {
         'schedule': crontab(minute='*/15'),
     },
 
-    # Reconcile PostgreSQL chunk rows against the ChromaDB index nightly
-    # (3 AM ET / 08:00 UTC — after the daily scrapes, before the morning crawl).
+    # Reconcile PostgreSQL chunk rows against the ChromaDB index, hourly.
     # The document/news write path commits Postgres rows before embedding them,
     # with no shared transaction, so an embedding failure silently orphans them.
-    # Small gaps are re-embedded here; anything over the limit is logged loudly
-    # rather than auto-repaired, since a large gap means something systemic.
-    'reconcile-chroma-index-nightly': {
+    #
+    # This runs hourly rather than nightly because it is now the ONLY thing that
+    # indexes GPU-processed documents: the GPU worker writes chunks to Postgres
+    # and no longer embeds at all (it produced 384-dim vectors for a 1024-dim
+    # Voyage collection, so every write failed). On the old nightly schedule a
+    # document stayed unsearchable for up to a day, and a single GPU batch can
+    # produce several thousand chunks — well past the old 2,000 cap, which
+    # would have left a permanent backlog.
+    'reconcile-chroma-index-hourly': {
         'task': 'core.tasks.reconcile_chroma_index_task',
-        'schedule': crontab(hour=8, minute=0),
-        'kwargs': {'repair_limit': 2000},
+        'schedule': crontab(minute=20),
+        'kwargs': {'repair_limit': 5000},
     },
 
     # Worker health check every 5 minutes

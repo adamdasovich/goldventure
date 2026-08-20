@@ -392,71 +392,11 @@ class DatabaseConnection:
             logger.info("Database connection closed")
 
 
-class ChromaDBClient:
-    """Client for ChromaDB using Python chromadb library"""
-
-    def __init__(self):
-        self.host = os.environ.get('CHROMA_HOST', '137.184.168.166')
-        self.port = int(os.environ.get('CHROMA_PORT', 8002))
-        self.collection_name = "document_chunks"
-        self._client = None
-        self._collection = None
-
-    def _get_collection(self):
-        """Lazy initialization of ChromaDB client and collection"""
-        if self._collection is None:
-            try:
-                import chromadb
-                self._client = chromadb.HttpClient(host=self.host, port=self.port)
-                self._collection = self._client.get_or_create_collection(name=self.collection_name)
-                logger.info(f"Connected to ChromaDB at {self.host}:{self.port}")
-            except Exception as e:
-                logger.error(f"Failed to connect to ChromaDB: {e}")
-                raise
-        return self._collection
-
-    def add_documents(self, ids: List[str], documents: List[str],
-                      metadatas: List[Dict], embeddings: List[List[float]]):
-        """Add documents to ChromaDB collection"""
-        collection = self._get_collection()
-        collection.add(
-            ids=ids,
-            documents=documents,
-            metadatas=metadatas,
-            embeddings=embeddings
-        )
-        return {"status": "success", "count": len(ids)}
-
-
 class DocumentProcessor:
     """Handles GPU-accelerated document processing with Docling"""
 
     def __init__(self):
         self.docling_converter = None
-        self.embedding_model = None
-        self._initialize_models()
-
-    def _initialize_models(self):
-        """Initialize embedding models for GPU acceleration"""
-        logger.info("Initializing document processing models...")
-
-        try:
-            # Initialize embedding model on GPU
-            from sentence_transformers import SentenceTransformer
-            import torch
-
-            # Force CUDA device
-            device = 'cuda' if torch.cuda.is_available() else 'cpu'
-            logger.info(f"Using device: {device}")
-
-            if device == 'cuda':
-                logger.info(f"GPU: {torch.cuda.get_device_name(0)}")
-
-            self.embedding_model = SentenceTransformer('all-MiniLM-L6-v2', device=device)
-            logger.info("Embedding model initialized on GPU")
-        except ImportError as e:
-            logger.warning(f"SentenceTransformers not available: {e}")
-            self.embedding_model = None
 
     def download_document(self, url: str, max_retries: int = 3) -> Tuple[Optional[Path], Optional[str]]:
         """Download document from URL to temporary file.
@@ -619,20 +559,6 @@ class DocumentProcessor:
         logger.info(f"Created {len(chunks)} chunks from {len(words)} words")
         return chunks
 
-    def generate_embeddings(self, texts: List[str]) -> List[List[float]]:
-        """Generate embeddings for text chunks"""
-        if self.embedding_model is None:
-            logger.warning("Embedding model not available, returning empty embeddings")
-            return [[0.0] * 384 for _ in texts]  # Return placeholder embeddings
-
-        try:
-            logger.info(f"Generating embeddings for {len(texts)} chunks")
-            embeddings = self.embedding_model.encode(texts, show_progress_bar=True)
-            return embeddings.tolist()
-        except Exception as e:
-            logger.error(f"Embedding generation failed: {e}")
-            return [[0.0] * 384 for _ in texts]
-
     def cleanup(self, file_path: Path):
         """Clean up temporary files"""
         try:
@@ -657,7 +583,6 @@ class GPUWorker:
 
     def __init__(self):
         self.db = DatabaseConnection()
-        self.chroma = ChromaDBClient()
         self.processor = DocumentProcessor()
         self.running = True
         self.idle_since: Optional[datetime] = None
@@ -877,9 +802,26 @@ class GPUWorker:
             logger.info(f"Created document record {doc_id} for {job.company_name}")
             return doc_id
 
-    def store_chunks(self, job: ProcessingJob, chunks: List[Dict],
-                     embeddings: List[List[float]]) -> int:
-        """Store document chunks in PostgreSQL and ChromaDB"""
+    def store_chunks(self, job: ProcessingJob, chunks: List[Dict]) -> int:
+        """Store document chunks in PostgreSQL.
+
+        Vector indexing deliberately does NOT happen here. This worker used to
+        embed with all-MiniLM-L6-v2 (384 dimensions) and write to Chroma
+        directly, but the collection is built on Voyage embeddings (1024), so
+        every write failed with "Collection expecting embedding with dimension
+        of 1024, got 384" — chunks reached Postgres and were never searchable,
+        while the job still reported success.
+
+        The two sides also disagreed on identity: Postgres stores
+        md5(document_id:i:text[:100]) as chroma_id, while the Chroma write used
+        md5(document_id:i), so even a dimension-matched write could not have
+        been reconciled against these rows.
+
+        Postgres is the source of truth. `reconcile_chroma_index_task` (and
+        `manage.py reindex_chroma`) embed with Voyage on the main server and
+        upsert keyed on chroma_id, which keeps one embedding provider and keeps
+        the Voyage key off ephemeral droplets.
+        """
         stored_count = 0
 
         # Ensure we have a document record
@@ -888,7 +830,7 @@ class GPUWorker:
             raise ValueError(f"Cannot store chunks: no document record for job {job.id}")
 
         with self.db.cursor() as cur:
-            for i, (chunk, embedding) in enumerate(zip(chunks, embeddings)):
+            for i, chunk in enumerate(chunks):
                 chunk_id = hashlib.md5(
                     f"{document_id}:{i}:{chunk['text'][:100]}".encode()
                 ).hexdigest()
@@ -913,68 +855,6 @@ class GPUWorker:
                 ))
 
                 stored_count += 1
-
-        # Store embeddings in ChromaDB
-        chroma_success = False
-        try:
-            chunk_ids = [
-                hashlib.md5(f"{document_id}:{i}".encode()).hexdigest()
-                for i in range(len(chunks))
-            ]
-
-            # ProcessingJob.company_id is never populated — document_processing_jobs
-            # has no such column, so it is always None. ChromaDB rejects null
-            # metadata values outright ("data did not match any variant of
-            # untagged enum MetadataValue"), which failed the whole batch and
-            # left documents chunked in Postgres but absent from the vector
-            # index while the job still reported success. Take the company from
-            # the document record, which ensure_document_record has just
-            # resolved, and drop any key that is still empty.
-            company_id = None
-            with self.db.cursor() as cur:
-                cur.execute(
-                    "SELECT company_id FROM documents WHERE id = %s", (document_id,)
-                )
-                row = cur.fetchone()
-                if row:
-                    company_id = row['company_id']
-
-            base_metadata = {
-                'document_id': document_id,
-                'company_id': company_id,
-                'company_name': job.company_name,
-                'document_type': job.document_type,
-            }
-            # Chroma only accepts str/int/float/bool.
-            base_metadata = {
-                k: v for k, v in base_metadata.items()
-                if v is not None and v != ''
-            }
-
-            metadatas = [
-                {**base_metadata, 'chunk_index': i} for i in range(len(chunks))
-            ]
-
-            texts = [c['text'] for c in chunks]
-
-            self.chroma.add_documents(
-                ids=chunk_ids,
-                documents=texts,
-                metadatas=metadatas,
-                embeddings=embeddings
-            )
-            logger.info(f"Stored {len(chunks)} embeddings in ChromaDB")
-            chroma_success = True
-
-        except Exception as e:
-            logger.error(f"Failed to store in ChromaDB: {e}")
-            # Mark the job for ChromaDB retry by updating a flag in the database
-            with self.db.cursor() as cur:
-                cur.execute("""
-                    UPDATE document_processing_jobs
-                    SET progress_message = 'Chunks stored, ChromaDB pending'
-                    WHERE id = %s
-                """, (job.id,))
 
         return stored_count
 
@@ -1149,12 +1029,8 @@ class GPUWorker:
                     characters_extracted=len(text) if text else 0
                 )
 
-            # Generate embeddings
-            texts = [c['text'] for c in chunks]
-            embeddings = self.processor.generate_embeddings(texts)
-
-            # Store chunks and embeddings
-            stored_count = self.store_chunks(job, chunks, embeddings)
+            # Chunks only — Voyage embedding happens on the main server.
+            stored_count = self.store_chunks(job, chunks)
 
             processing_time = time.time() - start_time
             logger.info(f"Job {job.id} completed: {stored_count} chunks in {processing_time:.1f}s")

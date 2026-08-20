@@ -318,9 +318,10 @@ class GPUOrchestrator:
 
                             # Add GPU droplet IP to pg_hba.conf for database access
                             self._add_ip_to_pg_hba(self.gpu_droplet_ip)
-                            # ...and to the Chroma allowlist, which is otherwise
-                            # closed to everything but localhost.
-                            self._set_chroma_access(self.gpu_droplet_ip, allow=True)
+                            # No Chroma grant: the worker writes chunks to
+                            # Postgres only, and the main server embeds them
+                            # with Voyage. The port stays closed to everything
+                            # but localhost.
                             return True
 
                 logger.info(f"Droplet status: {status}, waiting...")
@@ -332,31 +333,6 @@ class GPUOrchestrator:
 
         logger.error("Timeout waiting for droplet to be ready")
         return False
-
-    def _set_chroma_access(self, ip: str, allow: bool) -> None:
-        """Open or close the Chroma port for one GPU droplet.
-
-        Chroma has no authentication, so the port is closed to everything but
-        localhost and whichever droplet is currently running. Failing to grant
-        access is logged rather than raised: the run should not be aborted for
-        it, and the worker's Chroma writes will surface the problem loudly.
-        """
-        try:
-            is_valid, reason = validate_ip_for_ssh(ip)
-            if not is_valid:
-                logger.error(f"Cannot change Chroma access - IP validation failed: {reason}")
-                return
-
-            script = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                                  'scripts', 'chroma_firewall.sh')
-            action = 'allow' if allow else 'revoke'
-            subprocess.run([script, action, ip], timeout=15, check=True)
-            logger.info(f"Chroma access {'granted' if allow else 'revoked'} for {ip}")
-
-        except subprocess.CalledProcessError as e:
-            logger.error(f"chroma_firewall.sh {action} failed: {e}")
-        except Exception as e:
-            logger.error(f"Failed to change Chroma access for {ip}: {e}")
 
     def _add_ip_to_pg_hba(self, ip: str) -> None:
         """Add GPU droplet IP to pg_hba.conf for database access.
@@ -544,12 +520,6 @@ class GPUOrchestrator:
 
         logger.info(f"Destroying GPU droplet {self.gpu_droplet_id}...")
 
-        # Close the Chroma port before the IP is released — DigitalOcean will
-        # hand it to another customer, and a stale ACCEPT rule would give them
-        # unauthenticated access to the vector store.
-        if self.gpu_droplet_ip:
-            self._set_chroma_access(self.gpu_droplet_ip, allow=False)
-
         try:
             self._api_request('DELETE', f'droplets/{self.gpu_droplet_id}')
 
@@ -640,8 +610,12 @@ python3 -m venv venv
 source venv/bin/activate
 
 # Install dependencies
+# chromadb dropped: the worker writes chunks to Postgres and no longer embeds
+# or talks to the vector store. sentence-transformers is kept for now only
+# because docling's GPU path needs torch and this is where it comes from on
+# this image; dropping it needs a droplet cycle to verify, not a guess.
 pip install --upgrade pip
-pip install psycopg2-binary requests tiktoken sentence-transformers pypdfium2 docling chromadb
+pip install psycopg2-binary requests tiktoken sentence-transformers pypdfium2 docling
 
 # Install scraping dependencies
 pip install crawl4ai beautifulsoup4 playwright
@@ -775,8 +749,6 @@ DB_PORT=5432
 DB_NAME=goldventure
 DB_USER=goldventure
 DB_PASSWORD={db_password}
-CHROMA_HOST={db_host}
-CHROMA_PORT=8002
 """
 
         import tempfile
