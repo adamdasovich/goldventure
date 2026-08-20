@@ -42,6 +42,101 @@ def _clean_doc_title(title):
 # RESOURCE GRADE RANKER
 # ============================================================================
 
+# Resource categories, per CIM definitions as used by NI 43-101.
+#
+# These do NOT simply add up, which is what made the old Sum() over every row
+# wrong. Measured and Indicated are often restated as a single combined "M&I"
+# row, so a report carrying all three has the same tonnes twice. Reserves
+# (Proven/Probable) are the economically mineable part of Measured/Indicated —
+# a subset, never an addition. And CIM forbids adding Inferred to M&I at all,
+# because Inferred has too little geological confidence to be treated as
+# equivalent, so it is carried separately rather than folded into the total.
+MEASURED_INDICATED = ('measured', 'indicated')
+COMBINED_MI = 'mni'
+INFERRED = 'inferred'
+RESERVES = ('proven', 'probable')
+
+GRAMS_PER_TROY_OZ = 31.1035
+
+
+def summarize_resources(resources, commodity):
+    """Collapse one project's estimates into a category-aware summary.
+
+    `resources` must already be narrowed to a single report vintage.
+    Returns None when the rows carry nothing usable for this commodity.
+    """
+    def bucket(rows):
+        tonnes = sum(float(r.tonnes or 0) for r in rows)
+        gold = sum(float(r.gold_ounces or 0) for r in rows)
+        silver = sum(float(r.silver_ounces or 0) for r in rows)
+        return tonnes, gold, silver
+
+    by_cat = {}
+    for r in resources:
+        by_cat.setdefault((r.category or '').lower(), []).append(r)
+
+    # Prefer the combined M&I row when the report provides one; falling back to
+    # separate Measured + Indicated only when it does not.
+    if by_cat.get(COMBINED_MI):
+        mi_rows = by_cat[COMBINED_MI]
+    else:
+        mi_rows = [r for c in MEASURED_INDICATED for r in by_cat.get(c, [])]
+
+    inferred_rows = by_cat.get(INFERRED, [])
+    reserve_rows = [r for c in RESERVES for r in by_cat.get(c, [])]
+
+    mi_t, mi_au, mi_ag = bucket(mi_rows)
+    inf_t, inf_au, inf_ag = bucket(inferred_rows)
+    _, res_au, _ = bucket(reserve_rows)
+
+    # Headline totals are M&I + Inferred, reported separately in the payload so
+    # the split stays visible. Reserves are deliberately excluded from the
+    # total to avoid counting the same ore twice.
+    tonnes = mi_t + inf_t
+    gold_oz = mi_au + inf_au
+    silver_oz = mi_ag + inf_ag
+
+    counted = mi_rows + inferred_rows
+    if not counted:
+        return None
+
+    def weighted(field):
+        """Tonnage-weighted grade. A plain Avg let a 140kt row outrank a 5Mt one."""
+        num = den = 0.0
+        for r in counted:
+            g, t = getattr(r, field, None), float(r.tonnes or 0)
+            if g and t:
+                num += float(g) * t
+                den += t
+        return (num / den) if den else 0.0
+
+    if commodity == 'silver':
+        grade, ounces, unit = weighted('silver_grade_gpt'), silver_oz, 'g/t Ag'
+    elif commodity == 'copper':
+        grade, ounces, unit = weighted('copper_grade_pct'), tonnes, '% Cu'
+    else:
+        grade, ounces, unit = weighted('gold_grade_gpt'), gold_oz, 'g/t Au'
+
+    if not grade and not ounces:
+        return None
+
+    dates = [r.report_date for r in counted if r.report_date]
+    return {
+        'grade': grade,
+        'ounces': ounces,
+        'tonnes': tonnes,
+        'gold_oz': gold_oz,
+        'silver_oz': silver_oz,
+        'mi_oz': mi_au if commodity != 'silver' else mi_ag,
+        'inferred_oz': inf_au if commodity != 'silver' else inf_ag,
+        'reserve_oz': res_au,
+        'grade_unit': unit,
+        'categories': sorted({(r.category or '').lower() for r in counted}),
+        'report_date': max(dates) if dates else None,
+    }
+
+
+
 @api_view(['GET'])
 @permission_classes([AllowAny])
 def grade_ranker(request):
@@ -71,42 +166,28 @@ def grade_ranker(request):
 
     results = []
     for project in projects_qs:
-        # Get best resource estimate (most recent, prefer M&I)
-        resources = ResourceEstimate.objects.filter(project=project).order_by('-report_date')
-        if not resources.exists():
+        resources = list(ResourceEstimate.objects.filter(project=project))
+        if not resources:
             continue
 
-        # Aggregate across categories
-        totals = resources.aggregate(
-            total_tonnes=Sum('tonnes'),
-            total_gold_oz=Sum('gold_ounces'),
-            total_silver_oz=Sum('silver_ounces'),
-            avg_gold_grade=Avg('gold_grade_gpt'),
-            avg_silver_grade=Avg('silver_grade_gpt'),
-            avg_copper_grade=Avg('copper_grade_pct'),
-        )
+        # Only the newest estimate counts. A project restated in 2024 still has
+        # its 2016 rows on file, and summing across vintages counted the same
+        # deposit twice — True North read 4.2 Moz against a real ~2 Moz.
+        dated = [r for r in resources if r.report_date]
+        if dated:
+            newest = max(r.report_date for r in dated)
+            resources = [r for r in dated if r.report_date == newest]
 
-        gold_oz = float(totals['total_gold_oz'] or 0)
-        silver_oz = float(totals['total_silver_oz'] or 0)
-        tonnes = float(totals['total_tonnes'] or 0)
+        summary = summarize_resources(resources, commodity)
+        if summary is None:
+            continue
 
-        # Determine primary grade based on commodity
-        if commodity in ('gold', 'multi_metal'):
-            grade = float(totals['avg_gold_grade'] or 0)
-            ounces = gold_oz
-            grade_unit = 'g/t Au'
-        elif commodity == 'silver':
-            grade = float(totals['avg_silver_grade'] or 0)
-            ounces = silver_oz
-            grade_unit = 'g/t Ag'
-        elif commodity == 'copper':
-            grade = float(totals['avg_copper_grade'] or 0)
-            ounces = tonnes  # Use tonnes for copper
-            grade_unit = '% Cu'
-        else:
-            grade = float(totals['avg_gold_grade'] or 0)
-            ounces = gold_oz
-            grade_unit = 'g/t'
+        grade = summary['grade']
+        ounces = summary['ounces']
+        tonnes = summary['tonnes']
+        gold_oz = summary['gold_oz']
+        silver_oz = summary['silver_oz']
+        grade_unit = summary['grade_unit']
 
         if min_ounces and ounces < min_ounces:
             continue
@@ -134,6 +215,11 @@ def grade_ranker(request):
             'tonnes': round(tonnes, 0),
             'gold_oz': round(gold_oz, 0),
             'silver_oz': round(silver_oz, 0),
+            'measured_indicated_oz': round(summary['mi_oz'], 0),
+            'inferred_oz': round(summary['inferred_oz'], 0),
+            'reserves_oz': round(summary['reserve_oz'], 0),
+            'resource_categories': summary['categories'],
+            'report_date': summary['report_date'].isoformat() if summary['report_date'] else None,
             'npv_usd_m': float(econ.npv_5_usd) if econ and econ.npv_5_usd else None,
             'irr_pct': float(econ.irr_percent) if econ and econ.irr_percent else None,
             'aisc': float(econ.aisc_per_oz) if econ and econ.aisc_per_oz else None,

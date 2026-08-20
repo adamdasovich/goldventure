@@ -84,9 +84,9 @@ Return ONLY a JSON object, no prose and no markdown fence, in exactly this shape
       "category": "<measured|indicated|mni|inferred|proven|probable>",
       "tonnes": <number of tonnes, not millions - convert Mt to tonnes>,
       "gold_grade_gpt": <number or null>,
-      "gold_ounces": <number or null>,
+      "gold_ounces": <TROY OUNCES, not thousands - see units rule>,
       "silver_grade_gpt": <number or null>,
-      "silver_ounces": <number or null>,
+      "silver_ounces": <TROY OUNCES, not thousands - see units rule>,
       "copper_grade_pct": <number or null>,
       "cutoff_grade": <number or null>
     }
@@ -106,6 +106,14 @@ Return ONLY a JSON object, no prose and no markdown fence, in exactly this shape
 }
 
 Rules:
+- UNITS ARE THE MOST COMMON ERROR. Resource tables almost always report
+  contained metal in THOUSANDS of ounces, under headings like "koz",
+  "'000 oz", "Au (koz)" or "Contained Gold (thousand ounces)". Convert to
+  whole troy ounces: a table reading "1,145" under "koz" is 1145000, NOT 1145.
+  Likewise "Moz" or "million ounces": "1.15 Moz" is 1150000.
+- Sanity-check every resource row before returning it: tonnes x grade(g/t) / 31.1035
+  should approximately equal your ounces figure. If it does not, you have a
+  unit error - fix it rather than returning the mismatched numbers.
 - "tonnes" must be in tonnes. If the report says "12.4 Mt", return 12400000.
 - Use "mni" for a combined Measured & Indicated row.
 - Return an empty mineral_resources list if the excerpts contain no resource table.
