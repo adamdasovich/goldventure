@@ -780,10 +780,16 @@ class GPUWorker:
             title = job.file_url.split('/')[-1].replace('.pdf', '').replace('-', ' ').replace('_', ' ')
 
             # Create document record
+            # document_date is left NULL rather than NOW(): this worker does not
+            # know when the report was published, and stamping today's date made
+            # every document look simultaneous, which broke resource-history
+            # ordering downstream. The title retains the filename, so
+            # `manage.py backfill_document_dates` recovers the real date on the
+            # main server where the parser lives.
             cur.execute("""
                 INSERT INTO documents (title, document_type, document_date, file_url,
                     description, is_public, created_at, updated_at, company_id)
-                VALUES (%s, %s, NOW()::date, %s, %s, true, NOW(), NOW(), %s)
+                VALUES (%s, %s, NULL, %s, %s, true, NOW(), NOW(), %s)
                 RETURNING id
             """, (
                 title[:300],  # Truncate to fit varchar(300)

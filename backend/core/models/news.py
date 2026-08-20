@@ -70,7 +70,12 @@ class Document(models.Model):
 
     title = models.CharField(max_length=300)
     document_type = models.CharField(max_length=30, choices=DOCUMENT_TYPES)
-    document_date = models.DateField()
+    # Nullable: the GPU worker has no publication date to work from and used to
+    # default this to today, which then propagated into ResourceEstimate.report_date
+    # and made three Ixtaca reports from 2015, 2017 and 2019 look simultaneous.
+    # Unknown is recorded as unknown; backfill_document_dates recovers it from
+    # the title afterwards.
+    document_date = models.DateField(null=True, blank=True)
 
     # 500, not Django's 200 default: 25 GPU jobs failed outright on
     # "value too long for type character varying(200)" because SEDAR and
