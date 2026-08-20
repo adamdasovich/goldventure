@@ -48,22 +48,29 @@ UNIT_RATIO_TOLERANCE = Decimal('0.05')
 
 
 class Command(BaseCommand):
-    help = "De-duplicate resource estimates and correct unit/arithmetic errors."
-
     def add_arguments(self, parser):
         parser.add_argument('--dry-run', action='store_true')
+        parser.add_argument('--recompute-ambiguous', action='store_true',
+                            help="Also overwrite ounces that disagree for no clean "
+                                 "reason. Off by default: the wrong field may be "
+                                 "tonnes, not ounces.")
 
     def handle(self, *args, **opts):
         self.dry_run = opts['dry_run']
+        self.recompute_ambiguous = opts['recompute_ambiguous']
 
+        # Units first: two copies of a row that differ only because one was read
+        # as koz are not detectable as duplicates until both are in the same
+        # unit, and de-duplicating first could keep the wrong copy.
+        unit_fixed, flagged = self._fix_metal('gold')
+        s_unit, s_flagged = self._fix_metal('silver')
         removed = self._dedupe()
-        unit_fixed, recomputed = self._fix_metal('gold')
-        s_unit, s_recomputed = self._fix_metal('silver')
 
+        verb = 'recomputed' if self.recompute_ambiguous else 'FLAGGED for review'
         self.stdout.write(self.style.SUCCESS(
-            f"\n{removed} duplicate row(s) removed, "
-            f"{unit_fixed + s_unit} unit error(s) corrected, "
-            f"{recomputed + s_recomputed} row(s) recomputed from tonnes x grade"
+            f"\n{unit_fixed + s_unit} unit error(s) corrected, "
+            f"{removed} duplicate row(s) removed, "
+            f"{flagged + s_flagged} row(s) {verb}"
         ))
         if self.dry_run:
             self.stdout.write(self.style.NOTICE('Dry run — nothing written.'))
