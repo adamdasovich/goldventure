@@ -1682,11 +1682,25 @@ def _extract_news_from_element(element, source_url: str, base_url: str) -> Optio
                 date_text = f"{month_span.get_text(strip=True)} {day_span.get_text(strip=True)}"
                 date_str = parse_date_standalone(date_text)
 
-        # Strategy 2: Look for dedicated title element (div.title, div.news-title)
-        # Use lambda for multi-class matching (e.g., class="column small-12 news-title")
-        title_elem = element.find('div', class_=lambda c: c and ('title' in c if isinstance(c, list) else c == 'title'))
-        if not title_elem:
-            title_elem = element.find('div', class_=lambda c: c and ('news-title' in c if isinstance(c, list) else c == 'news-title'))
+        # Strategy 2: Look for a dedicated title element.
+        #
+        # Match ANY tag carrying a title-ish class, not just <div>. Founders
+        # Metals marks its headline as <span class="title"> inside a .item
+        # container, so restricting this to div meant the headline was never
+        # found: the cascade fell through to the generic link fallback and the
+        # adjacent "Download" PDF anchor became the title for all 82 of their
+        # releases.
+        _TITLE_CLASSES = ("title", "news-title", "entry-title", "post-title", "headline")
+
+        def _has_title_class(c):
+            if not c:
+                return False
+            classes = c if isinstance(c, list) else [c]
+            return any(cl in _TITLE_CLASSES for cl in classes)
+
+        title_elem = element.find(
+            ["div", "span", "p", "h2", "h3", "h4", "h5"], class_=_has_title_class
+        )
         if title_elem:
             title_link = title_elem.find('a', href=True)
             if title_link:
@@ -1741,9 +1755,19 @@ def _extract_news_from_element(element, source_url: str, base_url: str) -> Optio
             if read_more_link:
                 link_url = read_more_link.get('href', '')
             else:
-                first_link = element.find('a', href=True)
-                if first_link:
-                    link_url = first_link.get('href', '')
+                # Prefer an HTML article link over a PDF. Many listings carry
+                # both (Founders Metals renders "View" alongside "Download"),
+                # and taking whichever came first stored the PDF as the
+                # canonical URL, which is not a page Google can index.
+                candidates = element.find_all('a', href=True)
+                html_link = next(
+                    (a for a in candidates
+                     if not a.get('href', '').lower().split('?')[0].endswith('.pdf')),
+                    None,
+                )
+                chosen = html_link or (candidates[0] if candidates else None)
+                if chosen:
+                    link_url = chosen.get('href', '')
 
         # Validate
         if not title or len(title) < 10:
@@ -1782,6 +1806,20 @@ def _add_news_item(news_by_url: Dict[str, Dict], news: Dict, cutoff_date: dateti
     Returns True if item was added/updated, False if skipped.
     """
     global _seen_slugs
+
+    # Central quality gate. Every strategy funnels through here, but each one
+    # validated titles inline with its own threshold (len < 10, len < 15, or
+    # nothing at all), so junk that one strategy rejected another let through:
+    # 82 releases titled "Download", 225 titles under 15 characters, and 14
+    # rows whose URL was the listing page rather than an article. Enforcing the
+    # shared validators at the choke point means a new strategy cannot
+    # reintroduce the same class of defect.
+    if not is_valid_news_title(news.get("title")):
+        logger.debug("Rejected news item, bad title: %r", news.get("title"))
+        return False
+    if not is_valid_news_url(news.get("url")):
+        logger.debug("Rejected news item, listing-page URL: %r", news.get("url"))
+        return False
 
     # URL normalization: preserve ID-like query params, strip tracking params
     # PHP sites often use ?content_id=123, ?id=456, ?news_id=789 for unique content
