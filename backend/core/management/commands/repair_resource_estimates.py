@@ -65,11 +65,12 @@ class Command(BaseCommand):
         unit_fixed, flagged = self._fix_metal('gold')
         s_unit, s_flagged = self._fix_metal('silver')
         removed = self._dedupe()
+        merged = self._coalesce_partials()
 
         verb = 'recomputed' if self.recompute_ambiguous else 'FLAGGED for review'
         self.stdout.write(self.style.SUCCESS(
             f"\n{unit_fixed + s_unit} unit error(s) corrected, "
-            f"{removed} duplicate row(s) removed, "
+            f"{removed} duplicate row(s) removed, {merged} partial(s) coalesced, "
             f"{flagged + s_flagged} row(s) {verb}"
         ))
         if self.dry_run:
@@ -99,6 +100,74 @@ class Command(BaseCommand):
             with transaction.atomic():
                 ResourceEstimate.objects.filter(id__in=[e.id for e, _ in doomed]).delete()
         return len(doomed)
+
+    def _coalesce_partials(self):
+        """Merge rows describing the same estimate but extracted incompletely.
+
+        A report ingested more than once yields several rows for one physical
+        line of a resource table, each populated differently — one carries the
+        gold grade, another only the silver ounces. They are not identical, so
+        exact de-duplication leaves them all in place and every tool that sums
+        a report counts the tonnage several times: Ixtaca's 2019 statement read
+        493 Mt against a real ~124 Mt.
+
+        Same project, same category, same report date and the same tonnage is
+        the same line of the same table. Keep the most complete row, fill its
+        gaps from the others, and drop them.
+        """
+        FIELDS = ['gold_grade_gpt', 'gold_ounces', 'silver_grade_gpt',
+                  'silver_ounces', 'copper_grade_pct', 'cutoff_grade',
+                  'qualified_person', 'effective_date']
+
+        groups = {}
+        for est in ResourceEstimate.objects.order_by('id'):
+            if est.tonnes is None:
+                continue
+            groups.setdefault(
+                (est.project_id, est.category, est.report_date, est.tonnes), []
+            ).append(est)
+
+        merged = 0
+        header = False
+        for (_, category, report_date, _), rows in groups.items():
+            if len(rows) < 2:
+                continue
+
+            def completeness(e):
+                return sum(1 for f in FIELDS if getattr(e, f, None) is not None)
+
+            rows.sort(key=lambda e: (-completeness(e), e.id))
+            keeper, others = rows[0], rows[1:]
+
+            filled = []
+            for field in FIELDS:
+                if getattr(keeper, field, None) is not None:
+                    continue
+                for other in others:
+                    value = getattr(other, field, None)
+                    if value is not None:
+                        setattr(keeper, field, value)
+                        filled.append(field)
+                        break
+
+            if not header:
+                self.stdout.write("\n=== partial rows describing one estimate ===")
+                header = True
+            self.stdout.write(
+                f"  keep #{keeper.id:<5d} {keeper.project.name[:26]:26s} {category:<9s} "
+                f"{report_date}  merge {len(others)} partial(s)"
+                + (f", filled {', '.join(filled)}" if filled else "")
+            )
+            merged += len(others)
+
+            if not self.dry_run:
+                with transaction.atomic():
+                    if filled:
+                        keeper.save(update_fields=filled + ['updated_at'])
+                    ResourceEstimate.objects.filter(
+                        id__in=[o.id for o in others]).delete()
+
+        return merged
 
     def _fix_metal(self, metal):
         """Correct stated ounces for one metal against tonnes x grade."""
