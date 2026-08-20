@@ -14,11 +14,15 @@ arithmetic (tonnes x grade / 31.1035 must equal contained ounces):
    return, so some rows hold 1,145 where the report meant 1,145,000. These are
    unambiguous: the implied-to-stated ratio lands almost exactly on 1000.
 
-3. Rows that disagree with their own arithmetic for no clean reason, such as
-   True North's 140,000 t at 4.11 g/t recorded as 1,100,000 oz when the
-   tonnage and grade imply 18,500. Tonnage and grade corroborate each other
-   against a single ounces figure, so the ounces field is the one to trust
-   least; it is recomputed and the change logged individually.
+3. Rows that disagree with their own arithmetic for no clean reason. These are
+   REPORTED, NOT CHANGED. It is tempting to trust tonnage and grade over a
+   single ounces figure and recompute, but True North shows why that is wrong:
+   140,000 t at 4.11 g/t against 1,100,000 oz recorded. Roughly 1.1 Moz is a
+   plausible M&I for that deposit while 140,000 t is not, and its gold and
+   silver rows are both out by the same ~60x — so the tonnage is the bad field
+   and recomputing would have discarded the one correct number. Which field is
+   wrong cannot be decided from the row alone, so these need a human against
+   the source report. Pass --recompute-ambiguous to force the arithmetic.
 
 Usage:
     python manage.py repair_resource_estimates --dry-run
@@ -94,7 +98,7 @@ class Command(BaseCommand):
         grade_field = f'{metal}_grade_gpt'
         oz_field = f'{metal}_ounces'
 
-        unit_fixed = recomputed = 0
+        unit_fixed = flagged = 0
         header_written = False
 
         rows = (ResourceEstimate.objects
@@ -123,16 +127,18 @@ class Command(BaseCommand):
             self.stdout.write(
                 f"  #{est.id:<5d} {est.project.name[:26]:26s} {est.category:<9s} "
                 f"{float(stated):>12,.0f} -> {float(corrected):>12,.0f}  "
-                f"{'koz unit error' if is_unit_error else 'recomputed (ratio %.1fx)' % float(ratio)}"
+                f"{'koz unit error — fixing' if is_unit_error else 'AMBIGUOUS (%.0fx) — review, not changed' % float(ratio if ratio > 1 else 1 / ratio)}"
             )
 
             if is_unit_error:
                 unit_fixed += 1
             else:
-                recomputed += 1
+                flagged += 1
+                if not self.recompute_ambiguous:
+                    continue
 
             if not self.dry_run:
                 setattr(est, oz_field, corrected.quantize(Decimal('1')))
                 est.save(update_fields=[oz_field, 'updated_at'])
 
-        return unit_fixed, recomputed
+        return unit_fixed, flagged
