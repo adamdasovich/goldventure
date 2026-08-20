@@ -351,7 +351,7 @@ class GPUOrchestrator:
                                   'scripts', 'chroma_firewall.sh')
             action = 'allow' if allow else 'revoke'
             subprocess.run([script, action, ip], timeout=15, check=True)
-            logger.info(f"Chroma access {action}ed for {ip}")
+            logger.info(f"Chroma access {'granted' if allow else 'revoked'} for {ip}")
 
         except subprocess.CalledProcessError as e:
             logger.error(f"chroma_firewall.sh {action} failed: {e}")
