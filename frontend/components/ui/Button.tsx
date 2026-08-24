@@ -23,11 +23,16 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
         "bg-transparent border border-slate-600 text-slate-300 hover:glass-light hover:text-gold-400 hover:border-gold-600",
     };
 
-    // min-h below `sm` only: 44px is the WCAG 2.5.8 target floor for touch,
-    // and `sm`/`md` computed to ~30px/~38px. Desktop density is unchanged.
+    // 44x44 is WCAG 2.5.5 (AAA) and Apple's HIG; the AA floor in 2.5.8 is
+    // 24x24. Both dimensions matter -- a height-only floor still left
+    // icon-only and numeric buttons 40px wide.
+    //
+    // The floor lifts at `lg`, not `sm`: a phone held sideways is 667px wide
+    // and still a finger. Scoping this to `sm` switched the floor off exactly
+    // when the screen got shorter and targets got harder to hit.
     const sizeClasses = {
-      sm: "px-3 py-1.5 text-sm rounded-[var(--radius-sm)] min-h-11 sm:min-h-0",
-      md: "px-4 py-2 text-base rounded-[var(--radius-md)] min-h-11 sm:min-h-0",
+      sm: "px-3 py-1.5 text-sm rounded-[var(--radius-sm)] min-h-11 min-w-11 lg:min-h-0 lg:min-w-0",
+      md: "px-4 py-2 text-base rounded-[var(--radius-md)] min-h-11 min-w-11 lg:min-h-0 lg:min-w-0",
       lg: "px-6 py-3 text-lg rounded-[var(--radius-lg)]",
     };
 

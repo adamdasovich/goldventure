@@ -477,14 +477,14 @@ export default function HomeClient({ initialArticles }: HomeClientProps) {
                 <Link
                   key={link.href}
                   href={link.href}
-                  className="text-sm text-slate-400 hover:text-gold-400 transition-colors"
+                  className="inline-block py-3 -my-3 text-sm text-slate-400 hover:text-gold-400 transition-colors"
                 >
                   {link.label}
                 </Link>
               ))}
               <Link
                 href="/pricing"
-                className="text-sm text-slate-400 hover:text-gold-400 transition-colors"
+                className="inline-block py-3 -my-3 text-sm text-slate-400 hover:text-gold-400 transition-colors"
               >
                 Pricing
               </Link>
@@ -496,7 +496,7 @@ export default function HomeClient({ initialArticles }: HomeClientProps) {
                 href="https://www.linkedin.com/company/juniorminingintelligence"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="p-2 rounded-lg text-slate-400 hover:text-gold-400 hover:bg-slate-800/50 transition-colors"
+                className="inline-flex items-center justify-center min-h-11 min-w-11 rounded-lg text-slate-400 hover:text-gold-400 hover:bg-slate-800/50 transition-colors"
                 aria-label="LinkedIn"
               >
                 <svg
@@ -512,7 +512,7 @@ export default function HomeClient({ initialArticles }: HomeClientProps) {
                 href="https://twitter.com/JuniorMini82636"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="p-2 rounded-lg text-slate-400 hover:text-gold-400 hover:bg-slate-800/50 transition-colors"
+                className="inline-flex items-center justify-center min-h-11 min-w-11 rounded-lg text-slate-400 hover:text-gold-400 hover:bg-slate-800/50 transition-colors"
                 aria-label="X (Twitter)"
               >
                 <svg
@@ -528,7 +528,7 @@ export default function HomeClient({ initialArticles }: HomeClientProps) {
                 href="https://www.facebook.com/profile.php?id=61586276247045"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="p-2 rounded-lg text-slate-400 hover:text-gold-400 hover:bg-slate-800/50 transition-colors"
+                className="inline-flex items-center justify-center min-h-11 min-w-11 rounded-lg text-slate-400 hover:text-gold-400 hover:bg-slate-800/50 transition-colors"
                 aria-label="Facebook"
               >
                 <svg
@@ -557,19 +557,19 @@ export default function HomeClient({ initialArticles }: HomeClientProps) {
             <div className="flex gap-4 text-sm text-slate-500">
               <Link
                 href="/about"
-                className="hover:text-gold-400 transition-colors"
+                className="inline-block py-3 -my-3 hover:text-gold-400 transition-colors"
               >
                 About
               </Link>
               <Link
                 href="/glossary"
-                className="hover:text-gold-400 transition-colors"
+                className="inline-block py-3 -my-3 hover:text-gold-400 transition-colors"
               >
                 Glossary
               </Link>
               <Link
                 href="/guides"
-                className="hover:text-gold-400 transition-colors"
+                className="inline-block py-3 -my-3 hover:text-gold-400 transition-colors"
               >
                 Guides
               </Link>

@@ -94,7 +94,7 @@ export default function MetalsTicker() {
       <div className="ticker-track flex items-center gap-8">
         {tickerContent.map((item, i) => {
           const inner = (
-            <span className="flex items-center gap-2 flex-shrink-0 py-2 group">
+            <span className="flex items-center gap-2 shrink-0 py-2 group">
               <span
                 className={`text-xs font-semibold ${item.isMetal ? "text-gold-400" : "text-slate-400"} group-hover:text-gold-300 transition-colors`}
               >
@@ -120,7 +120,7 @@ export default function MetalsTicker() {
             <Link
               key={`${item.key}-${i}`}
               href={item.href}
-              className="flex-shrink-0"
+              className="shrink-0 inline-flex items-center min-h-11"
             >
               {inner}
             </Link>

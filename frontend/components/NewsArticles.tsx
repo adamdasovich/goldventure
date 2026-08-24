@@ -143,7 +143,7 @@ export default function NewsArticles({
         <p className="text-slate-400 mb-4">{error}</p>
         <button
           onClick={handleRefresh}
-          className="inline-flex items-center gap-2 px-4 py-2 bg-gold-400/10 text-gold-400 rounded-lg hover:bg-gold-400/20 transition-colors"
+          className="inline-flex items-center gap-2 px-4 py-2.5 min-h-11 bg-gold-400/10 text-gold-400 rounded-lg hover:bg-gold-400/20 transition-colors"
         >
           <RefreshCw className="w-4 h-4" />
           Try Again
@@ -178,7 +178,7 @@ export default function NewsArticles({
         <button
           onClick={handleRefresh}
           disabled={loading}
-          className="inline-flex items-center gap-1 px-3 py-1 text-sm text-slate-400 hover:text-gold-400 transition-colors disabled:opacity-50"
+          className="inline-flex items-center gap-1 px-3 py-2.5 min-h-11 text-sm text-slate-400 hover:text-gold-400 transition-colors disabled:opacity-50"
         >
           <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
           Refresh

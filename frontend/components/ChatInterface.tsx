@@ -134,7 +134,7 @@ export default function ChatInterface() {
             </CardDescription>
           </div>
           {dailyLimit > 0 && tier === "explorer" && (
-            <Link href="/pricing">
+            <Link href="/pricing" className="inline-flex items-center min-h-11">
               <Badge
                 variant="slate"
                 className="cursor-pointer hover:border-gold-400/50 transition-colors"
@@ -167,7 +167,7 @@ export default function ChatInterface() {
                 <button
                   key={prompt}
                   onClick={() => handleExampleClick(prompt)}
-                  className="px-3 py-1.5 text-sm rounded-full bg-slate-800/60 border border-slate-700/50 text-slate-300 hover:text-gold-400 hover:border-gold-500/30 hover:bg-gold-500/10 transition-all cursor-pointer"
+                  className="px-4 py-2.5 min-h-11 inline-flex items-center text-sm rounded-full bg-slate-800/60 border border-slate-700/50 text-slate-300 hover:text-gold-400 hover:border-gold-500/30 hover:bg-gold-500/10 transition-all cursor-pointer"
                 >
                   {prompt}
                 </button>

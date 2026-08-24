@@ -230,7 +230,7 @@ export default async function CommodityFacetPage({ params }: Props) {
                 <Link
                   key={f.slug}
                   href={`/companies/commodity/${f.slug}`}
-                  className="px-4 py-2 rounded-lg border border-gold-500/30 text-gold-300 hover:bg-gold-500/10 transition-colors text-sm"
+                  className="px-4 py-2.5 min-h-11 inline-flex items-center rounded-lg border border-gold-500/30 text-gold-300 hover:bg-gold-500/10 transition-colors text-sm"
                 >
                   {f.label} companies →
                 </Link>

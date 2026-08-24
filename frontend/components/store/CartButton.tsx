@@ -13,7 +13,7 @@ export function CartButton({ className = '' }: CartButtonProps) {
   return (
     <button
       onClick={toggleCart}
-      className={`relative p-2 min-h-11 min-w-11 sm:min-h-0 sm:min-w-0 inline-flex items-center justify-center text-slate-300 hover:text-gold-400 transition-colors ${className}`}
+      className={`relative p-2 min-h-11 min-w-11 lg:min-h-0 lg:min-w-0 inline-flex items-center justify-center text-slate-300 hover:text-gold-400 transition-colors ${className}`}
       aria-label={`Shopping cart with ${itemCount} items`}
     >
       <svg

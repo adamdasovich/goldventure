@@ -230,7 +230,7 @@ export default function PricingPage() {
         <div className="flex items-center justify-center gap-3 mb-12">
           <button
             onClick={() => setInterval("month")}
-            className={`px-4 py-2 min-h-11 sm:min-h-0 inline-flex items-center justify-center rounded-lg text-sm font-medium transition-all ${
+            className={`px-4 py-2 min-h-11 lg:min-h-0 inline-flex items-center justify-center rounded-lg text-sm font-medium transition-all ${
               interval === "month"
                 ? "bg-gold-500/20 text-gold-400 border border-gold-500/30"
                 : "text-slate-400 hover:text-slate-300"
@@ -240,7 +240,7 @@ export default function PricingPage() {
           </button>
           <button
             onClick={() => setInterval("year")}
-            className={`px-4 py-2 min-h-11 sm:min-h-0 inline-flex items-center justify-center rounded-lg text-sm font-medium transition-all ${
+            className={`px-4 py-2 min-h-11 lg:min-h-0 inline-flex items-center justify-center rounded-lg text-sm font-medium transition-all ${
               interval === "year"
                 ? "bg-gold-500/20 text-gold-400 border border-gold-500/30"
                 : "text-slate-400 hover:text-slate-300"
