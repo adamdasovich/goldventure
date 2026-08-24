@@ -258,8 +258,10 @@ export default function MetalsClient({
                   </CardDescription>
                 </div>
 
-                {/* Metal Selector */}
-                <div className="flex gap-2">
+                {/* Metal Selector. Ten metals in one non-wrapping row measured
+                    660px — it escaped a 375px viewport entirely and was only
+                    hidden by the body clip guard. Scrolls below md, wraps above. */}
+                <div className="flex gap-2 w-full md:w-auto overflow-x-auto md:overflow-visible md:flex-wrap scrollbar-none -mx-2 px-2 md:mx-0 md:px-0">
                   {metals.length > 0 &&
                     metals.map((metal) => (
                       <Button
@@ -270,6 +272,7 @@ export default function MetalsClient({
                             : "secondary"
                         }
                         size="sm"
+                        className="shrink-0"
                         onClick={() => setSelectedMetal(metal.symbol)}
                       >
                         {metal.metal}
@@ -283,7 +286,7 @@ export default function MetalsClient({
               <MetalChart symbol={selectedMetal} days={selectedTimeRange} />
 
               {/* Time Range Selector */}
-              <div className="flex gap-2 justify-center mt-6">
+              <div className="flex flex-wrap gap-2 justify-center mt-6">
                 {[
                   { label: "1W", days: 7 },
                   { label: "1M", days: 30 },
