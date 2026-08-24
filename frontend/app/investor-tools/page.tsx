@@ -412,7 +412,7 @@ export default async function InvestorToolsPage() {
                   </p>
                   <Link
                     href="/investor-tools/liquidity-screener"
-                    className="inline-block mt-4 text-sm text-gold-400 hover:underline"
+                    className="inline-flex items-center min-h-11 mt-4 text-sm text-gold-400 hover:underline"
                   >
                     Check any position size →
                   </Link>
@@ -439,7 +439,7 @@ export default async function InvestorToolsPage() {
                   </p>
                   <Link
                     href="/investor-tools/signal-to-noise"
-                    className="inline-block mt-4 text-sm text-gold-400 hover:underline"
+                    className="inline-flex items-center min-h-11 mt-4 text-sm text-gold-400 hover:underline"
                   >
                     Compare any company →
                   </Link>
@@ -580,7 +580,7 @@ export default async function InvestorToolsPage() {
               <Link
                 key={l.href}
                 href={l.href}
-                className="px-4 py-2 rounded-lg border border-gold-500/30 text-gold-300 hover:bg-gold-500/10 transition-colors text-sm"
+                className="px-4 py-2.5 min-h-11 inline-flex items-center rounded-lg border border-gold-500/30 text-gold-300 hover:bg-gold-500/10 transition-colors text-sm"
               >
                 {l.label} →
               </Link>
