@@ -551,7 +551,7 @@ export default function CompaniesClient({
                             href={company.website}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="text-xs text-gold-400 hover:text-gold-300 flex items-center gap-1"
+                            className="text-xs text-gold-400 hover:text-gold-300 flex items-center gap-1 py-3.5 -my-3.5"
                             onClick={(e) => e.stopPropagation()}
                           >
                             <span>Visit Website</span>

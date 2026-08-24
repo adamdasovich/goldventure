@@ -139,7 +139,7 @@ export default function SiteHeader({
       >
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16 lg:h-24">
-            <Link href="/" className="flex items-center shrink-0">
+            <Link href="/" className="flex items-center shrink-0 min-h-11">
               <LogoMono className="h-10 lg:h-14" />
             </Link>
 

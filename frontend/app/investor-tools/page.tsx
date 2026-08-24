@@ -215,7 +215,7 @@ export default async function InvestorToolsPage() {
                       <Link
                         key={slug}
                         href={tool.href}
-                        className="text-sm text-gold-400 hover:underline"
+                        className="text-sm text-gold-400 hover:underline inline-block py-3 -my-3"
                       >
                         {tool.title} →
                       </Link>
