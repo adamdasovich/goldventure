@@ -290,8 +290,20 @@ def _infer_commodity_from_name(name: str) -> str:
     if 'gold' in name_lower:
         return 'gold'
 
-    # Default to gold for mining companies
-    return 'gold'
+    # Unknown. Do NOT default to gold.
+    #
+    # This used to `return 'gold'` on the grounds that most juniors are gold
+    # companies. The effect was that any project whose NAME lacked a commodity
+    # word -- "Acacia", "Bulldog", "Coyote Creek" -- was recorded as gold as
+    # though it had been detected. On 2026-08-24 that accounted for 594 of the
+    # 720 gold-tagged projects, 82% of them, and it put companies on the gold
+    # commodity landing page on no evidence at all. Skyharbour, an Athabasca
+    # uranium explorer, was tagged gold this way.
+    #
+    # Blank is honest and the commodity filter simply skips it. The page-content
+    # scorer in company_scraper.score_commodity is what should supply a real
+    # value; this name-based guess is only a fallback for when it cannot.
+    return ''
 
 
 
@@ -883,10 +895,34 @@ def _save_projects(company, projects_data: list):
     """Save scraped projects to database."""
     from core.models import Project
 
+    import re  # module-level import is absent here; the file imports locally
+
+    def _norm(s):
+        return re.sub(r'[^a-z0-9]+', ' ', (s or '').lower()).strip()
+
+    # Listing pages put the company's own name in the same markup as the
+    # project cards, so it gets collected as a property. Skyharbour Resources
+    # was stored as a Skyharbour project.
+    company_norm = _norm(company.name)
+    company_bare = re.sub(
+        r'\b(resources?|minerals?|mining|metals?|gold|silver|corp|corporation|'
+        r'inc|ltd|limited|plc|company|co)\b', ' ', company_norm
+    ).strip()
+
     for project_data in projects_data:
         name = (project_data.get('name') or '')[:200]
         if not name or _is_invalid_project_name(name):
             continue
+        name_norm = _norm(name)
+        if name_norm == company_norm or (company_bare and name_norm == company_bare):
+            continue
+
+        # Prefer what was actually read off the page. The name-based guess is
+        # only a fallback: score_commodity() weighs how often each metal is
+        # mentioned and counts assay notation heavily, whereas a name tells you
+        # nothing unless it happens to contain the word.
+        scraped_commodity = (project_data.get('commodity') or '').strip().lower()
+        commodity = scraped_commodity or _infer_commodity_from_name(name)
 
         existing = Project.objects.filter(company=company, name=name).first()
         if existing:
@@ -894,6 +930,10 @@ def _save_projects(company, projects_data: list):
                 existing.description = (project_data.get('description') or '')[:2000]
             if project_data.get('location'):
                 existing.country = (project_data.get('location') or '')[:100]
+            # Only fill a blank; never overwrite a commodity already on record
+            # with a fresh guess.
+            if scraped_commodity and not existing.primary_commodity:
+                existing.primary_commodity = scraped_commodity[:50]
             existing.save()
         else:
             country = (project_data.get('location') or project_data.get('country') or 'Unknown')[:100]
@@ -902,7 +942,7 @@ def _save_projects(company, projects_data: list):
                 description=(project_data.get('description') or '')[:2000],
                 country=country,
                 project_stage=_infer_project_stage_from_name(name),
-                primary_commodity=_infer_commodity_from_name(name),
+                primary_commodity=commodity[:50],
             )
 
 

@@ -27,6 +27,166 @@ if sys.platform == 'win32':
     sys.stdout.reconfigure(encoding='utf-8', errors='replace')
 
 
+# ============================================================================
+# COMMODITY AND LOCATION SCORING
+#
+# Both used to be "first hit from a fixed-order list, anywhere on the page":
+#
+#     for loc in ['Canada', 'USA', 'Mexico', 'Peru', ...]:
+#         if loc.lower() in page_text.lower(): location = loc; break
+#
+# So a footer address or a TSX listing note decided the location, and 'Canada'
+# won because it sat first. Rio Silver's Peruvian projects were labelled
+# Canada. Commodity had the identical flaw with 'gold' first, which tagged
+# Skyharbour -- an Athabasca uranium company -- as gold.
+#
+# These score by weight of evidence instead: count how often each candidate is
+# actually mentioned and take the strongest, with assay notation ("g/t Au",
+# "% U3O8") counted heavily because it is unambiguous in a way prose is not.
+# Return None rather than guessing when nothing stands out.
+# ============================================================================
+
+# Full-word mentions. Deliberately no bare chemical symbols: \bag\b and \bau\b
+# match German company suffixes and stray initials often enough to matter.
+_COMMODITY_WORDS = {
+    'gold': ['gold'],
+    'silver': ['silver'],
+    'copper': ['copper'],
+    'zinc': ['zinc'],
+    'lead': ['galena'],
+    'nickel': ['nickel'],
+    'lithium': ['lithium', 'spodumene'],
+    'uranium': ['uranium'],
+    'cobalt': ['cobalt'],
+    'moly': ['molybdenum'],
+    'graphite': ['graphite'],
+    'manganese': ['manganese'],
+    'vanadium': ['vanadium'],
+    'tin': ['cassiterite'],
+    'tungsten': ['tungsten', 'scheelite'],
+    'pgm': ['platinum', 'palladium'],
+    'ree': ['rare earth', 'rare-earth', 'neodymium', 'praseodymium', 'dysprosium'],
+}
+
+# Assay and grade notation. Strong evidence: nobody writes "g/t Au" casually.
+_COMMODITY_ASSAY = {
+    'gold': [r'g/t\s*au\b', r'\bg/t\s*gold\b', r'\boz\s*au\b', r'\bau\s*g/t\b'],
+    'silver': [r'g/t\s*ag\b', r'\bag\s*g/t\b', r'\boz\s*ag\b'],
+    'copper': [r'%\s*cu\b', r'\bcu\s*%'],
+    'zinc': [r'%\s*zn\b', r'\bzn\s*%'],
+    'lead': [r'%\s*pb\b', r'\bpb\s*%'],
+    'nickel': [r'%\s*ni\b', r'\bni\s*%'],
+    'lithium': [r'%\s*li2o\b', r'li\s*2\s*o', r'\bppm\s*li\b'],
+    'uranium': [r'%\s*u3o8\b', r'u\s*3\s*o\s*8', r'\bppm\s*u\b'],
+    'cobalt': [r'%\s*co\b'],
+    'ree': [r'%\s*treo\b', r'\btreo\b'],
+}
+
+ASSAY_WEIGHT = 3
+MIN_COMMODITY_SCORE = 2
+
+
+def score_commodity(page_text: str, emphasis_text: str = '') -> Optional[str]:
+    """Dominant commodity on a page, or None when the evidence is thin.
+
+    `emphasis_text` (title, h1) is counted twice: a project page names its
+    commodity up top, while the body may mention neighbours and comparisons.
+    """
+    if not page_text:
+        return None
+    body = page_text.lower()
+    emphasis = (emphasis_text or '').lower()
+
+    scores = {}
+    for commodity, words in _COMMODITY_WORDS.items():
+        score = 0
+        for w in words:
+            pattern = r'\b' + re.escape(w) + r'\b'
+            score += len(re.findall(pattern, body))
+            score += 2 * len(re.findall(pattern, emphasis))
+        for pat in _COMMODITY_ASSAY.get(commodity, []):
+            score += ASSAY_WEIGHT * len(re.findall(pat, body))
+        if score:
+            scores[commodity] = score
+
+    if not scores:
+        return None
+    best, best_score = max(scores.items(), key=lambda kv: kv[1])
+    if best_score < MIN_COMMODITY_SCORE:
+        return None
+    return best
+
+
+# Subnational regions mapped to the country they belong to. The country column
+# previously held values like "Nevada" and "Ontario" -- 39 and 26 rows -- which
+# made country filtering meaningless.
+_REGION_TO_COUNTRY = {
+    # Canada
+    'ontario': 'Canada', 'quebec': 'Canada', 'québec': 'Canada',
+    'british columbia': 'Canada', 'alberta': 'Canada', 'saskatchewan': 'Canada',
+    'manitoba': 'Canada', 'yukon': 'Canada', 'nunavut': 'Canada',
+    'newfoundland': 'Canada', 'labrador': 'Canada', 'nova scotia': 'Canada',
+    'new brunswick': 'Canada', 'northwest territories': 'Canada',
+    'athabasca basin': 'Canada', 'abitibi': 'Canada', 'golden triangle': 'Canada',
+    'red lake': 'Canada', 'timmins': 'Canada', 'matagami': 'Canada',
+    # United States
+    'nevada': 'USA', 'alaska': 'USA', 'arizona': 'USA', 'colorado': 'USA',
+    'idaho': 'USA', 'montana': 'USA', 'utah': 'USA', 'wyoming': 'USA',
+    'california': 'USA', 'new mexico': 'USA', 'south dakota': 'USA',
+    'carlin trend': 'USA', 'walker lane': 'USA',
+    # Mexico
+    'chihuahua': 'Mexico', 'sonora': 'Mexico', 'durango': 'Mexico',
+    'zacatecas': 'Mexico', 'puebla': 'Mexico', 'oaxaca': 'Mexico',
+    'guerrero': 'Mexico', 'sinaloa': 'Mexico',
+    # Elsewhere
+    'western australia': 'Australia', 'queensland': 'Australia',
+    'new south wales': 'Australia', 'northern territory': 'Australia',
+    'atacama': 'Chile', 'antofagasta': 'Chile',
+}
+
+_COUNTRIES = [
+    'Canada', 'USA', 'United States', 'Mexico', 'Peru', 'Chile', 'Argentina',
+    'Brazil', 'Colombia', 'Ecuador', 'Bolivia', 'Guyana', 'Suriname',
+    'Australia', 'Ghana', 'Mali', 'Burkina Faso', 'Tanzania', 'Zambia',
+    'South Africa', 'Namibia', 'Botswana', 'Morocco', 'Finland', 'Sweden',
+    'Norway', 'Spain', 'Portugal', 'Ireland', 'Serbia', 'Turkey', 'Kazakhstan',
+    'Mongolia', 'Indonesia', 'Philippines', 'Papua New Guinea', 'Fiji',
+    'Cambodia', 'Laos', 'Nigeria', 'Cote d\'Ivoire', 'Senegal', 'Guinea',
+]
+
+
+def score_location(page_text: str, emphasis_text: str = '') -> Optional[str]:
+    """Most-supported COUNTRY on a page, or None.
+
+    Subnational names count toward their country, so "Nevada" three times and
+    "USA" once resolves to USA rather than storing a state in a country column.
+    """
+    if not page_text:
+        return None
+    body = page_text.lower()
+    emphasis = (emphasis_text or '').lower()
+
+    scores = {}
+
+    def add(country, n):
+        if n:
+            scores[country] = scores.get(country, 0) + n
+
+    for country in _COUNTRIES:
+        pattern = r'\b' + re.escape(country.lower()) + r'\b'
+        n = len(re.findall(pattern, body)) + 2 * len(re.findall(pattern, emphasis))
+        add('USA' if country == 'United States' else country, n)
+
+    for region, country in _REGION_TO_COUNTRY.items():
+        pattern = r'\b' + re.escape(region) + r'\b'
+        n = len(re.findall(pattern, body)) + 2 * len(re.findall(pattern, emphasis))
+        add(country, n)
+
+    if not scores:
+        return None
+    return max(scores.items(), key=lambda kv: kv[1])[0]
+
+
 class CompanyDataScraper:
     """
     Comprehensive scraper for mining company websites.
@@ -2404,37 +2564,16 @@ class CompanyDataScraper:
                             description = para_text[:1000]
                             break
 
-                # Extract location from description or page content
+                # Location and commodity by weight of evidence, not list order.
+                # The page heading is passed as emphasis because a project page
+                # names its commodity and district up top, while the body often
+                # mentions neighbouring deposits and other metals in passing.
                 page_text = soup.get_text()
-                locations = [
-                    'Canada', 'USA', 'United States', 'Mexico', 'Peru', 'Chile', 'Argentina',
-                    'Australia', 'Nevada', 'Ontario', 'Quebec', 'British Columbia', 'Alberta',
-                    'Saskatchewan', 'Manitoba', 'Yukon', 'Northwest Territories', 'Nunavut',
-                    'Chihuahua', 'Sonora', 'Durango', 'Puebla', 'Oaxaca', 'Guerrero',
-                    'Alaska', 'Arizona', 'Colorado', 'Idaho', 'Montana', 'Utah', 'Wyoming'
-                ]
-                for loc in locations:
-                    if loc.lower() in page_text.lower():
-                        location = loc
-                        break
-
-                # Extract commodity from page content
-                commodity = None
-                commodities = {
-                    'gold': ['gold', 'au ', ' au,', 'gold-'],
-                    'silver': ['silver', 'ag ', ' ag,', 'silver-'],
-                    'copper': ['copper', 'cu ', ' cu,'],
-                    'zinc': ['zinc', 'zn ', ' zn,'],
-                    'lead': ['lead', 'pb '],
-                    'nickel': ['nickel', 'ni '],
-                    'lithium': ['lithium', 'li '],
-                    'uranium': ['uranium', ' u ']
-                }
-                page_lower = page_text.lower()
-                for comm, patterns in commodities.items():
-                    if any(p in page_lower for p in patterns):
-                        commodity = comm
-                        break
+                emphasis = ' '.join(
+                    h.get_text(strip=True) for h in soup.find_all(['title', 'h1', 'h2'])[:6]
+                )
+                location = score_location(page_text, emphasis) or location
+                commodity = score_commodity(page_text, emphasis)
 
                 # Project name has already been validated, just add it
                 if project_name:
@@ -2617,37 +2756,19 @@ class CompanyDataScraper:
             if desc_text and len(desc_text) > 20 and desc_text != project.get('name'):
                 project['description'] = desc_text[:500]
 
-        # ===== LOCATION EXTRACTION =====
+        # ===== LOCATION AND COMMODITY =====
+        # Scored rather than first-match. On a listing card the text is short,
+        # so evidence is often thin — leaving the field unset is correct there.
+        # A wrong commodity is worse than a missing one: it puts the company on
+        # the wrong commodity landing page.
         text = element.get_text()
-        locations = [
-            'Canada', 'USA', 'United States', 'Mexico', 'Peru', 'Chile', 'Argentina',
-            'Australia', 'Nevada', 'Ontario', 'Quebec', 'British Columbia', 'Alberta',
-            'Saskatchewan', 'Manitoba', 'Yukon', 'Northwest Territories', 'Nunavut',
-            'Arizona', 'Colorado', 'Idaho', 'Montana', 'Utah', 'Wyoming', 'Alaska',
-            'Sonora', 'Chihuahua', 'Durango', 'Puebla', 'Oaxaca', 'Guerrero',
-        ]
-        for loc in locations:
-            if loc.lower() in text.lower():
-                project['location'] = loc
-                break
-
-        # ===== COMMODITY EXTRACTION =====
-        text_lower = text.lower()
-        commodities = {
-            'gold': ['gold', ' au ', 'au,', 'au-'],
-            'silver': ['silver', ' ag ', 'ag,', 'ag-'],
-            'copper': ['copper', ' cu ', 'cu,'],
-            'zinc': ['zinc', ' zn ', 'zn,'],
-            'lead': ['lead', ' pb '],
-            'nickel': ['nickel', ' ni '],
-            'lithium': ['lithium', ' li '],
-            'uranium': ['uranium'],
-            'rare_earths': ['rare earth', 'ree'],
-        }
-        for comm, patterns in commodities.items():
-            if any(p in text_lower for p in patterns):
-                project['commodity'] = comm
-                break
+        name_text = project.get('name') or ''
+        loc = score_location(text, name_text)
+        if loc:
+            project['location'] = loc
+        comm = score_commodity(text, name_text)
+        if comm:
+            project['commodity'] = comm
 
         return project if project.get('name') else None
 
