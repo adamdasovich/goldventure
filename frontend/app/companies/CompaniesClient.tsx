@@ -15,6 +15,8 @@ import { companyAPI, type Company } from "@/lib/api";
 import SiteHeader from "@/components/SiteHeader";
 import { useAuth } from "@/contexts/AuthContext";
 import { companyHref } from "@/lib/companyUrl";
+import { LoginModal, RegisterModal } from "@/components/auth";
+import { FreeAccountCTA } from "@/components/FreeAccountCTA";
 
 // Commodity filter options grouped by category
 const COMMODITY_GROUPS = {
@@ -69,6 +71,10 @@ export default function CompaniesClient({
   const [companies, setCompanies] = useState<Company[]>(initialCompanies || []);
   const [loading, setLoading] = useState(!initialCompanies);
   const [error, setError] = useState<string | null>(null);
+  // Auth modals, so the free-account CTAs below have somewhere to go. This page
+  // is the top paid-search landing page and had no registration path at all.
+  const [showLogin, setShowLogin] = useState(false);
+  const [showRegister, setShowRegister] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCommodities, setSelectedCommodities] = useState<string[]>([]);
   const [viewMode, setViewMode] = useState<"grid" | "table">("grid");
@@ -230,6 +236,14 @@ export default function CompaniesClient({
               </Link>
             ))}
           </div>
+
+          {!user && (
+            <FreeAccountCTA
+              variant="banner"
+              className="max-w-3xl mx-auto animate-slide-in-up"
+              onRegister={() => setShowRegister(true)}
+            />
+          )}
         </div>
       </section>
 
@@ -838,7 +852,7 @@ export default function CompaniesClient({
                         variant={currentPage === page ? "primary" : "secondary"}
                         size="sm"
                         onClick={() => setCurrentPage(page)}
-                        className="min-w-[40px]"
+                        className="min-w-11"
                       >
                         {page}
                       </Button>
@@ -879,8 +893,37 @@ export default function CompaniesClient({
               companies
             </div>
           )}
+
+          {/* The one that matters: paid visitors average 7-8 minutes on this
+              page before leaving. This catches them after they have browsed. */}
+          {!user && (
+            <FreeAccountCTA
+              className="mt-16"
+              onRegister={() => setShowRegister(true)}
+              onSignIn={() => setShowLogin(true)}
+            />
+          )}
         </div>
       </section>
+
+      {showLogin && (
+        <LoginModal
+          onClose={() => setShowLogin(false)}
+          onSwitchToRegister={() => {
+            setShowLogin(false);
+            setShowRegister(true);
+          }}
+        />
+      )}
+      {showRegister && (
+        <RegisterModal
+          onClose={() => setShowRegister(false)}
+          onSwitchToLogin={() => {
+            setShowRegister(false);
+            setShowLogin(true);
+          }}
+        />
+      )}
     </div>
   );
 }
