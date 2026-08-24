@@ -284,10 +284,22 @@ class CompanyDataScraper:
         )
 
         async with AsyncWebCrawler(config=browser_config) as crawler:
-            # 1. Scrape homepage first (gets basic info, nav structure) - ALWAYS do this
-            if 'homepage' in sections:
-                logger.info(f"[SCRAPE] Scraping homepage: {self.base_url}")
-                await self._scrape_homepage(crawler, crawler_config)
+            # 1. Scrape homepage first (gets basic info, nav structure).
+            #
+            # Unconditional, as the previous comment already claimed it was.
+            # It used to be gated on `'homepage' in sections`, so a caller
+            # asking only for ['projects'] never fetched the homepage, which is
+            # where _nav_links comes from -- making _find_potential_project_urls
+            # return nothing and leaving project discovery with only its guessed
+            # URLs (/projects/, /project/, /project).
+            #
+            # Scorpio Gold publishes its ground at /manhattan-district/, linked
+            # from the nav. With the gate in place the scraper probed three
+            # non-existent URLs and gave up; without it, discovery finds the
+            # page. Every other section's URL discovery depends on nav
+            # structure the same way, so this must not be optional.
+            logger.info(f"[SCRAPE] Scraping homepage: {self.base_url}")
+            await self._scrape_homepage(crawler, crawler_config)
 
             # 2. Find and scrape About/Corporate section
             if ('about' in sections or 'team' in sections) and self._should_continue_scraping('about'):
@@ -1965,6 +1977,13 @@ class CompanyDataScraper:
             # and gets picked up as though it were one.
             'prospect generator', 'prospect generator model', 'business model',
             'project generation', 'joint ventures', 'partnerships', 'strategy',
+            # In-page section headings on project pages. Scorpio Gold's
+            # Manhattan District page carries no h1/h2 at all, so the extractor
+            # falls through to whatever heading-like text it can find and
+            # returned "Goals & Milestones" as the property name.
+            'goals & milestones', 'goals and milestones', 'milestones',
+            'investment highlights', 'why invest', 'key highlights',
+            'goals', 'objectives', 'vision', 'mission', 'our approach',
             'downloads', 'resources', 'media', 'highlights', 'location map',
             # Technical/scientific section names (not actual projects)
             'alteration', 'metallurgy', 'mineralization', 'geological setting',
