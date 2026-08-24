@@ -224,7 +224,7 @@ export default function CompaniesClient({
               <Link
                 key={slug}
                 href={`/companies/commodity/${slug}`}
-                className="px-3 py-1.5 rounded-full border border-gold-500/30 text-gold-300 hover:bg-gold-500/10 text-sm transition-colors"
+                className="px-4 py-2.5 min-h-11 inline-flex items-center rounded-full border border-gold-500/30 text-gold-300 hover:bg-gold-500/10 text-sm transition-colors"
               >
                 {label} companies
               </Link>

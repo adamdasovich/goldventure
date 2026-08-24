@@ -102,7 +102,7 @@ export function StoreHeader() {
               <Link
                 key={item.href}
                 href={item.href}
-                className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors ${
+                className={`px-4 py-2.5 min-h-11 inline-flex items-center rounded-full text-xs font-medium whitespace-nowrap transition-colors ${
                   isActive
                     ? 'bg-gold-500/20 text-gold-400'
                     : 'text-slate-400 hover:text-slate-200 bg-slate-800/50'
@@ -116,7 +116,7 @@ export function StoreHeader() {
           {isAdmin && (
             <Link
               href="/admin/store"
-              className="px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors bg-amber-500/20 text-amber-400"
+              className="px-4 py-2.5 min-h-11 inline-flex items-center rounded-full text-xs font-medium whitespace-nowrap transition-colors bg-amber-500/20 text-amber-400"
             >
               Admin
             </Link>
