@@ -17,8 +17,29 @@ if (process.env.NODE_ENV === "production" && !RESOLVED_API_BASE_URL) {
 
 const API_BASE_URL = RESOLVED_API_BASE_URL || "http://localhost:8000/api";
 
-// Cache the sitemap itself for 1 hour — a busy Googlebot crawl shouldn't
+// Cache the rendered sitemap for 1 hour — a busy Googlebot crawl shouldn't
 // fan out into 20+ API calls per fetch.
+//
+// The fetches below deliberately use a SHORT revalidate (60s) rather than the
+// same 3600. Next persists fetch results in .next/cache/fetch-cache and reuses
+// them ACROSS BUILDS, so with a matching hour-long TTL a rebuild made right
+// after a data change re-emitted the previous sitemap. On 2026-08-24 four
+// companies gained descriptions, two consecutive rebuilds still produced the
+// old 378 URLs, and only deleting the fetch cache by hand picked them up. The
+// two TTLs also compounded: a route regenerating at the 60-minute mark could
+// read fetch data already 60 minutes old, leaving the sitemap up to two hours
+// behind reality.
+//
+// 60s is short enough that any build or hourly regeneration reads current data,
+// while still collapsing the ~6 paginated calls made within a single render.
+//
+// Do NOT use `cache: "no-store"` here. It opts the route into dynamic
+// rendering, which conflicts with `export const revalidate` — Next throws
+// "Dynamic server usage", every fetch fails, and the sitemap silently
+// collapses to 47 URLs with zero companies. Tried on 2026-08-24.
+//
+// Do NOT "fix" a stale sitemap by adding `rm -rf .next/cache` to the deploy —
+// that discards the whole incremental build cache and slows every deploy.
 export const revalidate = 3600;
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
@@ -33,7 +54,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     try {
       const response = await fetch(
         `${API_BASE_URL}/companies/?page=${page}&page_size=100`,
-        { next: { revalidate: 3600 } },
+        { next: { revalidate: 60 } },
       );
       if (response.ok) {
         const data = await response.json();
@@ -65,7 +86,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     try {
       const response = await fetch(
         `${API_BASE_URL}/properties/listings/?status=active&page=${propPage}&page_size=100`,
-        { next: { revalidate: 3600 } },
+        { next: { revalidate: 60 } },
       );
       if (response.ok) {
         const data = await response.json();
@@ -339,7 +360,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   let financingWeeks: any[] = [];
   try {
     const res = await fetch(`${API_BASE_URL}/reports/financings/`, {
-      next: { revalidate: 3600 },
+      next: { revalidate: 60 },
     });
     if (res.ok) {
       const data = await res.json();

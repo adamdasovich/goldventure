@@ -172,9 +172,16 @@ export type FacetCompany = {
   project_count?: number | null;
 };
 
-/** Fetch every company holding a project in any of `query`, sorted by name. */
+/**
+ * Fetch every company holding a project in any of `query`, sorted by name.
+ *
+ * `fresh` bypasses Next's fetch cache. Page rendering leaves it false: those
+ * routes carry their own `revalidate`, and a facet listing an hour behind is
+ * harmless. The sitemap passes true — see the note on indexableFacets.
+ */
 export async function fetchFacetCompanies(
   query: string[],
+  fresh = false,
 ): Promise<FacetCompany[]> {
   const commodity = encodeURIComponent(query.join(","));
   let companies: FacetCompany[] = [];
@@ -184,7 +191,7 @@ export async function fetchFacetCompanies(
     try {
       const res = await fetch(
         `${API_BASE_URL}/companies/?commodity=${commodity}&page=${page}&page_size=100`,
-        { next: { revalidate: 3600 } },
+        fresh ? { next: { revalidate: 60 } } : { next: { revalidate: 3600 } },
       );
       if (!res.ok) break;
       const data = await res.json();
@@ -205,12 +212,16 @@ export async function fetchFacetCompanies(
 /**
  * Facets with enough companies to be worth submitting. Mirrors the page's own
  * `MIN_INDEXABLE` check, so the sitemap never lists a URL that noindexes itself.
+ *
+ * Reads live (`fresh`) because this feeds the sitemap. See the note in
+ * app/sitemap.ts: Next persists fetch results across builds, so a cached read
+ * here would decide facet inclusion from stale counts.
  */
 export async function indexableFacets(): Promise<FacetConfig[]> {
   const counted = await Promise.all(
     ALL_FACETS.map(async (facet) => ({
       facet,
-      count: (await fetchFacetCompanies(facet.query)).length,
+      count: (await fetchFacetCompanies(facet.query, true)).length,
     })),
   );
   return counted.filter((c) => c.count >= MIN_INDEXABLE).map((c) => c.facet);
