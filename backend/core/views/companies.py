@@ -156,9 +156,19 @@ class CompanyViewSet(viewsets.ModelViewSet):
                     commodity_q |= Q(projects__primary_commodity__iexact=c)
                 queryset = queryset.filter(commodity_q).distinct()
 
-        # Annotate counts to avoid N+1 in serializers
+        # Annotate counts to avoid N+1 in serializers.
+        #
+        # `distinct=True` is REQUIRED. Annotating a Count and a Max over two
+        # different multi-valued relations in one call makes Django join both,
+        # so every project row is repeated once per news release and the count
+        # becomes projects x news_releases. Nuvau reported 50 projects for 2
+        # projects and 25 releases. Worse, a company with projects but no news
+        # multiplied to ZERO, and the sitemap filter is `project_count > 0`, so
+        # it silently dropped those companies from the sitemap entirely.
         queryset = queryset.annotate(
-            _project_count=Count('projects', filter=Q(projects__is_active=True)),
+            _project_count=Count(
+                'projects', filter=Q(projects__is_active=True), distinct=True
+            ),
             # Date of the company's most recent press release. `updated_at` is
             # useless as a freshness signal because the daily scrape rewrites
             # the row whether or not anything changed — 89% of companies carried
