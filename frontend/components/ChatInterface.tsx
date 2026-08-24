@@ -121,7 +121,9 @@ export default function ChatInterface() {
   return (
     <Card
       variant="glass-strong"
-      className="flex flex-col h-[600px] max-w-4xl mx-auto"
+      /* Fixed 600px overran a 375x667 phone once the header and ticker were
+         subtracted, and stranded the composer entirely in landscape. */
+      className="flex flex-col h-[min(600px,70dvh)] max-w-4xl mx-auto"
     >
       <CardHeader className="border-b border-slate-700/50">
         <div className="flex items-center justify-between">

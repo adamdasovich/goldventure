@@ -98,7 +98,7 @@ export default function CompanyChatbot({
     return (
       <button
         onClick={() => setIsOpen(true)}
-        className="fixed bottom-6 right-6 bg-gradient-to-r from-gold-500 to-copper-500 hover:from-gold-600 hover:to-copper-600 text-black font-semibold px-6 py-3 rounded-full shadow-lg flex items-center gap-2 transition-all hover:scale-105 z-50"
+        className="fixed bottom-[calc(1.5rem+env(safe-area-inset-bottom))] right-4 sm:right-6 max-w-[calc(100vw-2rem)] bg-gradient-to-r from-gold-500 to-copper-500 hover:from-gold-600 hover:to-copper-600 text-black font-semibold px-5 sm:px-6 py-3 rounded-full shadow-lg flex items-center gap-2 transition-all hover:scale-105 z-50"
       >
         <svg
           className="w-5 h-5"
@@ -113,13 +113,16 @@ export default function CompanyChatbot({
             d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"
           />
         </svg>
-        Ask about {companyName}
+        {/* The company name is what overruns a 375px screen, and it also
+            collides with the forum button pinned to the other corner. */}
+        <span className="hidden sm:inline">Ask about {companyName}</span>
+        <span className="sm:hidden">Ask</span>
       </button>
     );
   }
 
   return (
-    <div className="fixed bottom-6 right-6 w-96 z-50">
+    <div className="fixed z-50 inset-x-3 bottom-[calc(0.75rem+env(safe-area-inset-bottom))] sm:inset-x-auto sm:right-6 sm:bottom-6 sm:w-96">
       <Card variant="glass-card" className="shadow-2xl">
         <CardHeader className="flex flex-row items-center justify-between pb-3">
           <CardTitle className="text-lg flex items-center gap-2">
@@ -162,7 +165,7 @@ export default function CompanyChatbot({
           {/* Chat Messages */}
           <div
             ref={messagesContainerRef}
-            className="h-96 overflow-y-auto px-4 py-2 space-y-3"
+            className="h-[min(24rem,50dvh)] overflow-y-auto overscroll-contain px-4 py-2 space-y-3"
           >
             {messages.length === 0 && (
               <div className="text-center py-8">

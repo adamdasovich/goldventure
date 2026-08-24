@@ -16,7 +16,7 @@ import {
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/Card";
-import LogoMono from "@/components/LogoMono";
+import SiteHeader from "@/components/SiteHeader";
 import { LoginModal, RegisterModal } from "@/components/auth";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -38,7 +38,7 @@ export default function CreateEventPage() {
   const params = useParams();
   // params.id may be `{numericId}-{slug}` — strip to numeric for API lookups.
   const companyId = ((params.id as string) || "").split("-")[0];
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
   const [company, setCompany] = useState<Company | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -205,76 +205,11 @@ export default function CreateEventPage() {
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-900 to-slate-800">
       {/* Navigation */}
-      <nav className="glass-nav sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-24">
-            <div
-              className="flex items-center space-x-3 cursor-pointer"
-              onClick={() => router.push("/")}
-            >
-              <LogoMono className="h-18" />
-            </div>
-            <div className="flex items-center space-x-4">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => router.push("/")}
-              >
-                Dashboard
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => router.push("/companies")}
-              >
-                Companies
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => router.push("/metals")}
-              >
-                Metals
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => router.push("/financial-hub")}
-              >
-                Financial Hub
-              </Button>
-
-              {user ? (
-                <div className="flex items-center space-x-3">
-                  <span className="text-sm text-slate-300">
-                    Welcome, {user.full_name || user.username}
-                  </span>
-                  <Button variant="ghost" size="sm" onClick={logout}>
-                    Logout
-                  </Button>
-                </div>
-              ) : (
-                <>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setShowLogin(true)}
-                  >
-                    Login
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setShowRegister(true)}
-                  >
-                    Register
-                  </Button>
-                </>
-              )}
-            </div>
-          </div>
-        </div>
-      </nav>
+      <SiteHeader
+        active="/companies"
+        onLoginClick={() => setShowLogin(true)}
+        onRegisterClick={() => setShowRegister(true)}
+      />
 
       {/* Auth Modals */}
       {showLogin && (
@@ -308,7 +243,7 @@ export default function CreateEventPage() {
           </button>
 
           <div className="mb-8">
-            <h1 className="text-4xl font-bold text-white mb-2">
+            <h1 className="text-3xl sm:text-4xl font-bold text-white mb-2">
               Create Speaker Event
             </h1>
             <p className="text-slate-300">

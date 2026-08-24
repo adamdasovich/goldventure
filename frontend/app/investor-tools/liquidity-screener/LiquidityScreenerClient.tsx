@@ -254,6 +254,8 @@ export default function LiquidityScreenerClient() {
                 />
               ) : (
                 <div className="glass-card rounded-xl overflow-hidden">
+                  {/* These tables are wider than a phone; say so rather than leaving the overflow to be discovered. */}
+                  <p className="lg:hidden px-4 pt-3 text-xs text-slate-500">Swipe the table sideways to see all columns.</p>
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm min-w-[720px]">
                       <thead>

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import SiteNav from "@/components/SiteNav";
 
 const CANONICAL =
   "https://juniorminingintelligence.com/guides/how-to-read-ni-43-101-report";
@@ -208,6 +209,7 @@ const howToSchema = {
 export default function HowToReadNI43101Guide() {
   return (
     <>
+      <SiteNav />
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(articleSchema) }}

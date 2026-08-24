@@ -116,7 +116,7 @@ export default function ScrapingJobsPage() {
           </p>
         </div>
       ) : (
-        <div className="bg-slate-800/50 border border-slate-700 rounded-lg overflow-hidden">
+        <div className="bg-slate-800/50 border border-slate-700 rounded-lg overflow-x-auto">
           <table className="w-full">
             <thead>
               <tr className="border-b border-slate-700">

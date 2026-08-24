@@ -17,7 +17,7 @@ import {
   Percent,
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
-import LogoMono from "@/components/LogoMono";
+import SiteHeader from "@/components/SiteHeader";
 
 export default function PrivatePlacementsGuide() {
   const router = useRouter();
@@ -334,41 +334,7 @@ For junior mining companies, private placements are the primary method of raisin
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-900 via-slate-900 to-slate-800">
       {/* Navigation */}
-      <nav className="glass-nav sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-24">
-            <div
-              className="flex items-center space-x-3 cursor-pointer"
-              onClick={() => router.push("/")}
-            >
-              <LogoMono className="h-18" />
-            </div>
-            <div className="flex items-center space-x-4">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => router.push("/")}
-              >
-                Dashboard
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => router.push("/companies")}
-              >
-                Companies
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => router.push("/financial-hub")}
-              >
-                Financial Hub
-              </Button>
-            </div>
-          </div>
-        </div>
-      </nav>
+      <SiteHeader active="/financial-hub" />
 
       {/* Hero Section */}
       <section className="relative py-16 px-4 sm:px-6 lg:px-8 overflow-hidden">

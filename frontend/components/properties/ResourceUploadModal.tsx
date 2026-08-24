@@ -161,7 +161,7 @@ export function ResourceUploadModal({ listingId, accessToken, onClose, onUploadC
             <label className="block text-sm font-medium text-slate-300 mb-2">
               Resource Type <span className="text-red-400">*</span>
             </label>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               {RESOURCE_CATEGORIES.map((cat) => (
                 <button
                   key={cat.value}

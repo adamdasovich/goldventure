@@ -157,7 +157,7 @@ export default function CheckoutPage() {
                   placeholder="Apartment, suite, etc. (optional)"
                 />
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <Input
                     label="City"
                     value={shippingAddress.city}
@@ -172,7 +172,7 @@ export default function CheckoutPage() {
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <Input
                     label="Postal Code"
                     value={shippingAddress.postal_code}

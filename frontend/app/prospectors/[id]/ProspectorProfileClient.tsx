@@ -4,9 +4,8 @@ import { useState, useEffect, use } from "react";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
-import LogoMono from "@/components/LogoMono";
+import SiteHeader from "@/components/SiteHeader";
 import { LoginModal, RegisterModal } from "@/components/auth";
-import { useAuth } from "@/contexts/AuthContext";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -59,7 +58,6 @@ export default function ProspectorProfileClient({
   const resolvedParams = use(params);
   const [showLogin, setShowLogin] = useState(false);
   const [showRegister, setShowRegister] = useState(false);
-  const { user, logout } = useAuth();
 
   const [profile, setProfile] = useState<ProspectorProfile | null>(null);
   const [listings, setListings] = useState<PropertyListing[]>([]);
@@ -127,27 +125,11 @@ export default function ProspectorProfileClient({
     return (
       <div className="min-h-screen">
         {/* Navigation */}
-        <nav className="glass-nav sticky top-0 z-50">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="flex items-center justify-between h-24">
-              <div
-                className="flex items-center space-x-3 cursor-pointer"
-                onClick={() => (window.location.href = "/")}
-              >
-                <LogoMono className="h-16" />
-              </div>
-              <div className="flex items-center space-x-4">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => (window.location.href = "/properties")}
-                >
-                  Properties
-                </Button>
-              </div>
-            </div>
-          </div>
-        </nav>
+        <SiteHeader
+          active="/properties"
+          onLoginClick={() => setShowLogin(true)}
+          onRegisterClick={() => setShowRegister(true)}
+        />
 
         <div className="max-w-4xl mx-auto py-16 px-4 text-center">
           <h1 className="text-3xl font-bold text-white mb-4">
@@ -171,61 +153,11 @@ export default function ProspectorProfileClient({
   return (
     <div className="min-h-screen">
       {/* Navigation */}
-      <nav className="glass-nav sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-24">
-            <div
-              className="flex items-center space-x-3 cursor-pointer"
-              onClick={() => (window.location.href = "/")}
-            >
-              <LogoMono className="h-16" />
-            </div>
-            <div className="flex items-center space-x-4">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => (window.location.href = "/properties")}
-              >
-                Properties
-              </Button>
-              {user ? (
-                <>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => (window.location.href = "/properties/inbox")}
-                  >
-                    Inbox
-                  </Button>
-                  <span className="text-sm text-slate-300">
-                    Welcome, {user.full_name || user.username}
-                  </span>
-                  <Button variant="ghost" size="sm" onClick={logout}>
-                    Logout
-                  </Button>
-                </>
-              ) : (
-                <>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setShowLogin(true)}
-                  >
-                    Login
-                  </Button>
-                  <Button
-                    variant="primary"
-                    size="sm"
-                    onClick={() => setShowRegister(true)}
-                  >
-                    Register
-                  </Button>
-                </>
-              )}
-            </div>
-          </div>
-        </div>
-      </nav>
+      <SiteHeader
+        active="/properties"
+        onLoginClick={() => setShowLogin(true)}
+        onRegisterClick={() => setShowRegister(true)}
+      />
 
       {/* Auth Modals */}
       {showLogin && (

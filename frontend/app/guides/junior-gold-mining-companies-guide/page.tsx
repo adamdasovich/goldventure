@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import SiteNav from "@/components/SiteNav";
 
 export const metadata: Metadata = {
   title:
@@ -145,6 +146,7 @@ const howToSchema = {
 export default function JuniorGoldMiningCompaniesGuide() {
   return (
     <>
+      <SiteNav />
       {/* Schema markup */}
       <script
         type="application/ld+json"

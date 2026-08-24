@@ -161,7 +161,7 @@ export function PropertyCard({ listing }: PropertyCardProps) {
         </p>
 
         {/* Details Grid */}
-        <div className="grid grid-cols-2 gap-2 mb-4 text-sm">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-4 text-sm">
           <div className="flex items-center gap-1 text-slate-400">
             <svg
               className="w-4 h-4"

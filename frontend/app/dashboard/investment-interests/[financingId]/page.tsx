@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
-import LogoMono from '@/components/LogoMono';
+import SiteHeader from "@/components/SiteHeader";
 import { useAuth } from '@/contexts/AuthContext';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api';
@@ -181,21 +181,7 @@ export default function InvestmentInterestDetailPage() {
   return (
     <div className="min-h-screen bg-gradient-dark">
       {/* Navigation */}
-      <nav className="glass-nav sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-24">
-            <div className="flex items-center space-x-3 cursor-pointer" onClick={() => router.push('/')}>
-              <LogoMono className="h-18" />
-            </div>
-            <div className="flex items-center space-x-4">
-              <Badge variant="copper">Superuser</Badge>
-              <Button variant="ghost" size="sm" onClick={() => router.push('/dashboard')}>
-                Back to Dashboard
-              </Button>
-            </div>
-          </div>
-        </div>
-      </nav>
+      <SiteHeader />
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Page Header */}

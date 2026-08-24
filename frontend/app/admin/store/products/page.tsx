@@ -198,112 +198,114 @@ export default function ProductsListPage() {
             </Link>
           </div>
         ) : (
-          <table className="w-full">
-            <thead className="bg-slate-800/50">
-              <tr>
-                <th className="text-left px-4 py-3 text-sm font-medium text-slate-400">Product</th>
-                <th className="text-left px-4 py-3 text-sm font-medium text-slate-400">Category</th>
-                <th className="text-left px-4 py-3 text-sm font-medium text-slate-400">Price</th>
-                <th className="text-left px-4 py-3 text-sm font-medium text-slate-400">Inventory</th>
-                <th className="text-left px-4 py-3 text-sm font-medium text-slate-400">Status</th>
-                <th className="text-right px-4 py-3 text-sm font-medium text-slate-400">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-700">
-              {products.map((product) => (
-                <tr key={product.id} className="hover:bg-slate-800/30 transition-colors">
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-3">
-                      {/* Product Image */}
-                      <div className="w-12 h-12 bg-slate-800 rounded-lg overflow-hidden flex-shrink-0">
-                        {product.primary_image ? (
-                          <img
-                            src={product.primary_image}
-                            alt={product.name}
-                            className="w-full h-full object-cover"
-                          />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center">
-                            <svg className="w-6 h-6 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                            </svg>
-                          </div>
-                        )}
-                      </div>
-                      {/* Product Info */}
-                      <div>
-                        <p className="font-medium text-slate-100">{product.name}</p>
-                        <p className="text-sm text-slate-400">
-                          {product.product_type === 'digital' ? 'Digital' : 'Physical'}
-                          {product.sku && ` • ${product.sku}`}
-                        </p>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 text-slate-300">
-                    {product.category_name || '-'}
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className="text-slate-100 font-medium">
-                      ${(product.price_cents / 100).toFixed(2)}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3">
-                    {product.product_type === 'digital' ? (
-                      <span className="text-slate-400">Unlimited</span>
-                    ) : (
-                      <span className={product.inventory_count > 0 ? 'text-green-400' : 'text-red-400'}>
-                        {product.inventory_count}
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3">
-                    <button
-                      onClick={() => handleToggleActive(product)}
-                      className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
-                        product.is_active
-                          ? 'bg-green-500/20 text-green-400 hover:bg-green-500/30'
-                          : 'bg-slate-700 text-slate-400 hover:bg-slate-600'
-                      }`}
-                    >
-                      {product.is_active ? 'Active' : 'Inactive'}
-                    </button>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center justify-end gap-2">
-                      <Link
-                        href={`/admin/store/products/${product.id}`}
-                        className="p-2 text-slate-400 hover:text-gold-400 transition-colors"
-                        title="Edit"
-                      >
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                        </svg>
-                      </Link>
-                      <button
-                        onClick={() => handleDuplicate(product)}
-                        className="p-2 text-slate-400 hover:text-blue-400 transition-colors"
-                        title="Duplicate"
-                      >
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                        </svg>
-                      </button>
-                      <button
-                        onClick={() => handleDelete(product)}
-                        className="p-2 text-slate-400 hover:text-red-400 transition-colors"
-                        title="Delete"
-                      >
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                        </svg>
-                      </button>
-                    </div>
-                  </td>
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-slate-800/50">
+                <tr>
+                  <th className="text-left px-4 py-3 text-sm font-medium text-slate-400">Product</th>
+                  <th className="text-left px-4 py-3 text-sm font-medium text-slate-400">Category</th>
+                  <th className="text-left px-4 py-3 text-sm font-medium text-slate-400">Price</th>
+                  <th className="text-left px-4 py-3 text-sm font-medium text-slate-400">Inventory</th>
+                  <th className="text-left px-4 py-3 text-sm font-medium text-slate-400">Status</th>
+                  <th className="text-right px-4 py-3 text-sm font-medium text-slate-400">Actions</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-slate-700">
+                {products.map((product) => (
+                  <tr key={product.id} className="hover:bg-slate-800/30 transition-colors">
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-3">
+                        {/* Product Image */}
+                        <div className="w-12 h-12 bg-slate-800 rounded-lg overflow-hidden flex-shrink-0">
+                          {product.primary_image ? (
+                            <img
+                              src={product.primary_image}
+                              alt={product.name}
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center">
+                              <svg className="w-6 h-6 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                              </svg>
+                            </div>
+                          )}
+                        </div>
+                        {/* Product Info */}
+                        <div>
+                          <p className="font-medium text-slate-100">{product.name}</p>
+                          <p className="text-sm text-slate-400">
+                            {product.product_type === 'digital' ? 'Digital' : 'Physical'}
+                            {product.sku && ` • ${product.sku}`}
+                          </p>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-slate-300">
+                      {product.category_name || '-'}
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className="text-slate-100 font-medium">
+                        ${(product.price_cents / 100).toFixed(2)}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      {product.product_type === 'digital' ? (
+                        <span className="text-slate-400">Unlimited</span>
+                      ) : (
+                        <span className={product.inventory_count > 0 ? 'text-green-400' : 'text-red-400'}>
+                          {product.inventory_count}
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      <button
+                        onClick={() => handleToggleActive(product)}
+                        className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
+                          product.is_active
+                            ? 'bg-green-500/20 text-green-400 hover:bg-green-500/30'
+                            : 'bg-slate-700 text-slate-400 hover:bg-slate-600'
+                        }`}
+                      >
+                        {product.is_active ? 'Active' : 'Inactive'}
+                      </button>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center justify-end gap-2">
+                        <Link
+                          href={`/admin/store/products/${product.id}`}
+                          className="p-2 text-slate-400 hover:text-gold-400 transition-colors"
+                          title="Edit"
+                        >
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                          </svg>
+                        </Link>
+                        <button
+                          onClick={() => handleDuplicate(product)}
+                          className="p-2 text-slate-400 hover:text-blue-400 transition-colors"
+                          title="Duplicate"
+                        >
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                          </svg>
+                        </button>
+                        <button
+                          onClick={() => handleDelete(product)}
+                          className="p-2 text-slate-400 hover:text-red-400 transition-colors"
+                          title="Delete"
+                        >
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
     </div>

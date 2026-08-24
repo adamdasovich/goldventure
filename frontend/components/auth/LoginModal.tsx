@@ -1,9 +1,10 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
-import { useAuth } from '@/contexts/AuthContext';
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
-import { Button } from '@/components/ui/Button';
+import { useState } from "react";
+import { useAuth } from "@/contexts/AuthContext";
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/Card";
+import { Button } from "@/components/ui/Button";
+import { Modal } from "@/components/ui/Modal";
 
 interface LoginModalProps {
   onClose: () => void;
@@ -11,39 +12,50 @@ interface LoginModalProps {
 }
 
 export function LoginModal({ onClose, onSwitchToRegister }: LoginModalProps) {
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const { login } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
+    setError("");
     setLoading(true);
 
     try {
       await login(username, password);
       onClose();
     } catch (err: any) {
-      setError(err.message || 'Login failed');
+      setError(err.message || "Login failed");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <Card variant="glass-card" className="max-w-md w-full">
+    <Modal onClose={onClose} size="md" labelledBy="login-modal-title">
+      <Card variant="glass-card">
         <CardHeader>
           <div className="flex items-center justify-between">
-            <CardTitle>Login</CardTitle>
+            <CardTitle id="login-modal-title">Login</CardTitle>
             <button
               onClick={onClose}
-              className="text-slate-400 hover:text-white transition-colors"
+              aria-label="Close login"
+              className="-mr-2 p-2 text-slate-400 hover:text-white transition-colors"
             >
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              <svg
+                className="w-6 h-6"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M6 18L18 6M6 6l12 12"
+                />
               </svg>
             </button>
           </div>
@@ -57,7 +69,10 @@ export function LoginModal({ onClose, onSwitchToRegister }: LoginModalProps) {
             )}
 
             <div>
-              <label htmlFor="username" className="block text-sm font-medium text-slate-300 mb-2">
+              <label
+                htmlFor="username"
+                className="block text-sm font-medium text-slate-300 mb-2"
+              >
                 Username
               </label>
               <input
@@ -72,7 +87,10 @@ export function LoginModal({ onClose, onSwitchToRegister }: LoginModalProps) {
             </div>
 
             <div>
-              <label htmlFor="password" className="block text-sm font-medium text-slate-300 mb-2">
+              <label
+                htmlFor="password"
+                className="block text-sm font-medium text-slate-300 mb-2"
+              >
                 Password
               </label>
               <input
@@ -92,11 +110,11 @@ export function LoginModal({ onClose, onSwitchToRegister }: LoginModalProps) {
               className="w-full"
               disabled={loading}
             >
-              {loading ? 'Logging in...' : 'Login'}
+              {loading ? "Logging in..." : "Login"}
             </Button>
 
             <div className="text-center text-sm text-slate-400">
-              Don't have an account?{' '}
+              Don't have an account?{" "}
               <button
                 type="button"
                 onClick={onSwitchToRegister}
@@ -108,6 +126,6 @@ export function LoginModal({ onClose, onSwitchToRegister }: LoginModalProps) {
           </form>
         </CardContent>
       </Card>
-    </div>
+    </Modal>
   );
 }

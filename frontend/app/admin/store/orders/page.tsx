@@ -138,66 +138,68 @@ export default function OrdersPage() {
             <p className="text-slate-400">Orders will appear here once customers make purchases.</p>
           </div>
         ) : (
-          <table className="w-full">
-            <thead className="bg-slate-800/50">
-              <tr>
-                <th className="text-left px-4 py-3 text-sm font-medium text-slate-400">Order</th>
-                <th className="text-left px-4 py-3 text-sm font-medium text-slate-400">Customer</th>
-                <th className="text-left px-4 py-3 text-sm font-medium text-slate-400">Total</th>
-                <th className="text-left px-4 py-3 text-sm font-medium text-slate-400">Status</th>
-                <th className="text-left px-4 py-3 text-sm font-medium text-slate-400">Date</th>
-                <th className="text-right px-4 py-3 text-sm font-medium text-slate-400">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-700">
-              {orders.map((order) => (
-                <tr key={order.id} className="hover:bg-slate-800/30 transition-colors">
-                  <td className="px-4 py-3">
-                    <span className="font-medium text-slate-100">#{order.id}</span>
-                    <p className="text-sm text-slate-400">{order.items.length} item(s)</p>
-                  </td>
-                  <td className="px-4 py-3">
-                    <p className="text-slate-100">{order.customer_email}</p>
-                    {order.user_name && (
-                      <p className="text-sm text-slate-400">{order.user_name}</p>
-                    )}
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className="text-gold-400 font-medium">
-                      ${order.total_dollars.toFixed(2)}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className={`inline-flex px-2.5 py-1 rounded-full text-xs font-medium border ${getStatusColor(order.status)}`}>
-                      {ORDER_STATUSES.find(s => s.value === order.status)?.label || order.status}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-slate-400 text-sm">
-                    {new Date(order.created_at).toLocaleDateString('en-US', {
-                      month: 'short',
-                      day: 'numeric',
-                      year: 'numeric',
-                    })}
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    <button
-                      onClick={() => setSelectedOrder(order)}
-                      className="text-gold-400 hover:text-gold-300 text-sm font-medium"
-                    >
-                      View Details
-                    </button>
-                  </td>
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-slate-800/50">
+                <tr>
+                  <th className="text-left px-4 py-3 text-sm font-medium text-slate-400">Order</th>
+                  <th className="text-left px-4 py-3 text-sm font-medium text-slate-400">Customer</th>
+                  <th className="text-left px-4 py-3 text-sm font-medium text-slate-400">Total</th>
+                  <th className="text-left px-4 py-3 text-sm font-medium text-slate-400">Status</th>
+                  <th className="text-left px-4 py-3 text-sm font-medium text-slate-400">Date</th>
+                  <th className="text-right px-4 py-3 text-sm font-medium text-slate-400">Actions</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-slate-700">
+                {orders.map((order) => (
+                  <tr key={order.id} className="hover:bg-slate-800/30 transition-colors">
+                    <td className="px-4 py-3">
+                      <span className="font-medium text-slate-100">#{order.id}</span>
+                      <p className="text-sm text-slate-400">{order.items.length} item(s)</p>
+                    </td>
+                    <td className="px-4 py-3">
+                      <p className="text-slate-100">{order.customer_email}</p>
+                      {order.user_name && (
+                        <p className="text-sm text-slate-400">{order.user_name}</p>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className="text-gold-400 font-medium">
+                        ${order.total_dollars.toFixed(2)}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className={`inline-flex px-2.5 py-1 rounded-full text-xs font-medium border ${getStatusColor(order.status)}`}>
+                        {ORDER_STATUSES.find(s => s.value === order.status)?.label || order.status}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-slate-400 text-sm">
+                      {new Date(order.created_at).toLocaleDateString('en-US', {
+                        month: 'short',
+                        day: 'numeric',
+                        year: 'numeric',
+                      })}
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <button
+                        onClick={() => setSelectedOrder(order)}
+                        className="text-gold-400 hover:text-gold-300 text-sm font-medium"
+                      >
+                        View Details
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
 
       {/* Order Detail Modal */}
       {selectedOrder && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50">
-          <div className="glass rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+          <div className="glass rounded-xl max-w-2xl w-full max-h-[90dvh] overflow-y-auto">
             {/* Modal Header */}
             <div className="sticky top-0 bg-slate-800 px-6 py-4 border-b border-slate-700 flex items-center justify-between">
               <h2 className="text-xl font-bold text-slate-100">Order #{selectedOrder.id}</h2>

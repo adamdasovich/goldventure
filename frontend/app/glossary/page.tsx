@@ -9,7 +9,7 @@ import {
 } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
-import LogoMono from "@/components/LogoMono";
+import SiteHeader from "@/components/SiteHeader";
 import GlossarySubmissionForm from "@/components/GlossarySubmissionForm";
 
 interface GlossaryTerm {
@@ -641,60 +641,7 @@ export default function GlossaryPage() {
         />
 
         {/* Navigation */}
-        <nav className="glass-nav sticky top-0 z-50">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="flex items-center justify-between h-24">
-              <div className="flex items-center space-x-3">
-                <div
-                  className="cursor-pointer"
-                  onClick={() => (window.location.href = "/")}
-                >
-                  <LogoMono className="h-18" />
-                </div>
-              </div>
-              <div className="flex items-center space-x-4">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => (window.location.href = "/")}
-                >
-                  Home
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => (window.location.href = "/dashboard")}
-                >
-                  Dashboard
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => (window.location.href = "/companies")}
-                >
-                  Companies
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => (window.location.href = "/properties")}
-                >
-                  Properties
-                </Button>
-                <Button variant="primary" size="sm">
-                  Glossary
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => (window.location.href = "/metals")}
-                >
-                  Metals
-                </Button>
-              </div>
-            </div>
-          </div>
-        </nav>
+        <SiteHeader />
 
         {/* Header */}
         <div className="bg-gradient-to-b from-slate-800 to-slate-900 border-b border-slate-700">

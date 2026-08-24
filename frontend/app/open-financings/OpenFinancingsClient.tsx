@@ -1,14 +1,12 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Card, CardContent } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
-import LogoMono from "@/components/LogoMono";
+import SiteHeader from "@/components/SiteHeader";
 import { LoginModal, RegisterModal } from "@/components/auth";
-import { useAuth } from "@/contexts/AuthContext";
 import { companyHref } from "@/lib/companyUrl";
 
 interface OpenFinancing {
@@ -56,8 +54,6 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api";
 export default function OpenFinancingsClient({
   initialData,
 }: OpenFinancingsClientProps) {
-  const router = useRouter();
-  const { user, logout } = useAuth();
 
   const [data, setData] = useState<OpenFinancingsResponse | null>(
     initialData ?? null,
@@ -172,72 +168,10 @@ export default function OpenFinancingsClient({
 
   return (
     <div className="min-h-screen bg-slate-900">
-      <nav className="glass-nav sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <Link href="/" className="flex items-center space-x-3">
-              <LogoMono className="h-10" />
-            </Link>
-            <div className="flex items-center space-x-4">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => router.push("/")}
-              >
-                Home
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => router.push("/companies")}
-              >
-                Companies
-              </Button>
-              <Button
-                variant="primary"
-                size="sm"
-                onClick={() => router.push("/open-financings")}
-              >
-                Open Financings
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => router.push("/closed-financings")}
-              >
-                Closed Financings
-              </Button>
-              {user ? (
-                <div className="flex items-center space-x-3">
-                  <span className="text-sm text-slate-300">
-                    {user.full_name || user.username}
-                  </span>
-                  <Button variant="ghost" size="sm" onClick={logout}>
-                    Logout
-                  </Button>
-                </div>
-              ) : (
-                <>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setShowLogin(true)}
-                  >
-                    Login
-                  </Button>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => setShowRegister(true)}
-                  >
-                    Register
-                  </Button>
-                </>
-              )}
-            </div>
-          </div>
-        </div>
-      </nav>
+      <SiteHeader
+        onLoginClick={() => setShowLogin(true)}
+        onRegisterClick={() => setShowRegister(true)}
+      />
 
       {showLogin && (
         <LoginModal

@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/contexts/AuthContext";
@@ -81,6 +81,17 @@ export const metadata: Metadata = {
       en: "https://juniorminingintelligence.com",
     },
   },
+};
+
+// `viewportFit: "cover"` makes env(safe-area-inset-*) resolve to real values.
+// The manifest declares display: "standalone", so on a notched device there is
+// no browser chrome under the floating buttons — without this they sit in the
+// home-indicator strip.
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  themeColor: "#D4AF37",
 };
 
 // JSON-LD structured data for rich snippets
@@ -316,7 +327,6 @@ export default function RootLayout({
           href="/favicon-32x32.png"
         />
         <link rel="manifest" href="/manifest.json" />
-        <meta name="theme-color" content="#D4AF37" />
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{

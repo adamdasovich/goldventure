@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import SiteNav from "@/components/SiteNav";
 
 export const metadata: Metadata = {
   title: 'Critical Minerals Investment Guide 2026 | Lithium, Copper, Rare Earths | Junior Mining Intelligence',
@@ -72,6 +73,7 @@ const faqSchema = {
 export default function CriticalMineralsGuide() {
   return (
     <>
+      <SiteNav />
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(articleSchema) }}

@@ -403,7 +403,7 @@ export default function NewsFlagsPage() {
       {/* Dismiss Modal */}
       {showDismissModal && selectedFlag && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-          <div className="bg-slate-800 rounded-lg p-6 max-w-md w-full">
+          <div className="bg-slate-800 rounded-lg p-6 max-w-md w-full max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain">
             <h2 className="text-xl font-bold text-slate-100 mb-4">
               Dismiss Flag
             </h2>
@@ -450,7 +450,7 @@ export default function NewsFlagsPage() {
       {/* Close Financing Modal */}
       {showCloseFinancingModal && selectedFlag && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-          <div className="bg-slate-800 rounded-lg p-6 max-w-md w-full">
+          <div className="bg-slate-800 rounded-lg p-6 max-w-md w-full max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain">
             <h2 className="text-xl font-bold text-slate-100 mb-4">
               Close Financing
             </h2>

@@ -166,7 +166,7 @@ export default function DRSDocumentDetail() {
 
           <div className="flex items-start justify-between">
             <div>
-              <h1 className="text-4xl font-bold text-slate-900 dark:text-white mb-2">
+              <h1 className="text-3xl sm:text-4xl font-bold text-slate-900 dark:text-white mb-2">
                 {getDocumentTypeLabel(document.document_type)}
               </h1>
               <p className="text-lg text-slate-600 dark:text-slate-300">

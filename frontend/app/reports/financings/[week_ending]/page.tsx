@@ -282,39 +282,41 @@ export default async function FinancingRoundupPage({ params }: Props) {
                   <h2 className="mb-3 text-xl font-bold text-slate-900">
                     By commodity
                   </h2>
-                  <table className="w-full border border-slate-200 text-sm">
-                    <thead className="bg-slate-50 text-left text-slate-600">
-                      <tr>
-                        <th className="border-b border-slate-200 px-3 py-2">
-                          Commodity
-                        </th>
-                        <th className="border-b border-slate-200 px-3 py-2">
-                          Deals
-                        </th>
-                        <th className="border-b border-slate-200 px-3 py-2 text-right">
-                          Raised
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {week.by_commodity
-                        .slice()
-                        .sort((a, b) => b.amount_usd - a.amount_usd)
-                        .map((row) => (
-                          <tr key={row.commodity}>
-                            <td className="border-b border-slate-100 px-3 py-2 text-slate-800">
-                              {titleCase(row.commodity)}
-                            </td>
-                            <td className="border-b border-slate-100 px-3 py-2 text-slate-600">
-                              {row.count}
-                            </td>
-                            <td className="border-b border-slate-100 px-3 py-2 text-right text-slate-800">
-                              {formatUSD(row.amount_usd)}
-                            </td>
-                          </tr>
-                        ))}
-                    </tbody>
-                  </table>
+                  <div className="overflow-x-auto">
+                    <table className="w-full border border-slate-200 text-sm">
+                      <thead className="bg-slate-50 text-left text-slate-600">
+                        <tr>
+                          <th className="border-b border-slate-200 px-3 py-2">
+                            Commodity
+                          </th>
+                          <th className="border-b border-slate-200 px-3 py-2">
+                            Deals
+                          </th>
+                          <th className="border-b border-slate-200 px-3 py-2 text-right">
+                            Raised
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {week.by_commodity
+                          .slice()
+                          .sort((a, b) => b.amount_usd - a.amount_usd)
+                          .map((row) => (
+                            <tr key={row.commodity}>
+                              <td className="border-b border-slate-100 px-3 py-2 text-slate-800">
+                                {titleCase(row.commodity)}
+                              </td>
+                              <td className="border-b border-slate-100 px-3 py-2 text-slate-600">
+                                {row.count}
+                              </td>
+                              <td className="border-b border-slate-100 px-3 py-2 text-right text-slate-800">
+                                {formatUSD(row.amount_usd)}
+                              </td>
+                            </tr>
+                          ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </section>
               )}
 
@@ -323,39 +325,41 @@ export default async function FinancingRoundupPage({ params }: Props) {
                   <h2 className="mb-3 text-xl font-bold text-slate-900">
                     By financing type
                   </h2>
-                  <table className="w-full border border-slate-200 text-sm">
-                    <thead className="bg-slate-50 text-left text-slate-600">
-                      <tr>
-                        <th className="border-b border-slate-200 px-3 py-2">
-                          Type
-                        </th>
-                        <th className="border-b border-slate-200 px-3 py-2">
-                          Deals
-                        </th>
-                        <th className="border-b border-slate-200 px-3 py-2 text-right">
-                          Raised
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {week.by_type
-                        .slice()
-                        .sort((a, b) => b.amount_usd - a.amount_usd)
-                        .map((row) => (
-                          <tr key={row.type}>
-                            <td className="border-b border-slate-100 px-3 py-2 text-slate-800">
-                              {titleCase(row.type)}
-                            </td>
-                            <td className="border-b border-slate-100 px-3 py-2 text-slate-600">
-                              {row.count}
-                            </td>
-                            <td className="border-b border-slate-100 px-3 py-2 text-right text-slate-800">
-                              {formatUSD(row.amount_usd)}
-                            </td>
-                          </tr>
-                        ))}
-                    </tbody>
-                  </table>
+                  <div className="overflow-x-auto">
+                    <table className="w-full border border-slate-200 text-sm">
+                      <thead className="bg-slate-50 text-left text-slate-600">
+                        <tr>
+                          <th className="border-b border-slate-200 px-3 py-2">
+                            Type
+                          </th>
+                          <th className="border-b border-slate-200 px-3 py-2">
+                            Deals
+                          </th>
+                          <th className="border-b border-slate-200 px-3 py-2 text-right">
+                            Raised
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {week.by_type
+                          .slice()
+                          .sort((a, b) => b.amount_usd - a.amount_usd)
+                          .map((row) => (
+                            <tr key={row.type}>
+                              <td className="border-b border-slate-100 px-3 py-2 text-slate-800">
+                                {titleCase(row.type)}
+                              </td>
+                              <td className="border-b border-slate-100 px-3 py-2 text-slate-600">
+                                {row.count}
+                              </td>
+                              <td className="border-b border-slate-100 px-3 py-2 text-right text-slate-800">
+                                {formatUSD(row.amount_usd)}
+                              </td>
+                            </tr>
+                          ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </section>
               )}
             </div>

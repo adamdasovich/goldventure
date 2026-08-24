@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
@@ -45,6 +45,7 @@ export default function AdminLayoutClient({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
+  const [navOpen, setNavOpen] = useState(false);
   const router = useRouter();
   const { user, isAuthenticated, isLoading } = useAuth();
 
@@ -65,6 +66,11 @@ export default function AdminLayoutClient({
       router.push("/");
     }
   }, [isLoading, isAuthenticated, user, router]);
+
+  // The drawer is display-toggled, not unmounted, so close it on navigation.
+  useEffect(() => {
+    setNavOpen(false);
+  }, [pathname]);
 
   if (isLoading) {
     return (
@@ -90,9 +96,24 @@ export default function AdminLayoutClient({
   }
 
   return (
-    <div className="min-h-screen bg-slate-900 flex">
-      {/* Sidebar */}
-      <aside className="w-64 bg-slate-800/50 border-r border-slate-700 flex flex-col">
+    <div className="min-h-screen bg-slate-900 lg:flex">
+      {/* Scrim — only below lg, where the sidebar is a drawer */}
+      {navOpen && (
+        <div
+          onClick={() => setNavOpen(false)}
+          className="fixed inset-0 bg-black/60 z-30 lg:hidden"
+          aria-hidden="true"
+        />
+      )}
+
+      {/* Sidebar. Fixed w-64 left only 119px of a 375px screen for the
+          admin tables, so below lg it slides in over the content instead. */}
+      <aside
+        id="admin-nav"
+        className={`fixed inset-y-0 left-0 z-40 w-64 bg-slate-800 border-r border-slate-700 flex flex-col transition-transform duration-200 motion-reduce:transition-none lg:static lg:translate-x-0 lg:bg-slate-800/50 ${
+          navOpen ? "translate-x-0" : "-translate-x-full"
+        }`}
+      >
         {/* Logo */}
         <div className="p-4 border-b border-slate-700">
           <Link href="/" className="flex items-center">
@@ -165,11 +186,33 @@ export default function AdminLayoutClient({
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 overflow-auto">
+      <main className="flex-1 min-w-0 overflow-auto">
         {/* Top Bar */}
-        <header className="bg-slate-800/30 border-b border-slate-700 px-6 py-4">
-          <div className="flex items-center justify-between">
-            <h1 className="text-lg font-semibold text-slate-100">
+        <header className="bg-slate-800/30 border-b border-slate-700 px-3 sm:px-6 py-3 sm:py-4">
+          <div className="flex items-center justify-between gap-3">
+            <button
+              onClick={() => setNavOpen((o) => !o)}
+              aria-label={navOpen ? "Close admin menu" : "Open admin menu"}
+              aria-expanded={navOpen}
+              aria-controls="admin-nav"
+              className="lg:hidden -ml-2 p-3 rounded-lg text-slate-300 hover:text-gold-400 hover:bg-slate-700/50"
+            >
+              <svg
+                className="w-6 h-6"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+                aria-hidden="true"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M4 6h16M4 12h16M4 18h16"
+                />
+              </svg>
+            </button>
+            <h1 className="text-lg font-semibold text-slate-100 flex-1 min-w-0 truncate">
               Store Management
             </h1>
             <div className="flex items-center gap-4">
@@ -186,7 +229,7 @@ export default function AdminLayoutClient({
         </header>
 
         {/* Page Content */}
-        <div className="p-6">{children}</div>
+        <div className="p-3 sm:p-6">{children}</div>
       </main>
     </div>
   );

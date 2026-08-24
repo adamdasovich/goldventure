@@ -17,7 +17,7 @@ export default function IdleWarningModal() {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-      <div className="bg-zinc-900 border border-zinc-700 rounded-lg shadow-xl max-w-md w-full mx-4 p-6">
+      <div className="bg-zinc-900 border border-zinc-700 rounded-lg shadow-xl max-w-md w-full mx-4 p-6 max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain">
         {/* Warning Icon */}
         <div className="flex justify-center mb-4">
           <div className="w-16 h-16 bg-yellow-500/10 rounded-full flex items-center justify-center">

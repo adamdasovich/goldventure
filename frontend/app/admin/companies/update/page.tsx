@@ -235,7 +235,7 @@ export default function UpdateCompanyPage() {
         <div className="space-y-6">
           <div className="bg-slate-800/50 border border-slate-700 rounded-lg p-6">
             <h3 className="text-lg font-semibold text-slate-100 mb-4">Selected Company</h3>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="text-xs text-slate-500 uppercase tracking-wider">Name</label>
                 <p className="text-slate-200">{selectedCompany.name}</p>

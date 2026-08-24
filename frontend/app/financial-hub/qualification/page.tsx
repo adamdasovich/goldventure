@@ -12,6 +12,7 @@ import {
   Building2,
   Shield
 } from 'lucide-react';
+import SiteHeader from "@/components/SiteHeader";
 
 interface QualificationData {
   investor_type: string;
@@ -138,6 +139,7 @@ export default function QualificationPage() {
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
+        <SiteHeader />
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gold-400 mx-auto mb-4"></div>
           <p className="text-slate-300">Loading...</p>

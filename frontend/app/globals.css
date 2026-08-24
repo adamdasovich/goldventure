@@ -110,7 +110,16 @@
    BASE STYLES
    ============================================================================ */
 
+html {
+  overflow-x: hidden;
+}
+
 body {
+  /* `clip`, not `hidden`: `overflow: hidden` on body makes it a scroll
+     container, which silently kills the `sticky top-0` header on every page.
+     This is a guard rail against a future overflowing child, not a fix —
+     anything that actually overruns still needs fixing at the source. */
+  overflow-x: clip;
   background: var(--slate-900);
   color: var(--slate-100);
   font-family:
@@ -118,6 +127,18 @@ body {
     "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+/* Safari on iOS auto-zooms the page when a focused control computes below
+   16px, and the zoom persists after blur. `text-sm` (14px) is used on ~51
+   controls, so lift the floor for touch widths only — the desktop filter
+   panels keep their current density. */
+@media (max-width: 767px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
 }
 
 /* ============================================================================
@@ -688,7 +709,9 @@ body {
   position: absolute;
   top: 0;
   bottom: 0;
-  width: 40px;
+  /* Two fixed 40px masks ate 21% of a 375px screen. Scale with the viewport
+     so the fade stays decorative instead of hiding the prices. */
+  width: clamp(12px, 6vw, 40px);
   z-index: 1;
   pointer-events: none;
 }

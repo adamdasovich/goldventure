@@ -12,7 +12,7 @@ export default function GlobalError({
   return (
     <div className="min-h-screen flex items-center justify-center px-4">
       <div className="text-center">
-        <h1 className="text-4xl font-bold text-gold-400 mb-4">
+        <h1 className="text-3xl sm:text-4xl font-bold text-gold-400 mb-4">
           Something went wrong
         </h1>
         <p className="text-slate-400 mb-8 max-w-md mx-auto">

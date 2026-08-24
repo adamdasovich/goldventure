@@ -1,6 +1,7 @@
 import { Metadata } from 'next';
 import Link from 'next/link';
 import { OrganizationSchema } from '@/components/StructuredData';
+import SiteNav from "@/components/SiteNav";
 
 export const metadata: Metadata = {
   title: 'About Us - Junior Mining Intelligence Platform',
@@ -74,6 +75,7 @@ const aboutPageSchema = {
 export default function AboutPage() {
   return (
     <>
+      <SiteNav />
       {/* Structured Data */}
       <script
         type="application/ld+json"

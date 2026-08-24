@@ -11,7 +11,7 @@ import {
 import { Button } from "@/components/ui/Button";
 import { metalsAPI, type MetalPrice } from "@/lib/api";
 import MetalChart from "@/components/MetalChart";
-import LogoMono from "@/components/LogoMono";
+import SiteHeader from "@/components/SiteHeader";
 
 interface MetalsClientProps {
   initialMetals?: MetalPrice[];
@@ -157,53 +157,7 @@ export default function MetalsClient({
   return (
     <div className="min-h-screen">
       {/* Navigation */}
-      <nav className="glass-nav sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-24">
-            <div className="flex items-center space-x-3">
-              <div
-                className="cursor-pointer"
-                onClick={() => (window.location.href = "/")}
-              >
-                <LogoMono className="h-18" />
-              </div>
-            </div>
-            <div className="flex items-center space-x-4">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => (window.location.href = "/")}
-              >
-                Home
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => (window.location.href = "/")}
-              >
-                Dashboard
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => (window.location.href = "/")}
-              >
-                Companies
-              </Button>
-              <Button
-                variant="primary"
-                size="sm"
-                onClick={() => (window.location.href = "/")}
-              >
-                Metals
-              </Button>
-              <Button variant="ghost" size="sm">
-                Sign In
-              </Button>
-            </div>
-          </div>
-        </div>
-      </nav>
+      <SiteHeader active="/metals" />
 
       {/* Page header — server-rendered H1 + intro for SEO */}
       <header className="pt-14 pb-4 px-4 sm:px-6 lg:px-8">
@@ -286,7 +240,7 @@ export default function MetalsClient({
       <section id="historical-data" className="py-16 px-4 sm:px-6 lg:px-8">
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-12">
-            <h2 className="text-4xl font-bold text-gold-400 mb-4">
+            <h2 className="text-3xl sm:text-4xl font-bold text-gold-400 mb-4">
               Historical Data
             </h2>
             <p className="text-slate-300 text-lg mb-8">

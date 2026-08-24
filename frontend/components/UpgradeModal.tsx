@@ -24,7 +24,7 @@ export default function UpgradeModal({
 
       {/* Modal */}
       <div
-        className="relative glass-strong rounded-2xl max-w-md w-full p-6 animate-slide-in-up"
+        className="relative glass-strong rounded-2xl max-w-md w-full p-6 animate-slide-in-up max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Close button */}

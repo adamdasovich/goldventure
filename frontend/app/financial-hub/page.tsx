@@ -13,11 +13,9 @@ import {
   ArrowRight,
   ClipboardList
 } from 'lucide-react';
-import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
-import LogoMono from '@/components/LogoMono';
+import SiteHeader from "@/components/SiteHeader";
 import { LoginModal, RegisterModal } from '@/components/auth';
-import { useAuth } from '@/contexts/AuthContext';
 
 interface QualificationStatus {
   status: string;
@@ -31,7 +29,6 @@ export default function FinancialHub() {
   const [loading, setLoading] = useState(true);
   const [showLogin, setShowLogin] = useState(false);
   const [showRegister, setShowRegister] = useState(false);
-  const { user, logout } = useAuth();
 
   useEffect(() => {
     fetchQualificationStatus();
@@ -118,41 +115,11 @@ export default function FinancialHub() {
   return (
     <div className="min-h-screen">
       {/* Navigation */}
-      <nav className="glass-nav sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-24">
-            <div className="flex items-center space-x-3 cursor-pointer" onClick={() => router.push('/')}>
-              <LogoMono className="h-18" />
-            </div>
-            <div className="flex items-center space-x-4">
-              <Button variant="ghost" size="sm" onClick={() => router.push('/')}>Dashboard</Button>
-              <Button variant="ghost" size="sm" onClick={() => router.push('/companies')}>Companies</Button>
-              <Button variant="ghost" size="sm" onClick={() => router.push('/metals')}>Metals</Button>
-              <Button variant="ghost" size="sm" onClick={() => router.push('/financial-hub')}>Financial Hub</Button>
-
-              {user ? (
-                <div className="flex items-center space-x-3">
-                  <span className="text-sm text-slate-300">
-                    Welcome, {user.full_name || user.username}
-                  </span>
-                  <Button variant="ghost" size="sm" onClick={logout}>
-                    Logout
-                  </Button>
-                </div>
-              ) : (
-                <>
-                  <Button variant="ghost" size="sm" onClick={() => setShowLogin(true)}>
-                    Login
-                  </Button>
-                  <Button variant="primary" size="sm" onClick={() => setShowRegister(true)}>
-                    Register
-                  </Button>
-                </>
-              )}
-            </div>
-          </div>
-        </div>
-      </nav>
+      <SiteHeader
+        active="/financial-hub"
+        onLoginClick={() => setShowLogin(true)}
+        onRegisterClick={() => setShowRegister(true)}
+      />
 
       {/* Auth Modals */}
       {showLogin && (

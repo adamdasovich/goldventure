@@ -80,7 +80,7 @@ export function ProductGallery({ images, productName }: ProductGalleryProps) {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
-          <div className="relative w-full h-full max-w-4xl max-h-[90vh] flex items-center justify-center">
+          <div className="relative w-full h-full max-w-4xl max-h-[90dvh] flex items-center justify-center">
             <img
               src={currentImage.image_url}
               alt={currentImage.alt_text || productName}

@@ -131,7 +131,7 @@ export default function GlossarySubmissionForm({ isOpen, onClose, onSubmitSucces
 
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <Card variant="glass-card" className="w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+      <Card variant="glass-card" className="w-full max-w-2xl max-h-[90dvh] overflow-y-auto">
         <CardHeader>
           <div className="flex items-start justify-between mb-4">
             <div>

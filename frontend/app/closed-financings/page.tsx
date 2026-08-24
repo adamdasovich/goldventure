@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   Card,
@@ -12,7 +11,7 @@ import {
 } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
-import LogoMono from "@/components/LogoMono";
+import SiteHeader from "@/components/SiteHeader";
 import { LoginModal, RegisterModal } from "@/components/auth";
 import { useAuth } from "@/contexts/AuthContext";
 import { companyHref } from "@/lib/companyUrl";
@@ -51,8 +50,7 @@ interface ClosedFinancing {
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api";
 
 export default function ClosedFinancingsPage() {
-  const router = useRouter();
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
 
   const [financings, setFinancings] = useState<ClosedFinancing[]>([]);
   const [loading, setLoading] = useState(true);
@@ -342,65 +340,10 @@ export default function ClosedFinancingsPage() {
   return (
     <div className="min-h-screen bg-slate-900">
       {/* Navigation */}
-      <nav className="glass-nav sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <Link href="/" className="flex items-center space-x-3">
-              <LogoMono className="h-10" />
-            </Link>
-            <div className="flex items-center space-x-4">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => router.push("/")}
-              >
-                Home
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => router.push("/companies")}
-              >
-                Companies
-              </Button>
-              <Button
-                variant="primary"
-                size="sm"
-                onClick={() => router.push("/closed-financings")}
-              >
-                Closed Financings
-              </Button>
-              {user ? (
-                <div className="flex items-center space-x-3">
-                  <span className="text-sm text-slate-300">
-                    {user.full_name || user.username}
-                  </span>
-                  <Button variant="ghost" size="sm" onClick={logout}>
-                    Logout
-                  </Button>
-                </div>
-              ) : (
-                <>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setShowLogin(true)}
-                  >
-                    Login
-                  </Button>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => setShowRegister(true)}
-                  >
-                    Register
-                  </Button>
-                </>
-              )}
-            </div>
-          </div>
-        </div>
-      </nav>
+      <SiteHeader
+        onLoginClick={() => setShowLogin(true)}
+        onRegisterClick={() => setShowRegister(true)}
+      />
 
       {/* Auth Modals */}
       {showLogin && (
@@ -781,7 +724,7 @@ export default function ClosedFinancingsPage() {
       {/* Add/Edit Financing Modal */}
       {showAddModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 overflow-y-auto">
-          <div className="bg-slate-800 rounded-lg p-6 max-w-2xl w-full my-8 max-h-[90vh] overflow-y-auto">
+          <div className="bg-slate-800 rounded-lg p-6 max-w-2xl w-full my-8 max-h-[90dvh] overflow-y-auto">
             <h2 className="text-xl font-bold text-slate-100 mb-4">
               {editingFinancing ? "Edit Financing" : "Add Past Financing"}
             </h2>

@@ -8,48 +8,11 @@ import NewsArticles from "@/components/NewsArticles";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import LogoMono from "@/components/LogoMono";
+import SiteHeader, { PRIMARY_NAV, TOOLS_MENU } from "@/components/SiteHeader";
 import HeroCards from "@/components/HeroCards";
 import { LoginModal, RegisterModal } from "@/components/auth";
 import { useAuth } from "@/contexts/AuthContext";
-import { CartButton } from "@/components/store";
 import MetalsTicker from "@/components/MetalsTicker";
-
-/* ─── Navigation ───
-   Top-level nav is kept to four items. Secondary destinations live in the
-   "Tools" dropdown so a first-time visitor isn't faced with 11 choices. */
-const PRIMARY_NAV = [
-  { href: "/companies", label: "Companies" },
-  { href: "/properties", label: "Prospector's Exchange" },
-  { href: "/guides", label: "Guides" },
-];
-
-const TOOLS_MENU = [
-  {
-    href: "/investor-tools",
-    label: "Investor Tools",
-    desc: "10 screeners & analyzers",
-  },
-  {
-    href: "/metals",
-    label: "Metals Prices",
-    desc: "Live gold, silver & more",
-  },
-  {
-    href: "/closed-financings",
-    label: "Financing Tracker",
-    desc: "Private placements & deals",
-  },
-  {
-    href: "/financial-hub",
-    label: "Financial Hub",
-    desc: "Invest in private deals",
-  },
-  {
-    href: "/store",
-    label: "Store",
-    desc: "Reports & field gear",
-  },
-];
 
 /* ─── Feature cards ───
    `badge: "Live"` marks the real-time, WebSocket-powered features so they
@@ -130,13 +93,10 @@ interface HomeClientProps {
 export default function HomeClient({ initialArticles }: HomeClientProps) {
   const [showLogin, setShowLogin] = useState(false);
   const [showRegister, setShowRegister] = useState(false);
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [toolsOpen, setToolsOpen] = useState(false);
   const [isVibrating, setIsVibrating] = useState(false);
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
   const newsSectionRef = useRef<HTMLElement>(null);
   const chatSectionRef = useRef<HTMLElement>(null);
-  const toolsRef = useRef<HTMLDivElement>(null);
 
   // Platform stats
   const [stats, setStats] = useState({
@@ -188,290 +148,13 @@ export default function HomeClient({ initialArticles }: HomeClientProps) {
     newsSectionRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
-  // Close mobile menu on resize
-  useEffect(() => {
-    const handleResize = () => {
-      if (window.innerWidth >= 1024) setMobileMenuOpen(false);
-    };
-    window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
-  }, []);
-
-  // Lock body scroll when mobile menu is open
-  useEffect(() => {
-    document.body.style.overflow = mobileMenuOpen ? "hidden" : "";
-    return () => {
-      document.body.style.overflow = "";
-    };
-  }, [mobileMenuOpen]);
-
-  // Close the Tools dropdown when clicking outside it
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (toolsRef.current && !toolsRef.current.contains(e.target as Node)) {
-        setToolsOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, []);
-
   return (
     <div className="min-h-screen">
       {/* ════════ Navigation ════════ */}
-      <nav
-        className="glass-nav sticky top-0 z-50"
-        role="navigation"
-        aria-label="Main navigation"
-      >
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-20 lg:h-24">
-            <Link
-              href="/"
-              className="flex items-center space-x-3 flex-shrink-0"
-            >
-              <LogoMono className="h-12 lg:h-16" />
-            </Link>
-
-            {/* Desktop Nav */}
-            <div className="hidden lg:flex items-center space-x-1">
-              {PRIMARY_NAV.map((link) => (
-                <Link key={link.href} href={link.href}>
-                  <Button variant="ghost" size="sm">
-                    {link.label}
-                  </Button>
-                </Link>
-              ))}
-
-              {/* Tools dropdown */}
-              <div className="relative" ref={toolsRef}>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setToolsOpen((o) => !o)}
-                  aria-expanded={toolsOpen ? "true" : "false"}
-                  aria-haspopup="true"
-                >
-                  Tools
-                  <svg
-                    className={`w-4 h-4 ml-1 transition-transform ${
-                      toolsOpen ? "rotate-180" : ""
-                    }`}
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                    aria-hidden="true"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M19 9l-7 7-7-7"
-                    />
-                  </svg>
-                </Button>
-                {toolsOpen && (
-                  <div className="absolute left-0 mt-2 w-64 bg-slate-800/95 border border-slate-700/50 rounded-xl shadow-2xl backdrop-blur-sm overflow-hidden">
-                    {TOOLS_MENU.map((item) => (
-                      <Link
-                        key={item.href}
-                        href={item.href}
-                        onClick={() => setToolsOpen(false)}
-                        className="block px-4 py-3 hover:bg-gold-500/10 transition-colors"
-                      >
-                        <p className="text-sm font-medium text-slate-200">
-                          {item.label}
-                        </p>
-                        <p className="text-xs text-slate-400">{item.desc}</p>
-                      </Link>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              <Link href="/pricing">
-                <Button variant="ghost" size="sm">
-                  Pricing
-                </Button>
-              </Link>
-
-              {user && (
-                <Link href="/dashboard">
-                  <Button variant="ghost" size="sm">
-                    Dashboard
-                  </Button>
-                </Link>
-              )}
-
-              <CartButton />
-
-              {user ? (
-                <div className="flex items-center space-x-3 ml-3 pl-3 border-l border-slate-700">
-                  <span className="text-sm text-slate-300">
-                    {user.full_name || user.username}
-                  </span>
-                  <Button variant="ghost" size="sm" onClick={logout}>
-                    Logout
-                  </Button>
-                </div>
-              ) : (
-                <div className="flex items-center space-x-2 ml-3 pl-3 border-l border-slate-700">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setShowLogin(true)}
-                  >
-                    Login
-                  </Button>
-                  <Button
-                    variant="primary"
-                    size="sm"
-                    onClick={() => setShowRegister(true)}
-                  >
-                    Register
-                  </Button>
-                </div>
-              )}
-            </div>
-
-            {/* Mobile: cart + hamburger */}
-            <div className="flex items-center space-x-2 lg:hidden">
-              <CartButton />
-              <button
-                onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-                className="p-2 rounded-lg text-slate-300 hover:text-gold-400 hover:bg-slate-800/50 transition-colors"
-                aria-label={mobileMenuOpen ? "Close menu" : "Open menu"}
-                aria-expanded={mobileMenuOpen}
-              >
-                {mobileMenuOpen ? (
-                  <svg
-                    className="w-6 h-6"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                    aria-hidden="true"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M6 18L18 6M6 6l12 12"
-                    />
-                  </svg>
-                ) : (
-                  <svg
-                    className="w-6 h-6"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                    aria-hidden="true"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M4 6h16M4 12h16M4 18h16"
-                    />
-                  </svg>
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Mobile Menu */}
-        {mobileMenuOpen && (
-          <div className="lg:hidden mobile-nav-overlay border-t border-slate-700/50 animate-slide-in-up">
-            <div className="px-4 py-4 space-y-1">
-              {PRIMARY_NAV.map((link) => (
-                <Link
-                  key={link.href}
-                  href={link.href}
-                  onClick={() => setMobileMenuOpen(false)}
-                  className="block px-4 py-3 rounded-lg text-slate-300 hover:text-gold-400 hover:bg-slate-800/50 transition-colors"
-                >
-                  {link.label}
-                </Link>
-              ))}
-
-              <p className="px-4 pt-3 pb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Tools
-              </p>
-              {TOOLS_MENU.map((item) => (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  onClick={() => setMobileMenuOpen(false)}
-                  className="block px-4 py-3 rounded-lg text-slate-300 hover:text-gold-400 hover:bg-slate-800/50 transition-colors"
-                >
-                  {item.label}
-                </Link>
-              ))}
-
-              <Link
-                href="/pricing"
-                onClick={() => setMobileMenuOpen(false)}
-                className="block px-4 py-3 mt-1 rounded-lg text-gold-400 hover:bg-slate-800/50 transition-colors"
-              >
-                Pricing
-              </Link>
-              {user && (
-                <Link
-                  href="/dashboard"
-                  onClick={() => setMobileMenuOpen(false)}
-                  className="block px-4 py-3 rounded-lg text-slate-300 hover:text-gold-400 hover:bg-slate-800/50 transition-colors"
-                >
-                  Dashboard
-                </Link>
-              )}
-
-              <div className="pt-3 mt-3 border-t border-slate-700/50 space-y-2">
-                {user ? (
-                  <>
-                    <p className="px-4 text-sm text-slate-400">
-                      Welcome, {user.full_name || user.username}
-                    </p>
-                    <button
-                      onClick={() => {
-                        logout();
-                        setMobileMenuOpen(false);
-                      }}
-                      className="block w-full text-left px-4 py-3 rounded-lg text-slate-300 hover:text-gold-400 hover:bg-slate-800/50 transition-colors"
-                    >
-                      Logout
-                    </button>
-                  </>
-                ) : (
-                  <div className="flex gap-2 px-4">
-                    <Button
-                      variant="ghost"
-                      size="md"
-                      className="flex-1"
-                      onClick={() => {
-                        setShowLogin(true);
-                        setMobileMenuOpen(false);
-                      }}
-                    >
-                      Login
-                    </Button>
-                    <Button
-                      variant="primary"
-                      size="md"
-                      className="flex-1"
-                      onClick={() => {
-                        setShowRegister(true);
-                        setMobileMenuOpen(false);
-                      }}
-                    >
-                      Register
-                    </Button>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
-      </nav>
+      <SiteHeader
+        onLoginClick={() => setShowLogin(true)}
+        onRegisterClick={() => setShowRegister(true)}
+      />
 
       {/* Auth Modals */}
       {showLogin && (

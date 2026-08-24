@@ -12,7 +12,7 @@ import {
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { companyAPI, type Company } from "@/lib/api";
-import LogoMono from "@/components/LogoMono";
+import SiteHeader from "@/components/SiteHeader";
 import { useAuth } from "@/contexts/AuthContext";
 import { companyHref } from "@/lib/companyUrl";
 
@@ -183,49 +183,7 @@ export default function CompaniesClient({
   return (
     <div className="min-h-screen">
       {/* Navigation */}
-      <nav className="glass-nav sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-24">
-            <div className="flex items-center space-x-3">
-              <div
-                className="cursor-pointer"
-                onClick={() => (window.location.href = "/")}
-              >
-                <LogoMono className="h-18" />
-              </div>
-            </div>
-            <div className="flex items-center space-x-4">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => (window.location.href = "/")}
-              >
-                Home
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => (window.location.href = "/")}
-              >
-                Dashboard
-              </Button>
-              <Button variant="primary" size="sm">
-                Companies
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => (window.location.href = "/metals")}
-              >
-                Metals
-              </Button>
-              <Button variant="ghost" size="sm">
-                Sign In
-              </Button>
-            </div>
-          </div>
-        </div>
-      </nav>
+      <SiteHeader active="/companies" />
 
       {/* Hero Section */}
       <section className="relative py-20 px-4 sm:px-6 lg:px-8">

@@ -1,18 +1,9 @@
+import SiteHeader from "@/components/SiteHeader";
+
 export default function CompanyDetailLoading() {
   return (
     <div className="min-h-screen">
-      <nav className="glass-nav sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-24">
-            <div className="h-12 w-32 bg-slate-700 rounded animate-pulse" />
-            <div className="flex items-center space-x-4">
-              <div className="h-8 w-16 bg-slate-700 rounded animate-pulse" />
-              <div className="h-8 w-20 bg-slate-700 rounded animate-pulse" />
-              <div className="h-8 w-24 bg-slate-700 rounded animate-pulse" />
-            </div>
-          </div>
-        </div>
-      </nav>
+      <SiteHeader active="/companies" />
 
       <section className="relative py-12 px-4 sm:px-6 lg:px-8 bg-gradient-slate">
         <div className="max-w-7xl mx-auto">

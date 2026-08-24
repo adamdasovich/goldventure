@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import SiteNav from "@/components/SiteNav";
 
 export const metadata: Metadata = {
   title: "Mining Investment Guides | Junior Mining Intelligence",
@@ -102,6 +103,7 @@ const guides = [
 export default function GuidesPage() {
   return (
     <div className="min-h-screen bg-slate-900">
+      <SiteNav />
       {/* Header */}
       <header className="bg-slate-800/50 border-b border-slate-700">
         <div className="max-w-7xl mx-auto px-4 py-6">
@@ -111,7 +113,7 @@ export default function GuidesPage() {
           >
             ← Back to Home
           </Link>
-          <h1 className="text-4xl font-bold text-white">
+          <h1 className="text-3xl sm:text-4xl font-bold text-white">
             Mining Investment Guides
           </h1>
           <p className="text-slate-300 mt-2 text-lg">

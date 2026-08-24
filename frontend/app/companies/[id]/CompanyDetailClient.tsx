@@ -22,7 +22,7 @@ import {
   type Project,
   type NewsReleasesResponse,
 } from "@/lib/api";
-import LogoMono from "@/components/LogoMono";
+import SiteHeader from "@/components/SiteHeader";
 import {
   CompanySchema,
   BreadcrumbListSchema,
@@ -85,7 +85,7 @@ export default function CompanyDetailClient({
   // integer for API lookups. The internal API only knows numeric ids.
   const rawIdSegment = params.id as string;
   const companyId = (rawIdSegment || "").split("-")[0];
-  const { user, accessToken, logout } = useAuth();
+  const { user, accessToken } = useAuth();
 
   // Tab state — mirrored into the URL (?tab=forum) so the discovery pill, FAB,
   // and external links can deep-link straight into a tab and the choice
@@ -734,78 +734,11 @@ export default function CompanyDetailClient({
       )}
 
       {/* Navigation */}
-      <nav className="glass-nav sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-24">
-            <div className="flex items-center space-x-3">
-              <div
-                className="cursor-pointer"
-                onClick={() => (window.location.href = "/")}
-              >
-                <LogoMono className="h-18" />
-              </div>
-            </div>
-            <div className="flex items-center space-x-4">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => (window.location.href = "/")}
-              >
-                Home
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => (window.location.href = "/dashboard")}
-              >
-                Dashboard
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => (window.location.href = "/companies")}
-              >
-                Companies
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => (window.location.href = "/metals")}
-              >
-                Metals
-              </Button>
-
-              {user ? (
-                <div className="flex items-center space-x-3">
-                  <span className="text-sm text-slate-300">
-                    Welcome, {user.full_name || user.username}
-                  </span>
-                  <Button variant="ghost" size="sm" onClick={logout}>
-                    Logout
-                  </Button>
-                </div>
-              ) : (
-                <>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setShowLogin(true)}
-                  >
-                    Login
-                  </Button>
-                  <Button
-                    variant="primary"
-                    size="sm"
-                    onClick={() => setShowRegister(true)}
-                  >
-                    Register
-                  </Button>
-                </>
-              )}
-            </div>
-          </div>
-        </div>
-      </nav>
+      <SiteHeader
+        active="/companies"
+        onLoginClick={() => setShowLogin(true)}
+        onRegisterClick={() => setShowRegister(true)}
+      />
 
       {/* Auth Modals */}
       {showLogin && (
@@ -869,7 +802,7 @@ export default function CompanyDetailClient({
       {/* Edit Project Modal */}
       {editingProject && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-          <div className="bg-slate-900 border border-slate-700 rounded-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+          <div className="bg-slate-900 border border-slate-700 rounded-xl w-full max-w-2xl max-h-[90dvh] overflow-y-auto">
             <div className="p-6 border-b border-slate-700">
               <div className="flex items-center justify-between">
                 <h2 className="text-xl font-bold text-gold-400">
@@ -1152,7 +1085,7 @@ export default function CompanyDetailClient({
                         </span>
                       </div>
                     )}
-                    <h1 className="text-4xl font-bold text-gradient-gold">
+                    <h1 className="text-3xl sm:text-4xl font-bold text-gradient-gold break-words">
                       {company.name}
                     </h1>
                     {/* Ticker & Exchange Info */}

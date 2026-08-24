@@ -44,7 +44,7 @@ export function FloatingForumButton({
       type="button"
       onClick={onClick}
       aria-label="Open community forum"
-      className={`fixed bottom-6 left-6 z-40 flex items-center gap-2 rounded-full bg-gradient-to-br from-slate-700 to-slate-800 border border-gold-500/40 px-5 py-3 text-sm font-semibold text-gold-300 shadow-lg shadow-slate-900/60 hover:border-gold-400 hover:text-gold-200 hover:scale-105 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-gold-300 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 ${
+      className={`fixed left-4 bottom-[calc(6rem+env(safe-area-inset-bottom))] sm:left-6 sm:bottom-[calc(1.5rem+env(safe-area-inset-bottom))] z-40 flex items-center gap-2 rounded-full bg-gradient-to-br from-slate-700 to-slate-800 border border-gold-500/40 px-5 py-3 text-sm font-semibold text-gold-300 shadow-lg shadow-slate-900/60 hover:border-gold-400 hover:text-gold-200 hover:scale-105 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-gold-300 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 ${
         visible
           ? "opacity-100 translate-y-0 pointer-events-auto"
           : "opacity-0 translate-y-4 pointer-events-none"

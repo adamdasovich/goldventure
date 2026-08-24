@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import Link from 'next/link';
+import SiteHeader from "@/components/SiteHeader";
 
 interface FormErrors {
   [key: string]: string[];
@@ -91,6 +92,7 @@ export default function NewCompanyPage() {
   if (!accessToken) {
     return (
       <div className="flex items-center justify-center min-h-screen">
+        <SiteHeader />
         <div className="text-slate-400">Redirecting to login...</div>
       </div>
     );

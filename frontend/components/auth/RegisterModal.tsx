@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
+import { Modal } from "@/components/ui/Modal";
 
 interface RegisterModalProps {
   onClose: () => void;
@@ -132,14 +133,15 @@ export function RegisterModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <Card variant="glass-card" className="max-w-md w-full">
+    <Modal onClose={onClose} size="md" labelledBy="register-modal-title">
+      <Card variant="glass-card">
         <CardHeader>
           <div className="flex items-center justify-between">
-            <CardTitle>Create Account</CardTitle>
+            <CardTitle id="register-modal-title">Create Account</CardTitle>
             <button
               onClick={onClose}
-              className="text-slate-400 hover:text-white transition-colors"
+              aria-label="Close registration"
+              className="-mr-2 p-2 text-slate-400 hover:text-white transition-colors"
             >
               <svg
                 className="w-6 h-6"
@@ -337,6 +339,6 @@ export function RegisterModal({
           </form>
         </CardContent>
       </Card>
-    </div>
+    </Modal>
   );
 }

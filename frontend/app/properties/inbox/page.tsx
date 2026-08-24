@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
-import LogoMono from '@/components/LogoMono';
+import SiteHeader from "@/components/SiteHeader";
 import { LoginModal, RegisterModal } from '@/components/auth';
 import { useAuth } from '@/contexts/AuthContext';
 import { useInquiryWebSocket, InquiryMessage as WSInquiryMessage } from '@/hooks/useInquiryWebSocket';
@@ -50,7 +50,7 @@ interface Inquiry {
 export default function InboxPage() {
   const [showLogin, setShowLogin] = useState(false);
   const [showRegister, setShowRegister] = useState(false);
-  const { user, logout, accessToken, isLoading } = useAuth();
+  const { user, accessToken, isLoading } = useAuth();
 
   const [inquiries, setInquiries] = useState<Inquiry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -396,20 +396,12 @@ export default function InboxPage() {
     return (
       <div className="min-h-screen">
         {/* Navigation */}
-        <nav className="glass-nav sticky top-0 z-50">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="flex items-center justify-between h-24">
-              <div className="flex items-center space-x-3 cursor-pointer" onClick={() => window.location.href = '/'}>
-                <LogoMono className="h-16" />
-              </div>
-              <div className="flex items-center space-x-4">
-                <Button variant="ghost" size="sm" onClick={() => window.location.href = '/properties'}>Properties</Button>
-                <Button variant="ghost" size="sm" onClick={() => setShowLogin(true)}>Login</Button>
-                <Button variant="primary" size="sm" onClick={() => setShowRegister(true)}>Register</Button>
-              </div>
-            </div>
-          </div>
-        </nav>
+        <SiteHeader
+          active="/properties"
+          userLinks={[{ href: "/properties/watchlist", label: "Watchlist" }]}
+          onLoginClick={() => setShowLogin(true)}
+          onRegisterClick={() => setShowRegister(true)}
+        />
 
         {/* Auth Modals */}
         {showLogin && (
@@ -437,21 +429,12 @@ export default function InboxPage() {
   return (
     <div className="min-h-screen">
       {/* Navigation */}
-      <nav className="glass-nav sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-24">
-            <div className="flex items-center space-x-3 cursor-pointer" onClick={() => window.location.href = '/'}>
-              <LogoMono className="h-16" />
-            </div>
-            <div className="flex items-center space-x-4">
-              <Button variant="ghost" size="sm" onClick={() => window.location.href = '/properties'}>Properties</Button>
-              <Button variant="ghost" size="sm" onClick={() => window.location.href = '/properties/my-listings'}>My Listings</Button>
-              <span className="text-sm text-slate-300">Welcome, {user.full_name || user.username}</span>
-              <Button variant="ghost" size="sm" onClick={logout}>Logout</Button>
-            </div>
-          </div>
-        </div>
-      </nav>
+      <SiteHeader
+        active="/properties"
+        userLinks={[{ href: "/properties/watchlist", label: "Watchlist" }]}
+        onLoginClick={() => setShowLogin(true)}
+        onRegisterClick={() => setShowRegister(true)}
+      />
 
       {/* Auth Modals */}
       {showLogin && (

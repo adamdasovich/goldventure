@@ -9,3 +9,6 @@ export type { InputProps, TextareaProps } from './Input';
 
 export { Badge } from './Badge';
 export type { BadgeProps } from './Badge';
+
+export { Modal } from './Modal';
+export type { ModalProps } from './Modal';

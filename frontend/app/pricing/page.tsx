@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import Link from "next/link";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   AVAILABLE_COUNT,
@@ -12,7 +11,7 @@ import { platformAPI, type PlatformTier } from "@/lib/api";
 import { trackSubscribe } from "@/lib/analytics";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
-import LogoMono from "@/components/LogoMono";
+import SiteHeader from "@/components/SiteHeader";
 
 // Used only if /platform/tiers/ is unreachable. The backend is the authority
 // on price; these exist so the page still renders something sane offline.
@@ -203,20 +202,7 @@ export default function PricingPage() {
   return (
     <div className="min-h-screen">
       {/* Nav */}
-      <nav className="glass-nav sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <Link href="/" className="flex items-center space-x-3">
-              <LogoMono className="h-10" />
-            </Link>
-            <Link href="/">
-              <Button variant="ghost" size="sm">
-                Back to Home
-              </Button>
-            </Link>
-          </div>
-        </div>
-      </nav>
+      <SiteHeader />
 
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
         {/* Success banner */}

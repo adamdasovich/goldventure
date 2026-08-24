@@ -321,7 +321,7 @@ export default function UnusualActivityClient() {
           {selected && !loading && data && !data.message && data.summary && (
             <>
               {/* Summary cards */}
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div className="glass-card rounded-xl p-5">
                   <p className="text-xs text-slate-400 uppercase tracking-wider mb-1">
                     Trading Days

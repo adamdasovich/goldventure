@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import SiteNav from "@/components/SiteNav";
 
 const CANONICAL =
   "https://juniorminingintelligence.com/guides/gold-grade-explained";
@@ -149,6 +150,7 @@ const faqSchema = {
 export default function GoldGradeExplainedGuide() {
   return (
     <>
+      <SiteNav />
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(articleSchema) }}

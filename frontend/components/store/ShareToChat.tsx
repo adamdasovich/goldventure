@@ -65,7 +65,7 @@ export function ShareToChat({ product, onClose }: ShareToChatProps) {
       />
 
       {/* Modal */}
-      <div className="relative glass rounded-xl max-w-md w-full p-6 animate-slide-in-up">
+      <div className="relative glass rounded-xl max-w-md w-full p-6 animate-slide-in-up max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain">
         {/* Close Button */}
         <button
           onClick={onClose}

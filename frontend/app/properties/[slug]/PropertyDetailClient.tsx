@@ -6,7 +6,7 @@ import Image from "next/image";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
-import LogoMono from "@/components/LogoMono";
+import SiteHeader from "@/components/SiteHeader";
 import { LoginModal, RegisterModal } from "@/components/auth";
 import { useAuth } from "@/contexts/AuthContext";
 import { PropertyListing } from "@/types/property";
@@ -31,7 +31,7 @@ export default function PropertyDetailClient({
   const [showInquiryModal, setShowInquiryModal] = useState(false);
   const [showProfileEdit, setShowProfileEdit] = useState(false);
   const [showResourceUpload, setShowResourceUpload] = useState(false);
-  const { user, logout, accessToken } = useAuth();
+  const { user, accessToken } = useAuth();
 
   // Seed from server-rendered listing so crawlers + first paint have content.
   // Client-side refresh still runs to pick up auth-only fields (is_watchlisted).
@@ -204,64 +204,12 @@ export default function PropertyDetailClient({
   return (
     <div className="min-h-screen">
       {/* Navigation */}
-      <nav className="glass-nav sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-24">
-            <div
-              className="flex items-center space-x-3 cursor-pointer"
-              onClick={() => (window.location.href = "/")}
-            >
-              <LogoMono className="h-16" />
-            </div>
-            <div className="flex items-center space-x-4">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => (window.location.href = "/properties")}
-              >
-                &larr; Back to Exchange
-              </Button>
-
-              {user ? (
-                <div className="flex items-center space-x-3">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() =>
-                      (window.location.href = "/properties/watchlist")
-                    }
-                  >
-                    Watchlist
-                  </Button>
-                  <span className="text-sm text-slate-300">
-                    {user.full_name || user.username}
-                  </span>
-                  <Button variant="ghost" size="sm" onClick={logout}>
-                    Logout
-                  </Button>
-                </div>
-              ) : (
-                <>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setShowLogin(true)}
-                  >
-                    Login
-                  </Button>
-                  <Button
-                    variant="primary"
-                    size="sm"
-                    onClick={() => setShowRegister(true)}
-                  >
-                    Register
-                  </Button>
-                </>
-              )}
-            </div>
-          </div>
-        </div>
-      </nav>
+      <SiteHeader
+        active="/properties"
+        userLinks={[{ href: "/properties/watchlist", label: "Watchlist" }]}
+        onLoginClick={() => setShowLogin(true)}
+        onRegisterClick={() => setShowRegister(true)}
+      />
 
       {/* Auth Modals */}
       {showLogin && (
@@ -735,7 +683,7 @@ export default function PropertyDetailClient({
                     <h3 className="text-sm font-medium text-slate-400 mb-2">
                       Assay Highlights
                     </h3>
-                    <div className="bg-slate-800 rounded-lg overflow-hidden">
+                    <div className="bg-slate-800 rounded-lg overflow-x-auto">
                       <table className="w-full text-sm">
                         <thead>
                           <tr className="border-b border-slate-700">

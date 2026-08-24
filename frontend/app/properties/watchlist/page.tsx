@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
-import LogoMono from '@/components/LogoMono';
+import SiteHeader from "@/components/SiteHeader";
 import { LoginModal, RegisterModal } from '@/components/auth';
 import { useAuth } from '@/contexts/AuthContext';
 import { PropertyListingListItem } from '@/types/property';
@@ -22,7 +22,7 @@ interface WatchlistItem {
 
 export default function WatchlistPage() {
   const router = useRouter();
-  const { user, logout, accessToken, isLoading: authLoading } = useAuth();
+  const { user, accessToken, isLoading: authLoading } = useAuth();
   const [showLogin, setShowLogin] = useState(false);
   const [showRegister, setShowRegister] = useState(false);
   const [watchlist, setWatchlist] = useState<WatchlistItem[]>([]);
@@ -97,20 +97,11 @@ export default function WatchlistPage() {
     return (
       <div className="min-h-screen">
         {/* Navigation */}
-        <nav className="glass-nav sticky top-0 z-50">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="flex items-center justify-between h-24">
-              <div className="flex items-center space-x-3 cursor-pointer" onClick={() => router.push('/')}>
-                <LogoMono className="h-16" />
-              </div>
-              <div className="flex items-center space-x-4">
-                <Button variant="ghost" size="sm" onClick={() => router.push('/properties')}>Properties</Button>
-                <Button variant="ghost" size="sm" onClick={() => setShowLogin(true)}>Login</Button>
-                <Button variant="primary" size="sm" onClick={() => setShowRegister(true)}>Register</Button>
-              </div>
-            </div>
-          </div>
-        </nav>
+        <SiteHeader
+          active="/properties"
+          onLoginClick={() => setShowLogin(true)}
+          onRegisterClick={() => setShowRegister(true)}
+        />
 
         {showLogin && (
           <LoginModal
@@ -141,34 +132,11 @@ export default function WatchlistPage() {
   return (
     <div className="min-h-screen">
       {/* Navigation */}
-      <nav className="glass-nav sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-24">
-            <div className="flex items-center space-x-3 cursor-pointer" onClick={() => router.push('/')}>
-              <LogoMono className="h-16" />
-            </div>
-            <div className="flex items-center space-x-4">
-              <Badge variant="copper">My Watchlist</Badge>
-              <Button variant="ghost" size="sm" onClick={() => router.push('/properties')}>
-                Browse Exchange
-              </Button>
-              {user && (
-                <>
-                  <Button variant="ghost" size="sm" onClick={() => router.push('/properties/inbox')}>
-                    Inbox
-                  </Button>
-                  <span className="text-sm text-slate-300">
-                    {user.full_name || user.username}
-                  </span>
-                  <Button variant="ghost" size="sm" onClick={logout}>
-                    Logout
-                  </Button>
-                </>
-              )}
-            </div>
-          </div>
-        </div>
-      </nav>
+      <SiteHeader
+        active="/properties"
+        onLoginClick={() => setShowLogin(true)}
+        onRegisterClick={() => setShowRegister(true)}
+      />
 
       {/* Main Content */}
       <section className="py-8 px-4">
@@ -259,7 +227,7 @@ export default function WatchlistPage() {
                       {item.listing.province_state}, {item.listing.country_display}
                     </p>
 
-                    <div className="grid grid-cols-2 gap-2 text-sm mb-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm mb-4">
                       <div>
                         <span className="text-slate-500">Size:</span>
                         <span className="text-slate-300 ml-1">{item.listing.total_hectares?.toLocaleString() || 'N/A'} ha</span>

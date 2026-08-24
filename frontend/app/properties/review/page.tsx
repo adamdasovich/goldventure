@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
-import LogoMono from '@/components/LogoMono';
+import SiteHeader from "@/components/SiteHeader";
 import { useAuth } from '@/contexts/AuthContext';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || '/api';
@@ -182,21 +182,7 @@ export default function PropertyReviewPage() {
   return (
     <div className="min-h-screen">
       {/* Navigation */}
-      <nav className="glass-nav sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-24">
-            <div className="flex items-center space-x-3 cursor-pointer" onClick={() => router.push('/')}>
-              <LogoMono className="h-16" />
-            </div>
-            <div className="flex items-center space-x-4">
-              <Badge variant="copper">Admin Review</Badge>
-              <Button variant="ghost" size="sm" onClick={() => router.push('/properties')}>
-                Back to Properties
-              </Button>
-            </div>
-          </div>
-        </div>
-      </nav>
+      <SiteHeader active="/properties" />
 
       <div className="max-w-6xl mx-auto px-4 py-8">
         <div className="mb-8">

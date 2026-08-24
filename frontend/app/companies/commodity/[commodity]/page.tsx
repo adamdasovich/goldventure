@@ -10,6 +10,7 @@ import {
   fetchFacetCompanies,
   getFacet,
 } from "@/lib/commodityFacets";
+import SiteNav from "@/components/SiteNav";
 
 const BASE = "https://juniorminingintelligence.com";
 
@@ -105,6 +106,7 @@ export default async function CommodityFacetPage({ params }: Props) {
 
   return (
     <>
+      <SiteNav />
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(collectionJsonLd) }}

@@ -190,7 +190,7 @@ export function CreateFinancingModal({
       <div className="flex min-h-screen items-center justify-center p-4">
         <div className="fixed inset-0 bg-black/70" onClick={onClose} />
 
-        <Card className="relative z-10 w-full max-w-3xl p-6 max-h-[90vh] overflow-y-auto">
+        <Card className="relative z-10 w-full max-w-3xl p-6 max-h-[90dvh] overflow-y-auto">
           {/* Header */}
           <div className="flex items-center justify-between mb-6">
             <div>
@@ -260,7 +260,7 @@ export function CreateFinancingModal({
                 <label className="block text-sm font-medium text-slate-300 mb-3">
                   Financing Type <span className="text-red-400">*</span>
                 </label>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {FINANCING_TYPES.map((type) => (
                     <button
                       key={type.value}
@@ -343,7 +343,7 @@ export function CreateFinancingModal({
           {/* Step 2: Offering Details */}
           {step === 2 && (
             <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {/* Amount Raised */}
                 <div>
                   <label className="block text-sm font-medium text-slate-300 mb-2">
@@ -416,7 +416,7 @@ export function CreateFinancingModal({
                     <Badge variant="copper">Warrant Terms</Badge>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-slate-300 mb-2">
                         Warrant Strike Price
@@ -475,7 +475,7 @@ export function CreateFinancingModal({
               )}
 
               {/* Dates */}
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-slate-300 mb-2">
                     Announced Date <span className="text-red-400">*</span>

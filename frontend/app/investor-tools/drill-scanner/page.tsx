@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { Badge } from "@/components/ui/Badge";
-import { Button } from "@/components/ui/Button";
-import LogoMono from "@/components/LogoMono";
+import SiteHeader from "@/components/SiteHeader";
 import DrillScannerClient from "./DrillScannerClient";
 import { toolBySlug } from "../tools";
 
@@ -89,27 +88,7 @@ export default function DrillScannerPage() {
       />
 
       {/* Nav */}
-      <nav className="glass-nav sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <Link href="/" className="flex items-center">
-              <LogoMono className="h-10" />
-            </Link>
-            <div className="flex items-center gap-2">
-              <Link href="/investor-tools">
-                <Button variant="ghost" size="sm">
-                  All Tools
-                </Button>
-              </Link>
-              <Link href="/">
-                <Button variant="ghost" size="sm">
-                  Home
-                </Button>
-              </Link>
-            </div>
-          </div>
-        </div>
-      </nav>
+      <SiteHeader />
 
       {/* Header */}
       <section className="py-8 px-4 sm:px-6 lg:px-8 bg-gradient-to-b from-[#0a0e1a] to-slate-900">

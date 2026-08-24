@@ -296,7 +296,7 @@ export function InvestmentInterestModal({
               {/* Summary */}
               <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700">
                 <h4 className="text-sm font-medium text-white mb-3">Investment Summary</h4>
-                <div className="grid grid-cols-2 gap-4 text-sm">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
                   <div>
                     <span className="text-slate-400">Company:</span>
                     <span className="text-white ml-2">{company.name}</span>

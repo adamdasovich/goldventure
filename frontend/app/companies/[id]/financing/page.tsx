@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
-import LogoMono from "@/components/LogoMono";
+import SiteHeader from "@/components/SiteHeader";
 import { LoginModal, RegisterModal } from "@/components/auth";
 import { InvestmentInterestModal } from "@/components/financing";
 import { useAuth } from "@/contexts/AuthContext";
@@ -72,7 +72,7 @@ export default function CompanyFinancingPage() {
   const router = useRouter();
   // params.id may be `{numericId}-{slug}` — strip to numeric for API lookups.
   const companyId = ((params.id as string) || "").split("-")[0];
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
   const accessToken =
     typeof window !== "undefined" ? localStorage.getItem("accessToken") : null;
 
@@ -427,58 +427,11 @@ export default function CompanyFinancingPage() {
   return (
     <div className="min-h-screen bg-slate-900">
       {/* Navigation */}
-      <nav className="glass-nav sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <Link href="/" className="flex items-center space-x-3">
-              <LogoMono className="h-10" />
-            </Link>
-            <div className="flex items-center space-x-4">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => router.push("/companies")}
-              >
-                Companies
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => router.push("/financial-hub")}
-              >
-                Financial Hub
-              </Button>
-              {user ? (
-                <div className="flex items-center space-x-3">
-                  <span className="text-sm text-slate-300">
-                    {user.full_name || user.username}
-                  </span>
-                  <Button variant="ghost" size="sm" onClick={logout}>
-                    Logout
-                  </Button>
-                </div>
-              ) : (
-                <>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setShowLogin(true)}
-                  >
-                    Login
-                  </Button>
-                  <Button
-                    variant="primary"
-                    size="sm"
-                    onClick={() => setShowRegister(true)}
-                  >
-                    Register
-                  </Button>
-                </>
-              )}
-            </div>
-          </div>
-        </div>
-      </nav>
+      <SiteHeader
+        active="/companies"
+        onLoginClick={() => setShowLogin(true)}
+        onRegisterClick={() => setShowRegister(true)}
+      />
 
       {/* Auth Modals */}
       {showLogin && (
@@ -704,7 +657,7 @@ export default function CompanyFinancingPage() {
                             </svg>
                             Includes Warrants
                           </h4>
-                          <div className="grid grid-cols-2 gap-4 text-sm">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
                             {selectedFinancing.warrant_strike_price && (
                               <div>
                                 <span className="text-slate-400">
