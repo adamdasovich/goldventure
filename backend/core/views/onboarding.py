@@ -254,9 +254,13 @@ def scrape_company_save(request):
 def _infer_commodity_from_name(name: str) -> str:
     """
     Infer the primary commodity from a project name.
-    Looks for commodity keywords in the name and returns the appropriate commodity code.
-    Defaults to 'gold' if no commodity is detected.
+
+    Fallback only — company_scraper.score_commodity reads the page itself and
+    should be preferred. Returns '' when the name gives no signal; it must not
+    guess, because a wrong commodity puts the company on the wrong landing page.
     """
+    import re  # module-level import is absent here; the file imports locally
+
     name_lower = name.lower()
 
     # Check for specific commodities in order of specificity
@@ -283,7 +287,12 @@ def _infer_commodity_from_name(name: str) -> str:
         return 'cobalt'
     if 'platinum' in name_lower or 'palladium' in name_lower or 'pgm' in name_lower:
         return 'pgm'
-    if 'rare earth' in name_lower or 'ree' in name_lower:
+    # 'ree' needs a word boundary. As a bare substring it matches inside
+    # "Creek", "Green" and "Three", and because this check ran before the gold
+    # check, "Gold Creek", "Burro Creek Gold" and "Coyote Creek" were all filed
+    # as rare earths -- 25 of the 28 ree-tagged projects on 2026-08-24, which
+    # was very nearly the entire rare-earths landing page.
+    if 'rare earth' in name_lower or re.search(r'\bree\b', name_lower):
         return 'ree'
     if 'base metal' in name_lower:
         return 'base metals'
