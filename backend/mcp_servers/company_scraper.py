@@ -420,7 +420,11 @@ class CompanyDataScraper:
         project_indicators = [
             'lake', 'river', 'creek', 'mountain', 'hill', 'valley', 'springs',
             'ridge', 'peak', 'basin', 'gulch', 'canyon', 'flat', 'mine',
-            'deposit', 'project', 'property', 'claim', 'belt', 'district'
+            'deposit', 'project', 'property', 'claim', 'belt', 'district',
+            # Section names some companies use instead of "projects".
+            # Peruvian Metals publishes its properties under /operations, which
+            # nothing here matched, so the page was never visited.
+            'operations', 'asset', 'portfolio', 'exploration',
         ]
 
         for link in nav_links:
@@ -1761,6 +1765,22 @@ class CompanyDataScraper:
         name_lower = name.lower().strip()
         name_stripped = name.strip()
 
+        # ===== SECTION HEADINGS =====
+        # A section heading with any modifier in front of it. The exact-match
+        # list below catches "projects" and "our projects" but not "Flagship
+        # Projects", which is what Rio Silver's index page uses -- so the index
+        # heading was stored as a project for all of their properties.
+        # The leading group includes section nouns so pairs like "project
+        # portfolio" and "asset portfolio" are caught as well as "our projects".
+        if re.fullmatch(
+            r'(our|the|its|their|key|core|current|featured|flagship|active|'
+            r'principal|main|primary|selected|other|additional|'
+            r'project|property|asset|mineral|mining|exploration)?\s*'
+            r'(projects?|properties|property|assets?|portfolio|holdings)',
+            name_lower,
+        ):
+            return False
+
         # ===== LENGTH HEURISTICS =====
         # Real project names are short - typically 1-5 words
         word_count = len(name_stripped.split())
@@ -1779,6 +1799,12 @@ class CompanyDataScraper:
             'about us', 'contact', 'news', 'investors', 'team', 'management',
             'overview', 'gallery', 'maps', 'documents', 'introduction',
             'maps & sections', 'maps and sections', 'photo gallery', 'video gallery',
+            # Business-model pages, not properties. "Prospect generator" is a
+            # standard junior-mining term (Eagle Plains and Skyharbour both
+            # publish one), so the page sits alongside the real project pages
+            # and gets picked up as though it were one.
+            'prospect generator', 'prospect generator model', 'business model',
+            'project generation', 'joint ventures', 'partnerships', 'strategy',
             'downloads', 'resources', 'media', 'highlights', 'location map',
             # Technical/scientific section names (not actual projects)
             'alteration', 'metallurgy', 'mineralization', 'geological setting',
@@ -2258,7 +2284,17 @@ class CompanyDataScraper:
                     'gallery', 'media', 'documents', 'reports', 'corporate', 'highlights',
                     'overview', 'history', 'events', 'calendar', 'mandates', 'shareholder',
                     'shareholders', 'presentations', 'factsheet', 'stock', 'stockinformation',
-                    'inthemedia', 'faq', 'privacy', 'terms', 'legal', 'disclaimer'
+                    'inthemedia', 'faq', 'privacy', 'terms', 'legal', 'disclaimer',
+                    # Section indexes, NOT individual projects. Without these the
+                    # single-segment branch below treats a listing page as a detail
+                    # page: riosilverinc.com/project/ has slug "project", its title
+                    # contains "project" so the indicator check passes, and the
+                    # page heading "Flagship Projects" was stored as the project
+                    # name -- with location and commodity guessed from whatever the
+                    # index page happened to mention.
+                    'project', 'projects', 'property', 'properties',
+                    'asset', 'assets', 'portfolio', 'operations', 'our-projects',
+                    'our-properties', 'project-portfolio',
                 }
                 if slug not in non_project_slugs:
                     # Check if page has project indicators in title, h1, or h2
