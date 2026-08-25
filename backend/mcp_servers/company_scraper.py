@@ -854,6 +854,19 @@ class CompanyDataScraper:
             # table.
             if has_project_indicator:
                 full_url = urljoin(self.base_url, url)
+
+                # Drop the fragment. A nav item reading "Projects" that points
+                # at an on-page anchor (/#projects) resolves to the homepage,
+                # and scraping the homepage *as a project listing* harvests
+                # everything on it -- Centurion Minerals contributed its three
+                # directors and the word "Director" as project names that way,
+                # which no amount of filtering the names would have fixed.
+                full_url = full_url.split('#', 1)[0]
+
+                # The homepage is already scraped, on its own terms.
+                if not urlparse(full_url).path.strip('/'):
+                    continue
+
                 if full_url not in potential_urls:
                     potential_urls.append(full_url)
                     logger.debug(f"[DISCOVER] Potential project page: {text} -> {full_url}")
