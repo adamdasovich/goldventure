@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import SiteNav from "@/components/SiteNav";
 import { companyHref } from "@/lib/companyUrl";
+import WeekContext from "./WeekContext";
 
 const BASE = "https://juniorminingintelligence.com";
 const API_BASE_URL =
@@ -439,6 +440,20 @@ export default async function FinancingRoundupPage({ params }: Props) {
             </section>
           </>
         )}
+
+        {/*
+          Prose around the table. Without it the page was ~200 words of rows and
+          headings -- thin content, and nine of these went into the sitemap when
+          the archive gap was fixed.
+        */}
+        <WeekContext
+          weekLabel={dateLabel}
+          count={week.count}
+          totalUsd={week.total_amount_usd}
+          items={week.items}
+          byType={week.by_type}
+          byCommodity={week.by_commodity}
+        />
 
         <footer className="mt-12 border-t border-slate-200 pt-6 text-sm text-slate-500">
           <Link

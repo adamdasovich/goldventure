@@ -9,6 +9,7 @@ import {
   termAnchor,
 } from "@/lib/glossaryCategories";
 import SiteNav from "@/components/SiteNav";
+import { hasTermPage } from "@/lib/glossaryTermExtras";
 
 const BASE = "https://juniorminingintelligence.com";
 
@@ -187,7 +188,21 @@ export default async function GlossaryCategoryPage({ params }: Props) {
               className="scroll-mt-24"
             >
               <h2 className="text-xl font-semibold text-slate-100 mb-2">
-                {t.term}
+                {/*
+                  Terms with expanded context get their own page; the rest are
+                  only ever read here. Linking from the heading is what makes
+                  those pages reachable by a crawler at all.
+                */}
+                {hasTermPage(termAnchor(t.term)) ? (
+                  <Link
+                    href={`/glossary/${termAnchor(t.term)}`}
+                    className="hover:text-gold-400"
+                  >
+                    {t.term}
+                  </Link>
+                ) : (
+                  t.term
+                )}
               </h2>
               <p className="text-slate-300 leading-relaxed">{t.definition}</p>
               {Array.isArray(t.related_links) && t.related_links.length > 0 && (

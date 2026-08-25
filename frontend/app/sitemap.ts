@@ -2,6 +2,7 @@ import { MetadataRoute } from "next";
 import { companyHref } from "@/lib/companyUrl";
 import { indexableFacets } from "@/lib/commodityFacets";
 import { indexableGlossaryCategories } from "@/lib/glossaryCategories";
+import { termPageAnchors } from "@/lib/glossaryTermExtras";
 import { lastModifiedFor, safeLastModified } from "@/lib/routeLastModified";
 import { TOOLS } from "./investor-tools/tools";
 
@@ -373,6 +374,21 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: 0.6,
   }));
 
+  // Individual glossary term pages.
+  //
+  // Only terms with expanded context appear here. A page built on the stored
+  // definition alone would be about 40 words, so a term without an entry in
+  // TERM_EXTRAS stays on its category page and is never submitted -- the list
+  // is derived from the same source the route generates from, so the two
+  // cannot drift.
+  const glossaryTermRoutes: MetadataRoute.Sitemap = termPageAnchors().map(
+    (anchor) => ({
+      url: `${baseUrl}/glossary/${anchor}`,
+      changeFrequency: "monthly" as const,
+      priority: 0.5,
+    }),
+  );
+
   // Weekly financing roundup pages (native SEO archive)
   let financingWeeks: any[] = [];
   try {
@@ -407,6 +423,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     ...staticRoutes,
     ...commodityFacetRoutes,
     ...glossaryCategoryRoutes,
+    ...glossaryTermRoutes,
     ...financingRoundupRoutes,
     ...companyRoutes,
     ...propertyRoutes,
