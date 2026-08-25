@@ -86,6 +86,29 @@ const FEATURES: {
   },
 ];
 
+/* ─── Secondary hero links ───
+   These used to be six more full-width primary-looking buttons. They are
+   jump links, so they belong in a row, not the CTA stack. */
+type ScrollAction = "chat" | "happening" | "news";
+
+const SECONDARY_LINKS: {
+  label: string;
+  href?: string;
+  action?: ScrollAction;
+}[] = [
+  { label: "AI Assistant", action: "chat" },
+  { label: "Happening Now", action: "happening" },
+  { label: "Mining News", action: "news" },
+  { label: "Open Financings", href: "/open-financings" },
+  { label: "Closed Financings", href: "/closed-financings" },
+  { label: "Weekly Snapshot", href: "/reports/weekly" },
+];
+
+const SECONDARY_CHIP =
+  "shrink-0 px-4 py-2.5 min-h-11 inline-flex items-center whitespace-nowrap " +
+  "rounded-full border border-slate-600 text-slate-300 text-sm transition-colors " +
+  "hover:text-gold-400 hover:border-gold-500/50";
+
 interface HomeClientProps {
   initialArticles?: any[];
 }
@@ -146,6 +169,12 @@ export default function HomeClient({ initialArticles }: HomeClientProps) {
 
   const scrollToNews = () => {
     newsSectionRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  const SCROLL_ACTIONS: Record<ScrollAction, () => void> = {
+    chat: scrollToChat,
+    happening: scrollToHappening,
+    news: scrollToNews,
   };
 
   return (
@@ -223,8 +252,10 @@ export default function HomeClient({ initialArticles }: HomeClientProps) {
             answers your questions instantly.
           </p>
 
-          {/* Primary CTAs */}
-          <div className="flex flex-col sm:flex-row flex-wrap gap-3 justify-center animate-slide-in-up">
+          {/* Two primary CTAs. There were eight, all the same weight and all
+              full width on a phone — about 780px of stacked buttons before a
+              visitor saw any content, and no signal about where to start. */}
+          <div className="flex flex-col sm:flex-row gap-3 justify-center animate-slide-in-up">
             <Button
               variant="primary"
               size="md"
@@ -233,66 +264,38 @@ export default function HomeClient({ initialArticles }: HomeClientProps) {
             >
               Platform Features
             </Button>
-            <Link href="/companies">
-              <Button
-                variant="secondary"
-                size="sm"
-                className="w-full sm:w-auto"
-              >
+            <Link href="/companies" className="w-full sm:w-auto">
+              <Button variant="secondary" size="md" className="w-full">
                 Explore Companies
               </Button>
             </Link>
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={scrollToChat}
-              className="w-full sm:w-auto"
-            >
-              AI Assistant
-            </Button>
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={scrollToHappening}
-              className="w-full sm:w-auto"
-            >
-              Happening Now
-            </Button>
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={scrollToNews}
-              className="w-full sm:w-auto"
-            >
-              Mining News
-            </Button>
-            <Link href="/open-financings">
-              <Button
-                variant="secondary"
-                size="sm"
-                className="w-full sm:w-auto"
-              >
-                Open Financings
-              </Button>
-            </Link>
-            <Link href="/closed-financings">
-              <Button
-                variant="secondary"
-                size="sm"
-                className="w-full sm:w-auto"
-              >
-                Closed Financings
-              </Button>
-            </Link>
-            <Link href="/reports/weekly">
-              <Button
-                variant="secondary"
-                size="sm"
-                className="w-full sm:w-auto"
-              >
-                Weekly Financial Snapshot
-              </Button>
-            </Link>
+          </div>
+
+          {/* The other six are jump links, not calls to action, so they read
+              as a compact row: swipeable below sm, wrapped above. */}
+          <div className="mt-5 animate-slide-in-up">
+            <div className="flex gap-2 overflow-x-auto scrollbar-none sm:flex-wrap sm:justify-center sm:overflow-visible -mx-4 px-4 sm:mx-0 sm:px-0">
+              {SECONDARY_LINKS.map((item) =>
+                item.href ? (
+                  <Link
+                    key={item.label}
+                    href={item.href}
+                    className={SECONDARY_CHIP}
+                  >
+                    {item.label}
+                  </Link>
+                ) : (
+                  <button
+                    key={item.label}
+                    type="button"
+                    onClick={SCROLL_ACTIONS[item.action!]}
+                    className={SECONDARY_CHIP}
+                  >
+                    {item.label}
+                  </button>
+                ),
+              )}
+            </div>
           </div>
         </div>
       </section>

@@ -90,7 +90,7 @@ export default function StoreClient() {
     <div className="space-y-16">
       {/* Hero Section */}
       <section className="text-center py-12">
-        <h1 className="text-4xl lg:text-5xl font-bold text-gradient-gold mb-4">
+        <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-gradient-gold mb-4">
           The GoldVenture Store
         </h1>
         <p className="text-xl text-slate-400 max-w-2xl mx-auto">

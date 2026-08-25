@@ -206,7 +206,7 @@ Flow-through shares are particularly attractive for high-income investors seekin
                  style={{ backgroundColor: 'rgba(212, 175, 55, 0.2)', border: '2px solid #d4af37' }}>
               <FileText className="w-10 h-10" style={{ color: '#d4af37' }} />
             </div>
-            <h1 className="text-4xl md:text-5xl font-bold mb-4 text-gradient-gold">
+            <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold mb-4 text-gradient-gold">
               Subscription Agreements Guide
             </h1>
             <p className="text-xl text-slate-300 max-w-2xl mx-auto">

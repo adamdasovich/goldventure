@@ -232,7 +232,7 @@ export default function QualificationPage() {
           </button>
 
           <div className="text-center mb-12">
-            <h1 className="text-4xl md:text-5xl font-bold mb-4 text-gradient-gold animate-fade-in leading-tight pb-2">
+            <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold mb-4 text-gradient-gold animate-fade-in leading-tight pb-2">
               Accredited Investor Qualification
             </h1>
             <p className="text-lg text-slate-300">

@@ -47,7 +47,7 @@ export default function FieldGearClient() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
             </svg>
           </div>
-          <h1 className="text-4xl lg:text-5xl font-bold text-slate-100 mb-4">
+          <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-slate-100 mb-4">
             Field Gear
           </h1>
           <p className="text-xl text-slate-300 max-w-2xl">

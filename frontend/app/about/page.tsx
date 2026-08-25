@@ -89,7 +89,7 @@ export default function AboutPage() {
           <div className="absolute inset-0 bg-gradient-to-r from-amber-500/10 to-amber-600/5" />
           <div className="relative max-w-7xl mx-auto">
             <div className="text-center">
-              <h1 className="text-5xl md:text-6xl font-bold text-white mb-6">
+              <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold text-white mb-6">
                 About Junior Mining Intelligence
               </h1>
               <p className="text-xl md:text-2xl text-slate-300 max-w-4xl mx-auto leading-relaxed">

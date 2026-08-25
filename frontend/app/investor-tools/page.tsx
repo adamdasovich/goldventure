@@ -155,7 +155,7 @@ export default async function InvestorToolsPage() {
           <Badge variant="gold" className="mb-4">
             Investor Intelligence
           </Badge>
-          <h1 className="text-4xl sm:text-5xl font-bold text-gradient-gold mb-5">
+          <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold text-gradient-gold mb-5">
             Junior Mining Investor Tools
           </h1>
           <p className="text-lg text-slate-300 leading-relaxed">

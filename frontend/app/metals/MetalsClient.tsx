@@ -162,7 +162,7 @@ export default function MetalsClient({
       {/* Page header — server-rendered H1 + intro for SEO */}
       <header className="pt-14 pb-4 px-4 sm:px-6 lg:px-8">
         <div className="max-w-4xl mx-auto text-center">
-          <h1 className="text-4xl md:text-5xl font-bold text-gradient-gold mb-4">
+          <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold text-gradient-gold mb-4">
             Live Precious &amp; Critical Metals Prices
           </h1>
           <p className="text-lg text-slate-300 leading-relaxed">

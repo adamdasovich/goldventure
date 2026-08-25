@@ -126,18 +126,24 @@ export default function ChatInterface() {
       className="flex flex-col h-[min(600px,70dvh)] max-w-4xl mx-auto"
     >
       <CardHeader className="border-b border-slate-700/50">
-        <div className="flex items-center justify-between">
-          <div>
+        {/* The upgrade pill was being squeezed to 75px by the title beside it
+            and wrapping to four lines. It stacks under the title on a phone
+            and sits alongside from sm up. */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div className="min-w-0">
             <CardTitle>Claude Mining Assistant</CardTitle>
             <CardDescription>
               Ask anything about mining companies, projects, and resources
             </CardDescription>
           </div>
           {dailyLimit > 0 && tier === "explorer" && (
-            <Link href="/pricing" className="inline-flex items-center min-h-11">
+            <Link
+              href="/pricing"
+              className="inline-flex shrink-0 items-center self-start min-h-11"
+            >
               <Badge
                 variant="slate"
-                className="cursor-pointer hover:border-gold-400/50 transition-colors"
+                className="cursor-pointer whitespace-nowrap hover:border-gold-400/50 transition-colors"
               >
                 {dailyLimit} msgs/day &middot; Upgrade
               </Badge>
@@ -151,7 +157,11 @@ export default function ChatInterface() {
         className="flex-1 overflow-y-auto space-y-4 py-4"
       >
         {messages.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full text-center space-y-4">
+          // min-h-full, not h-full: capping the card at 70dvh made this taller
+          // than its scroll container on a phone, and `justify-center` then
+          // pushed the overflow above the scroll origin where it could not be
+          // reached. Growing past full height keeps it all scrollable.
+          <div className="flex flex-col items-center justify-center min-h-full text-center space-y-4">
             <LogoIcon className="h-24 w-24" />
             <div className="space-y-2">
               <h3 className="text-xl font-semibold text-gold-400">

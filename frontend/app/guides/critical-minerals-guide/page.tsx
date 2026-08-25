@@ -95,7 +95,7 @@ export default function CriticalMineralsGuide() {
               <span className="text-slate-400 text-sm">18 min read</span>
               <span className="text-slate-400 text-sm">Updated January 2026</span>
             </div>
-            <h1 className="text-4xl md:text-5xl font-bold text-white leading-tight">
+            <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold text-white leading-tight">
               Critical Minerals Investment Guide 2026
             </h1>
             <p className="text-xl text-slate-300 mt-4 leading-relaxed">
