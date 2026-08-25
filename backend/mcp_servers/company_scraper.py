@@ -269,6 +269,40 @@ def _is_acronym(word: str) -> bool:
     return len(stripped) <= 3 or not re.search(r'[AEIOUaeiou]', stripped)
 
 
+def _link_label(link) -> str:
+    """
+    Recover a label for an anchor that has no text of its own.
+
+    Mining sites routinely link their projects as image cards, so the anchor
+    wraps an <img> and `get_text()` is empty. Chesapeake Gold links both of its
+    projects that way -- the homepage carries /metates/ and /lucy-project/, and
+    nav extraction dropped both for having no text, so project discovery fell
+    back to guessing /projects/ and /project/ and found nothing.
+
+    The alt text is usually better than any visible label would have been:
+    "Lucy gold project in Sinaloa, Mexico" names the commodity and the country
+    as well as the project.
+
+    Falls back to the URL slug last, and never to a file download.
+    """
+    for attr in ('title', 'aria-label'):
+        value = (link.get(attr) or '').strip()
+        if value:
+            return value
+
+    img = link.find('img')
+    if img:
+        alt = (img.get('alt') or '').strip()
+        if alt:
+            return alt
+
+    path = urlparse(link.get('href', '') or '').path.rstrip('/')
+    slug = path.split('/')[-1] if path else ''
+    if slug and '.' not in slug:
+        return slug.replace('-', ' ').replace('_', ' ')
+    return ''
+
+
 def _strip_furniture(text: str) -> str:
     """Remove trailing listings, bracketed tickers and nav words, repeatedly."""
     prev = None
@@ -1496,11 +1530,19 @@ class CompanyDataScraper:
             nav_links = []
             for link in soup.find_all('a', href=True):
                 href = link.get('href', '')
+                if not href:
+                    continue
                 text = link.get_text(strip=True)
-                if href and text and len(text) < 50:
-                    # Only internal links
-                    if self._is_internal_link(href):
-                        nav_links.append({'url': href, 'text': text})
+                # A long label is a sentence inside body copy, not navigation.
+                if len(text) >= 50:
+                    continue
+                if not text:
+                    text = _link_label(link)
+                if not text:
+                    continue
+                # Only internal links
+                if self._is_internal_link(href):
+                    nav_links.append({'url': href, 'text': text[:120]})
             self.extracted_data['_nav_links'] = nav_links
 
             # Extract project URLs from dropdown navigation menus
