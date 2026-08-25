@@ -2022,6 +2022,10 @@ async def crawl_html_news_pages(url: str, months: int = 6, custom_news_url: str 
 
     news_by_url: Dict[str, Dict] = {}  # Map URL -> news item (prefer items with dates)
     successful_news_url = None  # Track which URL pattern found news
+    # Raw item count returned by a structured source (WordPress REST, Strapi,
+    # RSS) before the date cutoff trims it. Used only to confirm that the
+    # cached URL is redundant -- never to skip it. See the [UNION-EXIT] check.
+    structured_api_items = 0
     cutoff_date = datetime.now() - timedelta(days=months * 30)
 
     browser_config = BrowserConfig(
@@ -2358,6 +2362,7 @@ async def crawl_html_news_pages(url: str, months: int = 6, custom_news_url: str 
 
             if wp_items_total > 0:
                 logger.info(f"[WORDPRESS] Total: {wp_items_total} news items from REST API")
+                structured_api_items = max(structured_api_items, wp_items_total)
         except Exception as e:
             logger.debug(f"WordPress REST API extraction failed: {e}")
 
@@ -5937,6 +5942,25 @@ async def crawl_html_news_pages(url: str, months: int = 6, custom_news_url: str 
                                 f"({recent} within 90 days), skipping remaining patterns"
                             )
                             break
+
+                # The cached URL was fetched and added nothing the structured
+                # source had not already supplied. For this site the API is a
+                # superset of the canonical news page, so guessing the
+                # remaining patterns is unlikely to surface what neither holds.
+                #
+                # Note this runs only after actually visiting the cached URL --
+                # the earlier attempt at this skipped the sweep outright on the
+                # strength of the API alone, and cost A2 Gold 80 of its 84
+                # releases.
+                if structured_api_items >= 20 and not found_here and news_by_url:
+                    url_clean = news_url.rstrip('/').split('?')[0]
+                    if cached_news_url and url_clean == cached_news_url.rstrip('/').split('?')[0]:
+                        logger.info(
+                            f"[UNION-EXIT] Cached URL added nothing beyond the "
+                            f"{structured_api_items}-item API response "
+                            f"({len(news_by_url)} in window) — skipping remaining patterns"
+                        )
+                        break
 
                 # ============================================================
                 # EARLY EXIT CHECKS - prevent scrapes from running 2+ hours
