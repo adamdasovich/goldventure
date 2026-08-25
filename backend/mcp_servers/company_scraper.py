@@ -838,24 +838,21 @@ class CompanyDataScraper:
             combined = url_lower + ' ' + text
             has_project_indicator = any(ind in combined for ind in project_indicators)
 
-            # Also check for 2-3 word geographic-sounding names
-            # (e.g., "Laird Lake", "Excelsior Springs", "Golden Summit")
-            words = text.split()
-            is_short_name = 1 <= len(words) <= 4
-
-            # Simple URL slug at root level (e.g., /laird-lake/)
-            is_simple_slug = len(parts) == 1 and '-' in parts[0]
-
-            # A derived label has to say "project" (or similar) outright. The
-            # loose "short name at root level" heuristic is fine for a link
-            # whose visible text a human wrote, but image-card links to team
-            # bios also produce short hyphenated slugs -- Centurion Minerals
-            # yielded 'David Tafel', 'Dennis LaPoint' and 'Director' as project
-            # candidates once derived labels were allowed through it.
-            derived = link.get('derived', False)
-            if has_project_indicator or (
-                not derived and is_short_name and is_simple_slug
-            ):
+            # The label must name a project outright. The old fallback -- any
+            # short name at a root-level hyphenated slug -- cannot tell a
+            # project from a person, and team bios fit it exactly: Centurion
+            # Minerals yielded 'David Tafel', 'Dennis LaPoint', 'Jeremy Wright'
+            # and 'Director' as project candidates through that branch, whether
+            # the label was the anchor's own text or recovered from an image.
+            #
+            # The indicator list is broad enough to keep the real ones:
+            # /north-star-project/, /treasure-island-project, /dunlop-deposit/,
+            # /manhattan-district/, and Chesapeake's /metates/ whose alt text
+            # reads "Metates gold and silver project in Durango, Mexico".
+            # A bare slug with no descriptive text anywhere is now missed, and
+            # that is the right trade against writing people into the projects
+            # table.
+            if has_project_indicator:
                 full_url = urljoin(self.base_url, url)
                 if full_url not in potential_urls:
                     potential_urls.append(full_url)
@@ -4387,6 +4384,11 @@ class CompanyDataScraper:
             'mineral resource', 'mineral reserve', 'resource estimate',
             'inferred resource', 'indicated resource', 'measured resource',
             'total resources', 'resource table', 'resource summary',
+            # Job titles -- these arrive when a team bio page gets scraped as
+            # though it were a project page.
+            'director', 'president', 'chairman', 'chairwoman', 'chief executive',
+            'chief financial', 'chief operating', 'chief geologist', 'vice president',
+            'officer', 'advisor', 'adviser', 'consultant', 'secretary', 'treasurer',
             # Generic navigation items
             'all projects', 'our projects', 'view projects', 'see projects',
             'all properties', 'our properties', 'back to', 'return to',
