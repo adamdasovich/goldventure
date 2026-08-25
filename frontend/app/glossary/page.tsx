@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import SiteHeader from "@/components/SiteHeader";
 import GlossarySubmissionForm from "@/components/GlossarySubmissionForm";
+import { GLOSSARY_CATEGORIES } from "@/lib/glossaryCategories";
 
 interface GlossaryTerm {
   id?: number;
@@ -700,6 +701,29 @@ export default function GlossaryPage() {
               {glossaryTerms.length} terms covering reporting standards,
               geology, finance, regulatory requirements, and mining operations.
             </p>
+
+            {/*
+              Real links to the category pages, not filter buttons. The filters
+              below are client state and leave no URL for a crawler to follow,
+              so without these the six category pages would be reachable only
+              from the sitemap.
+            */}
+            <nav aria-label="Glossary sections" className="mt-6">
+              <h2 className="text-sm uppercase tracking-wider text-slate-500 mb-3">
+                Browse by section
+              </h2>
+              <div className="flex flex-wrap gap-2">
+                {GLOSSARY_CATEGORIES.map((c) => (
+                  <a
+                    key={c.slug}
+                    href={`/glossary/category/${c.slug}`}
+                    className="px-3 py-1.5 rounded-lg border border-slate-600 text-slate-300 hover:border-gold-500/50 hover:text-gold-300 transition-colors text-sm"
+                  >
+                    {c.label}
+                  </a>
+                ))}
+              </div>
+            </nav>
           </div>
         </div>
 

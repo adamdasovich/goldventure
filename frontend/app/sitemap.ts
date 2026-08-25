@@ -1,6 +1,7 @@
 import { MetadataRoute } from "next";
 import { companyHref } from "@/lib/companyUrl";
 import { indexableFacets } from "@/lib/commodityFacets";
+import { indexableGlossaryCategories } from "@/lib/glossaryCategories";
 import { lastModifiedFor, safeLastModified } from "@/lib/routeLastModified";
 import { TOOLS } from "./investor-tools/tools";
 
@@ -356,6 +357,22 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: 0.8,
   }));
 
+  // Glossary category pages — definitional long-tail ("mining geology terms",
+  // "junior mining finance terms").
+  //
+  // Grouped rather than one page per term: definitions average 40 words, so
+  // 112 term pages would each be thin, while six category pages carry
+  // 377-1,380 words of definitions apiece. Filtered by the same
+  // MIN_INDEXABLE_TERMS bar the pages apply, for the reason noted above the
+  // commodity facets.
+  const glossaryCategoryRoutes: MetadataRoute.Sitemap = (
+    await indexableGlossaryCategories()
+  ).map((category) => ({
+    url: `${baseUrl}/glossary/category/${category.slug}`,
+    changeFrequency: "monthly" as const,
+    priority: 0.6,
+  }));
+
   // Weekly financing roundup pages (native SEO archive)
   let financingWeeks: any[] = [];
   try {
@@ -389,6 +406,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   return [
     ...staticRoutes,
     ...commodityFacetRoutes,
+    ...glossaryCategoryRoutes,
     ...financingRoundupRoutes,
     ...companyRoutes,
     ...propertyRoutes,
