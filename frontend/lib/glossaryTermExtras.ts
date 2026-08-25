@@ -574,6 +574,688 @@ export const TERM_EXTRAS: Record<string, TermExtra> = {
       "ree-rare-earth-elements",
     ],
   },
+  // --------------------------------------------------------------- operations
+  "open-pit-mining": {
+    summary:
+      "Mining from surface, removing waste rock to reach ore — the cheapest way to move large tonnages and the most visible.",
+    whyItMatters:
+      "Open-pit economics live or die on the stripping ratio. Every tonne of waste is a tonne paid for and never sold, and as a pit deepens that ratio worsens, which is what eventually ends the mine rather than the ore running out.",
+    inPractice:
+      "Look for the pit shell in a technical study and the strip ratio at depth, not just the average. A project with a 2:1 average and 6:1 in its final years has most of its value in the early phases.",
+    seeAlso: [
+      "stripping-ratio",
+      "underground-mining",
+      "cut-off-grade",
+      "mineral-reserve",
+    ],
+  },
+  "underground-mining": {
+    summary:
+      "Mining through shafts, declines and tunnels, reaching ore too deep or too narrow to strip from surface.",
+    whyItMatters:
+      "Underground costs far more per tonne but moves almost no waste, so it suits narrow high-grade systems that would be uneconomic in a pit. Most orogenic gold and epithermal vein deposits end up here.",
+    pitfall:
+      "Underground mining introduces dilution from the walls of a narrow stope. A 10 g/t vein mined at two metres against a one-metre true width delivers about half the grade to the mill.",
+    seeAlso: ["open-pit-mining", "dilution", "true-width", "orogenic-gold"],
+  },
+  "stripping-ratio": {
+    summary:
+      "Tonnes of waste that must be moved for each tonne of ore — the number that quietly sets open-pit costs.",
+    whyItMatters:
+      "It is the most underappreciated figure in a pit study. A modest change to it moves operating cost per ounce more than a comparable change to grade, because waste haulage is the largest line item at most open-pit mines.",
+    inPractice:
+      "Check both the life-of-mine average and the profile by year. Ratios that climb steeply late in the plan mean the back end of the mine is worth far less than the headline reserve suggests.",
+    seeAlso: [
+      "open-pit-mining",
+      "operating-expenditure-opex",
+      "mineral-reserve",
+      "cut-off-grade",
+    ],
+  },
+  "metallurgical-recovery": {
+    summary:
+      "The share of metal in the rock that the plant actually captures and sells.",
+    whyItMatters:
+      "Recovery multiplies straight through to revenue. A deposit at 90% recovery delivers a quarter more metal than the same rock at 72%, and poor metallurgy has killed more good-looking grades than poor geology has.",
+    inPractice:
+      "Recovery comes from test work on real samples, and early-stage numbers are often assumptions. Treat a recovery figure without supporting metallurgical testing as a placeholder.",
+    pitfall:
+      "Refractory ore — gold locked inside sulphide minerals — resists conventional leaching and needs roasting or pressure oxidation. That is a capital cost decision hiding inside a recovery percentage.",
+    seeAlso: [
+      "mining-recovery",
+      "flotation",
+      "cyanide-leaching",
+      "carlin-type-deposit",
+      "concentrate",
+    ],
+  },
+  "mining-recovery": {
+    summary:
+      "The proportion of the defined orebody that actually gets extracted, as opposed to left behind in pillars or lost to the mine plan.",
+    whyItMatters:
+      "Distinct from metallurgical recovery, and often confused with it. This one is about what comes out of the ground; the other is about what comes out of the plant. Both are applied, and both shrink the reserve.",
+    seeAlso: [
+      "metallurgical-recovery",
+      "dilution",
+      "mineral-reserve",
+      "underground-mining",
+    ],
+  },
+  dilution: {
+    summary:
+      "Waste rock that gets mined along with the ore, lowering the grade that reaches the mill.",
+    whyItMatters:
+      "Dilution is the gap between the grade in the resource model and the grade the plant actually sees. Narrow-vein underground mines suffer it most, and a project that models 5% dilution but delivers 25% has an entirely different cost structure than its study described.",
+    pitfall:
+      "In mining this word means rock, not shares. The financing sense of dilution is a separate concept and the two appear in the same documents.",
+    seeAlso: [
+      "true-width",
+      "underground-mining",
+      "mining-recovery",
+      "cut-off-grade",
+    ],
+  },
+  flotation: {
+    summary:
+      "Separating minerals by making the valuable ones stick to bubbles — the dominant process route for sulphide ores.",
+    whyItMatters:
+      "Flotation produces a concentrate rather than a finished metal, which means smelter terms, transport costs and payability all sit between the mine and the revenue. That is a different business from a gold mine pouring its own doré.",
+    inPractice:
+      "Concentrate grade and the impurities alongside it decide what a smelter will pay. Arsenic, antimony and mercury attract penalties heavy enough to sink an otherwise sound project.",
+    seeAlso: [
+      "concentrate",
+      "metallurgical-recovery",
+      "polymetallic-deposit",
+      "gravity-separation",
+    ],
+  },
+  concentrate: {
+    summary:
+      "The upgraded product a mine ships — ore reduced to a fraction of its bulk with most of the metal retained.",
+    whyItMatters:
+      "Selling concentrate rather than metal means a third party sets much of your economics. Treatment and refining charges, payable percentages and impurity penalties are all negotiated, and none of them appear in a headline grade.",
+    seeAlso: [
+      "flotation",
+      "metallurgical-recovery",
+      "spodumene",
+      "polymetallic-deposit",
+    ],
+  },
+  "heap-leaching": {
+    summary:
+      "Stacking crushed ore on a lined pad and trickling solution through it to dissolve the metal — low cost, low recovery.",
+    whyItMatters:
+      "Heap leaching makes low-grade oxide deposits economic that no mill could justify. Capital cost is a fraction of a conventional plant, which is why it is often the route a junior can actually finance.",
+    pitfall:
+      "Recoveries are typically far below milling, and leach kinetics can take months. A heap leach project's economics depend heavily on how much metal is recovered within the modelled leach cycle.",
+    seeAlso: [
+      "cyanide-leaching",
+      "metallurgical-recovery",
+      "open-pit-mining",
+      "carbon-in-pulp-cip",
+    ],
+  },
+  "cyanide-leaching": {
+    summary:
+      "Dissolving gold and silver in a dilute cyanide solution — the standard extraction chemistry for over a century.",
+    whyItMatters:
+      "Practically every gold project assumes it, so the interesting question is whether the ore responds. Free-milling ore leaches readily; refractory ore does not, and the difference is millions in extra capital.",
+    inPractice:
+      "Cyanide use drives much of a project's permitting and community risk, and is banned outright in some jurisdictions. That is a jurisdictional question as much as a technical one.",
+    seeAlso: [
+      "heap-leaching",
+      "carbon-in-pulp-cip",
+      "metallurgical-recovery",
+      "tailings",
+    ],
+  },
+  "carbon-in-pulp-cip": {
+    summary:
+      "Recovering dissolved gold onto activated carbon suspended in the leached slurry.",
+    inPractice:
+      "CIP and the closely related CIL are the standard back end of a conventional gold plant. Seeing them in a flowsheet tells you the ore is free-milling and the processing route is well understood — which is good news for financing.",
+    seeAlso: ["cyanide-leaching", "mill", "metallurgical-recovery"],
+  },
+  "gravity-separation": {
+    summary:
+      "Separating minerals by density alone, with no chemistry involved.",
+    whyItMatters:
+      "Where it works it is the cheapest recovery there is, and coarse free gold responds to it well. A gravity circuit recovering a meaningful share of the gold ahead of leaching materially improves overall economics.",
+    seeAlso: ["flotation", "metallurgical-recovery", "placer-deposit", "mill"],
+  },
+  mill: {
+    summary:
+      "The plant that crushes, grinds and processes ore into a saleable product.",
+    whyItMatters:
+      "Mill throughput and the cost of building one usually dominate a project's capital. It is also the asset a nearby producer may already own — which is why a deposit within trucking distance of an underused mill is worth disproportionately more than the same rock in isolation.",
+    seeAlso: [
+      "capital-expenditure-capex",
+      "metallurgical-recovery",
+      "concentrate",
+      "brownfield-exploration",
+    ],
+  },
+  tailings: {
+    summary:
+      "What remains after the metal is removed — the ground rock and process water a mine must store permanently.",
+    whyItMatters:
+      "Tailings storage is among the largest capital items and by far the largest long-tail liability. Dam failures have ended companies, and permitting increasingly turns on storage design rather than on the mining itself.",
+    inPractice:
+      "Dry-stack tailings cost more upfront and remove the dam failure mode entirely. Seeing it in a study is a signal about both risk appetite and the jurisdiction's expectations.",
+    seeAlso: ["mill", "cyanide-leaching", "capital-expenditure-capex"],
+  },
+  "greenfield-exploration": {
+    summary:
+      "Searching ground with no known deposit — the highest-risk, highest-reward end of exploration.",
+    whyItMatters:
+      "Greenfield discovery is where the multiples are, and where most capital is lost. It is also what flow-through financing exists to fund, since the tax treatment is designed to push money into genuine exploration.",
+    seeAlso: [
+      "brownfield-exploration",
+      "flow-through-shares",
+      "drill-program",
+      "strike-length",
+    ],
+  },
+  "brownfield-exploration": {
+    summary:
+      "Exploring near a known deposit or an existing mine, where infrastructure already exists.",
+    whyItMatters:
+      "Ounces found beside a mill are worth more than ounces found in isolation, because they can be processed without new capital. This is why historic mining camps stay actively explored for decades after their original discovery.",
+    seeAlso: [
+      "greenfield-exploration",
+      "mill",
+      "orogenic-gold",
+      "drill-program",
+    ],
+  },
+  "drill-program": {
+    summary:
+      "A planned campaign of drilling — the main way an explorer converts money into information.",
+    whyItMatters:
+      "Metres drilled and holes completed are the clearest measure of whether a company is actually working. A junior that raised money and has not drilled it is burning treasury on overheads.",
+    inPractice:
+      "Watch the purpose: step-out drilling tests whether a system extends, infill drilling tightens confidence for a resource upgrade. They are funded for different reasons and carry very different odds.",
+    seeAlso: [
+      "intercept",
+      "assay",
+      "indicated-resource",
+      "greenfield-exploration",
+    ],
+  },
+  "geophysical-survey": {
+    summary:
+      "Measuring physical properties of the ground — magnetism, conductivity, density — to see structure without drilling.",
+    whyItMatters:
+      "Geophysics is how a company decides where to spend drilling money. A well-defined conductor or magnetic anomaly is a target, not a discovery, and the distinction is routinely blurred in press releases.",
+    pitfall:
+      "An anomaly is a physical contrast, and plenty of things that are not orebodies produce one. Until it is drilled it is a reason to drill, nothing more.",
+    seeAlso: ["geochemical-survey", "drill-program", "greenfield-exploration"],
+  },
+  "geochemical-survey": {
+    summary:
+      "Sampling soil, rock or sediment to map metal concentrations across a property.",
+    whyItMatters:
+      "Geochemistry is cheap relative to drilling and narrows a large land package to a handful of targets. A coherent soil anomaly over a kilometre of strike is a far stronger case for drilling than a single high rock sample.",
+    seeAlso: [
+      "geophysical-survey",
+      "assay",
+      "strike-length",
+      "greenfield-exploration",
+    ],
+  },
+  // ------------------------------------------- battery and specialty products
+  "battery-grade-lithium": {
+    summary:
+      "Lithium chemical pure enough for cathode manufacture — typically 99.5% or better.",
+    whyItMatters:
+      "Mining lithium and producing battery-grade chemical are different businesses. Concentrate is a commodity; qualified battery-grade product sells into long-term offtake at far better margins, and qualification with a cathode maker takes years.",
+    pitfall:
+      "A company describing itself as a battery-metals producer may be selling spodumene concentrate to a converter, which is a very different position in the value chain.",
+    seeAlso: [
+      "lithium-carbonate-li2co3",
+      "lithium-hydroxide-lioh",
+      "spodumene",
+      "lithium-brine",
+    ],
+  },
+  "lithium-carbonate-li2co3": {
+    summary:
+      "The lithium chemical favoured for iron-phosphate cathodes, and the easier product to make from brine.",
+    whyItMatters:
+      "Carbonate and hydroxide are not interchangeable. LFP chemistry uses carbonate, and LFP has taken large share in standard-range vehicles and grid storage, which has shifted demand between the two products.",
+    seeAlso: [
+      "lithium-hydroxide-lioh",
+      "lithium-iron-phosphate-lfp",
+      "lithium-brine",
+      "battery-grade-lithium",
+    ],
+  },
+  "lithium-hydroxide-lioh": {
+    summary:
+      "The lithium chemical required for high-nickel cathodes, generally produced from hard rock.",
+    whyItMatters:
+      "High-nickel NMC cathodes need hydroxide because carbonate does not work well at those compositions. Which chemical a project can make determines which customers it can even approach.",
+    seeAlso: [
+      "lithium-carbonate-li2co3",
+      "nmc-battery-chemistry",
+      "spodumene",
+      "battery-grade-lithium",
+    ],
+  },
+  "class-1-nickel": {
+    summary:
+      "Nickel of at least 99.8% purity, the only kind that can be processed into battery chemicals.",
+    whyItMatters:
+      "Most world nickel goes to stainless steel and never needs this purity. Battery demand draws on a much smaller subset, which is why the nickel price and the battery-nickel story do not always move together.",
+    inPractice:
+      "Sulphide deposits reach Class 1 comparatively easily. Laterites need high-pressure acid leaching, which is capital-intensive and has a long history of cost overruns.",
+    seeAlso: [
+      "nickel-sulphate",
+      "volcanogenic-massive-sulfide-vms",
+      "metallurgical-recovery",
+    ],
+  },
+  "nickel-sulphate": {
+    summary: "The nickel chemical fed into cathode production.",
+    whyItMatters:
+      "This is the actual product a battery-facing nickel project sells. The step from Class 1 metal or from mixed hydroxide precipitate to sulphate is where a meaningful share of the value sits.",
+    seeAlso: [
+      "class-1-nickel",
+      "nmc-battery-chemistry",
+      "cathode-active-material-cam",
+    ],
+  },
+  "cobalt-sulphate": {
+    summary: "Refined cobalt chemical used directly in cathode manufacture.",
+    whyItMatters:
+      "Cobalt is the battery input with the sharpest ethical and concentration risk, most of it sourced from the DRC and refined in China. Western supply is a policy objective as much as a commercial one.",
+    seeAlso: ["cobalt-hydroxide", "nmc-battery-chemistry", "critical-minerals"],
+  },
+  "cobalt-hydroxide": {
+    summary: "The intermediate cobalt product shipped from mine to refinery.",
+    inPractice:
+      "Most DRC cobalt travels as hydroxide for refining elsewhere. A project selling hydroxide is exposed to refining margins it does not control.",
+    seeAlso: ["cobalt-sulphate", "critical-minerals"],
+  },
+  "ndpr-oxide": {
+    summary:
+      "The combined neodymium-praseodymium oxide that carries most of the value in a rare earth deposit.",
+    whyItMatters:
+      "NdPr is what permanent magnets are made from, and therefore what an EV motor or wind turbine actually needs. A rare earth project's economics are usually an NdPr story wearing a TREO headline.",
+    pitfall:
+      "Compare rare earth projects on NdPr per tonne, not on total rare earth oxide. Two deposits at identical TREO can differ several-fold in value.",
+    seeAlso: [
+      "treo-total-rare-earth-oxides",
+      "magnetic-rare-earths",
+      "neodymium-nd",
+      "praseodymium-pr",
+    ],
+  },
+  "by-product-silver": {
+    summary:
+      "Silver produced alongside a different primary metal, usually lead, zinc or copper.",
+    whyItMatters:
+      "Most of the world's silver arrives this way, which means silver supply responds to base metal economics rather than to the silver price. It is the main reason silver supply is slow to react to a rally.",
+    seeAlso: [
+      "primary-silver-producer",
+      "polymetallic-deposit",
+      "silver-streaming-agreement",
+    ],
+  },
+  "primary-silver-producer": {
+    summary:
+      "A miner earning the majority of its revenue from silver rather than as a credit.",
+    whyItMatters:
+      "There are very few of them, which is why investors seeking silver exposure often end up holding base metal risk instead. A genuine primary silver producer offers leverage to the silver price that a by-product miner does not.",
+    seeAlso: [
+      "by-product-silver",
+      "epithermal-silver-deposit",
+      "silver-gold-ratio",
+    ],
+  },
+
+  // ------------------------------------------------------- metals & materials
+  "ree-rare-earth-elements": {
+    summary:
+      "Seventeen elements that are not especially rare, but are rarely concentrated enough to mine economically.",
+    whyItMatters:
+      "The bottleneck is separation and refining, not geology. Separating adjacent rare earths is chemically difficult and capacity is heavily concentrated in China, so a Western deposit without a processing route solves only half the problem.",
+    seeAlso: [
+      "treo-total-rare-earth-oxides",
+      "magnetic-rare-earths",
+      "heavy-rare-earths-hree",
+      "light-rare-earths-lree",
+    ],
+  },
+  "magnetic-rare-earths": {
+    summary:
+      "The four rare earths used in permanent magnets: neodymium, praseodymium, dysprosium and terbium.",
+    whyItMatters:
+      "These carry nearly all the economic value in the rare earth basket. Everything else in a deposit is largely a by-product, and some of it is oversupplied to the point of being a disposal cost.",
+    seeAlso: [
+      "ndpr-oxide",
+      "neodymium-nd",
+      "dysprosium-dy",
+      "treo-total-rare-earth-oxides",
+    ],
+  },
+  "neodymium-nd": {
+    summary:
+      "The principal magnet rare earth, and the largest single value component of most REE deposits.",
+    seeAlso: ["ndpr-oxide", "praseodymium-pr", "magnetic-rare-earths"],
+  },
+  "praseodymium-pr": {
+    summary:
+      "The magnet rare earth that partners neodymium, usually reported and sold with it as NdPr.",
+    seeAlso: ["ndpr-oxide", "neodymium-nd", "magnetic-rare-earths"],
+  },
+  "dysprosium-dy": {
+    summary:
+      "A heavy rare earth added to magnets so they hold their strength at high temperature.",
+    whyItMatters:
+      "Dysprosium is what lets an EV traction motor survive under load, and it is far scarcer than the light rare earths. Deposits carrying meaningful heavies command attention disproportionate to their size.",
+    seeAlso: ["heavy-rare-earths-hree", "magnetic-rare-earths", "ndpr-oxide"],
+  },
+  "critical-minerals-list": {
+    summary:
+      "A government's published schedule of minerals it considers essential and supply-vulnerable.",
+    whyItMatters:
+      "Listing increasingly unlocks permitting priority, grant funding and offtake support. It also changes over time and differs between countries, so a company citing a list should be read against which list it means.",
+    seeAlso: ["critical-minerals", "strategic-metals", "defense-metals"],
+  },
+  "strategic-metals": {
+    summary:
+      "Metals a state considers necessary to its economy or security, overlapping heavily with critical minerals.",
+    whyItMatters:
+      "The label is used loosely in company marketing, often to attach a policy narrative to an ordinary deposit. Check whether the metal actually appears on the relevant jurisdiction's list.",
+    seeAlso: [
+      "critical-minerals",
+      "critical-minerals-list",
+      "defense-metals",
+      "technology-metals",
+    ],
+  },
+  "defense-metals": {
+    summary:
+      "Metals whose supply is treated as a defence-procurement concern — rare earths, antimony, tungsten, titanium among them.",
+    whyItMatters:
+      "Defence demand is small in tonnage but policy-driven and price-insensitive, and it has recently pulled funding toward antimony and tungsten projects that would otherwise struggle to finance.",
+    seeAlso: ["antimony", "tungsten", "critical-minerals", "strategic-metals"],
+  },
+  "precious-metals-basket": {
+    summary:
+      "Combined exposure to gold, silver, platinum and palladium rather than a single metal.",
+    inPractice:
+      "The four do not move together. Gold responds to real rates and monetary conditions, while platinum and palladium are largely industrial and tied to vehicle production, so a basket dilutes the monetary thesis some investors are actually buying.",
+    seeAlso: ["silver-gold-ratio", "silver-ounce-equivalent-ageq"],
+  },
+  // ----------------------------------------------------- geology, remainder
+  vein: {
+    summary:
+      "A sheet of mineralised rock filling a fracture — narrow, often high grade, and the classic underground target.",
+    whyItMatters:
+      "Veins produce spectacular assays and modest tonnage. The question is never whether the grade is good, it is whether there is enough of it and whether it holds together at depth and along strike.",
+    pitfall:
+      "Narrow veins carry the worst dilution. A one-metre vein cannot be mined at one metre, so the grade delivered to the mill is always below the grade in the drill hole.",
+    seeAlso: [
+      "true-width",
+      "dilution",
+      "epithermal-deposit",
+      "orogenic-gold",
+      "stockwork",
+    ],
+  },
+  stockwork: {
+    summary:
+      "A dense network of small intersecting veinlets, mineralising a whole volume of rock rather than a single structure.",
+    whyItMatters:
+      "Stockworks are how low-grade bulk-tonnage deposits form. Individually the veinlets are trivial; collectively they make a body large enough to mine from surface.",
+    seeAlso: [
+      "vein",
+      "porphyry-deposit",
+      "porphyry-copper-deposit",
+      "open-pit-mining",
+    ],
+  },
+  orebody: {
+    summary:
+      "The economically mineable part of a mineral deposit — the portion worth extracting, not merely the mineralised rock.",
+    pitfall:
+      "The word implies economics that may not have been demonstrated. Mineralisation becomes an orebody when a study says it pays, not when a drill hole finds it.",
+    seeAlso: ["mineral-resource", "mineral-reserve", "cut-off-grade"],
+  },
+  alteration: {
+    summary:
+      "Chemical change in rock caused by the same fluids that carried the metal — the fingerprint a mineralising system leaves behind.",
+    whyItMatters:
+      "Alteration extends far beyond the ore itself, which makes it the main tool for vectoring toward a deposit. Recognising a specific alteration assemblage tells a geologist which part of a system they are standing in and which direction to drill.",
+    seeAlso: [
+      "epithermal-deposit",
+      "porphyry-copper-deposit",
+      "geochemical-survey",
+      "vein",
+    ],
+  },
+  "porphyry-deposit": {
+    summary:
+      "A large, low-grade deposit formed around a cooling intrusion, most often carrying copper with gold or molybdenum.",
+    whyItMatters:
+      "Porphyries supply most of the world's copper and a good deal of its molybdenum. They are enormous, mineable from surface, and almost always beyond what a junior can build alone.",
+    seeAlso: [
+      "porphyry-copper-deposit",
+      "stockwork",
+      "molybdenum",
+      "stripping-ratio",
+    ],
+  },
+  "placer-deposit": {
+    summary:
+      "Metal concentrated by water and gravity in river gravels rather than locked in hard rock.",
+    whyItMatters:
+      "Placer gold is free, coarse and recoverable by gravity alone, which makes it cheap to work and historically the first thing found in any district. Its real significance to an explorer is as a pointer to the hard-rock source upstream.",
+    seeAlso: ["gravity-separation", "orogenic-gold", "geochemical-survey"],
+  },
+  "volcanogenic-massive-sulfide-vms": {
+    summary:
+      "Sulphide deposits formed at seafloor hydrothermal vents, typically carrying copper and zinc with silver and gold.",
+    whyItMatters:
+      "VMS bodies are compact and high grade, and they occur in clusters — finding one strongly suggests more nearby, which is why VMS camps stay explored for decades.",
+    seeAlso: [
+      "polymetallic-deposit",
+      "flotation",
+      "concentrate",
+      "class-1-nickel",
+    ],
+  },
+  "epithermal-silver-deposit": {
+    summary:
+      "A shallow-formed silver deposit, usually carrying gold and base metals alongside.",
+    whyItMatters:
+      "These are the source of most primary silver production outside base-metal by-product. Grades are quoted in the hundreds of grams per tonne, which only looks extraordinary if you are comparing against gold.",
+    seeAlso: [
+      "epithermal-deposit",
+      "silver-grade-g-t",
+      "primary-silver-producer",
+      "vein",
+    ],
+  },
+  "heavy-rare-earths-hree": {
+    summary:
+      "The scarcer, higher-atomic-weight rare earths, including dysprosium and terbium.",
+    whyItMatters:
+      "Heavies are far less abundant than the light rare earths and command much higher prices, because the magnet metals that survive heat are found here. A deposit with a meaningful heavy split is disproportionately valuable.",
+    seeAlso: [
+      "light-rare-earths-lree",
+      "dysprosium-dy",
+      "magnetic-rare-earths",
+      "treo-total-rare-earth-oxides",
+    ],
+  },
+  "light-rare-earths-lree": {
+    summary:
+      "The more abundant rare earths — lanthanum, cerium, neodymium, praseodymium.",
+    pitfall:
+      "Lanthanum and cerium are abundant to the point of oversupply, so a high TREO grade built on them is worth much less per tonne than the number suggests. The value inside the light group is neodymium and praseodymium.",
+    seeAlso: [
+      "heavy-rare-earths-hree",
+      "ndpr-oxide",
+      "treo-total-rare-earth-oxides",
+      "magnetic-rare-earths",
+    ],
+  },
+  bastnasite: {
+    summary:
+      "A rare earth carbonate mineral, one of the two principal ores of the light rare earths.",
+    inPractice:
+      "Which mineral hosts the rare earths determines the processing route, and processing is where rare earth projects usually fail. Bastnasite and monazite behave differently, and monazite carries thorium, which brings radioactive handling into the permitting.",
+    seeAlso: [
+      "ree-rare-earth-elements",
+      "light-rare-earths-lree",
+      "treo-total-rare-earth-oxides",
+    ],
+  },
+
+  // ------------------------------------------- metals & materials, remainder
+  "base-metals": {
+    summary:
+      "The industrial non-precious metals — copper, zinc, lead, nickel, aluminium, tin.",
+    whyItMatters:
+      "Base metals track industrial production and construction rather than monetary conditions, so they move on a different cycle from gold. A portfolio weighted to both is less diversified than it looks, because the equities often trade together regardless.",
+    seeAlso: ["polymetallic-deposit", "by-product-silver", "concentrate"],
+  },
+  "battery-metals": {
+    summary:
+      "The metals a lithium-ion battery needs: lithium, nickel, cobalt, graphite, manganese.",
+    pitfall:
+      "The grouping is a marketing convenience. Cathode chemistry keeps changing, and LFP's rise cut cobalt and nickel demand per vehicle while leaving lithium and graphite untouched. Which metal you hold matters more than the label.",
+    seeAlso: [
+      "nmc-battery-chemistry",
+      "lithium-iron-phosphate-lfp",
+      "class-1-nickel",
+      "graphite-natural-vs-synthetic",
+    ],
+  },
+  "energy-transition-metals": {
+    summary:
+      "Metals whose demand is driven by electrification and renewable generation — copper above all.",
+    whyItMatters:
+      "Copper is the least glamorous and most consequential of them. Every turbine, grid upgrade and vehicle needs it in tonnages nothing else matches, and no new metal substitutes for it.",
+    seeAlso: ["battery-metals", "technology-metals", "critical-minerals"],
+  },
+  "electric-vehicle-ev-metals": {
+    summary:
+      "The metals concentrated in an electric vehicle — lithium, nickel, cobalt, graphite, copper and magnet rare earths.",
+    inPractice:
+      "An EV uses roughly three to four times the copper of a combustion car, and its motor needs NdPr magnets. Those two exposures are more durable than the cathode metals, whose demand shifts with chemistry.",
+    seeAlso: [
+      "battery-metals",
+      "magnetic-rare-earths",
+      "energy-transition-metals",
+    ],
+  },
+  "technology-metals": {
+    summary:
+      "A loose grouping of metals used in small quantities in electronics and advanced manufacturing.",
+    pitfall:
+      "Among the vaguest terms in the sector, and frequently applied to a deposit to borrow a narrative. Ask which metal, what the market for it is, and who buys it — several trade in markets too small and opaque to support a mine.",
+    seeAlso: ["critical-minerals", "strategic-metals", "indium", "vanadium"],
+  },
+  "graphite-natural-vs-synthetic": {
+    summary:
+      "Mined flake graphite against graphite manufactured from petroleum coke — competing feedstocks for the same anode.",
+    whyItMatters:
+      "Synthetic performs consistently and costs more energy to make; natural is cheaper but must be processed into coated spherical purified graphite before a battery can use it. A natural graphite project's economics depend on that downstream step, not on the mine.",
+    seeAlso: ["battery-metals", "concentrate", "critical-minerals"],
+  },
+  "nmc-battery-chemistry": {
+    summary:
+      "Nickel-manganese-cobalt cathodes, the high-energy-density chemistry used where range matters.",
+    inPractice:
+      "Ratios are written as NMC 622 or NMC 811, the digits being the nickel-manganese-cobalt proportions. The industry has moved toward higher nickel to cut cobalt, which changed demand for both.",
+    seeAlso: [
+      "lithium-iron-phosphate-lfp",
+      "class-1-nickel",
+      "cobalt-sulphate",
+      "cathode-active-material-cam",
+    ],
+  },
+  "lithium-iron-phosphate-lfp": {
+    summary:
+      "A cathode using iron and phosphate instead of nickel and cobalt — cheaper, safer, lower energy density.",
+    whyItMatters:
+      "LFP has taken large share in standard-range vehicles and dominates grid storage. It uses no nickel or cobalt at all, which is the single biggest reason demand forecasts for those two metals were revised down.",
+    seeAlso: [
+      "nmc-battery-chemistry",
+      "lithium-carbonate-li2co3",
+      "battery-metals",
+    ],
+  },
+  "cathode-active-material-cam": {
+    summary:
+      "The processed cathode powder that goes into a cell — the step where refined metals become battery components.",
+    whyItMatters:
+      "CAM production is the value-added stage between mining and cell manufacture, and it sits almost entirely in Asia. Western projects that reach it capture margin no miner can.",
+    seeAlso: ["nmc-battery-chemistry", "nickel-sulphate", "gigafactory"],
+  },
+  gigafactory: {
+    summary:
+      "A very large battery cell plant, and the demand anchor a battery-metals project usually points to.",
+    pitfall:
+      "Announced capacity and operating capacity differ substantially, and timelines slip. A project justifying itself with a pipeline of announced gigafactories is relying on forecasts, not offtake.",
+    seeAlso: [
+      "cathode-active-material-cam",
+      "battery-metals",
+      "battery-grade-lithium",
+    ],
+  },
+  antimony: {
+    summary:
+      "A critical mineral used in flame retardants, ammunition and increasingly in liquid-metal grid batteries.",
+    whyItMatters:
+      "Supply is highly concentrated and Western production is minimal, which put antimony on defence-critical lists and drove a sharp price move. Very few deposits are primary antimony rather than a gold by-product.",
+    seeAlso: ["defense-metals", "critical-minerals", "tungsten"],
+  },
+  tungsten: {
+    summary:
+      "An extremely hard, high-melting-point metal used in cutting tools and armour.",
+    whyItMatters:
+      "Like antimony, supply concentration rather than geology is the story. Tungsten has no good substitute in machining, which makes even modest supply disruption disproportionately disruptive.",
+    seeAlso: ["antimony", "defense-metals", "critical-minerals"],
+  },
+  molybdenum: {
+    summary:
+      "A steel-strengthening metal recovered mostly as a by-product of copper porphyries.",
+    inPractice:
+      "Because it is a by-product, moly supply follows copper mining rather than moly demand. That makes its price unusually volatile when demand moves.",
+    seeAlso: ["porphyry-copper-deposit", "porphyry-deposit", "base-metals"],
+  },
+  vanadium: {
+    summary:
+      "A steel additive with a second, growing use in flow batteries for long-duration grid storage.",
+    whyItMatters:
+      "Most vanadium demand is still steel, so the flow-battery thesis is an option on top of an industrial commodity rather than the main business. Treat forecasts that assume otherwise with care.",
+    seeAlso: [
+      "technology-metals",
+      "critical-minerals",
+      "energy-transition-metals",
+    ],
+  },
+  indium: {
+    summary:
+      "A scarce metal used in transparent conductive coatings for screens and solar cells, recovered as a zinc by-product.",
+    pitfall:
+      "There are essentially no primary indium mines. A company presenting indium as its story is describing a credit inside a zinc deposit.",
+    seeAlso: ["base-metals", "technology-metals", "by-product-silver"],
+  },
+  "uranium-u3o8": {
+    summary:
+      "Uranium as it is reported and traded — triuranium octoxide, the concentrate known as yellowcake.",
+    whyItMatters:
+      "Uranium grades span orders of magnitude, from around 0.1% in conventional deposits to well above 15% in the Athabasca Basin. Comparing a uranium grade to anything outside its own deposit style is meaningless.",
+    inPractice:
+      "Most uranium sells on long-term contracts to utilities rather than at spot, so the spot price is a poor guide to what a producer actually receives.",
+    seeAlso: ["critical-minerals", "grade-g-t", "cut-off-grade"],
+  },
 };
 
 /** Whether a term has enough expansion to justify its own page. */
