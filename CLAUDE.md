@@ -46,8 +46,13 @@ output, so editing source without `npm run build` has no effect.
 # After git pull on the server:
 cd /var/www/goldventure/frontend
 set -o pipefail                     # so a failed build is NOT masked by the pipe
-npm run build 2>&1 | grep -v baseline-browser-mapping   # ~2-4 min; serves from .next/
-pm2 restart goldventure-frontend    # picks up the new build
+
+# If package.json changed, install FIRST — plain `npm install`, no flags:
+npm install
+
+# Build, and restart ONLY if the build succeeded (note the &&, not a newline):
+npm run build 2>&1 | grep -v baseline-browser-mapping \
+  && pm2 restart goldventure-frontend                  # ~2-4 min; serves from .next/
 
 # Useful:
 pm2 list                            # status / restart count
@@ -65,6 +70,33 @@ pm2 logs goldventure-frontend       # tail logs (check after a deploy)
 > Keep `set -o pipefail` — without it the pipeline reports grep's exit status and
 > a broken build would look like it succeeded.
 
+> **NOTE:** `npm run test:mobile` (Playwright, `frontend/tests/mobile/`) guards
+> the mobile layout at 320/375/390 and 667x375 landscape — viewport overflow,
+> the nav trigger, the auth dialogs, and touch-target sizes.
+> Against a deploy: `BASE_URL=https://juniorminingintelligence.com npm run test:mobile`.
+> It uses the locally installed Chrome, so there is no browser download.
+> Read `frontend/tests/mobile/README.md` before changing it — in particular,
+> `scrollWidth` does **not** detect overflow on this site, because the
+> `overflow-x: clip` guard on `body` in `globals.css` suppresses it. That is how
+> a 660px-wide row on `/metals` survived a full static review and three deploys.
+
+> **CRITICAL:** NEVER pass `--omit=optional` (or `--no-optional`) to npm here.
+> Tailwind 4 compiles CSS through `lightningcss`, whose platform binary
+> (`node_modules/lightningcss/lightningcss.linux-x64-gnu.node`) ships as an
+> **optional** dependency. Omitting it deletes the binary and every build then
+> dies with `Cannot find module '../lightningcss.linux-x64-gnu.node'` while
+> pointing at `app/globals.css`, which reads like a CSS problem and is not.
+> Recovery is a plain `npm install` on the server, then rebuild. This took the
+> site down for ~5 minutes on 2026-08-24. Use plain `npm install`; if you want a
+> clean tree use `npm ci` with no flags.
+>
+> **CRITICAL:** Gate the pm2 restart on the build's exit code. Chain them with
+> `&&` — never two separate lines, never `;`. `next start` serves `.next/`, so
+> restarting after a failed build swaps a working process for one with no valid
+> build, and every route returns **502**. Watch for the subtler version of this:
+> in `npm run build ...; echo "done" && pm2 restart` the restart is gated on the
+> `echo`, not on the build. That is what caused the 2026-08-24 outage.
+>
 > **CRITICAL:** Server path is `/var/www/goldventure` (NOT `/var/www/goldventure-platform`). Always deploy immediately after pushing — don't wait for the user to notice.
 >
 > **CRITICAL:** Gunicorn is managed by systemd (`/etc/systemd/system/gunicorn.service`). NEVER use `pkill -f gunicorn` + `gunicorn --daemon` — this creates duplicate processes because systemd auto-restarts the killed process (`Restart=always`). Use `systemctl reload gunicorn` for normal deploys: the unit defines `ExecReload=/bin/kill -s HUP $MAINPID`, so the master survives and gracefully cycles workers (zero downtime), and each worker re-imports the new code. Use `systemctl restart gunicorn` only when the master itself must restart (e.g. changed `ExecStart` args or env vars).
