@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import CompanyDetailClient from "./CompanyDetailClient";
+import CompanyProfileContent from "./CompanyProfileContent";
 import { parseCompanyIdParam } from "@/lib/companyUrl";
 
 const API_BASE_URL =
@@ -56,12 +57,16 @@ export default async function CompanyDetailPage({ params }: Props) {
 
   let companyRes: Response;
   let projectsRes: Response;
+  let newsRes: Response | null = null;
   try {
-    [companyRes, projectsRes] = await Promise.all([
+    [companyRes, projectsRes, newsRes] = await Promise.all([
       fetch(`${API_BASE_URL}/companies/${numericId}/`, {
         next: { revalidate: 3600 },
       }),
       fetch(`${API_BASE_URL}/companies/${numericId}/projects/`, {
+        next: { revalidate: 3600 },
+      }),
+      fetch(`${API_BASE_URL}/companies/${numericId}/news-releases/`, {
         next: { revalidate: 3600 },
       }),
     ]);
@@ -73,16 +78,43 @@ export default async function CompanyDetailPage({ params }: Props) {
 
   const company = await companyRes.json();
   const projects = projectsRes.ok ? await projectsRes.json() : [];
+  const projectList: any[] = Array.isArray(projects)
+    ? projects
+    : projects.results || [];
+
+  // The news endpoint splits releases into financial / non-financial buckets;
+  // the profile summary wants them merged and date-sorted.
+  let news: any[] = [];
+  if (newsRes?.ok) {
+    try {
+      const payload = await newsRes.json();
+      news = Array.isArray(payload)
+        ? payload
+        : [...(payload.financial || []), ...(payload.non_financial || [])];
+    } catch {
+      news = [];
+    }
+  }
 
   // BreadcrumbList + NewsArticle JSON-LD are emitted from layout.tsx —
   // see comment there for the Next.js 16 RSC streaming caveat.
 
   return (
-    <CompanyDetailClient
-      initialCompany={company}
-      initialProjects={
-        Array.isArray(projects) ? projects : projects.results || []
-      }
-    />
+    <>
+      <CompanyDetailClient
+        initialCompany={company}
+        initialProjects={projectList}
+      />
+      {/*
+        Server-rendered facts below the interactive tabs. The tabs are a client
+        component, so until now every profile shipped roughly 250 crawlable
+        words no matter how much data sat behind it.
+      */}
+      <CompanyProfileContent
+        company={company}
+        projects={projectList}
+        news={news}
+      />
+    </>
   );
 }
