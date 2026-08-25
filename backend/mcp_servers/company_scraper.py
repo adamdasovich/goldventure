@@ -186,6 +186,186 @@ def score_location(page_text: str, emphasis_text: str = '') -> Optional[str]:
         return None
     return max(scores.items(), key=lambda kv: kv[1])[0]
 
+# ---------------------------------------------------------------------------
+# Company name cleanup
+#
+# The name is taken from the homepage <title>, which is written for humans and
+# search engines, not for us. Fifteen live companies had to be repaired by hand
+# on 2026-08-25 because the raw title went straight into the database and from
+# there into the <h1>, <title>, meta description, JSON-LD and the URL slug:
+#
+#   "Rokmaster Resources Website"
+#   "Waratah Minerals - ASX:WTM"
+#   "Nouveau Monde Graphite >> Solutions zero-carbone(tm)"
+#   "GR Silver Mining (GRSL)"
+#   "LAHONTAN GOLD CORP"
+#
+# clean_company_name() is deliberately conservative: it only removes material
+# it can positively identify as page furniture. It is validated against every
+# name already in the database, and must be a no-op on all of them.
+# ---------------------------------------------------------------------------
+
+# Separators sites put between their name and a tagline. Ordered longest-first
+# so " - " is tried before a bare hyphen.
+_NAME_SEPARATORS = [
+    '|', '»', '«', '‹', '›', '•', '·', '≫', '≪', '—', '–',
+    ' -- ', ' - ', ':: ', ': ',
+]
+
+# A hyphen glued to the preceding word but followed by a space, as in
+# "Blackrock Silver- Silver, Gold & Lithium Exploration".
+_GLUED_HYPHEN = re.compile(r'(?<=\w)-\s+')
+
+# Page furniture that is not part of any company name.
+_FURNITURE_WORDS = {
+    'home', 'homepage', 'website', 'web site', 'official website',
+    'official site', 'welcome', 'index', 'main', 'menu', 'overview',
+    'landing page', 'site',
+}
+
+# A trailing exchange listing, e.g. "ASX:WTM", "(TSXV: ABC)", "- TSX.V:RKR".
+_LISTING_TAIL = re.compile(
+    r'[\s\-–—•·|,]*\(?\b(?:TSXV|TSX\.?V?|CSE|CNSX|ASX|NYSE(?:\s*American)?|NASDAQ|'
+    r'OTCQB|OTCQX|OTC|LSE|AIM|FSE|FRA)\s*[:.]\s*[A-Z0-9.]{1,8}\)?\s*$',
+    re.IGNORECASE,
+)
+
+# A bare trailing ticker in brackets, e.g. "(GRSL)", "(MAX.V)".
+_PAREN_TICKER = re.compile(r'\s*\(\s*[A-Z]{1,6}(?:\.[A-Z]{1,3})?\s*\)\s*$')
+
+# A truncated listing left dangling, e.g. 'Galway Metals Inc. (TSX.V'.
+_UNCLOSED_BRACKET = re.compile(r'\s*\([^()]*$')
+
+# Trademark and copyright marks.
+_SYMBOLS = re.compile(r'[™®©℠]')
+
+# Strong corporate suffixes -- the surest sign a fragment is the real name.
+_CORPORATE = (
+    'corp', 'corporation', 'inc', 'incorporated', 'ltd', 'limited',
+    'llc', 'plc', 'company', 'co.',
+)
+# Sector words: suggestive but far weaker than a corporate suffix.
+_SECTOR = (
+    'resources', 'metals', 'mining', 'minerals', 'exploration', 'ventures',
+    'holdings', 'group', 'energy', 'capital', 'royalt',
+)
+_COMMODITY = (
+    'gold', 'silver', 'copper', 'nickel', 'lithium', 'uranium', 'cobalt',
+    'graphite', 'zinc', 'platinum', 'potash', 'antimony', 'tungsten',
+)
+# Marketing language -- a fragment containing this is a tagline, not a name.
+_TAGLINE_WORDS = (
+    'unlocking', 'discovering', 'exploring', 'developing', 'building',
+    'focused on', 'leading', 'premier', 'innovative', 'potential',
+    'opportunity', 'future', 'investment in', 'investing in', 'committed to',
+    'creating', 'delivering', 'advancing', 'powering', 'solutions',
+    'next generation', 'welcome to',
+)
+
+
+def _is_acronym(word: str) -> bool:
+    """A ticker-like token that should keep its capitals (BWR, NMG, STLLR)."""
+    stripped = re.sub(r'[^A-Za-z]', '', word)
+    return len(stripped) <= 3 or not re.search(r'[AEIOUaeiou]', stripped)
+
+
+def _strip_furniture(text: str) -> str:
+    """Remove trailing listings, bracketed tickers and nav words, repeatedly."""
+    prev = None
+    while prev != text:
+        prev = text
+        text = _LISTING_TAIL.sub('', text).strip()
+        text = _PAREN_TICKER.sub('', text).strip()
+        # Trailing furniture word, with or without a separator in front.
+        lowered = text.lower()
+        for word in sorted(_FURNITURE_WORDS, key=len, reverse=True):
+            for joiner in (' - ', ' | ', ' ', ''):
+                tail = joiner + word
+                if joiner and lowered.endswith(tail):
+                    text = text[: -len(tail)].strip(' -|–—:·•')
+                    break
+                if not joiner and lowered.endswith(' ' + word):
+                    text = text[: -(len(word) + 1)].strip(' -|–—:·•')
+                    break
+            lowered = text.lower()
+    return text
+
+
+def _score_name_part(part: str, is_first: bool) -> int:
+    """How likely this fragment of a <title> is the company name."""
+    low = part.lower()
+    score = 0
+    if any(f' {k}' in f' {low}' for k in _CORPORATE):
+        score += 10
+    if any(k in low for k in _SECTOR):
+        score += 3
+    if any(k in low for k in _COMMODITY):
+        score += 1
+    if any(k in low for k in _TAGLINE_WORDS):
+        score -= 6
+    # Real names are short. Taglines run on.
+    if len(part) < 30:
+        score += 2
+    elif len(part) > 45:
+        score -= 2
+    # A sentence fragment ("... in British Columbia") is prose, not a name.
+    if re.search(r'\b(?:in|for|across|throughout|with)\b', low):
+        score -= 2
+    if is_first:
+        score += 1
+    return score
+
+
+def clean_company_name(raw: str) -> str:
+    """
+    Reduce a homepage <title> to the company name.
+
+    Returns the input unchanged when nothing is confidently identifiable as
+    furniture -- a slightly long name is much cheaper than a mangled one.
+    """
+    if not raw:
+        return ''
+
+    text = _SYMBOLS.sub('', raw).replace('\u00a0', ' ')
+    text = re.sub(r'\s+', ' ', text).strip()
+    text = _strip_furniture(text)
+
+    # An unclosed trailing bracket is a truncated listing, e.g.
+    # 'Trident Resources Corp (TSX-V: ROCK'. Drop it before the separator
+    # split runs, or the ': ' split keeps the dangling bracket.
+    text = _UNCLOSED_BRACKET.sub('', text).strip()
+
+    # Normalise a glued hyphen so the separator split can see it.
+    text = _GLUED_HYPHEN.sub(' - ', text)
+
+    parts = None
+    for sep in _NAME_SEPARATORS:
+        if sep in text:
+            candidates = [p.strip() for p in text.split(sep) if p.strip()]
+            if len(candidates) >= 2:
+                parts = candidates
+                break
+
+    if parts:
+        best = max(
+            parts,
+            key=lambda p: (_score_name_part(p, p == parts[0]), -parts.index(p)),
+        )
+        # Only accept the split if it actually improved things.
+        if _score_name_part(best, best == parts[0]) > 0:
+            text = best
+
+    text = _strip_furniture(text).strip(' -|–—:·•,')
+
+    # SHOUTED names ("LAHONTAN GOLD CORP") come from a styled logo or header.
+    # Short all-caps tokens are acronyms and are left alone.
+    words = text.split()
+    if len(words) >= 2 and text == text.upper() and re.search(r'[A-Z]{2}', text):
+        text = ' '.join(w if _is_acronym(w) else w.capitalize() for w in words)
+
+    return text.strip()
+
+
 
 class CompanyDataScraper:
     """
@@ -890,6 +1070,20 @@ class CompanyDataScraper:
                         if h1_text and any(kw in h1_text.lower() for kw in company_suffixes):
                             self.extracted_data['company']['name'] = h1_text
                             break
+
+            # One cleanup pass over whichever source won above. The title,
+            # og:site_name, RSS title, logo alt and h1 are all written for
+            # humans, so any of them can arrive carrying a tagline, a nav
+            # word or a ticker.
+            raw_name = self.extracted_data['company'].get('name') or ''
+            if raw_name:
+                cleaned = clean_company_name(raw_name)
+                if cleaned:
+                    if cleaned != raw_name:
+                        logger.info(
+                            f"[NAME] cleaned {raw_name!r} -> {cleaned!r}"
+                        )
+                    self.extracted_data['company']['name'] = cleaned
 
             # Extract tagline/slogan (usually in hero section)
             hero_selectors = [

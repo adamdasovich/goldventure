@@ -641,10 +641,25 @@ def _save_scraped_company_data(data: dict, source_url: str, update_existing: boo
 def _create_or_update_company(data: dict, source_url: str, update_existing: bool):
     """Find or create company from scraped data."""
     from core.models import Company
+    # Imported lazily, like scrape_company_website below -- company_scraper
+    # pulls in crawl4ai at module level.
+    from mcp_servers.company_scraper import clean_company_name
 
     company_data = data.get('company', {})
     if not company_data.get('name'):
         raise Exception("No company name extracted - cannot create record")
+
+    # Second line of defence. The scraper already cleans what it extracts,
+    # but this is the single point every code path saves a company through,
+    # and a page <title> reaching the database here ends up in the <h1>,
+    # the <title>, the JSON-LD and the URL slug all at once.
+    cleaned_name = clean_company_name(company_data['name'])
+    if cleaned_name and cleaned_name != company_data['name']:
+        logger.info(
+            f"[ONBOARD] cleaned company name "
+            f"{company_data['name']!r} -> {cleaned_name!r}"
+        )
+        company_data['name'] = cleaned_name
 
     # Check for existing company
     existing = None
@@ -658,7 +673,10 @@ def _create_or_update_company(data: dict, source_url: str, update_existing: bool
     # Prepare fields with length truncation
     fields = {
         'name': (company_data.get('name') or '')[:200],
-        'legal_name': (company_data.get('legal_name') or company_data.get('name') or '')[:200],
+        # Deliberately NOT falling back to name: a display name is not a
+        # legal name, and mirroring the two left no clean value to recover
+        # from when the scraper wrote a page title into both.
+        'legal_name': (company_data.get('legal_name') or '')[:200],
         'ticker_symbol': (company_data.get('ticker_symbol') or '')[:10],
         'description': (company_data.get('description') or '')[:2000],
         'tagline': (company_data.get('tagline') or '')[:500],
