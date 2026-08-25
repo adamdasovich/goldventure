@@ -846,7 +846,16 @@ class CompanyDataScraper:
             # Simple URL slug at root level (e.g., /laird-lake/)
             is_simple_slug = len(parts) == 1 and '-' in parts[0]
 
-            if has_project_indicator or (is_short_name and is_simple_slug):
+            # A derived label has to say "project" (or similar) outright. The
+            # loose "short name at root level" heuristic is fine for a link
+            # whose visible text a human wrote, but image-card links to team
+            # bios also produce short hyphenated slugs -- Centurion Minerals
+            # yielded 'David Tafel', 'Dennis LaPoint' and 'Director' as project
+            # candidates once derived labels were allowed through it.
+            derived = link.get('derived', False)
+            if has_project_indicator or (
+                not derived and is_short_name and is_simple_slug
+            ):
                 full_url = urljoin(self.base_url, url)
                 if full_url not in potential_urls:
                     potential_urls.append(full_url)
@@ -1536,13 +1545,22 @@ class CompanyDataScraper:
                 # A long label is a sentence inside body copy, not navigation.
                 if len(text) >= 50:
                     continue
+                derived = False
                 if not text:
                     text = _link_label(link)
+                    derived = True
                 if not text:
                     continue
                 # Only internal links
                 if self._is_internal_link(href):
-                    nav_links.append({'url': href, 'text': text[:120]})
+                    nav_links.append({
+                        'url': href,
+                        'text': text[:120],
+                        # True when the label came from alt/title/slug rather
+                        # than the anchor's own text. Project discovery trusts
+                        # these less -- see _find_potential_project_urls.
+                        'derived': derived,
+                    })
             self.extracted_data['_nav_links'] = nav_links
 
             # Extract project URLs from dropdown navigation menus
