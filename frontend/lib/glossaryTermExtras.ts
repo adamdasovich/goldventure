@@ -411,6 +411,169 @@ export const TERM_EXTRAS: Record<string, TermExtra> = {
       "silver-grade-g-t",
     ],
   },
+  // ------------------------------------------------------------------ geology
+  "grade-g-t": {
+    summary:
+      "How much metal is in the rock, in grams per tonne — the number every drill release leads with.",
+    whyItMatters:
+      "Grade drives everything downstream: how much rock you must move per ounce, what processing route works, and whether the deposit survives a weak price. Higher grade forgives a great deal of bad luck elsewhere.",
+    inPractice:
+      "Judge grade against the deposit type, never in isolation. Around 1 g/t gold can be economic in a bulk-tonnage open pit and hopeless underground, while 5 g/t underground is often excellent. Base metals are quoted as a percentage instead.",
+    pitfall:
+      "Comparing grades across companies without checking cut-off grades and deposit styles. It is the most common apples-to-oranges error in the sector.",
+    seeAlso: ["cut-off-grade", "intercept", "true-width", "ounce-troy-ounce"],
+  },
+  intercept: {
+    summary:
+      "The length of mineralised rock a drill hole passed through, quoted with its grade.",
+    whyItMatters:
+      "Intercepts are the raw output of exploration and the main driver of junior share prices. A single spectacular hole can re-rate a company before anyone knows whether it repeats.",
+    inPractice:
+      "Read grade and width together — 50m at 1 g/t and 5m at 10 g/t contain similar metal but imply very different mines. Then check whether the width quoted is true width or downhole length.",
+    pitfall:
+      "Headline intercepts are chosen by the company. Look for the full table of results, including the holes that missed, and for how the composite was calculated.",
+    seeAlso: ["true-width", "grade-g-t", "assay", "drill-program"],
+  },
+  "true-width": {
+    summary:
+      "The actual thickness of a mineralised zone, as opposed to the longer distance a drill hole travels through it at an angle.",
+    whyItMatters:
+      "Downhole length always overstates thickness unless the hole is perpendicular to the zone. A company quoting downhole length without disclosing true width is flattering its own results, sometimes by a factor of two or more.",
+    pitfall:
+      'Wording such as "true width is estimated to be 60-70% of downhole length" is doing real work in a release. Read it, then mentally rescale the headline.',
+    seeAlso: ["intercept", "grade-g-t", "vein", "strike-length"],
+  },
+  "strike-length": {
+    summary:
+      "How far a mineralised structure extends horizontally along its trend.",
+    whyItMatters:
+      "Strike length is the crude measure of how big a system might get. A high-grade vein over 200m is a curiosity; the same grade over 4km is a district.",
+    inPractice:
+      'Watch for "open along strike", which means drilling stopped rather than the mineralisation. It is the single most common reason a resource grows between statements.',
+    seeAlso: ["intercept", "vein", "orebody", "greenfield-exploration"],
+  },
+  assay: {
+    summary:
+      "The laboratory measurement of metal content in a sample — the step that turns a promising-looking core in a box into a number.",
+    whyItMatters:
+      "Assays are the evidence base for everything else. Until they return, visual observations of mineralisation are exactly that, and companies that lean too heavily on visuals before assays are worth treating carefully.",
+    inPractice:
+      "Turnaround at commercial labs is often measured in weeks to months and lengthens in busy markets, which is why drill programmes and news flow are so frequently out of step.",
+    seeAlso: ["intercept", "grade-g-t", "qualified-person", "drill-program"],
+  },
+  "porphyry-copper-deposit": {
+    summary:
+      "A very large, low-grade copper system formed around an intrusion — the source of most of the world's copper.",
+    whyItMatters:
+      "Porphyries supply the bulk of global copper because they are enormous, not because they are rich. Grades near 0.4% Cu are workable at scale, which means huge capital cost and long permitting timelines.",
+    inPractice:
+      "Judge a porphyry on tonnage, strip ratio, by-product credits and jurisdiction rather than grade. Gold and molybdenum credits often decide the economics.",
+    pitfall:
+      "A junior with a genuine porphyry discovery usually cannot build it. These are multi-billion-dollar mines, so the realistic outcome is a sale to a major.",
+    seeAlso: [
+      "porphyry-deposit",
+      "stripping-ratio",
+      "grade-g-t",
+      "capital-expenditure-capex",
+    ],
+  },
+  "epithermal-deposit": {
+    summary:
+      "A gold and silver deposit formed at shallow depth by hot fluids, typically high-grade and structurally controlled.",
+    whyItMatters:
+      "Epithermal systems produce the spectacular drill intercepts juniors are re-rated on. They are also narrow and erratic, so tonnage is usually the constraint rather than grade.",
+    inPractice:
+      "Look for the vertical extent of the system and evidence it stays mineralised at depth. Many epithermal deposits are rich near surface and pinch out quickly.",
+    seeAlso: ["epithermal-silver-deposit", "vein", "true-width", "alteration"],
+  },
+  "orogenic-gold": {
+    summary:
+      "Gold deposited in structures formed during mountain building — the style behind most of Canada's and Australia's historic gold camps.",
+    whyItMatters:
+      "Orogenic systems are the classic underground gold mine: narrow, high grade, and persistent to great depth. Many have produced for decades, which makes brownfield ground around old camps consistently attractive.",
+    seeAlso: ["vein", "brownfield-exploration", "strike-length", "grade-g-t"],
+  },
+  "carlin-type-deposit": {
+    summary:
+      "Sediment-hosted, very fine-grained gold deposits, characteristic of Nevada and responsible for a large share of US production.",
+    whyItMatters:
+      "Carlin gold is invisible to the eye and often refractory, so metallurgy matters as much as grade. Nevada's endowment and permitting regime make the style disproportionately important to North American juniors.",
+    seeAlso: ["metallurgical-recovery", "cyanide-leaching", "grade-g-t"],
+  },
+  "lithium-brine": {
+    summary:
+      "Lithium dissolved in subsurface salt-water, concentrated by evaporation rather than mined as rock.",
+    whyItMatters:
+      "Brine and hard-rock lithium are different businesses. Brine has lower operating costs and much longer ramp-up, and its grades are quoted in milligrams per litre rather than as a percentage, so the two cannot be compared directly.",
+    inPractice:
+      "Watch flow rates and aquifer characteristics as closely as grade — the ability to actually pump the brine decides the project.",
+    seeAlso: ["spodumene", "battery-grade-lithium", "lithium-carbonate-li2co3"],
+  },
+  spodumene: {
+    summary:
+      "The hard-rock lithium mineral, mined from pegmatites and reported as a percentage of Li₂O.",
+    whyItMatters:
+      "Spodumene projects reach production faster than brines and dominate Western supply growth. Concentrate is typically shipped at around 6% Li₂O for downstream conversion.",
+    seeAlso: [
+      "lithium-brine",
+      "battery-grade-lithium",
+      "concentrate",
+      "lithium-hydroxide-lioh",
+    ],
+  },
+  "polymetallic-deposit": {
+    summary:
+      "A deposit carrying several economic metals at once, most often some combination of zinc, lead, copper, silver and gold.",
+    whyItMatters:
+      "By-product credits can make or break a polymetallic project, and they introduce exposure to metals the company may never mention in its marketing. They are also why equivalence grades exist, and why those grades need reading carefully.",
+    seeAlso: [
+      "copper-equivalent-cueq",
+      "silver-ounce-equivalent-ageq",
+      "volcanogenic-massive-sulfide-vms",
+      "concentrate",
+    ],
+  },
+
+  // --------------------------------------------------------------- regulatory
+  "ni-43-101": {
+    summary:
+      "The Canadian rule governing how mineral projects may be described in public, and the reason mining disclosure is as standardised as it is.",
+    whyItMatters:
+      "NI 43-101 exists because the sector has a long history of unverifiable claims. It requires technical information to be prepared or approved by a qualified person with defined credentials and personal accountability, which is what separates a resource estimate from a press release.",
+    inPractice:
+      "Technical reports are filed on SEDAR+ and are the primary source for any serious assessment — assumptions, cut-offs, recoveries and risks all live there rather than in the news release.",
+    pitfall:
+      "Historical resource estimates predating the standard, or foreign estimates not prepared to it, are frequently quoted with a disclaimer nobody reads. They are not directly comparable to compliant figures.",
+    seeAlso: [
+      "qualified-person",
+      "mineral-resource",
+      "mineral-reserve",
+      "feasibility-study",
+    ],
+  },
+  "qualified-person": {
+    summary:
+      "The credentialed engineer or geoscientist who takes personal responsibility for technical disclosure under NI 43-101.",
+    whyItMatters:
+      "The QP requirement is the accountability mechanism of the whole standard. Someone with a professional designation and a reputation to lose has to sign off, which is why compliant estimates carry weight that a company's own claims do not.",
+    inPractice:
+      "Look for who the QP is and whether they are independent of the company. An independent QP on a resource estimate is a meaningfully stronger signal than an internal one.",
+    seeAlso: ["ni-43-101", "mineral-resource", "assay"],
+  },
+  "critical-minerals": {
+    summary:
+      "Minerals a government has designated as essential to its economy or defence and vulnerable to supply disruption.",
+    whyItMatters:
+      "Designation is a policy instrument, not a geological one, but it moves real money: permitting priority, grants and offtake support increasingly follow the lists. A project's inclusion can change its financing options.",
+    pitfall:
+      "The lists differ between jurisdictions and are revised periodically. A company describing its metal as critical may be citing a list that does not apply where it operates.",
+    seeAlso: [
+      "critical-minerals-list",
+      "strategic-metals",
+      "defense-metals",
+      "ree-rare-earth-elements",
+    ],
+  },
 };
 
 /** Whether a term has enough expansion to justify its own page. */
