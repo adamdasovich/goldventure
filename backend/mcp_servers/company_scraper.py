@@ -4397,6 +4397,16 @@ class CompanyDataScraper:
             'mineral resource', 'mineral reserve', 'resource estimate',
             'inferred resource', 'indicated resource', 'measured resource',
             'total resources', 'resource table', 'resource summary',
+            # Section headings that sit above the real content on a project
+            # page. 'drills' was listed but not 'drilling', so Scorpio Gold's
+            # "Drilling Highlights" heading was stored as its only project.
+            'drilling', 'highlights', 'exploration highlights',
+            'recent results', 'key results', 'summary of', 'overview of',
+            # Bare descriptors with no name attached. Pirate Gold offered
+            # "High-Grade Project", which names nothing.
+            'high-grade project', 'high grade project', 'flagship project',
+            'flagship property', 'core project', 'main project',
+            'our project', 'the project', 'current project',
             # Job titles -- these arrive when a team bio page gets scraped as
             # though it were a project page.
             'director', 'president', 'chairman', 'chairwoman', 'chief executive',
