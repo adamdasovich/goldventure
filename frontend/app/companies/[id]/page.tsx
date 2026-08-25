@@ -27,13 +27,12 @@ export async function generateStaticParams() {
       const results = data.results || [];
       allParams = [
         ...allParams,
+        // Every real company is prerendered, not just the ones thick enough
+        // to index. With dynamicParams disabled, anything left out of this
+        // list 404s -- and a thin-but-real company should still have a page.
+        // Whether it is indexed is layout.tsx's decision, separately.
         ...results
-          .filter(
-            (c: any) =>
-              c.name &&
-              (c.description || c.brief_description) &&
-              (c.project_count ?? 0) > 0,
-          )
+          .filter((c: any) => c.name)
           .map((c: any) => ({
             id: c.slug ? `${c.id}-${c.slug}` : String(c.id),
           })),
@@ -47,6 +46,13 @@ export async function generateStaticParams() {
     return [];
   }
 }
+
+// Anything outside generateStaticParams 404s at the router instead of being
+// rendered. notFound() alone could not do this: with dynamic params enabled
+// Next serves an ISR shell for an unknown id and answers HTTP 200, so
+// /companies/<anything> read as a soft 404 over an unbounded URL space, and a
+// deleted company left a live-looking page behind.
+export const dynamicParams = false;
 
 export const revalidate = 3600;
 
