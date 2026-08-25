@@ -1,6 +1,7 @@
 import OpenFinancingsClient, {
   type OpenFinancingsResponse,
 } from "./OpenFinancingsClient";
+import OpenFinancingsContext from "./OpenFinancingsContext";
 
 const API_BASE_URL =
   process.env.API_BASE_URL ||
@@ -29,5 +30,16 @@ export default async function OpenFinancingsPage() {
     // Fall back to the client-side fetch in OpenFinancingsClient.
   }
 
-  return <OpenFinancingsClient initialData={initialData} />;
+  return (
+    <>
+      <OpenFinancingsClient initialData={initialData} />
+      {/*
+        The table above is a client component, so the page rendered 712 words
+        with no <h2> and a single <h3> containing the number 16.
+        /closed-financings was given this treatment after Google filed it under
+        Soft 404; this page was missed.
+      */}
+      <OpenFinancingsContext />
+    </>
+  );
 }
