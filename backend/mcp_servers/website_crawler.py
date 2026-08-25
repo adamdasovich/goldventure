@@ -626,6 +626,26 @@ GENERIC_PAGE_FILENAMES = {
 }
 
 
+def _news_date(value) -> "datetime | None":
+    """
+    Parse a news item's stored date, or None.
+
+    Dates reach this module as '%Y-%m-%d' strings, but not every extraction
+    path guarantees that. The early-exit checks used to call strptime bare
+    inside a generator, so one malformed date raised straight past them into
+    the per-pattern `except Exception: continue` -- silently abandoning the
+    rest of that pattern's processing rather than skipping one bad date.
+    """
+    if not value:
+        return None
+    if isinstance(value, datetime):
+        return value
+    try:
+        return datetime.strptime(str(value), '%Y-%m-%d')
+    except (ValueError, TypeError):
+        return None
+
+
 def is_valid_news_url(url):
     """Reject URLs that point at a listing/section page rather than an article.
 
@@ -5883,9 +5903,31 @@ async def crawl_html_news_pages(url: str, months: int = 6, custom_news_url: str 
                     news_url_clean = news_url.rstrip('/').split('?')[0]  # Normalize for comparison
                     is_cached = cached_news_url and news_url_clean == cached_news_url.rstrip('/').split('?')[0]
                     is_custom = custom_news_url and news_url_clean.startswith(custom_news_url.rstrip('/'))
-                    if (is_cached or is_custom) and len(news_by_url) >= 15:
-                        logger.info(f"[FAST-EXIT] Known URL found {len(news_by_url)} items, skipping remaining patterns")
-                        break
+                    if is_cached or is_custom:
+                        # The 15-item bar was raised from 5 because a cached
+                        # page can be stale -- an archive that no longer carries
+                        # the newest releases. But item count is a poor proxy
+                        # for staleness: a live news page listing eight
+                        # releases fails it, and 79% of companies WITH a known
+                        # good URL went on to probe all ~75 patterns anyway,
+                        # 59% of them running until the time limit cut them off.
+                        #
+                        # Freshness is the thing actually being tested, so test
+                        # it. A page carrying a release from the last 45 days is
+                        # demonstrably current and worth trusting at a much
+                        # lower count. The 15-item path stays for pages that
+                        # publish no dates we can parse.
+                        cutoff = datetime.now() - timedelta(days=45)
+                        recent = sum(
+                            1 for item in news_by_url.values()
+                            if (_news_date(item.get('date')) or datetime.min) > cutoff
+                        )
+                        if len(news_by_url) >= 15 or (recent >= 1 and len(news_by_url) >= 3):
+                            logger.info(
+                                f"[FAST-EXIT] Known URL found {len(news_by_url)} items "
+                                f"({recent} within 45 days), skipping remaining patterns"
+                            )
+                            break
 
                 # ============================================================
                 # EARLY EXIT CHECKS - prevent scrapes from running 2+ hours
@@ -5896,9 +5938,11 @@ async def crawl_html_news_pages(url: str, months: int = 6, custom_news_url: str 
                 # to exit before reaching URL patterns where newer releases lived,
                 # resulting in missed news (e.g., Feb 10th releases not captured)
                 if months <= 6:  # Only for short-term scraping (daily scrape uses months=3)
-                    recent_count = sum(1 for n in news_by_url.values()
-                                      if n.get('date') and
-                                      datetime.strptime(n['date'], '%Y-%m-%d') > datetime.now() - timedelta(days=30))
+                    recent_cutoff = datetime.now() - timedelta(days=30)
+                    recent_count = sum(
+                        1 for item in news_by_url.values()
+                        if (_news_date(item.get('date')) or datetime.min) > recent_cutoff
+                    )
                     if recent_count >= 10:
                         logger.info(f"[EARLY-EXIT] Found {recent_count} recent news items, stopping URL pattern search")
                         break
