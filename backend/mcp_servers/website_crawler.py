@@ -2022,10 +2022,6 @@ async def crawl_html_news_pages(url: str, months: int = 6, custom_news_url: str 
 
     news_by_url: Dict[str, Dict] = {}  # Map URL -> news item (prefer items with dates)
     successful_news_url = None  # Track which URL pattern found news
-    # Raw item count returned by any structured source (WordPress REST, Strapi,
-    # RSS), before the date cutoff trims it. Used to decide whether the HTML
-    # URL sweep is needed at all -- see the [API-COMPLETE] gate below.
-    structured_api_items = 0
     cutoff_date = datetime.now() - timedelta(days=months * 30)
 
     browser_config = BrowserConfig(
@@ -2362,7 +2358,6 @@ async def crawl_html_news_pages(url: str, months: int = 6, custom_news_url: str 
 
             if wp_items_total > 0:
                 logger.info(f"[WORDPRESS] Total: {wp_items_total} news items from REST API")
-                structured_api_items = max(structured_api_items, wp_items_total)
         except Exception as e:
             logger.debug(f"WordPress REST API extraction failed: {e}")
 
@@ -2978,38 +2973,6 @@ async def crawl_html_news_pages(url: str, months: int = 6, custom_news_url: str 
         # and caused the scraper to time out before reaching URL patterns with newer releases
         time_limit_with_news = 300 if months > 6 else 150  # 5 min for onboarding, 2.5 min for daily
         time_limit_no_news = 300 if months > 6 else 180    # 5 min for onboarding, 3 min for daily
-
-        # ============================================================
-        # The URL pattern sweep is a fallback. When a structured source has
-        # already answered -- WordPress REST, Strapi, an RSS feed -- guessing
-        # roughly 75 HTML URLs adds requests and minutes without adding news.
-        #
-        # 65 of the 253 companies in one morning's batch exposed a WordPress
-        # REST API returning 90 to 100 posts, and every one of them went on to
-        # probe the full pattern list anyway. Banyan Gold got its complete news
-        # list from wp-json before the loop started, then scanned 75 URLs and
-        # ran into the time limit.
-        #
-        # The bar is the same freshness test the cached-URL exit uses: a
-        # substantial list carrying something from the last 90 days is
-        # demonstrably current. A thin or stale list still falls through to the
-        # sweep, so a site whose API returns blog posts rather than releases is
-        # not cut off from the HTML pages where its real news lives.
-        # ============================================================
-        if structured_api_items >= 20 and news_by_url:
-            api_cutoff = datetime.now() - timedelta(days=90)
-            api_recent = sum(
-                1 for item in news_by_url.values()
-                if (_news_date(item.get('date')) or datetime.min) > api_cutoff
-            )
-            if api_recent >= 1:
-                logger.info(
-                    f"[API-COMPLETE] Structured source returned "
-                    f"{structured_api_items} items, {len(news_by_url)} within "
-                    f"the window ({api_recent} in the last 90 days) — skipping "
-                    f"the URL pattern sweep"
-                )
-                news_page_patterns = []
 
         for news_url in news_page_patterns:
             # PRE-PATTERN TIME CHECK: Skip remaining patterns if we've exceeded time limits
