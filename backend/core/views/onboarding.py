@@ -255,49 +255,62 @@ def _infer_commodity_from_name(name: str) -> str:
     """
     Infer the primary commodity from a project name.
 
-    Fallback only — company_scraper.score_commodity reads the page itself and
+    Fallback only -- company_scraper.score_commodity reads the page itself and
     should be preferred. Returns '' when the name gives no signal; it must not
     guess, because a wrong commodity puts the company on the wrong landing page.
+
+    Whichever commodity is named FIRST wins. Mining convention orders a project
+    name by contribution, so "Gold-Copper" is a gold project and "Copper-Gold"
+    is a copper one. Fixed-order checking got this backwards: silver was tested
+    before copper and gold, so "Cerro Bayo Gold-Silver Project" came out silver
+    and "Bright Angel Gold - Copper Project" came out copper.
     """
     import re  # module-level import is absent here; the file imports locally
 
     name_lower = name.lower()
 
-    # Check for specific commodities in order of specificity
-    # Check compound commodities first
-    if 'gold-silver' in name_lower or 'gold silver' in name_lower:
-        return 'gold'  # Gold-silver projects typically listed as gold primary
-    if 'silver-gold' in name_lower or 'silver gold' in name_lower:
-        return 'silver'
-
-    # Check individual commodities
-    if 'silver' in name_lower:
-        return 'silver'
-    if 'copper' in name_lower:
-        return 'copper'
-    if 'zinc' in name_lower:
-        return 'zinc'
-    if 'nickel' in name_lower:
-        return 'nickel'
-    if 'lithium' in name_lower:
-        return 'lithium'
-    if 'uranium' in name_lower:
-        return 'uranium'
-    if 'cobalt' in name_lower:
-        return 'cobalt'
-    if 'platinum' in name_lower or 'palladium' in name_lower or 'pgm' in name_lower:
-        return 'pgm'
-    # 'ree' needs a word boundary. As a bare substring it matches inside
-    # "Creek", "Green" and "Three", and because this check ran before the gold
+    # (pattern, commodity). Matched as regexes so a word boundary can be
+    # required where a bare substring would over-match.
+    #
+    # 'ree' needs a boundary. As a bare substring it matches inside "Creek",
+    # "Green" and "Three", and because that check once ran before the gold
     # check, "Gold Creek", "Burro Creek Gold" and "Coyote Creek" were all filed
     # as rare earths -- 25 of the 28 ree-tagged projects on 2026-08-24, which
     # was very nearly the entire rare-earths landing page.
-    if 'rare earth' in name_lower or re.search(r'\bree\b', name_lower):
-        return 'ree'
-    if 'base metal' in name_lower:
-        return 'base metals'
-    if 'gold' in name_lower:
-        return 'gold'
+    patterns = [
+        (r'rare earth|\bree\b|\btreo\b', 'ree'),
+        (r'\bbase metals?\b', 'base metals'),
+        (r'\bgold\b|\bau\b', 'gold'),
+        (r'\bsilver\b|\bag\b', 'silver'),
+        (r'\bcopper\b|\bcu\b', 'copper'),
+        (r'\bzinc\b', 'zinc'),
+        (r'\bnickel\b', 'nickel'),
+        (r'\blithium\b', 'lithium'),
+        (r'\buranium\b|u3o8', 'uranium'),
+        (r'\bcobalt\b', 'cobalt'),
+        (r'\bgraphite\b', 'graphite'),
+        (r'\btungsten\b', 'tungsten'),
+        (r'\bantimony\b', 'antimony'),
+        (r'\bmolybdenum\b|\bmoly\b', 'moly'),
+        (r'\bvanadium\b', 'vanadium'),
+        (r'\bmanganese\b', 'manganese'),
+        (r'\bpotash\b', 'potash'),
+        (r'\btin\b', 'tin'),
+        (r'\blead\b', 'lead'),
+        (r'\biron ore\b', 'iron_ore'),
+        (r'platinum|palladium|\bpgm\b|\bpge\b', 'pgm'),
+    ]
+
+    best_pos = None
+    best_commodity = ''
+    for pattern, commodity in patterns:
+        match = re.search(pattern, name_lower)
+        if match and (best_pos is None or match.start() < best_pos):
+            best_pos = match.start()
+            best_commodity = commodity
+
+    if best_commodity:
+        return best_commodity
 
     # Unknown. Do NOT default to gold.
     #
