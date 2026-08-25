@@ -192,7 +192,7 @@ export default function CompaniesClient({
       <SiteHeader active="/companies" />
 
       {/* Hero Section */}
-      <section className="relative py-20 px-4 sm:px-6 lg:px-8">
+      <section className="relative py-10 sm:py-14 lg:py-20 px-4 sm:px-6 lg:px-8">
         <div className="absolute inset-0 bg-linear-to-b from-slate-900 via-slate-900 to-slate-800 opacity-50"></div>
         <div
           className="absolute inset-0"
@@ -203,38 +203,46 @@ export default function CompaniesClient({
         ></div>
 
         <div className="relative max-w-7xl mx-auto text-center">
-          <Badge variant="gold" className="mb-6">
-            Junior Mining Companies
-          </Badge>
-          <h1 className="text-5xl md:text-6xl font-bold mb-6 text-gradient-gold animate-fade-in leading-tight pb-2">
+          {/* The badge repeated the H1 word for word, so it cost a line of
+              screen and said nothing. */}
+          <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold mb-4 text-gradient-gold animate-fade-in leading-tight text-balance pb-1">
             Junior Mining Companies: Gold, Silver &amp; Critical Minerals Stocks
           </h1>
-          <p className="text-xl text-slate-300 max-w-3xl mx-auto mb-6 animate-slide-in-up">
-            Comprehensive database of junior mining companies exploring gold,
-            silver, lithium, copper, rare earths & critical minerals with
-            detailed resource estimates and project data
+          <p className="text-base sm:text-lg md:text-xl text-slate-300 max-w-2xl mx-auto mb-6 animate-slide-in-up">
+            500+ juniors exploring gold, silver, lithium, copper and critical
+            minerals — with resource estimates, financings and project data.
           </p>
-          <div className="flex flex-wrap justify-center gap-2 mb-12 animate-slide-in-up">
-            {(
-              [
-                ["gold", "Gold"],
-                ["silver", "Silver"],
-                ["copper", "Copper"],
-                ["lithium", "Lithium"],
-                ["nickel", "Nickel"],
-                ["uranium", "Uranium"],
-                ["rare-earths", "Rare Earths"],
-                ["critical-minerals", "Critical Minerals"],
-              ] as const
-            ).map(([slug, label]) => (
-              <Link
-                key={slug}
-                href={`/companies/commodity/${slug}`}
-                className="px-4 py-2.5 min-h-11 inline-flex items-center rounded-full border border-gold-500/30 text-gold-300 hover:bg-gold-500/10 text-sm transition-colors"
-              >
-                {label} companies
-              </Link>
-            ))}
+
+          {/* Eight chips wrapped to four rows on a phone and pushed the
+              listings below the fold. One swipeable row below sm, wrapped
+              above. Labels keep "companies" — they are the anchor text for
+              the /companies/commodity/* pages. */}
+          <div className="mb-8 animate-slide-in-up">
+            <p className="text-xs uppercase tracking-wider text-slate-500 mb-2">
+              Browse by commodity
+            </p>
+            <div className="flex gap-2 overflow-x-auto scrollbar-none sm:flex-wrap sm:justify-center sm:overflow-visible -mx-4 px-4 sm:mx-0 sm:px-0">
+              {(
+                [
+                  ["gold", "Gold"],
+                  ["silver", "Silver"],
+                  ["copper", "Copper"],
+                  ["lithium", "Lithium"],
+                  ["nickel", "Nickel"],
+                  ["uranium", "Uranium"],
+                  ["rare-earths", "Rare Earths"],
+                  ["critical-minerals", "Critical Minerals"],
+                ] as const
+              ).map(([slug, label]) => (
+                <Link
+                  key={slug}
+                  href={`/companies/commodity/${slug}`}
+                  className="shrink-0 px-4 py-2.5 min-h-11 inline-flex items-center whitespace-nowrap rounded-full border border-gold-500/30 text-gold-300 hover:bg-gold-500/10 text-sm transition-colors"
+                >
+                  {label} companies
+                </Link>
+              ))}
+            </div>
           </div>
 
           {!user && (
