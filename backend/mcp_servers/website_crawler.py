@@ -5893,31 +5893,40 @@ async def crawl_html_news_pages(url: str, months: int = 6, custom_news_url: str 
                 # ============================================================
                 # TRACK SUCCESSFUL URL - for caching to speed up future scrapes
                 # ============================================================
-                if not successful_news_url and len(news_by_url) > news_count_before:
+                found_here = len(news_by_url) > news_count_before
+
+                if not successful_news_url and found_here:
                     successful_news_url = news_url
                     logger.info(f"[CACHE] URL found news, marking for cache: {news_url}")
 
-                    # EARLY EXIT: If cached/custom URL found ENOUGH news, skip remaining patterns
-                    # Threshold raised from 5 to 15 — cached URLs can return stale pages
-                    # missing the newest releases, so we need a higher bar before trusting them
+                # EARLY EXIT: a known-good URL that is demonstrably current ends
+                # the sweep.
+                #
+                # Evaluated outside the `not successful_news_url` guard above.
+                # Nested inside it, any earlier pattern that turned up a single
+                # item disqualified the cached URL from ever ending the sweep --
+                # Banyan Gold's cached page carries a release from eight days
+                # ago and still scanned all 75 patterns for exactly that reason.
+                if found_here:
                     news_url_clean = news_url.rstrip('/').split('?')[0]  # Normalize for comparison
                     is_cached = cached_news_url and news_url_clean == cached_news_url.rstrip('/').split('?')[0]
                     is_custom = custom_news_url and news_url_clean.startswith(custom_news_url.rstrip('/'))
                     if is_cached or is_custom:
-                        # The 15-item bar was raised from 5 because a cached
-                        # page can be stale -- an archive that no longer carries
-                        # the newest releases. But item count is a poor proxy
-                        # for staleness: a live news page listing eight
-                        # releases fails it, and 79% of companies WITH a known
-                        # good URL went on to probe all ~75 patterns anyway,
-                        # 59% of them running until the time limit cut them off.
+                        # The item-count bar was raised from 5 to 15 because a
+                        # cached page can be stale -- an archive that no longer
+                        # carries the newest releases. But count is a poor proxy
+                        # for staleness: a live news page listing eight releases
+                        # fails it, and 79% of companies WITH a known good URL
+                        # went on to probe all ~75 patterns anyway, 59% of them
+                        # running until the time limit cut them off.
                         #
-                        # Freshness is the thing actually being tested, so test
-                        # it. A page carrying a release from the last 45 days is
-                        # demonstrably current and worth trusting at a much
-                        # lower count. The 15-item path stays for pages that
-                        # publish no dates we can parse.
-                        cutoff = datetime.now() - timedelta(days=45)
+                        # Freshness is what the count was standing in for, so
+                        # test that instead. 90 days rather than 45: a junior
+                        # between drill programmes goes quiet for a couple of
+                        # months as a matter of course, and a stale year-archive
+                        # URL carries items many months older than that, so the
+                        # wider window still separates the two.
+                        cutoff = datetime.now() - timedelta(days=90)
                         recent = sum(
                             1 for item in news_by_url.values()
                             if (_news_date(item.get('date')) or datetime.min) > cutoff
@@ -5925,7 +5934,7 @@ async def crawl_html_news_pages(url: str, months: int = 6, custom_news_url: str 
                         if len(news_by_url) >= 15 or (recent >= 1 and len(news_by_url) >= 3):
                             logger.info(
                                 f"[FAST-EXIT] Known URL found {len(news_by_url)} items "
-                                f"({recent} within 45 days), skipping remaining patterns"
+                                f"({recent} within 90 days), skipping remaining patterns"
                             )
                             break
 
