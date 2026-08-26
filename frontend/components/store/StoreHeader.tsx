@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import AskAssistantButton from "@/components/AskAssistantButton";
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { CartButton } from './CartButton';
@@ -67,6 +68,9 @@ export function StoreHeader() {
 
           {/* Right: Admin + Cart + Account */}
           <div className="flex items-center gap-3">
+            <span className="hidden sm:contents">
+              <AskAssistantButton />
+            </span>
             {/* Admin Button - Only visible to staff/superusers */}
             {isAdmin && (
               <Link href="/admin/store">
@@ -94,6 +98,9 @@ export function StoreHeader() {
 
         {/* Mobile Navigation */}
         <nav className="md:hidden flex items-center gap-2 pb-3 overflow-x-auto">
+          <span className="contents sm:hidden">
+            <AskAssistantButton variant="chip" />
+          </span>
           {storeNavItems.map((item) => {
             const isActive = pathname === item.href ||
               (item.href !== '/store' && pathname.startsWith(item.href));
