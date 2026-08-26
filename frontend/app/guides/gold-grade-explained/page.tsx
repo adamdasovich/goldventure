@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import SiteNav from "@/components/SiteNav";
+import { RelatedResources, OPEN_FINANCINGS, COMPANY_DATABASE } from "@/components/guides/RelatedResources";
 
 const CANONICAL =
   "https://juniorminingintelligence.com/guides/gold-grade-explained";
@@ -748,6 +749,11 @@ export default function GoldGradeExplainedGuide() {
                 </li>
               </ul>
             </section>
+          
+            <RelatedResources
+              slugs={["grade-ranker","peer-comparison","ni43-101-analyzer"]} extra={[OPEN_FINANCINGS, COMPANY_DATABASE]}
+              intro="Grade only means something next to its peers and its costs. These use the same 500+ company dataset this guide draws on:"
+            />
           </article>
         </div>
       </div>

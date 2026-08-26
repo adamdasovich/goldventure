@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import SiteNav from "@/components/SiteNav";
+import { RelatedResources, COMPANY_DATABASE, OPEN_FINANCINGS } from "@/components/guides/RelatedResources";
 
 export const metadata: Metadata = {
   title: 'Critical Minerals Investment Guide 2026 | Lithium, Copper, Rare Earths | Junior Mining Intelligence',
@@ -642,6 +643,11 @@ export default function CriticalMineralsGuide() {
               </p>
             </section>
 
+          
+            <RelatedResources
+              slugs={["sector-pulse","metal-correlation","peer-comparison"]} extra={[COMPANY_DATABASE, OPEN_FINANCINGS]}
+              intro="Critical-minerals juniors move with their underlying metal and with each other. These show both:"
+            />
           </article>
         </main>
       </div>

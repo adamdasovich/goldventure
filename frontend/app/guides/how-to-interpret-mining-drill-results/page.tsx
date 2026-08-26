@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import SiteNav from "@/components/SiteNav";
+import { RelatedResources, OPEN_FINANCINGS, WEEKLY_REPORT } from "@/components/guides/RelatedResources";
 
 const CANONICAL =
   "https://juniorminingintelligence.com/guides/how-to-interpret-mining-drill-results";
@@ -1489,6 +1490,11 @@ export default function DrillResultsGuide() {
                 </li>
               </ul>
             </section>
+          
+            <RelatedResources heading="Where drill news leads"
+              slugs={["catalyst-calendar"]} extra={[OPEN_FINANCINGS, WEEKLY_REPORT]}
+              intro="Drill results move stocks, and the companies behind them are usually raising into that news. Where that plays out:"
+            />
           </article>
         </div>
       </div>

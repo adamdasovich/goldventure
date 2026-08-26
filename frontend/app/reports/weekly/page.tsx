@@ -138,6 +138,130 @@ export default async function WeeklyReportsArchivePage() {
           </ul>
         )}
 
+        {/* The archive list alone left this page at ~287 words, thin enough to
+            sit in "crawled - currently not indexed" and earning 1 organic
+            session in the 30 days to 2026-08-26. The sections below describe
+            what a report actually contains, drawn from the real data_snapshot
+            keys the generator writes, so the page says something to a reader
+            arriving from search rather than only to someone already looking for
+            an archive. */}
+        <section className="mt-16 border-t border-slate-200 pt-10">
+          <h2 className="text-2xl font-bold text-slate-900">
+            What each report contains
+          </h2>
+          <p className="mt-3 max-w-2xl text-base leading-relaxed text-slate-600">
+            The report is generated after the Friday close and covers the
+            trailing seven days across every junior miner tracked on the
+            platform. It is assembled from the same data behind the company
+            profiles, not written from a news feed.
+          </p>
+
+          <dl className="mt-8 space-y-6">
+            <div>
+              <dt className="font-semibold text-slate-900">Top developments</dt>
+              <dd className="mt-1 text-slate-600 leading-relaxed">
+                The week reduced to the handful of events that actually mattered
+                — a resource upgrade, a financing that changes a balance sheet,
+                a drill hole that reprices a project.
+              </dd>
+            </div>
+            <div>
+              <dt className="font-semibold text-slate-900">
+                Stock movers, with the catalyst attached
+              </dt>
+              <dd className="mt-1 text-slate-600 leading-relaxed">
+                Around fifty of the largest moves each week, each matched to the
+                release that caused it. A 30% move with no news behind it is a
+                different signal from a 30% move on a drill result, and the
+                report distinguishes them.
+              </dd>
+            </div>
+            <div>
+              <dt className="font-semibold text-slate-900">
+                Material news releases
+              </dt>
+              <dd className="mt-1 text-slate-600 leading-relaxed">
+                Roughly fifty releases a week filtered down from everything
+                published — assay results, permitting decisions, agreements and
+                management changes, with the routine corporate filings removed.
+              </dd>
+            </div>
+            <div>
+              <dt className="font-semibold text-slate-900">
+                Financings closed
+              </dt>
+              <dd className="mt-1 text-slate-600 leading-relaxed">
+                Which companies raised, how much, and on what terms. For rounds
+                that are still open rather than already closed, see{" "}
+                <Link
+                  href="/open-financings"
+                  className="font-medium text-amber-800 hover:underline"
+                >
+                  open financings
+                </Link>
+                .
+              </dd>
+            </div>
+            <div>
+              <dt className="font-semibold text-slate-900">
+                New NI 43-101 technical reports
+              </dt>
+              <dd className="mt-1 text-slate-600 leading-relaxed">
+                Resource estimates, PEAs and feasibility studies filed during
+                the week — the documents that move a project between stages.
+              </dd>
+            </div>
+            <div>
+              <dt className="font-semibold text-slate-900">
+                Metal prices and emerging themes
+              </dt>
+              <dd className="mt-1 text-slate-600 leading-relaxed">
+                Weekly changes across the metals that matter to juniors, plus
+                the themes showing up repeatedly across the week&apos;s releases
+                — a district attracting several financings, or a commodity
+                suddenly drawing exploration budgets.
+              </dd>
+            </div>
+          </dl>
+        </section>
+
+        <section className="mt-12 border-t border-slate-200 pt-10">
+          <h2 className="text-2xl font-bold text-slate-900">
+            Where to go next
+          </h2>
+          <ul className="mt-4 space-y-3 text-slate-600">
+            <li>
+              <Link
+                href="/open-financings"
+                className="font-medium text-amber-800 hover:underline"
+              >
+                Open financings
+              </Link>{" "}
+              — the raises still open, with terms, warrants and closing dates.
+            </li>
+            <li>
+              <Link
+                href="/companies"
+                className="font-medium text-amber-800 hover:underline"
+              >
+                Company database
+              </Link>{" "}
+              — profiles for 500+ juniors, with projects, resources and
+              financing history.
+            </li>
+            <li>
+              <Link
+                href="/investor-tools"
+                className="font-medium text-amber-800 hover:underline"
+              >
+                Investor tools
+              </Link>{" "}
+              — nineteen screeners and analysers for grade, dilution, warrants
+              and drill results.
+            </li>
+          </ul>
+        </section>
+
         <footer className="mt-12 text-center text-xs text-slate-500">
           Reports cover the trailing 7 days through the Friday close.
         </footer>

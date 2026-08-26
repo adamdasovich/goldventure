@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import SiteNav from "@/components/SiteNav";
+import { RelatedResources, COMPANY_DATABASE } from "@/components/guides/RelatedResources";
 
 const CANONICAL =
   "https://juniorminingintelligence.com/guides/inferred-vs-indicated-vs-measured-resources";
@@ -781,6 +782,11 @@ Measured Resource ──── (economic study) ────► Proven Reserve`}
                 </li>
               </ul>
             </section>
+          
+            <RelatedResources
+              slugs={["ni43-101-analyzer","resource-growth","grade-ranker"]} extra={[COMPANY_DATABASE]}
+              intro="Resource categories matter most when you watch them move between reports. These track that for you:"
+            />
           </article>
         </div>
       </div>

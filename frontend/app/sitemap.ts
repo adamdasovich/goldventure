@@ -279,6 +279,15 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       priority: 0.7,
     },
     {
+      // The briefing itself lives on /dashboard, which is personal and stays
+      // out of the sitemap. Without this entry the feature had no indexable
+      // page at all.
+      url: `${baseUrl}/daily-briefing`,
+      lastModified: lastModifiedFor("/daily-briefing"),
+      changeFrequency: "monthly",
+      priority: 0.7,
+    },
+    {
       url: `${baseUrl}/about`,
       lastModified: lastModifiedFor("/about"),
       changeFrequency: "monthly",
