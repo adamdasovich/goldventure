@@ -311,7 +311,7 @@ export default function PricingPage() {
             <ul className="space-y-3 mb-8 flex-1">
               <li className="flex items-start gap-2 text-sm text-slate-300">
                 <span className="text-emerald-400 mt-0.5">&#10003;</span>
-                Browse 500+ company profiles
+                Browse 390+ company profiles
               </li>
               <li className="flex items-start gap-2 text-sm text-slate-300">
                 <span className="text-emerald-400 mt-0.5">&#10003;</span>5 AI

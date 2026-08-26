@@ -752,7 +752,7 @@ export default function GoldGradeExplainedGuide() {
           
             <RelatedResources
               slugs={["grade-ranker","peer-comparison","ni43-101-analyzer"]} extra={[OPEN_FINANCINGS, COMPANY_DATABASE]}
-              intro="Grade only means something next to its peers and its costs. These use the same 500+ company dataset this guide draws on:"
+              intro="Grade only means something next to its peers and its costs. These use the same 390+ company dataset this guide draws on:"
             />
           </article>
         </div>

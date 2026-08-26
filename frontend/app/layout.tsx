@@ -23,7 +23,7 @@ export const metadata: Metadata = {
     template: "%s | Junior Mining Intelligence",
   },
   description:
-    "Track 500+ junior mining companies exploring gold, silver, lithium, copper, rare earths & critical minerals. Real-time exploration data, NI 43-101 reports, TSXV listings, resource estimates. AI-powered mining intelligence platform.",
+    "Track 390+ junior mining companies exploring gold, silver, lithium, copper, rare earths & critical minerals. Real-time exploration data, NI 43-101 reports, TSXV listings, resource estimates. AI-powered mining intelligence platform.",
   authors: [{ name: "Junior Mining Intelligence" }],
   creator: "Junior Mining Intelligence",
   publisher: "Junior Mining Intelligence",
@@ -40,7 +40,7 @@ export const metadata: Metadata = {
     title:
       "Junior Mining Stocks: Gold, Silver & Critical Minerals Intelligence 2026",
     description:
-      "Track 500+ junior mining companies exploring gold, silver, lithium, copper, rare earths & critical minerals. Real-time exploration data, NI 43-101 reports, TSXV listings.",
+      "Track 390+ junior mining companies exploring gold, silver, lithium, copper, rare earths & critical minerals. Real-time exploration data, NI 43-101 reports, TSXV listings.",
     images: [
       {
         url: "/og-image.png",
@@ -55,7 +55,7 @@ export const metadata: Metadata = {
     title:
       "Junior Mining Stocks: Gold, Silver & Critical Minerals Intelligence 2026",
     description:
-      "Track 500+ junior mining companies exploring gold, silver, lithium, copper, rare earths & critical minerals with AI-powered insights.",
+      "Track 390+ junior mining companies exploring gold, silver, lithium, copper, rare earths & critical minerals with AI-powered insights.",
     images: ["/og-image.png"],
     site: "@jrminingintel",
     creator: "@jrminingintel",
@@ -234,7 +234,7 @@ const organizationJsonLd = {
           "@type": "Service",
           name: "Junior Mining Company Analysis",
           description:
-            "Comprehensive analysis of 500+ junior mining companies including gold, silver, lithium, copper, and critical minerals exploration",
+            "Comprehensive analysis of 390+ junior mining companies including gold, silver, lithium, copper, and critical minerals exploration",
         },
       },
       {

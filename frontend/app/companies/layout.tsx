@@ -4,7 +4,7 @@ export const metadata: Metadata = {
   title:
     "Junior Mining Companies - Gold, Silver & Critical Minerals | TSXV & TSX Stocks",
   description:
-    "Browse 500+ junior mining companies exploring gold, silver, lithium, copper, rare earths & critical minerals on TSXV and TSX. View resource estimates, project data, and investment opportunities.",
+    "Browse 390+ junior mining companies exploring gold, silver, lithium, copper, rare earths & critical minerals on TSXV and TSX. View resource estimates, project data, and investment opportunities.",
   keywords: [
     "junior mining companies",
     "gold mining companies",
@@ -26,7 +26,7 @@ export const metadata: Metadata = {
     title:
       "Junior Mining Companies: Gold, Silver & Critical Minerals | Junior Mining Intelligence",
     description:
-      "Comprehensive database of 500+ junior mining companies exploring gold, silver, lithium, copper, rare earths & critical minerals with detailed resource estimates.",
+      "Comprehensive database of 390+ junior mining companies exploring gold, silver, lithium, copper, rare earths & critical minerals with detailed resource estimates.",
     url: "https://juniorminingintelligence.com/companies",
     type: "website",
     images: [
@@ -42,7 +42,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "Junior Mining Companies: Gold, Silver & Critical Minerals",
     description:
-      "Browse 500+ junior mining companies with AI-powered analysis. Track gold, silver, lithium, copper, rare earths & critical minerals.",
+      "Browse 390+ junior mining companies with AI-powered analysis. Track gold, silver, lithium, copper, rare earths & critical minerals.",
     images: ["/og-image.png"],
   },
   alternates: {

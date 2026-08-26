@@ -30,7 +30,7 @@ const faqPageJsonLd = {
       name: "How do I track junior mining stocks?",
       acceptedAnswer: {
         "@type": "Answer",
-        text: "Junior Mining Intelligence provides a comprehensive platform to track 500+ junior mining companies exploring gold, silver, lithium, copper, rare earths, and critical minerals. Features include real-time exploration data, NI 43-101 technical reports, mineral resource estimates, project financings, and AI-powered analysis. Our database includes companies listed on TSXV, TSX, and other major exchanges.",
+        text: "Junior Mining Intelligence provides a comprehensive platform to track 390+ junior mining companies exploring gold, silver, lithium, copper, rare earths, and critical minerals. Features include real-time exploration data, NI 43-101 technical reports, mineral resource estimates, project financings, and AI-powered analysis. Our database includes companies listed on TSXV, TSX, and other major exchanges.",
       },
     },
     {

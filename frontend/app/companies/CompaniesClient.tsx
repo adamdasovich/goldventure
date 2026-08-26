@@ -214,7 +214,7 @@ export default function CompaniesClient({
             Junior Mining Companies: Gold, Silver &amp; Critical Minerals Stocks
           </h1>
           <p className="text-base sm:text-lg md:text-xl text-slate-300 max-w-2xl mx-auto mb-6 animate-slide-in-up">
-            500+ juniors exploring gold, silver, lithium, copper and critical
+            390+ juniors exploring gold, silver, lithium, copper and critical
             minerals — with resource estimates, financings and project data.
           </p>
 

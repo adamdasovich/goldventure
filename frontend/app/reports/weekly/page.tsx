@@ -246,7 +246,7 @@ export default async function WeeklyReportsArchivePage() {
               >
                 Company database
               </Link>{" "}
-              — profiles for 500+ juniors, with projects, resources and
+              — profiles for 390+ juniors, with projects, resources and
               financing history.
             </li>
             <li>

@@ -1372,7 +1372,7 @@ export default function DrillResultsGuide() {
                 Tools to speed this up
               </h2>
               <p className="text-slate-300 mb-4 leading-relaxed">
-                Tracking drill results manually across the 500+ companies in the
+                Tracking drill results manually across the 390+ companies in the
                 junior mining universe is impractical. The tools below automate
                 the work:
               </p>
@@ -1398,7 +1398,7 @@ export default function DrillResultsGuide() {
                     Grade Ranker →
                   </h3>
                   <p className="text-sm text-slate-300 mb-0">
-                    Compare resource grades across 500+ companies. Filter for
+                    Compare resource grades across 390+ companies. Filter for
                     deposits in your preferred grade tier — sub-economic
                     surprises don&apos;t make the list.
                   </p>
@@ -1423,7 +1423,7 @@ export default function DrillResultsGuide() {
                     Company Database →
                   </h3>
                   <p className="text-sm text-slate-300 mb-0">
-                    Browse 500+ junior miners. Each company page lists recent
+                    Browse 390+ junior miners. Each company page lists recent
                     news releases including drill announcements.
                   </p>
                 </Link>

@@ -5,7 +5,7 @@ import SiteNav from "@/components/SiteNav";
 
 export const metadata: Metadata = {
   title: 'About Us - Junior Mining Intelligence Platform',
-  description: 'Learn about Junior Mining Intelligence, the AI-powered platform providing comprehensive analysis and data on 500+ junior mining companies exploring gold, silver, lithium, copper, rare earths, and critical minerals.',
+  description: 'Learn about Junior Mining Intelligence, the AI-powered platform providing 396 junior mining companies, 17,800+ news releases and 3,200+ NI 43-101 documents, with AI research, 19 investor tools and live financing rounds.',
   keywords: [
     'about junior mining intelligence',
     'mining data platform',
@@ -17,7 +17,7 @@ export const metadata: Metadata = {
   ],
   openGraph: {
     title: 'About Us - Junior Mining Intelligence Platform',
-    description: 'AI-powered platform providing comprehensive analysis and data on 500+ junior mining companies exploring gold, silver, lithium, copper, rare earths, and critical minerals.',
+    description: 'AI-powered platform providing 396 junior mining companies, 17,800+ news releases and 3,200+ NI 43-101 documents, with AI research, 19 investor tools and live financing rounds.',
     url: 'https://juniorminingintelligence.com/about',
     type: 'website',
     images: [
@@ -32,7 +32,7 @@ export const metadata: Metadata = {
   twitter: {
     card: 'summary_large_image',
     title: 'About Us - Junior Mining Intelligence Platform',
-    description: 'AI-powered platform providing comprehensive analysis and data on 500+ junior mining companies.',
+    description: 'A research platform covering 396 junior mining companies, with AI analysis, 19 investor tools and live financing rounds.',
     images: ['/og-image.png'],
   },
   alternates: {
@@ -47,7 +47,7 @@ const aboutPageSchema = {
   '@id': 'https://juniorminingintelligence.com/about',
   url: 'https://juniorminingintelligence.com/about',
   name: 'About Junior Mining Intelligence',
-  description: 'Learn about Junior Mining Intelligence, the AI-powered platform providing comprehensive analysis and data on 500+ junior mining companies.',
+  description: 'Learn about Junior Mining Intelligence, a research platform covering 396 junior mining companies with AI analysis, 19 investor tools and live financing rounds.',
   mainEntity: {
     '@type': 'Organization',
     '@id': 'https://juniorminingintelligence.com/#organization',
@@ -93,8 +93,9 @@ export default function AboutPage() {
                 About Junior Mining Intelligence
               </h1>
               <p className="text-xl md:text-2xl text-slate-300 max-w-4xl mx-auto leading-relaxed">
-                AI-powered platform providing comprehensive analysis and data on 500+ junior mining companies
-                exploring gold, silver, lithium, copper, rare earths, and critical minerals.
+                A research platform for junior mining investors: 396 companies,
+                17,800+ news releases and 3,200+ technical documents — with the
+                tools to actually do something with them.
               </p>
             </div>
           </div>
@@ -109,33 +110,75 @@ export default function AboutPage() {
                   Our Mission
                 </h2>
                 <p className="text-lg text-slate-300 mb-4 leading-relaxed">
-                  We democratize access to junior mining intelligence by aggregating, analyzing, and presenting
-                  critical data on exploration companies across precious metals, battery metals, and critical minerals.
+                  Researching a junior miner properly means reading technical
+                  reports, tracking financings, following drill results and
+                  working out what dilution has already happened. Doing that
+                  across a sector of four hundred companies is a full-time job,
+                  which is why most investors do it for two or three and guess
+                  at the rest.
                 </p>
                 <p className="text-lg text-slate-300 leading-relaxed">
-                  Our platform empowers investors, analysts, and industry professionals with real-time data,
-                  NI 43-101 technical reports, resource estimates, and AI-powered insights to make informed
-                  decisions in the junior mining sector.
+                  This platform does the assembling. Every company profile pulls
+                  together projects, resource estimates, financing history, news
+                  and filed documents in one place, and the tools built on top
+                  answer the questions that data is for — which deposits carry
+                  economic grades, which companies have warrant overhang waiting
+                  above them, and which raises are open right now.
                 </p>
               </div>
               <div className="bg-gradient-to-br from-amber-500/20 to-amber-600/10 p-8 rounded-lg border border-amber-500/30">
-                <h3 className="text-2xl font-semibold text-amber-400 mb-4">What We Track</h3>
+                <h3 className="text-2xl font-semibold text-amber-400 mb-4">What You Can Do</h3>
                 <ul className="space-y-3 text-slate-300">
                   <li className="flex items-start">
                     <span className="text-amber-500 mr-2">•</span>
-                    <span><strong className="text-white">500+ Companies:</strong> Comprehensive junior mining database</span>
+                    <span>
+                      <strong className="text-white">Participate in open financings:</strong>{" "}
+                      see every round still accepting subscriptions, with terms,
+                      warrants and closing dates — then register the amount you
+                      want and watch how far the round has filled.
+                    </span>
                   </li>
                   <li className="flex items-start">
                     <span className="text-amber-500 mr-2">•</span>
-                    <span><strong className="text-white">NI 43-101 Reports:</strong> Technical reports and resource estimates</span>
+                    <span>
+                      <strong className="text-white">Ask the AI anything:</strong>{" "}
+                      unlimited Claude-powered research across any company in
+                      the database, grounded in its own filings and news.
+                    </span>
                   </li>
                   <li className="flex items-start">
                     <span className="text-amber-500 mr-2">•</span>
-                    <span><strong className="text-white">Real-time Data:</strong> News, financings, and exploration updates</span>
+                    <span>
+                      <strong className="text-white">Run 19 purpose-built tools:</strong>{" "}
+                      rank deposits by grade, measure warrant overhang and
+                      dilution, scan drill results across the sector, and
+                      compare peers on the numbers that matter.
+                    </span>
                   </li>
                   <li className="flex items-start">
                     <span className="text-amber-500 mr-2">•</span>
-                    <span><strong className="text-white">AI Analysis:</strong> Machine learning-powered company insights</span>
+                    <span>
+                      <strong className="text-white">Get a daily briefing:</strong>{" "}
+                      build a watchlist and receive what changed on it — price
+                      moves with the news behind them, financings, and newly
+                      filed technical reports.
+                    </span>
+                  </li>
+                  <li className="flex items-start">
+                    <span className="text-amber-500 mr-2">•</span>
+                    <span>
+                      <strong className="text-white">Read the week in one page:</strong>{" "}
+                      a Friday sector report covering top movers with their
+                      catalysts, financings closed, and new NI 43-101 filings.
+                    </span>
+                  </li>
+                  <li className="flex items-start">
+                    <span className="text-amber-500 mr-2">•</span>
+                    <span>
+                      <strong className="text-white">Take the data with you:</strong>{" "}
+                      export the full company database as CSV, and discuss any
+                      company on its own live board.
+                    </span>
                   </li>
                 </ul>
               </div>
@@ -326,7 +369,7 @@ export default function AboutPage() {
               Start Exploring Junior Mining Companies
             </h2>
             <p className="text-xl text-slate-300 mb-8">
-              Access comprehensive data on 500+ companies exploring gold, silver, lithium, copper, and critical minerals
+              396 junior miners across gold, silver, lithium, copper and critical minerals — with the tools to research them and the financings to act on
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <Link

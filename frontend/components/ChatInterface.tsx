@@ -6,7 +6,6 @@ import {
   Card,
   CardHeader,
   CardTitle,
-  CardDescription,
   CardContent,
 } from "./ui/Card";
 import { Input } from "./ui/Input";
@@ -15,15 +14,16 @@ import { Badge } from "./ui/Badge";
 import { claudeAPI } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
 import type { ChatMessage } from "@/types/api";
-import LogoIcon from "./LogoIcon";
 
-const EXAMPLE_PROMPTS = [
-  "Compare Aftermath Silver and Aston Bay stock over 6 months",
-  "How much capital has the mining sector raised this year?",
-  "Has Aston Bay's gold resource grown over time?",
-  "Does Aston Bay's news move its stock price?",
-  "Find unusual trading volume in Aftermath Silver",
-  "What companies are exploring lithium?",
+/* Short label on the chip, full question sent. Six sentence-long chips only
+   fitted two per screen and read as instructions rather than options. */
+const EXAMPLE_PROMPTS: { label: string; prompt: string }[] = [
+  { label: "Compare two companies", prompt: "Compare Aftermath Silver and Aston Bay stock over 6 months" },
+  { label: "Sector capital raised", prompt: "How much capital has the mining sector raised this year?" },
+  { label: "Resource growth", prompt: "Has Aston Bay's gold resource grown over time?" },
+  { label: "Does news move price?", prompt: "Does Aston Bay's news move its stock price?" },
+  { label: "Unusual volume", prompt: "Find unusual trading volume in Aftermath Silver" },
+  { label: "Who explores lithium?", prompt: "What companies are exploring lithium?" },
 ];
 
 export default function ChatInterface() {
@@ -132,9 +132,6 @@ export default function ChatInterface() {
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div className="min-w-0">
             <CardTitle>Claude Mining Assistant</CardTitle>
-            <CardDescription>
-              Ask anything about mining companies, projects, and resources
-            </CardDescription>
           </div>
           {dailyLimit > 0 && tier === "explorer" && (
             <Link
@@ -161,25 +158,22 @@ export default function ChatInterface() {
           // than its scroll container on a phone, and `justify-center` then
           // pushed the overflow above the scroll origin where it could not be
           // reached. Growing past full height keeps it all scrollable.
-          <div className="flex flex-col items-center justify-center min-h-full text-center space-y-4">
-            <LogoIcon className="h-24 w-24" />
-            <div className="space-y-2">
-              <h3 className="text-xl font-semibold text-gold-400">
-                Start a conversation
-              </h3>
-              <p className="text-slate-400 max-w-md">
-                Try asking about companies, total resources, project details, or
-                any mining data
-              </p>
-            </div>
+          <div className="flex flex-col items-center justify-center min-h-full text-center space-y-3">
+            {/* The 96px logo, the "Start a conversation" heading and the
+                explainer beneath it all told people what a chat box is. The
+                example prompts do that better by being tappable. */}
+            <p className="text-xs uppercase tracking-[0.14em] text-slate-500">
+              Try one of these
+            </p>
             <div className="flex flex-wrap gap-2 justify-center max-w-2xl">
-              {EXAMPLE_PROMPTS.map((prompt) => (
+              {EXAMPLE_PROMPTS.map((example) => (
                 <button
-                  key={prompt}
-                  onClick={() => handleExampleClick(prompt)}
+                  key={example.label}
+                  title={example.prompt}
+                  onClick={() => handleExampleClick(example.prompt)}
                   className="px-4 py-2.5 min-h-11 inline-flex items-center text-sm rounded-full bg-slate-800/60 border border-slate-700/50 text-slate-300 hover:text-gold-400 hover:border-gold-500/30 hover:bg-gold-500/10 transition-all cursor-pointer"
                 >
-                  {prompt}
+                  {example.label}
                 </button>
               ))}
             </div>

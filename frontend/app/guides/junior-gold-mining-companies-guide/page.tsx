@@ -1174,7 +1174,7 @@ export default function JuniorGoldMiningCompaniesGuide() {
                   🔍 Explore Junior Mining Companies
                 </h3>
                 <p className="text-slate-300 mb-4">
-                  Access our database of 500+ junior gold mining companies with
+                  Access our database of 390+ junior gold mining companies with
                   detailed profiles, resource estimates, project maps, and
                   AI-powered analysis.
                 </p>
@@ -1491,7 +1491,7 @@ export default function JuniorGoldMiningCompaniesGuide() {
                       Junior Gold Mining Intelligence
                     </Link>
                   </strong>{" "}
-                  - Comprehensive database of 500+ junior miners with AI-powered
+                  - Comprehensive database of 390+ junior miners with AI-powered
                   analysis
                 </li>
                 <li>
@@ -1736,7 +1736,7 @@ export default function JuniorGoldMiningCompaniesGuide() {
                   Ready to Start Exploring Junior Mining Stocks?
                 </h3>
                 <p className="text-slate-300 mb-6 max-w-2xl mx-auto">
-                  Access our comprehensive database of 500+ junior gold mining
+                  Access our comprehensive database of 390+ junior gold mining
                   companies with real-time data, NI 43-101 resource estimates,
                   exploration updates, and AI-powered analysis.
                 </p>
@@ -1792,7 +1792,7 @@ export default function JuniorGoldMiningCompaniesGuide() {
           
             <RelatedResources
               slugs={["grade-ranker","peer-comparison","dilution-tracker"]} extra={[COMPANY_DATABASE, OPEN_FINANCINGS, ALL_TOOLS, CLOSED_FINANCINGS]}
-              intro="Everything described above is already assembled for 500+ juniors — you do not have to compile it yourself:"
+              intro="Everything described above is already assembled for 390+ juniors — you do not have to compile it yourself:"
             />
           </article>
 
@@ -1811,7 +1811,7 @@ export default function JuniorGoldMiningCompaniesGuide() {
                 </p>
                 <p className="text-slate-300 text-sm leading-relaxed">
                   Junior Gold Mining Intelligence provides comprehensive data,
-                  analysis, and tools for tracking 500+ junior gold mining
+                  analysis, and tools for tracking 390+ junior gold mining
                   companies. Our platform combines real-time exploration data,
                   NI 43-101 technical reports, and AI-powered insights to help
                   investors make informed decisions.

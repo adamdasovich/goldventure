@@ -112,7 +112,7 @@ export const COMPANY_DATABASE: ExtraLink = {
   href: "/companies",
   title: "Company Database",
   description:
-    "Profiles for 500+ junior miners — projects, resource estimates, drill results, financing history and news, in one searchable place.",
+    "Profiles for 390+ junior miners — projects, resource estimates, drill results, financing history and news, in one searchable place.",
 };
 
 export const WEEKLY_REPORT: ExtraLink = {

@@ -1571,7 +1571,7 @@ export default function HowToReadNI43101Guide() {
                     Grade Ranker →
                   </h3>
                   <p className="text-sm text-slate-300 mb-0">
-                    Compare resource grades across the 500+ company database.
+                    Compare resource grades across the 390+ company database.
                     Sort by category-weighted grade to filter for serious
                     deposits.
                   </p>
@@ -1584,7 +1584,7 @@ export default function HowToReadNI43101Guide() {
                     Company Database →
                   </h3>
                   <p className="text-sm text-slate-300 mb-0">
-                    Browse 500+ junior miners. Each company page links to its
+                    Browse 390+ junior miners. Each company page links to its
                     most recent NI 43-101 reports, resource estimates, and news
                     releases.
                   </p>

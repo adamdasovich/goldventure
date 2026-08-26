@@ -2,7 +2,7 @@ import { Metadata } from "next";
 
 const url = "https://juniorminingintelligence.com/investor-tools/drill-scanner";
 const description =
-  "Search press releases for drill results across 500+ junior mining companies. Find the most active drillers and track exploration news by commodity.";
+  "Search press releases for drill results across 390+ junior mining companies. Find the most active drillers and track exploration news by commodity.";
 
 export const metadata: Metadata = {
   title: "Drill Result Scanner - Search Junior Mining Drill Results",

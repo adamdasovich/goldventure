@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import SectionHeading from "@/components/SectionHeading";
 import Link from "next/link";
 import Image from "next/image";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/Card";
@@ -150,26 +151,19 @@ export function HeroCards({ onLoginClick }: HeroCardsProps) {
   return (
     <section
       id="happening-now"
-      className="py-16 md:py-20 px-4 sm:px-6 lg:px-8 scroll-mt-24"
+      className="py-10 md:py-14 px-4 sm:px-6 lg:px-8 scroll-mt-24"
     >
       <div className="max-w-7xl mx-auto">
-        <div className="text-center mb-10">
-          <Badge variant="gold" className="mb-4">
-            Live on the Platform
-          </Badge>
-          <h2 className="text-3xl sm:text-4xl font-bold text-gradient-gold mb-4">
-            Happening Right Now
-          </h2>
-          <p className="text-slate-300 text-lg max-w-2xl mx-auto">
-            Upcoming company events, open financing rounds, and a featured
-            listing from the Prospector&apos;s Exchange.
+        <SectionHeading
+          eyebrow="Live on the platform"
+          title="Live now"
+          description="Upcoming company events, open financing rounds, and a featured listing from the Prospector's Exchange."
+        />
+        {!user && (
+          <p className="-mt-4 mb-6 text-center text-sm text-slate-500">
+            Create a free account to open events, financings and listings.
           </p>
-          {!user && (
-            <p className="text-sm text-slate-500 mt-3">
-              Create a free account to open events, financings, and listings.
-            </p>
-          )}
-        </div>
+        )}
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {/* Card 1: Upcoming Speaking Events */}
@@ -179,21 +173,7 @@ export function HeroCards({ onLoginClick }: HeroCardsProps) {
           >
             <CardHeader className="pb-2">
               <div className="flex items-center justify-between">
-                <CardTitle className="text-lg text-gold-400 flex items-center gap-2">
-                  <svg
-                    className="w-5 h-5"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                    aria-hidden="true"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
-                    />
-                  </svg>
+                <CardTitle className="text-lg text-gold-400">
                   Upcoming Events
                 </CardTitle>
                 {data?.upcoming_events.some((e) => e.status === "live") && (
@@ -289,21 +269,7 @@ export function HeroCards({ onLoginClick }: HeroCardsProps) {
             className="hover:border-gold-400/50 transition-all duration-300"
           >
             <CardHeader className="pb-2">
-              <CardTitle className="text-lg text-gold-400 flex items-center gap-2">
-                <svg
-                  className="w-5 h-5"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                  aria-hidden="true"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                  />
-                </svg>
+              <CardTitle className="text-lg text-gold-400">
                 Financing Opportunities
               </CardTitle>
             </CardHeader>
@@ -404,27 +370,7 @@ export function HeroCards({ onLoginClick }: HeroCardsProps) {
           >
             <CardHeader className="pb-2">
               <div className="flex items-center justify-between">
-                <CardTitle className="text-lg text-gold-400 flex items-center gap-2">
-                  <svg
-                    className="w-5 h-5"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                    aria-hidden="true"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
-                    />
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"
-                    />
-                  </svg>
+                <CardTitle className="text-lg text-gold-400">
                   Featured Property
                 </CardTitle>
                 <Badge variant="gold" className="text-xs">

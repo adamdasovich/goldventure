@@ -6,84 +6,27 @@ import Image from "next/image";
 import ChatInterface from "@/components/ChatInterface";
 import NewsArticles from "@/components/NewsArticles";
 import { Button } from "@/components/ui/Button";
-import { Badge } from "@/components/ui/Badge";
 import LogoMono from "@/components/LogoMono";
 import SiteHeader, { PRIMARY_NAV, TOOLS_MENU } from "@/components/SiteHeader";
 import HeroCards from "@/components/HeroCards";
+import SectionHeading from "@/components/SectionHeading";
 import { LoginModal, RegisterModal } from "@/components/auth";
 import { useAuth } from "@/contexts/AuthContext";
 import MetalsTicker from "@/components/MetalsTicker";
 
-/* ─── Feature cards ───
-   `badge: "Live"` marks the real-time, WebSocket-powered features so they
-   visibly stand out in the grid. */
-const FEATURES: {
-  title: string;
-  description: string;
-  icon: string;
-  href: string;
-  badge?: string;
-}[] = [
-  {
-    title: "Weekly Financial Snapshot",
-    badge: "New",
-    description:
-      "Every Friday after the close: top movers with catalysts, new NI 43-101 reports, financings closed, metal price changes, and emerging themes — on one page.",
-    icon: "M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z",
-    href: "/reports/weekly",
-  },
-  {
-    title: "Company Database",
-    description:
-      "Profiles for 500+ junior miners — projects, resource estimates, financing history, and news, all in one place.",
-    icon: "M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4",
-    href: "/companies",
-  },
-  {
-    title: "Live Company Forums",
-    badge: "Live",
-    description:
-      "Every company has a real-time discussion board. Investors and management talk directly, and new posts appear instantly — like a group chat.",
-    icon: "M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.86 9.86 0 01-4-.8L3 21l1.8-4A8.84 8.84 0 013 12c0-4.418 4.03-8 9-8s9 3.582 9 8z",
-    href: "/companies",
-  },
-  {
-    title: "Speaking Events",
-    badge: "Live",
-    description:
-      "Join live online presentations from company management. Watch by video, ask questions, upvote the best ones, and react in real time.",
-    icon: "M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z",
-    href: "/companies",
-  },
-  {
-    title: "Prospector's Exchange",
-    badge: "Live",
-    description:
-      "A marketplace of mineral properties for sale. Message owners directly through private, real-time chat to negotiate deals.",
-    icon: "M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z",
-    href: "/properties",
-  },
-  {
-    title: "15 Investor Tools",
-    description:
-      "Screeners and calculators — rank companies by ore grade, compare them side by side, scan drill results, and more.",
-    icon: "M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z",
-    href: "/investor-tools",
-  },
-  {
-    title: "Financing Tracker",
-    description:
-      "See which companies are raising capital — active and recently closed private placements and deals across the sector.",
-    icon: "M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z",
-    href: "/closed-financings",
-  },
-  {
-    title: "Real-Time Metals",
-    description:
-      "Live prices for gold, silver, platinum, and palladium, plus the day's top-moving mining stocks.",
-    icon: "M13 7h8m0 0v8m0-8l-8 8-4-4-6 6",
-    href: "/metals",
-  },
+/* ─── Platform directory ───
+   Was eight description cards with icons. The titles carry the meaning and
+   the detail lives on the destination pages, so only the title, the link and
+   the live marker survive. */
+const FEATURES: { title: string; href: string; badge?: string }[] = [
+  { title: "Weekly Financial Snapshot", href: "/reports/weekly", badge: "New" },
+  { title: "Company Database", href: "/companies" },
+  { title: "Live Company Forums", href: "/companies", badge: "Live" },
+  { title: "Speaking Events", href: "/companies", badge: "Live" },
+  { title: "Prospector's Exchange", href: "/properties", badge: "Live" },
+  { title: "15 Investor Tools", href: "/investor-tools" },
+  { title: "Financing Tracker", href: "/closed-financings" },
+  { title: "Real-Time Metals", href: "/metals" },
 ];
 
 /* ─── Secondary hero links ───
@@ -243,13 +186,12 @@ export default function HomeClient({ initialArticles }: HomeClientProps) {
             />
           </button>
 
-          <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold mb-4 text-gradient-gold animate-fade-in leading-tight pb-1">
-            Research junior mining stocks in minutes, not hours
+          <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold mb-3 text-gradient-gold animate-fade-in leading-tight text-balance pb-1">
+            Junior mining research, in minutes
           </h1>
-          <p className="text-base sm:text-lg text-slate-300 animate-slide-in-up mb-6">
-            Profiles, financials, and news for {stats.companies}+ small gold,
-            silver, and critical-minerals companies — plus an AI assistant that
-            answers your questions instantly.
+          <p className="text-base sm:text-lg text-slate-300 animate-slide-in-up mb-6 max-w-xl mx-auto">
+            Profiles, financials and news on {stats.companies}+ juniors, with an
+            AI assistant that answers questions about any of them.
           </p>
 
           {/* Two primary CTAs. There were eight, all the same weight and all
@@ -301,22 +243,15 @@ export default function HomeClient({ initialArticles }: HomeClientProps) {
       </section>
 
       {/* ════════ AI Chat Interface Section ════════ */}
+      {/* The section heading said the same thing as the chat card's own title
+          and description directly beneath it. The card is self-evidently a
+          chatbot; it does not need announcing twice. */}
       <section
         ref={chatSectionRef}
         id="chat-section"
-        className="py-16 md:py-20 px-4 sm:px-6 lg:px-8 bg-gradient-slate"
+        className="py-10 md:py-14 px-4 sm:px-6 lg:px-8 bg-gradient-slate"
       >
         <div className="max-w-7xl mx-auto">
-          <div className="text-center mb-12">
-            <h2 className="text-3xl sm:text-4xl font-bold text-gradient-gold mb-4">
-              Ask Anything About Mining Companies
-            </h2>
-            <p className="text-slate-300 text-lg max-w-2xl mx-auto">
-              Plain-English answers about exploration projects, resource
-              reports, property listings, and company financials.
-            </p>
-          </div>
-
           <ChatInterface />
         </div>
       </section>
@@ -325,65 +260,32 @@ export default function HomeClient({ initialArticles }: HomeClientProps) {
       <div className="section-divider"></div>
 
       {/* ════════ Features Showcase ════════ */}
+      {/* Eight description cards ran to 2,197px on a phone — 3.3 screens of
+          feature copy between the chat and the live data people actually come
+          back for. The titles carry the meaning on their own, so this is a
+          directory: tap through for the detail. */}
       <section
         id="features"
-        className="py-16 md:py-20 px-4 sm:px-6 lg:px-8 scroll-mt-24"
+        className="py-10 md:py-14 px-4 sm:px-6 lg:px-8 scroll-mt-24"
       >
-        <div className="max-w-7xl mx-auto">
-          <div className="text-center mb-12">
-            <Badge variant="gold" className="mb-4">
-              Platform Features
-            </Badge>
-            <h2 className="text-3xl sm:text-4xl font-bold text-gradient-gold mb-4">
-              Everything You Need for Mining Research
-            </h2>
-            <p className="text-slate-300 text-lg max-w-2xl mx-auto">
-              From AI research and live company forums to real-time market data,
-              our platform gives you the edge in junior mining investment.
-            </p>
-          </div>
+        <div className="max-w-5xl mx-auto">
+          <SectionHeading title="What&rsquo;s on the platform" />
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-            {FEATURES.map((feature, i) => (
-              <Link key={i} href={feature.href} className="group block">
-                <div
-                  className={`glass-card feature-card rounded-xl p-5 h-full ${
-                    feature.badge
-                      ? "border-gold-500/40 ring-1 ring-gold-500/20"
-                      : ""
-                  }`}
-                >
-                  <div className="flex items-start justify-between mb-4">
-                    <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-gold-500/15 border border-gold-500/30 feature-icon">
-                      <svg
-                        className="w-5 h-5 text-gold-400"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                        aria-hidden="true"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d={feature.icon}
-                        />
-                      </svg>
-                    </div>
-                    {feature.badge && (
-                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-gold-500/15 border border-gold-500/40 text-xs font-semibold text-gold-400">
-                        <span className="w-1.5 h-1.5 bg-gold-400 rounded-full animate-pulse"></span>
-                        {feature.badge}
-                      </span>
-                    )}
-                  </div>
-                  <h3 className="text-lg font-semibold text-slate-200 group-hover:text-gold-400 transition-colors mb-2">
-                    {feature.title}
-                  </h3>
-                  <p className="text-sm text-slate-400 leading-relaxed">
-                    {feature.description}
-                  </p>
-                </div>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
+            {FEATURES.map((feature) => (
+              <Link
+                key={feature.href + feature.title}
+                href={feature.href}
+                className="group flex items-center justify-between gap-2 rounded-lg border border-slate-700/70 bg-slate-800/40 px-3 py-3 min-h-16 transition-colors hover:border-gold-500/40 hover:bg-slate-800/70"
+              >
+                <span className="text-sm font-medium text-slate-200 group-hover:text-gold-400 transition-colors">
+                  {feature.title}
+                </span>
+                {feature.badge && (
+                  <span className="shrink-0 self-start rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-gold-400 bg-gold-500/10">
+                    {feature.badge}
+                  </span>
+                )}
               </Link>
             ))}
           </div>
@@ -403,29 +305,22 @@ export default function HomeClient({ initialArticles }: HomeClientProps) {
       <section
         ref={newsSectionRef}
         id="news-section"
-        className="py-16 md:py-20 px-4 sm:px-6 lg:px-8 bg-gradient-slate"
+        className="py-10 md:py-14 px-4 sm:px-6 lg:px-8 bg-gradient-slate"
       >
         <div className="max-w-4xl mx-auto">
-          <div className="text-center mb-8">
-            <Badge variant="slate" className="mb-4">
-              Updated 3x Daily
-            </Badge>
-            <h2 className="text-3xl sm:text-4xl font-bold text-gradient-gold mb-4">
-              Latest Mining News
-            </h2>
-            <p className="text-slate-300 text-lg max-w-2xl mx-auto">
-              Exploration discoveries, market updates, and industry developments
-              across gold, silver, lithium, copper &amp; critical minerals.
-            </p>
-          </div>
+          <SectionHeading
+            eyebrow="Updated 3&times; daily"
+            title="Latest mining news"
+            description="Discoveries, market moves and industry developments across gold, silver, lithium, copper and critical minerals."
+          />
 
-          <div className="backdrop-blur-sm bg-slate-800/30 border border-slate-700/50 rounded-xl p-6">
-            <NewsArticles
-              initialLimit={8}
-              showLoadMore={true}
-              initialArticles={initialArticles?.slice(0, 8)}
-            />
-          </div>
+          {/* The articles are already cards; wrapping them in a second bordered
+              panel just added a frame around a frame. */}
+          <NewsArticles
+            initialLimit={5}
+            showLoadMore={true}
+            initialArticles={initialArticles?.slice(0, 5)}
+          />
         </div>
       </section>
 

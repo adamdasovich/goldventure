@@ -2,7 +2,7 @@ import { Metadata } from "next";
 
 const url = "https://juniorminingintelligence.com/investor-tools/grade-ranker";
 const description =
-  "Rank 500+ junior mining companies by resource grade and size. Filter by commodity, stage, and minimum resource to find the highest-grade gold, silver, and copper deposits.";
+  "Rank 390+ junior mining companies by resource grade and size. Filter by commodity, stage, and minimum resource to find the highest-grade gold, silver, and copper deposits.";
 
 export const metadata: Metadata = {
   title: "Resource Grade Ranker - Screen Junior Miners by Grade",

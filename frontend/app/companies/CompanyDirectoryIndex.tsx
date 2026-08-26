@@ -105,7 +105,7 @@ export default async function CompanyDirectoryIndex() {
             <a
               key={letter}
               href={`#companies-${letter === "#" ? "0" : letter}`}
-              className="px-2.5 py-1 rounded border border-slate-700 text-slate-300 hover:border-gold-500/50 hover:text-gold-300 transition-colors text-sm"
+              className="min-h-11 min-w-11 inline-flex items-center justify-center px-2.5 rounded border border-slate-700 text-slate-300 hover:border-gold-500/50 hover:text-gold-300 transition-colors text-sm"
             >
               {letter}
             </a>

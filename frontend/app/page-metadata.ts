@@ -2,7 +2,7 @@ import { Metadata } from 'next';
 
 export const homeMetadata: Metadata = {
   title: 'Junior Mining Data: Gold, Silver & Critical Minerals Intelligence 2026',
-  description: 'Track 500+ junior mining companies exploring gold, silver, lithium, copper, rare earths & critical minerals. Real-time data on exploration projects, NI 43-101 reports, TSXV listings, resource estimates. AI-powered mining intelligence.',
+  description: 'Track 390+ junior mining companies exploring gold, silver, lithium, copper, rare earths & critical minerals. Real-time data on exploration projects, NI 43-101 reports, TSXV listings, resource estimates. AI-powered mining intelligence.',
   keywords: [
     'junior mining',
     'junior mining stocks',
@@ -26,7 +26,7 @@ export const homeMetadata: Metadata = {
   ],
   openGraph: {
     title: 'Junior Mining Data: Gold, Silver & Critical Minerals Intelligence 2026',
-    description: 'Track 500+ junior mining companies exploring gold, silver, lithium, copper, rare earths & critical minerals with real-time exploration data and NI 43-101 reports.',
+    description: 'Track 390+ junior mining companies exploring gold, silver, lithium, copper, rare earths & critical minerals with real-time exploration data and NI 43-101 reports.',
     type: 'website',
     url: 'https://juniorminingintelligence.com',
   },

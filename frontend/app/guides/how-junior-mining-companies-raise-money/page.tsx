@@ -1296,7 +1296,7 @@ export default function FinancingPillarGuide() {
                   </h3>
                   <p className="text-sm text-slate-300 mb-0">
                     Browse private placements, bought deals, and flow-through
-                    raises across 500+ junior miners. Filter by structure, size,
+                    raises across 390+ junior miners. Filter by structure, size,
                     discount, warrant coverage.
                   </p>
                 </Link>
