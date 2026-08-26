@@ -1,13 +1,23 @@
 import type { Metadata, Viewport } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Archivo, Inter, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/contexts/AuthContext";
 import ClientLayout from "./ClientLayout";
 import GoogleAnalytics from "@/components/GoogleAnalytics";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+/* Display face. Archivo is a grotesque with a width axis — set wide it reads
+   like equipment signage, which suits a mining platform and is distinct from
+   the Inter-everywhere default. */
+const archivo = Archivo({
   subsets: ["latin"],
+  variable: "--font-archivo",
+  axes: ["wdth"],
+});
+
+/* Body and UI. High x-height, real tabular figures, excellent at 14-16px. */
+const inter = Inter({
+  subsets: ["latin"],
+  variable: "--font-inter",
 });
 
 const geistMono = Geist_Mono({
@@ -346,7 +356,7 @@ export default function RootLayout({
         {gaId && <GoogleAnalytics measurementId={gaId} />}
       </head>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        className={`${archivo.variable} ${inter.variable} ${geistMono.variable} antialiased`}
       >
         <ClientLayout>{children}</ClientLayout>
       </body>

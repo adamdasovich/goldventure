@@ -40,11 +40,11 @@ export default function SectionHeading({
     >
       <div className={centred ? "" : "min-w-0"}>
         {eyebrow && (
-          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-gold-500/80 mb-1.5">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500 mb-2">
             {eyebrow}
           </p>
         )}
-        <h2 className="text-xl sm:text-2xl lg:text-3xl font-bold text-slate-100 text-balance">
+        <h2 className="font-display text-xl sm:text-2xl lg:text-[1.75rem] font-bold tracking-tight text-slate-50 text-balance">
           {title}
         </h2>
         {description && (

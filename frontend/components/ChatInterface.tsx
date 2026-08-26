@@ -2,12 +2,7 @@
 
 import React, { useState, useRef, useEffect } from "react";
 import Link from "next/link";
-import {
-  Card,
-  CardHeader,
-  CardTitle,
-  CardContent,
-} from "./ui/Card";
+import { Card, CardHeader, CardTitle, CardContent } from "./ui/Card";
 import { Input } from "./ui/Input";
 import { Button } from "./ui/Button";
 import { Badge } from "./ui/Badge";
@@ -18,22 +13,47 @@ import type { ChatMessage } from "@/types/api";
 /* Short label on the chip, full question sent. Six sentence-long chips only
    fitted two per screen and read as instructions rather than options. */
 const EXAMPLE_PROMPTS: { label: string; prompt: string }[] = [
-  { label: "Compare two companies", prompt: "Compare Aftermath Silver and Aston Bay stock over 6 months" },
-  { label: "Sector capital raised", prompt: "How much capital has the mining sector raised this year?" },
-  { label: "Resource growth", prompt: "Has Aston Bay's gold resource grown over time?" },
-  { label: "Does news move price?", prompt: "Does Aston Bay's news move its stock price?" },
-  { label: "Unusual volume", prompt: "Find unusual trading volume in Aftermath Silver" },
-  { label: "Who explores lithium?", prompt: "What companies are exploring lithium?" },
+  {
+    label: "Compare two companies",
+    prompt: "Compare Aftermath Silver and Aston Bay stock over 6 months",
+  },
+  {
+    label: "Sector capital raised",
+    prompt: "How much capital has the mining sector raised this year?",
+  },
+  {
+    label: "Resource growth",
+    prompt: "Has Aston Bay's gold resource grown over time?",
+  },
+  {
+    label: "Does news move price?",
+    prompt: "Does Aston Bay's news move its stock price?",
+  },
+  {
+    label: "Unusual volume",
+    prompt: "Find unusual trading volume in Aftermath Silver",
+  },
+  {
+    label: "Who explores lithium?",
+    prompt: "What companies are exploring lithium?",
+  },
 ];
 
 export default function ChatInterface() {
   const { accessToken, subscription } = useAuth();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  /**
+   * Collapsed by default: a single ask-bar rather than a 550px panel sitting
+   * open on a page nobody has asked anything on yet. Expands on click, focus,
+   * or a suggestion tap, and stays expanded once there is a conversation.
+   */
+  const [expanded, setExpanded] = useState(false);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [limitReached, setLimitReached] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
+  const composerRef = useRef<HTMLInputElement>(null);
 
   const tier = subscription?.effective_tier || "explorer";
   const dailyLimit = subscription?.features?.daily_chat_limit ?? 5;
@@ -114,12 +134,75 @@ export default function ChatInterface() {
     }
   };
 
+  // Once there is a conversation the panel stays open regardless.
+  const isOpen = expanded || messages.length > 0;
+
+  const open = () => {
+    setExpanded(true);
+    // Focus after the panel has mounted, so the composer is ready to type in
+    // rather than costing a second tap.
+    requestAnimationFrame(() => composerRef.current?.focus());
+  };
+
   const handleExampleClick = (prompt: string) => {
     handleSend(prompt);
   };
 
+  if (!isOpen) {
+    return (
+      <div className="max-w-4xl mx-auto">
+        <button
+          type="button"
+          onClick={open}
+          className="group flex w-full items-center gap-3 rounded-xl border border-slate-700 bg-slate-800/50 px-4 py-4 text-left transition-colors hover:border-gold-500/50 hover:bg-slate-800"
+          aria-expanded={false}
+          aria-controls="chat-panel"
+        >
+          <svg
+            className="h-5 w-5 shrink-0 text-gold-400"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"
+            />
+          </svg>
+          <span className="flex-1 truncate text-slate-400 group-hover:text-slate-300">
+            Ask about any company&hellip;
+          </span>
+          <span className="shrink-0 rounded-lg bg-gold-500/15 px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-gold-400">
+            Ask
+          </span>
+        </button>
+
+        <div className="mt-3 flex gap-2 overflow-x-auto scrollbar-none -mx-4 px-4 sm:mx-0 sm:px-0 sm:flex-wrap sm:justify-center">
+          {EXAMPLE_PROMPTS.slice(0, 4).map((example) => (
+            <button
+              key={example.label}
+              type="button"
+              title={example.prompt}
+              onClick={() => {
+                setExpanded(true);
+                handleSend(example.prompt);
+              }}
+              className="shrink-0 whitespace-nowrap rounded-full border border-slate-700 px-4 py-2.5 min-h-11 inline-flex items-center text-sm text-slate-400 transition-colors hover:border-gold-500/40 hover:text-gold-400"
+            >
+              {example.label}
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <Card
+      id="chat-panel"
       variant="glass-strong"
       /* Fixed 600px overran a 375x667 phone once the header and ticker were
          subtracted, and stranded the composer entirely in landscape. */
@@ -241,6 +324,7 @@ export default function ChatInterface() {
       <div className="p-6 border-t border-slate-700/50">
         <div className="flex gap-2">
           <Input
+            ref={composerRef}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}

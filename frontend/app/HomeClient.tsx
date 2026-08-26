@@ -83,13 +83,15 @@ export default function HomeClient({ initialArticles }: HomeClientProps) {
   const newsSectionRef = useRef<HTMLElement>(null);
   const chatSectionRef = useRef<HTMLElement>(null);
 
-  // Platform stats. The fallback is what renders server-side and on first
-  // paint, so it has to be a claim that is true — 500 was not.
+  /* Platform stats. These render server-side and on first paint, so they are
+     seeded with true floors rather than zeros — /platform-stats/ currently
+     reports 396 / 1358 / 297 / 1920, and the live values replace these within
+     a second. Zeros here showed three em-dashes on the prerender. */
   const [stats, setStats] = useState({
     companies: 390,
-    projects: 0,
-    financings: 0,
-    news_articles: 0,
+    projects: 1300,
+    financings: 290,
+    news_articles: 1900,
   });
 
   useEffect(() => {
@@ -176,17 +178,11 @@ export default function HomeClient({ initialArticles }: HomeClientProps) {
       </div>
 
       {/* ════════ Hero Section ════════ */}
+      {/* Four stacked decorative layers came off here — a grid overlay, a
+          pulsing radial wash and a particle field. Depth now comes from
+          spacing and scale, which is what the 2026 reference work does. */}
       <section className="relative py-10 md:py-16 px-4 sm:px-6 lg:px-8 overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-b from-[#0a0e1a] via-slate-900 to-slate-800"></div>
-        <div className="absolute inset-0 hero-grid"></div>
-        <div
-          className="absolute inset-0 animate-subtle-pulse"
-          style={{
-            backgroundImage:
-              "radial-gradient(circle at 30% 40%, rgba(212, 161, 42, 0.15) 0%, transparent 50%), radial-gradient(circle at 70% 60%, rgba(184, 134, 11, 0.08) 0%, transparent 40%)",
-          }}
-        ></div>
-        <div className="hero-particles"></div>
+        <div className="absolute inset-0 bg-linear-to-b from-[#0a0e1a] via-slate-900 to-slate-900"></div>
 
         <div className="relative max-w-3xl mx-auto text-center">
           {/* Socrates mascot */}
@@ -206,11 +202,13 @@ export default function HomeClient({ initialArticles }: HomeClientProps) {
             />
           </button>
 
-          <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold mb-3 text-gradient-gold animate-fade-in leading-tight text-balance pb-1">
+          {/* Near-white, not gold gradient. The accent is spent on the
+              figures below and the primary CTA, where it means something. */}
+          <h1 className="font-display text-[2rem] leading-[1.05] sm:text-5xl lg:text-6xl font-bold tracking-tight mb-4 text-slate-50 text-balance">
             Junior mining research, in minutes
           </h1>
-          <p className="text-base sm:text-lg text-slate-300 animate-slide-in-up mb-6 max-w-xl mx-auto">
-            Profiles, financials and news on {stats.companies}+ juniors, with an
+          <p className="text-base sm:text-lg text-slate-400 mb-7 max-w-xl mx-auto leading-relaxed">
+            Profiles, financials and news on {stats.companies} juniors, with an
             AI assistant that answers questions about any of them.
           </p>
 
@@ -233,9 +231,30 @@ export default function HomeClient({ initialArticles }: HomeClientProps) {
             </Link>
           </div>
 
+          {/* Live figures from /platform-stats/. Real numbers in the first
+              screen do more to establish the product than another paragraph
+              claiming it is comprehensive. Mono + tabular so they line up. */}
+          <dl className="mt-8 grid grid-cols-2 sm:grid-cols-4 gap-px overflow-hidden rounded-xl border border-slate-800 bg-slate-800">
+            {[
+              { label: "Companies", value: stats.companies },
+              { label: "Projects", value: stats.projects },
+              { label: "Financings", value: stats.financings },
+              { label: "News items", value: stats.news_articles },
+            ].map((s) => (
+              <div key={s.label} className="bg-slate-900/90 px-3 py-4">
+                <dd className="font-mono text-xl sm:text-2xl font-medium tracking-tight text-gold-400 tabular-nums">
+                  {s.value ? s.value.toLocaleString() : "—"}
+                </dd>
+                <dt className="mt-1 text-[11px] uppercase tracking-[0.12em] text-slate-500">
+                  {s.label}
+                </dt>
+              </div>
+            ))}
+          </dl>
+
           {/* The other six are jump links, not calls to action, so they read
               as a compact row: swipeable below sm, wrapped above. */}
-          <div className="mt-5 animate-slide-in-up">
+          <div className="mt-6">
             <div className="flex gap-2 overflow-x-auto scrollbar-none sm:flex-wrap sm:justify-center sm:overflow-visible -mx-4 px-4 sm:mx-0 sm:px-0">
               {SECONDARY_LINKS.map((item) =>
                 item.href ? (

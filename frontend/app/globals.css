@@ -48,6 +48,7 @@
   --glass-border: rgba(255, 255, 255, 0.125);
   --glass-border-strong: rgba(255, 255, 255, 0.18);
 
+
   /* Animation Timing */
   --duration-fast: 150ms;
   --duration-base: 250ms;
@@ -93,6 +94,10 @@
   --color-error: var(--error);
   --color-info: var(--info);
 
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-archivo), var(--font-inter), sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, "SF Mono", monospace;
+
   /* Border Radius */
   --radius-sm: 8px;
   --radius-md: 12px;
@@ -122,9 +127,10 @@ body {
   overflow-x: clip;
   background: var(--slate-900);
   color: var(--slate-100);
-  font-family:
-    -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen", "Ubuntu",
-    "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif;
+  /* Was a system stack here, which overrode the webfont the layout loads —
+     Geist was downloaded on every page load and never rendered. */
+  font-family: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  font-feature-settings: "cv05" 1;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -139,6 +145,14 @@ body {
   textarea {
     font-size: 16px;
   }
+}
+
+/* Archivo carries a width axis. Set slightly wide, headlines read like
+   equipment signage rather than another Inter headline. Tailwind generates
+   .font-display for the family; this adds the axis and optical tracking. */
+.font-display {
+  font-stretch: 108%;
+  letter-spacing: -0.015em;
 }
 
 /* ============================================================================
