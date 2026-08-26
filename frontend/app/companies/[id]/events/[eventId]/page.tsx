@@ -515,7 +515,7 @@ export default function EventDetailPage() {
                 {getStatusBadge(event.status)}
               </div>
 
-              <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold mb-6 text-gradient-gold animate-fade-in leading-tight pb-2">
+              <h1 className="font-display text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold mb-6 text-slate-50 animate-fade-in leading-tight tracking-tight">
                 {event.title}
               </h1>
 

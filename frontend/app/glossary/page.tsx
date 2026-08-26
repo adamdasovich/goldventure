@@ -649,7 +649,7 @@ export default function GlossaryPage() {
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
             <div className="flex items-start justify-between gap-4 mb-4">
               <div className="flex-1">
-                <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold text-gradient-gold mb-4">
+                <h1 className="font-display text-3xl sm:text-4xl md:text-5xl font-bold text-slate-50 mb-4 tracking-tight">
                   Junior Gold Mining Glossary
                 </h1>
               </div>

@@ -369,7 +369,7 @@ export default function HomeClient({ initialArticles }: HomeClientProps) {
       {/* ════════ Pricing CTA Section ════════ */}
       <section className="py-16 md:py-20 px-4 sm:px-6 lg:px-8">
         <div className="max-w-2xl mx-auto text-center">
-          <h2 className="text-2xl sm:text-3xl font-bold text-gradient-gold mb-4">
+          <h2 className="font-display text-2xl sm:text-3xl font-bold text-slate-50 mb-4 tracking-tight">
             Start Free — No Card Required
           </h2>
           <p className="text-slate-300 mb-6">

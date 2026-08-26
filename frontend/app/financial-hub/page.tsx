@@ -152,7 +152,7 @@ export default function FinancialHub() {
         <div className="relative max-w-7xl mx-auto">
           {/* Header */}
           <div className="text-center mb-12">
-            <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold mb-6 text-gradient-gold animate-fade-in leading-tight pb-2">
+            <h1 className="font-display text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold mb-6 text-slate-50 animate-fade-in leading-tight tracking-tight">
               Financial Hub
             </h1>
             <p className="text-xl text-slate-300 max-w-3xl mx-auto">

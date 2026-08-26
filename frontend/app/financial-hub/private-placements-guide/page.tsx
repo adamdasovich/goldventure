@@ -367,7 +367,7 @@ For junior mining companies, private placements are the primary method of raisin
             >
               <Briefcase className="w-10 h-10" style={{ color: "#d4af37" }} />
             </div>
-            <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold mb-4 text-gradient-gold">
+            <h1 className="font-display text-3xl sm:text-4xl md:text-5xl font-bold mb-4 text-slate-50 tracking-tight">
               Private Placements Guide
             </h1>
             <p className="text-xl text-slate-300 max-w-2xl mx-auto mb-4">

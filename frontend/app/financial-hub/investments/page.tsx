@@ -241,7 +241,7 @@ export default function InvestmentTracking() {
           <Badge variant="gold" className="mb-4">
             Portfolio Tracker
           </Badge>
-          <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold mb-4 text-gradient-gold animate-fade-in leading-tight pb-2">
+          <h1 className="font-display text-3xl sm:text-4xl md:text-5xl font-bold mb-4 text-slate-50 animate-fade-in leading-tight tracking-tight">
             Investment Tracking
           </h1>
           <p className="text-lg text-slate-300 max-w-3xl">

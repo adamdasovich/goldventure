@@ -247,7 +247,7 @@ export default function HowToReadNI43101Guide() {
               </ol>
             </nav>
 
-            <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold text-gradient-gold mb-6">
+            <h1 className="font-display text-3xl sm:text-4xl md:text-5xl font-bold text-slate-50 mb-6 tracking-tight">
               How to Read an NI 43-101 Report
             </h1>
             <p className="text-xl text-slate-300 mb-4">

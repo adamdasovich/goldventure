@@ -103,7 +103,7 @@ export default function ToolPageLayout({
           <Badge variant="gold" className="mb-3">
             {badge}
           </Badge>
-          <h1 className="text-3xl sm:text-4xl font-bold text-gradient-gold mb-3">
+          <h1 className="font-display text-3xl sm:text-4xl font-bold text-slate-50 mb-3 tracking-tight">
             {title}
           </h1>
           <p className="text-slate-300 max-w-2xl mx-auto leading-relaxed">

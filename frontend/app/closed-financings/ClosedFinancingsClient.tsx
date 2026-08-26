@@ -380,7 +380,7 @@ export default function ClosedFinancingsClient() {
           <Badge variant="gold" className="mb-4">
             Recently Closed
           </Badge>
-          <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold mb-4 text-gradient-gold leading-tight pb-2">
+          <h1 className="font-display text-3xl sm:text-4xl md:text-5xl font-bold mb-4 text-slate-50 leading-tight tracking-tight">
             Closed Financings
           </h1>
           <p className="text-lg text-slate-300 max-w-2xl mx-auto mb-3">

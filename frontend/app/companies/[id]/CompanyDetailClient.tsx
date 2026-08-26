@@ -1085,7 +1085,7 @@ export default function CompanyDetailClient({
                         </span>
                       </div>
                     )}
-                    <h1 className="text-3xl sm:text-4xl font-bold text-gradient-gold break-words">
+                    <h1 className="font-display text-3xl sm:text-4xl font-bold text-slate-50 break-words tracking-tight">
                       {company.name}
                     </h1>
                     {/* Ticker & Exchange Info */}

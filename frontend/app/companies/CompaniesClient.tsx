@@ -210,7 +210,7 @@ export default function CompaniesClient({
         <div className="relative max-w-7xl mx-auto text-center">
           {/* The badge repeated the H1 word for word, so it cost a line of
               screen and said nothing. */}
-          <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold mb-4 text-gradient-gold animate-fade-in leading-tight text-balance pb-1">
+          <h1 className="font-display text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold mb-4 text-slate-50 animate-fade-in leading-tight text-balance tracking-tight">
             Junior Mining Companies: Gold, Silver &amp; Critical Minerals Stocks
           </h1>
           <p className="text-base sm:text-lg md:text-xl text-slate-300 max-w-2xl mx-auto mb-6 animate-slide-in-up">
