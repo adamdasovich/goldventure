@@ -125,14 +125,81 @@ class FinancingViewSet(viewsets.ModelViewSet):
     """
     serializer_class = FinancingSerializer
 
+    # Params this endpoint understands. Anything else is rejected rather than
+    # ignored: ?status=open used to be dropped silently and return all 297
+    # financings, which reads as "297 open rounds" when there are 21. A filter
+    # that quietly does nothing is worse than one that errors, because the
+    # caller believes the answer.
+    ALLOWED_LIST_PARAMS = frozenset({
+        'company', 'status', 'is_closed',
+        # DRF infrastructure: pagination, search, ordering, format suffix.
+        'page', 'page_size', 'search', 'ordering', 'format',
+    })
+
+    _TRUE = frozenset({'true', '1', 'yes'})
+    _FALSE = frozenset({'false', '0', 'no'})
+
     def get_queryset(self):
-        """Filter financings by company if company query param is provided"""
+        """Financings, optionally narrowed by company and open/closed state."""
         # Note: is_deleted field requires migration 0041 to be applied
         queryset = Financing.objects.select_related('company').all()
-        company_id = self.request.query_params.get('company')
+        params = self.request.query_params
+
+        company_id = params.get('company')
         if company_id:
             queryset = queryset.filter(company_id=company_id)
+
+        # "status" is the friendly spelling; "is_closed" mirrors the column.
+        status_param = (params.get('status') or '').strip().lower()
+        if status_param == 'open':
+            queryset = queryset.filter(is_closed=False)
+        elif status_param == 'closed':
+            queryset = queryset.filter(is_closed=True)
+
+        is_closed_param = (params.get('is_closed') or '').strip().lower()
+        if is_closed_param in self._TRUE:
+            queryset = queryset.filter(is_closed=True)
+        elif is_closed_param in self._FALSE:
+            queryset = queryset.filter(is_closed=False)
+
         return queryset.order_by('-announced_date')
+
+    def list(self, request, *args, **kwargs):
+        """Validate the query string before answering it."""
+        unknown = sorted(set(request.query_params) - self.ALLOWED_LIST_PARAMS)
+        if unknown:
+            return Response(
+                {
+                    'error': 'unknown_query_parameter',
+                    'detail': (
+                        'Unrecognised query parameter(s): '
+                        + ', '.join(unknown)
+                        + '. This endpoint would otherwise ignore them and '
+                        'return every financing, which reads as a filtered '
+                        'result.'
+                    ),
+                    'unknown': unknown,
+                    'supported': sorted(self.ALLOWED_LIST_PARAMS),
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        bad = {}
+        status_param = (request.query_params.get('status') or '').strip().lower()
+        if status_param and status_param not in ('open', 'closed'):
+            bad['status'] = "expected 'open' or 'closed'"
+        is_closed_param = (
+            request.query_params.get('is_closed') or ''
+        ).strip().lower()
+        if is_closed_param and is_closed_param not in (self._TRUE | self._FALSE):
+            bad['is_closed'] = "expected 'true' or 'false'"
+        if bad:
+            return Response(
+                {'error': 'invalid_query_parameter', 'detail': bad},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        return super().list(request, *args, **kwargs)
 
     def get_permissions(self):
         """Allow read for anyone, require auth for write operations"""
