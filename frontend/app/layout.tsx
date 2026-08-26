@@ -12,6 +12,7 @@ const archivo = Archivo({
   subsets: ["latin"],
   variable: "--font-archivo",
   axes: ["wdth"],
+  style: ["normal", "italic"],
 });
 
 /* Body and UI. High x-height, real tabular figures, excellent at 14-16px. */

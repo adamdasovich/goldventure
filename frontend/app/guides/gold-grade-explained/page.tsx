@@ -182,7 +182,7 @@ export default function GoldGradeExplainedGuide() {
               </ol>
             </nav>
 
-            <h1 className="font-display text-3xl sm:text-4xl md:text-5xl font-bold text-slate-50 mb-6 tracking-tight">
+            <h1 className="font-display text-2xl sm:text-3xl md:text-4xl font-semibold text-gold-400 mb-6 tracking-tight italic">
               Gold Grade Explained
             </h1>
             <p className="text-xl text-slate-300 mb-4">

@@ -206,7 +206,7 @@ export default function OpenFinancingsClient({
           <Badge variant="gold" className="mb-4">
             Currently Raising
           </Badge>
-          <h1 className="font-display text-3xl sm:text-4xl md:text-5xl font-bold mb-4 text-slate-50 leading-tight tracking-tight">
+          <h1 className="font-display text-2xl sm:text-3xl md:text-4xl font-semibold mb-4 text-gold-400 leading-tight tracking-tight italic">
             Open Financings
           </h1>
           <p className="text-lg text-slate-300 max-w-2xl mx-auto mb-2">

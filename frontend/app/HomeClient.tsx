@@ -204,7 +204,7 @@ export default function HomeClient({ initialArticles }: HomeClientProps) {
 
           {/* Near-white, not gold gradient. The accent is spent on the
               figures below and the primary CTA, where it means something. */}
-          <h1 className="font-display text-[2rem] leading-[1.05] sm:text-5xl lg:text-6xl font-bold tracking-tight mb-4 text-slate-50 text-balance">
+          <h1 className="font-display text-2xl sm:text-[1.75rem] lg:text-[2rem] leading-snug font-semibold tracking-tight mb-4 text-gold-400 text-balance italic">
             Junior mining research, in minutes
           </h1>
           <p className="text-base sm:text-lg text-slate-400 mb-7 max-w-xl mx-auto leading-relaxed">
@@ -369,7 +369,7 @@ export default function HomeClient({ initialArticles }: HomeClientProps) {
       {/* ════════ Pricing CTA Section ════════ */}
       <section className="py-16 md:py-20 px-4 sm:px-6 lg:px-8">
         <div className="max-w-2xl mx-auto text-center">
-          <h2 className="font-display text-2xl sm:text-3xl font-bold text-slate-50 mb-4 tracking-tight">
+          <h2 className="font-display text-2xl sm:text-3xl font-semibold text-gold-400 mb-4 tracking-tight italic">
             Start Free — No Card Required
           </h2>
           <p className="text-slate-300 mb-6">

@@ -252,7 +252,7 @@ export default function PricingPage() {
           <Badge variant="gold" className="mb-4">
             Choose Your Plan
           </Badge>
-          <h1 className="font-display text-3xl sm:text-4xl md:text-5xl font-bold text-slate-50 mb-4 tracking-tight">
+          <h1 className="font-display text-2xl sm:text-3xl md:text-4xl font-semibold text-gold-400 mb-4 tracking-tight italic">
             Mining Intelligence, Your Way
           </h1>
           <p className="text-lg text-slate-300 max-w-2xl mx-auto">
@@ -473,7 +473,7 @@ export default function PricingPage() {
 
         {/* Feature Comparison Table */}
         <div className="mb-16">
-          <h2 className="font-display text-2xl font-bold text-slate-50 text-center mb-8 tracking-tight">
+          <h2 className="font-display text-2xl font-semibold text-gold-400 text-center mb-8 tracking-tight italic">
             Full Feature Comparison
           </h2>
           <div className="overflow-x-auto">
@@ -518,7 +518,7 @@ export default function PricingPage() {
 
         {/* FAQ */}
         <div className="max-w-3xl mx-auto">
-          <h2 className="font-display text-2xl font-bold text-slate-50 text-center mb-8 tracking-tight">
+          <h2 className="font-display text-2xl font-semibold text-gold-400 text-center mb-8 tracking-tight italic">
             Frequently Asked Questions
           </h2>
           <div className="space-y-4">

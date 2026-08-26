@@ -108,7 +108,7 @@ export function FreeAccountCTA({
     <div
       className={`rounded-2xl border border-gold-500/30 bg-linear-to-b from-slate-900 to-slate-800/60 px-6 py-10 sm:px-10 text-center ${className}`}
     >
-      <h2 className="font-display text-2xl sm:text-3xl font-bold text-slate-50 mb-3 leading-tight tracking-tight">
+      <h2 className="font-display text-2xl sm:text-3xl font-semibold text-gold-400 mb-3 leading-tight tracking-tight italic">
         {copy.heading}
       </h2>
       <p className="text-slate-300 max-w-2xl mx-auto mb-6">{copy.sub}</p>

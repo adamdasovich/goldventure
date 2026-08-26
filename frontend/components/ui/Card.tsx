@@ -37,12 +37,12 @@ export const CardTitle = React.forwardRef<
   React.HTMLAttributes<HTMLHeadingElement>
 >(({ className = "", children, ...props }, ref) => {
   return (
-    // Was text-gradient-gold, which put a gold gradient on the title of every
-    // card on the site. Spending the accent everywhere is what stopped it
-    // reading as an accent; gold now marks figures, live states and CTAs.
+    // Solid gold, not the old gradient — the gradient shimmer is what read as
+    // dated, the gold itself never was. Roman, not italic: h1/h2 carry the
+    // slant, and italicising every card title would be a lot of it.
     <h3
       ref={ref}
-      className={`font-display text-xl font-bold tracking-tight text-slate-100 ${className}`}
+      className={`font-display text-lg font-semibold tracking-tight text-gold-400 ${className}`}
       {...props}
     >
       {children}

@@ -178,7 +178,7 @@ export default function PendingGlossaryTermsPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="font-display text-3xl sm:text-4xl font-bold text-slate-50 mb-2 tracking-tight">
+              <h1 className="font-display text-2xl sm:text-3xl font-semibold text-gold-400 mb-2 tracking-tight italic">
                 Pending Glossary Terms
               </h1>
               <p className="text-slate-300">

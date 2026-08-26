@@ -192,7 +192,7 @@ export default function InvestmentInterestDetailPage() {
             </svg>
             Back to Dashboard
           </Button>
-          <h1 className="font-display text-3xl font-bold text-slate-50 tracking-tight">Investment Interest Details</h1>
+          <h1 className="font-display text-3xl font-semibold text-gold-400 tracking-tight italic">Investment Interest Details</h1>
           {financing && (
             <p className="text-slate-400 mt-2">
               {financing.company_name} - {financing.financing_type.replace('_', ' ').toUpperCase()}

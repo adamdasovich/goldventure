@@ -48,7 +48,7 @@ export default function DailyBriefingPage() {
       <section className="relative py-12 sm:py-16 lg:py-20 px-4 sm:px-6 lg:px-8">
         <div className="absolute inset-0 bg-linear-to-b from-slate-900 via-slate-900 to-slate-800 opacity-50" />
         <div className="relative max-w-4xl mx-auto">
-          <h1 className="font-display text-3xl sm:text-4xl lg:text-5xl font-bold mb-5 text-slate-50 leading-tight text-balance tracking-tight">
+          <h1 className="font-display text-2xl sm:text-3xl lg:text-4xl font-semibold mb-5 text-gold-400 leading-tight text-balance tracking-tight italic">
             Your Daily Briefing on the Juniors You Follow
           </h1>
           <p className="text-lg text-slate-300 leading-relaxed">
