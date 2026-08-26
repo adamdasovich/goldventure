@@ -8,6 +8,8 @@ import { Button } from "@/components/ui/Button";
 import { CartButton } from "@/components/store";
 import { LoginModal, RegisterModal } from "@/components/auth";
 import { useAuth } from "@/contexts/AuthContext";
+import AskAssistantButton from "@/components/AskAssistantButton";
+import { useAssistant } from "@/contexts/AssistantContext";
 
 export interface NavLink {
   href: string;
@@ -79,6 +81,7 @@ export default function SiteHeader({
   onRegisterClick,
 }: SiteHeaderProps) {
   const { user, logout } = useAuth();
+  const { open: openAssistant } = useAssistant();
   const pathname = usePathname();
 
   const [menuOpen, setMenuOpen] = useState(false);
@@ -226,6 +229,8 @@ export default function SiteHeader({
                   </Link>
                 ))}
 
+              <AskAssistantButton className="mr-1" />
+
               <CartButton />
 
               {user ? (
@@ -289,6 +294,21 @@ export default function SiteHeader({
             className="lg:hidden mobile-nav-overlay border-t border-slate-700/50 animate-slide-in-up"
           >
             <div className="px-4 py-4 space-y-1 max-h-[calc(100dvh-4rem)] overflow-y-auto overscroll-contain">
+              {/* First item in the panel: the assistant is the reason most
+                  people are here, so it should not be below Pricing. */}
+              <button
+                type="button"
+                onClick={() => {
+                  openAssistant();
+                  closeMenu();
+                }}
+                className="mb-2 flex w-full items-center gap-2 rounded-lg border border-gold-500/50 bg-gold-500/10 px-4 py-3 min-h-11 text-gold-300 transition-colors hover:bg-gold-500/20"
+              >
+                <svg className="h-5 w-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+                </svg>
+                Ask the AI Assistant
+              </button>
               {links.map((link) => (
                 <Link
                   key={link.href}

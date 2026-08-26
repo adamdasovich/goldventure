@@ -78,16 +78,16 @@ test.describe("SiteNav on the static routes", () => {
     test(`${route} keeps its destinations reachable`, async ({ page }, testInfo) => {
       await visit(page, route);
 
-      // These are server-rendered SEO pages, so the nav is plain markup with no
-      // client JS. Which half shows is a width question, not a device question:
-      // the chip strip is `sm:hidden`, so a phone held sideways (667px) sits
-      // above the breakpoint and correctly gets the inline row instead.
+      // These are server-rendered SEO pages, so the nav is plain markup with
+      // almost no client JS. Which half shows is a width question: the strip
+      // covers everything below `lg`, because the inline row measured 576px
+      // and did not fit a 667px landscape phone.
       const vw = testInfo.project.use.viewport!.width;
       const strip = page.locator('nav[aria-label="Site sections"]');
       const inline = page.locator("nav.glass-nav div.hidden").first();
 
-      if (vw < 640) {
-        await expect(strip, "chip strip is rendered below sm").toBeVisible();
+      if (vw < 1024) {
+        await expect(strip, "chip strip is rendered below lg").toBeVisible();
         expect(await strip.locator("a").count()).toBeGreaterThanOrEqual(4);
 
         // It may scroll sideways; it may not clip silently.
@@ -97,7 +97,7 @@ test.describe("SiteNav on the static routes", () => {
         }));
         if (scrolls.canScroll) expect(scrolls.overflowX).toBe("auto");
       } else {
-        await expect(inline, "inline link row is rendered at or above sm").toBeVisible();
+        await expect(inline, "inline link row is rendered at or above lg").toBeVisible();
         expect(await inline.locator("a").count()).toBeGreaterThanOrEqual(4);
       }
     });

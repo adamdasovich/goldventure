@@ -3,9 +3,8 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import ChatInterface from "@/components/ChatInterface";
 import ChatLauncher from "@/components/ChatLauncher";
-import { Modal } from "@/components/ui/Modal";
+import { useAssistant } from "@/contexts/AssistantContext";
 import NewsArticles from "@/components/NewsArticles";
 import { Button } from "@/components/ui/Button";
 import LogoMono from "@/components/LogoMono";
@@ -88,16 +87,9 @@ export default function HomeClient({ initialArticles }: HomeClientProps) {
   const [showLogin, setShowLogin] = useState(false);
   const [showRegister, setShowRegister] = useState(false);
   const [isVibrating, setIsVibrating] = useState(false);
-  /* The assistant opens in a modal. "AI Assistant" used to scroll to the
-     section and stop there — once the panel was collapsed that landed you on a
-     thin bar and read as a dead link. */
-  const [chatOpen, setChatOpen] = useState(false);
-  const [chatPrompt, setChatPrompt] = useState<string | undefined>();
-
-  const openChat = (prompt?: string) => {
-    setChatPrompt(prompt);
-    setChatOpen(true);
-  };
+  /* One assistant for the site, provided by ClientLayout — the header opens
+     the same instance from every page. */
+  const { open: openChat } = useAssistant();
   const { user } = useAuth();
   const newsSectionRef = useRef<HTMLElement>(null);
   const chatSectionRef = useRef<HTMLElement>(null);
@@ -185,20 +177,6 @@ export default function HomeClient({ initialArticles }: HomeClientProps) {
             setShowLogin(true);
           }}
         />
-      )}
-
-      {/* ════════ AI Assistant ════════ */}
-      {chatOpen && (
-        <Modal
-          onClose={() => setChatOpen(false)}
-          size="2xl"
-          labelledBy="assistant-title"
-        >
-          <ChatInterface
-            initialPrompt={chatPrompt}
-            onClose={() => setChatOpen(false)}
-          />
-        </Modal>
       )}
 
       {/* ════════ Metals Price Ticker ════════ */}

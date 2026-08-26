@@ -1,5 +1,6 @@
 import Link from "next/link";
 import LogoMono from "@/components/LogoMono";
+import AskAssistantButton from "@/components/AskAssistantButton";
 
 const LINKS = [
   { href: "/", label: "Home" },
@@ -15,7 +16,7 @@ const FEATURED = { href: "/reports/weekly", label: "Weekly Snapshot" };
  * (public archives, guides, etc). Mirrors the look of the homepage's
  * glass nav so users have a consistent escape hatch.
  *
- * Below `sm` the links move to a scrolling chip strip rather than being
+ * Below `lg` the links move to a scrolling chip strip rather than being
  * hidden — these are the SEO archive routes, so a mobile visitor arriving
  * from search needs somewhere to go next. Kept free of client JS so the
  * report pages stay fully server-rendered.
@@ -28,7 +29,7 @@ export default function SiteNav() {
           <Link href="/" className="flex items-center shrink-0 min-h-11">
             <LogoMono className="h-10" />
           </Link>
-          <div className="hidden sm:flex items-center space-x-1 sm:space-x-2">
+          <div className="hidden lg:flex items-center space-x-1 lg:space-x-2">
             {LINKS.map((link) => (
               <Link
                 key={link.href}
@@ -44,12 +45,13 @@ export default function SiteNav() {
             >
               {FEATURED.label}
             </Link>
+            <AskAssistantButton className="ml-2" />
           </div>
         </div>
 
         <nav
           aria-label="Site sections"
-          className="sm:hidden flex items-center gap-2 pb-3 overflow-x-auto scrollbar-none"
+          className="lg:hidden flex items-center gap-2 pb-3 overflow-x-auto scrollbar-none"
         >
           {LINKS.map((link) => (
             <Link
@@ -66,6 +68,7 @@ export default function SiteNav() {
           >
             {FEATURED.label}
           </Link>
+          <AskAssistantButton variant="chip" />
         </nav>
       </div>
     </nav>

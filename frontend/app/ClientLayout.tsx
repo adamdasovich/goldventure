@@ -5,6 +5,7 @@ import { CartProvider } from "@/contexts/CartContext";
 import { IdleTimeoutProvider } from "@/contexts/IdleTimeoutContext";
 import { CartSidebar } from "@/components/store";
 import IdleWarningModal from "@/components/auth/IdleWarningModal";
+import { AssistantProvider } from "@/contexts/AssistantContext";
 
 export default function ClientLayout({
   children,
@@ -15,9 +16,11 @@ export default function ClientLayout({
     <AuthProvider>
       <IdleTimeoutProvider>
         <CartProvider>
-          {children}
-          <CartSidebar />
-          <IdleWarningModal />
+          <AssistantProvider>
+            {children}
+            <CartSidebar />
+            <IdleWarningModal />
+          </AssistantProvider>
         </CartProvider>
       </IdleTimeoutProvider>
     </AuthProvider>
