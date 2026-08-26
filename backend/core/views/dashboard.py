@@ -20,6 +20,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status as http_status
 
+from ..entitlements import tier_gated
 from ..models import (
     Company, Watchlist, StockPrice, NewsRelease, Financing, Document, User,
 )
@@ -417,11 +418,22 @@ def build_briefing(user):
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
+@tier_gated(stub=('companies',))
 def daily_briefing(request):
     """
     GET /api/dashboard/daily-briefing/
     Recent-activity digest across the user's watchlist. Cached 30 min/user;
     'last_visit' and 'email_briefing_enabled' are layered on per-request.
+
+    Prospector and above for the detail. Explorers keep the headline and the
+    stats — the briefing's whole proposition is "here is what changed", so
+    showing that something changed while withholding which company it was is a
+    truthful teaser rather than an empty one. Building a watchlist stays free,
+    which is what makes the teaser worth seeing.
+
+    tier_gated is applied closest to the view so it wraps the cache-hit return
+    path too; it rebuilds the gated list rather than mutating, so gating a
+    cached briefing never writes back into the cached object.
     """
     user = request.user
 

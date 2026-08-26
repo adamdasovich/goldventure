@@ -83,6 +83,7 @@ from ..serializers import (
 logger = logging.getLogger(__name__)
 
 from ..constants import CacheTTL, Timeouts
+from ..entitlements import requires_tier
 
 from rest_framework.decorators import api_view, permission_classes, action
 from rest_framework.permissions import IsAuthenticated, AllowAny, IsAuthenticatedOrReadOnly
@@ -100,11 +101,22 @@ from django.db.models import Count, Q
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
+@requires_tier('prospector')
 def register_investment_interest(request):
     """
     Register investment interest in a financing round.
 
     POST /api/investment-interest/register/
+
+    Prospector and above. Open financings are already tier-split — explorers
+    see 5 of the live rounds in full and locked stubs for the rest — so the
+    ability to act on one belongs on the same side of the line. A registered
+    interest is also a real commitment signal passed to the company, which is
+    worth keeping behind a paying account.
+
+    Registration grants a 30-day Prospector comp (see
+    PlatformSubscription.grant_free_month), so a brand-new user can still do
+    this during their trial; access lapses with the grant.
 
     Required fields:
     - financing: Financing ID

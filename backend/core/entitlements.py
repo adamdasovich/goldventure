@@ -173,3 +173,47 @@ def tier_gated(*, stub=(), truncate=(), window=(), requires='prospector',
 
         return wrapper
     return decorator
+
+
+def requires_tier(required='prospector'):
+    """Hard-block a view for callers below `required`.
+
+    Companion to ``tier_gated``, for *actions* rather than reads. Truncating a
+    GET into a teaser is the house pattern and the better one, but there is no
+    partial version of registering interest in a financing — the write either
+    happens or it does not — so the honest answer is a 403 that names what is
+    missing, rather than a half-completed action or a silently dropped one.
+
+    Prefer ``tier_gated`` for anything that returns data. Reach for this only
+    where a teaser is meaningless.
+
+    Returns the structured payload the frontend already understands from the
+    tool teasers, so an upgrade prompt can be rendered without special-casing.
+    """
+    def decorator(view):
+        @functools.wraps(view)
+        def wrapper(request, *args, **kwargs):
+            user = getattr(request, 'user', None)
+            if meets_tier(user, required):
+                return view(request, *args, **kwargs)
+
+            from rest_framework.response import Response
+            from rest_framework import status
+
+            current = resolve_effective_tier(user)
+            return Response(
+                {
+                    'error': 'upgrade_required',
+                    'detail': (
+                        'This action is available on the Prospector plan and above.'
+                        if required == 'prospector'
+                        else f'This action requires the {required.title()} plan.'
+                    ),
+                    'required_tier': required,
+                    'current_tier': current,
+                    'is_locked': True,
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        return wrapper
+    return decorator
