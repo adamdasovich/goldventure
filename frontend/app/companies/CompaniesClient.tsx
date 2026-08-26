@@ -18,6 +18,7 @@ import { companyHref } from "@/lib/companyUrl";
 import { LoginModal, RegisterModal } from "@/components/auth";
 import { FreeAccountCTA } from "@/components/FreeAccountCTA";
 import type { SignupOffer } from "@/lib/signupOffer";
+import ExportCompaniesButton from "@/components/ExportCompaniesButton";
 
 // Commodity filter options grouped by category
 const COMMODITY_GROUPS = {
@@ -381,6 +382,10 @@ export default function CompaniesClient({
 
               {/* View Toggle and Stats */}
               <div className="flex items-center gap-4">
+                {/* Shown to everyone, including logged-out visitors: a download
+                    they can see and cannot use converts better than one they
+                    never knew existed. The server enforces the gate. */}
+                <ExportCompaniesButton />
                 {user && (
                   <Link href="/companies/new">
                     <Button

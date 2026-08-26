@@ -293,12 +293,9 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       changeFrequency: "monthly",
       priority: 0.5,
     },
-    {
-      url: `${baseUrl}/financial-hub/private-placements-guide`,
-      lastModified: lastModifiedFor("/financial-hub/private-placements-guide"),
-      changeFrequency: "monthly",
-      priority: 0.6,
-    },
+    // Redirected into /guides/how-junior-mining-companies-raise-money on
+    // 2026-08-26 (three pages competed for the same query). A redirecting URL
+    // must not stay in the sitemap.
     {
       url: `${baseUrl}/financial-hub/subscription-agreements-guide`,
       lastModified: lastModifiedFor(

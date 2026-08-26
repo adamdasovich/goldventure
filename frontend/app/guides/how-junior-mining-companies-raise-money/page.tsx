@@ -520,7 +520,7 @@ export default function FinancingPillarGuide() {
                 For a focused deep-dive on private placement mechanics,
                 exemptions, and the subscription agreement process, see our{" "}
                 <Link
-                  href="/financial-hub/private-placements-guide"
+                  href="/guides/how-junior-mining-companies-raise-money"
                   className="text-gold-400 hover:underline"
                 >
                   Private Placements Guide
@@ -1325,7 +1325,7 @@ export default function FinancingPillarGuide() {
                   </p>
                 </Link>
                 <Link
-                  href="/financial-hub/private-placements-guide"
+                  href="/guides/how-junior-mining-companies-raise-money"
                   className="block bg-slate-800 border border-slate-700 hover:border-gold-500/50 rounded-lg p-5 transition-colors"
                 >
                   <h3 className="text-lg font-bold text-gold-400 mb-2">
@@ -1400,7 +1400,7 @@ export default function FinancingPillarGuide() {
                 </li>
                 <li>
                   <Link
-                    href="/financial-hub/private-placements-guide"
+                    href="/guides/how-junior-mining-companies-raise-money"
                     className="text-gold-400 hover:underline"
                   >
                     Private Placements Guide (Financial Hub) →

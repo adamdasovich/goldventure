@@ -133,6 +133,30 @@ const nextConfig: NextConfig = {
       },
     ];
   },
+
+  // Three pages competed for private-placement searches: the 4,554-word guide
+  // below, /guides/private-placements-and-warrants (1,591, actually about units
+  // and warrants), and this one (1,087, a straight duplicate sitting in the
+  // financial-hub section). Google had to pick among three of ours for the same
+  // query and split authority instead — the best of them earned 4 organic
+  // sessions in the 30 days to 2026-08-26.
+  //
+  // The duplicate redirects into the canonical guide. The warrants page keeps
+  // its URL and content but was retitled to lead with units and warrants rather
+  // than "private placements", which removes the overlap without deleting a
+  // distinct subtopic that Warrant Radar links to.
+  //
+  // 308 (permanent: true) rather than 302 — link equity only passes on a
+  // permanent redirect, and passing it is the entire point.
+  async redirects() {
+    return [
+      {
+        source: "/financial-hub/private-placements-guide",
+        destination: "/guides/how-junior-mining-companies-raise-money",
+        permanent: true,
+      },
+    ];
+  },
 };
 
 export default nextConfig;

@@ -277,7 +277,7 @@ const fallbackGlossaryTerms: GlossaryTerm[] = [
       },
       {
         text: "Private Placements Deep Dive",
-        url: "/financial-hub/private-placements-guide",
+        url: "/guides/how-junior-mining-companies-raise-money",
       },
     ],
   },

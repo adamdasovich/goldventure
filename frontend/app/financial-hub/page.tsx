@@ -61,7 +61,7 @@ export default function FinancialHub() {
       description: 'Learn how private placements work, their benefits for junior mining companies, and how to participate',
       icon: Briefcase,
       color: 'bg-blue-500',
-      href: '/financial-hub/private-placements-guide',
+      href: '/guides/how-junior-mining-companies-raise-money',
       status: 'available'
     },
     {

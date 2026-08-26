@@ -30,7 +30,6 @@ export const ROUTE_LAST_MODIFIED: Record<string, string> = {
   "/glossary": "2026-08-04",
   "/metals": "2026-08-04",
   "/financial-hub": "2026-01-04",
-  "/financial-hub/private-placements-guide": "2026-05-28",
   "/financial-hub/subscription-agreements-guide": "2025-12-15",
   "/pricing": "2026-08-18",
   "/properties": "2025-12-14",

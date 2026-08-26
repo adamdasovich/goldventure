@@ -7,12 +7,12 @@ const CANONICAL =
   "https://juniorminingintelligence.com/guides/private-placements-and-warrants";
 
 export const metadata: Metadata = {
-  title: "Junior Mining Private Placements & Warrants: How Units Work",
+  title: "Warrants and Units in Junior Mining Financings, Explained",
   description:
     "How junior mining private placements are structured — what a 'unit' is (share + warrant), how warrants work (strike price, expiry, half vs full warrants), how to read a private placement announcement, and where to find recent warrant financings.",
   alternates: { canonical: CANONICAL },
   openGraph: {
-    title: "Junior Mining Private Placements, Units & Warrants Explained",
+    title: "Warrants and Units in Junior Mining Financings",
     description:
       "What a private placement unit is, how warrants work (strike, expiry, half vs full), how to read the announcement, and where to track recent junior mining warrant financings.",
     type: "article",
@@ -29,7 +29,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "Junior Mining Private Placements, Units & Warrants",
+    title: "Warrants and Units in Junior Mining Financings",
     description:
       "Units = shares + warrants. How the structure works, how to read an announcement, and where to find recent junior mining warrant financings.",
     images: ["/og-image.png"],
@@ -39,7 +39,7 @@ export const metadata: Metadata = {
 const articleSchema = {
   "@context": "https://schema.org",
   "@type": "Article",
-  headline: "Junior Mining Private Placements & Warrants: How Units Work",
+  headline: "Warrants and Units in Junior Mining Financings, Explained",
   description:
     "How junior mining private placements are structured as units of shares plus warrants, how warrants work, and how to read a private placement announcement.",
   author: {
