@@ -2994,42 +2994,59 @@ class CompanyDataScraper:
             # Highlights" -- a section title. Storing that was wrong; storing
             # nothing left the company with no projects at all and out of the
             # sitemap.
-            # "Nothing usable" rather than "nothing at all": a page whose only
-            # heading is a section title produces a candidate that will be
-            # discarded later, and that must not suppress this fallback.
-            usable = [
+            # Drop anything that will not survive validation later, so a
+            # section heading cannot masquerade as a result.
+            projects_found = [
                 p for p in projects_found
                 if self._is_valid_project_name(p.get('name', ''))
             ]
-            if not usable:
-                projects_found = usable
-                slug = urlparse(url).path.rstrip('/').split('/')[-1]
-                candidate = slug.replace('-', ' ').replace('_', ' ').strip()
-                # Title-case only the words that are not already mixed case, so
-                # an acronym in a slug is not mangled.
-                candidate = ' '.join(
-                    w if any(c.isupper() for c in w) else w.capitalize()
-                    for w in candidate.split()
-                )
-                words = candidate.split()
-                looks_named = len(words) >= 2 or bool(
+
+            # When the URL names a single project, it outranks every heading on
+            # the page. Chasing section headings through a rejection list does
+            # not converge: Scorpio Gold's /manhattan-district/ offered
+            # "Drilling Highlights", and blocking that surfaced "District Drill
+            # Targets" behind it.
+            #
+            # A path like /manhattan-district/ is the company stating the
+            # project's name. A heading is whatever the page designer put
+            # first. Only the URL is reliable here.
+            slug = urlparse(url).path.rstrip('/').split('/')[-1]
+            candidate = slug.replace('-', ' ').replace('_', ' ').strip()
+            # Title-case only words that are not already mixed case, so an
+            # acronym in a slug is not mangled.
+            candidate = ' '.join(
+                w if any(c.isupper() for c in w) else w.capitalize()
+                for w in candidate.split()
+            )
+            names_a_project = bool(candidate) and (
+                bool(
                     re.search(
-                        r'\b(project|property|deposit|mine|district|claim|prospect)\b',
+                        r'\b(project|property|deposit|mine|district|claim|prospect|'
+                        r'zone|trend|belt)\b',
                         candidate,
                         re.IGNORECASE,
                     )
                 )
-                if candidate and looks_named and self._is_valid_project_name(candidate):
+                or len(candidate.split()) >= 2
+            )
+
+            if names_a_project and self._is_valid_project_name(candidate):
+                if not any(
+                    p.get('name', '').lower() == candidate.lower()
+                    for p in projects_found
+                ):
                     logger.info(
-                        f"[PROJECT-SLUG] No usable heading on {url}; "
-                        f"naming it {candidate!r} from the URL"
+                        f"[PROJECT-SLUG] {url} names a project; using "
+                        f"{candidate!r} over the page headings"
                     )
-                    projects_found.append({
+                    # The URL identifies one project, so the headings on this
+                    # page describe it rather than list others.
+                    projects_found = [{
                         'name': candidate[:200],
                         'description': '',
                         'location': None,
                         'source_url': url,
-                    })
+                    }]
 
             # Add found projects
             self.extracted_data['projects'].extend(projects_found)
