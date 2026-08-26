@@ -12,7 +12,7 @@ import type { ChatMessage } from "@/types/api";
 
 /* Short label on the chip, full question sent. Six sentence-long chips only
    fitted two per screen and read as instructions rather than options. */
-const EXAMPLE_PROMPTS: { label: string; prompt: string }[] = [
+export const EXAMPLE_PROMPTS: { label: string; prompt: string }[] = [
   {
     label: "Compare two companies",
     prompt: "Compare Aftermath Silver and Aston Bay stock over 6 months",
@@ -39,15 +39,21 @@ const EXAMPLE_PROMPTS: { label: string; prompt: string }[] = [
   },
 ];
 
-export default function ChatInterface() {
+interface ChatInterfaceProps {
+  /** Sent once on mount — a suggestion tapped on the launcher. */
+  initialPrompt?: string;
+  /** Rendered as a close control in the header when present. */
+  onClose?: () => void;
+  className?: string;
+}
+
+export default function ChatInterface({
+  initialPrompt,
+  onClose,
+  className = "",
+}: ChatInterfaceProps = {}) {
   const { accessToken, subscription } = useAuth();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  /**
-   * Collapsed by default: a single ask-bar rather than a 550px panel sitting
-   * open on a page nobody has asked anything on yet. Expands on click, focus,
-   * or a suggestion tap, and stays expanded once there is a conversation.
-   */
-  const [expanded, setExpanded] = useState(false);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [limitReached, setLimitReached] = useState(false);
@@ -127,6 +133,17 @@ export default function ChatInterface() {
     }
   };
 
+  const firedInitial = useRef(false);
+  useEffect(() => {
+    if (initialPrompt && !firedInitial.current) {
+      firedInitial.current = true;
+      handleSend(initialPrompt);
+    }
+    // handleSend closes over state that changes every render; firing once is
+    // the whole point, so the ref guard is the control rather than the deps.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialPrompt]);
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
@@ -134,79 +151,19 @@ export default function ChatInterface() {
     }
   };
 
-  // Once there is a conversation the panel stays open regardless.
-  const isOpen = expanded || messages.length > 0;
-
-  const open = () => {
-    setExpanded(true);
-    // Focus after the panel has mounted, so the composer is ready to type in
-    // rather than costing a second tap.
-    requestAnimationFrame(() => composerRef.current?.focus());
-  };
 
   const handleExampleClick = (prompt: string) => {
     handleSend(prompt);
   };
 
-  if (!isOpen) {
-    return (
-      <div className="max-w-4xl mx-auto">
-        <button
-          type="button"
-          onClick={open}
-          className="group flex w-full items-center gap-3 rounded-xl border border-slate-700 bg-slate-800/50 px-4 py-4 text-left transition-colors hover:border-gold-500/50 hover:bg-slate-800"
-          aria-expanded={false}
-          aria-controls="chat-panel"
-        >
-          <svg
-            className="h-5 w-5 shrink-0 text-gold-400"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-            aria-hidden="true"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"
-            />
-          </svg>
-          <span className="flex-1 truncate text-slate-400 group-hover:text-slate-300">
-            Ask about any company&hellip;
-          </span>
-          <span className="shrink-0 rounded-lg bg-gold-500/15 px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-gold-400">
-            Ask
-          </span>
-        </button>
-
-        <div className="mt-3 flex gap-2 overflow-x-auto scrollbar-none -mx-4 px-4 sm:mx-0 sm:px-0 sm:flex-wrap sm:justify-center">
-          {EXAMPLE_PROMPTS.slice(0, 4).map((example) => (
-            <button
-              key={example.label}
-              type="button"
-              title={example.prompt}
-              onClick={() => {
-                setExpanded(true);
-                handleSend(example.prompt);
-              }}
-              className="shrink-0 whitespace-nowrap rounded-full border border-slate-700 px-4 py-2.5 min-h-11 inline-flex items-center text-sm text-slate-400 transition-colors hover:border-gold-500/40 hover:text-gold-400"
-            >
-              {example.label}
-            </button>
-          ))}
-        </div>
-      </div>
-    );
-  }
-
   return (
     <Card
       id="chat-panel"
       variant="glass-strong"
-      /* Fixed 600px overran a 375x667 phone once the header and ticker were
-         subtracted, and stranded the composer entirely in landscape. */
-      className="flex flex-col h-[min(600px,70dvh)] max-w-4xl mx-auto"
+      /* Height comes from the modal now; the card just fills it. Opaque
+         rather than glass: over a modal scrim the translucency let the page
+         bleed through and the panel looked unfinished. */
+      className={`flex flex-col h-[70dvh] max-h-[70dvh] w-full !bg-slate-900 !backdrop-blur-none border border-slate-700 ${className}`}
     >
       <CardHeader className="border-b border-slate-700/50">
         {/* The upgrade pill was being squeezed to 75px by the title beside it
@@ -214,8 +171,21 @@ export default function ChatInterface() {
             and sits alongside from sm up. */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div className="min-w-0">
-            <CardTitle>Claude Mining Assistant</CardTitle>
+            <CardTitle id="assistant-title">Claude Mining Assistant</CardTitle>
           </div>
+          <div className="flex items-center gap-2 self-start sm:self-auto">
+            {onClose && (
+              <button
+                type="button"
+                onClick={onClose}
+                aria-label="Close assistant"
+                className="order-2 -mr-2 p-2 text-slate-400 hover:text-white transition-colors sm:order-none"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            )}
           {dailyLimit > 0 && tier === "explorer" && (
             <Link
               href="/pricing"
@@ -229,6 +199,7 @@ export default function ChatInterface() {
               </Badge>
             </Link>
           )}
+          </div>
         </div>
       </CardHeader>
 

@@ -4,6 +4,8 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import ChatInterface from "@/components/ChatInterface";
+import ChatLauncher from "@/components/ChatLauncher";
+import { Modal } from "@/components/ui/Modal";
 import NewsArticles from "@/components/NewsArticles";
 import { Button } from "@/components/ui/Button";
 import LogoMono from "@/components/LogoMono";
@@ -57,14 +59,21 @@ const SECONDARY_LINKS: {
   label: string;
   href?: string;
   action?: ScrollAction;
+  /** Rendered in gold — the assistant is the reason most people are here. */
+  primary?: boolean;
 }[] = [
-  { label: "AI Assistant", action: "chat" },
+  { label: "Ask the AI Assistant", action: "chat", primary: true },
   { label: "Happening Now", action: "happening" },
   { label: "Mining News", action: "news" },
   { label: "Open Financings", href: "/open-financings" },
   { label: "Closed Financings", href: "/closed-financings" },
   { label: "Weekly Snapshot", href: "/reports/weekly" },
 ];
+
+const PRIMARY_CHIP =
+  "shrink-0 px-4 py-2.5 min-h-11 inline-flex items-center whitespace-nowrap " +
+  "rounded-full border border-gold-500/60 bg-gold-500/10 text-gold-300 text-sm " +
+  "font-medium transition-colors hover:bg-gold-500/20 hover:border-gold-500";
 
 const SECONDARY_CHIP =
   "shrink-0 px-4 py-2.5 min-h-11 inline-flex items-center whitespace-nowrap " +
@@ -79,6 +88,16 @@ export default function HomeClient({ initialArticles }: HomeClientProps) {
   const [showLogin, setShowLogin] = useState(false);
   const [showRegister, setShowRegister] = useState(false);
   const [isVibrating, setIsVibrating] = useState(false);
+  /* The assistant opens in a modal. "AI Assistant" used to scroll to the
+     section and stop there — once the panel was collapsed that landed you on a
+     thin bar and read as a dead link. */
+  const [chatOpen, setChatOpen] = useState(false);
+  const [chatPrompt, setChatPrompt] = useState<string | undefined>();
+
+  const openChat = (prompt?: string) => {
+    setChatPrompt(prompt);
+    setChatOpen(true);
+  };
   const { user } = useAuth();
   const newsSectionRef = useRef<HTMLElement>(null);
   const chatSectionRef = useRef<HTMLElement>(null);
@@ -103,9 +122,7 @@ export default function HomeClient({ initialArticles }: HomeClientProps) {
       .catch(() => {});
   }, []);
 
-  const scrollToChat = () => {
-    chatSectionRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
+  const scrollToChat = () => openChat();
 
   // Socrates easter egg — click the mascot for a fart sound + shimmy
   const handleSocratesFart = useCallback(() => {
@@ -168,6 +185,20 @@ export default function HomeClient({ initialArticles }: HomeClientProps) {
             setShowLogin(true);
           }}
         />
+      )}
+
+      {/* ════════ AI Assistant ════════ */}
+      {chatOpen && (
+        <Modal
+          onClose={() => setChatOpen(false)}
+          size="2xl"
+          labelledBy="assistant-title"
+        >
+          <ChatInterface
+            initialPrompt={chatPrompt}
+            onClose={() => setChatOpen(false)}
+          />
+        </Modal>
       )}
 
       {/* ════════ Metals Price Ticker ════════ */}
@@ -270,7 +301,7 @@ export default function HomeClient({ initialArticles }: HomeClientProps) {
                     key={item.label}
                     type="button"
                     onClick={SCROLL_ACTIONS[item.action!]}
-                    className={SECONDARY_CHIP}
+                    className={item.primary ? PRIMARY_CHIP : SECONDARY_CHIP}
                   >
                     {item.label}
                   </button>
@@ -291,7 +322,7 @@ export default function HomeClient({ initialArticles }: HomeClientProps) {
         className="py-10 md:py-14 px-4 sm:px-6 lg:px-8 bg-gradient-slate"
       >
         <div className="max-w-7xl mx-auto">
-          <ChatInterface />
+          <ChatLauncher onOpen={openChat} />
         </div>
       </section>
 
