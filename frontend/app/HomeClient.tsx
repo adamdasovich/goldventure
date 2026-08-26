@@ -13,20 +13,39 @@ import SectionHeading from "@/components/SectionHeading";
 import { LoginModal, RegisterModal } from "@/components/auth";
 import { useAuth } from "@/contexts/AuthContext";
 import MetalsTicker from "@/components/MetalsTicker";
+import { AVAILABLE_COUNT } from "@/app/investor-tools/tools";
 
 /* ─── Platform directory ───
    Was eight description cards with icons. The titles carry the meaning and
    the detail lives on the destination pages, so only the title, the link and
    the live marker survive. */
+// Counted from the tool catalogue, never by hand. This said "15" while 19 were
+// live — the same drift that put stale counts in the sitemap and the pricing
+// table, and that had /companies advertising 500+ companies against a database
+// of 396.
 const FEATURES: { title: string; href: string; badge?: string }[] = [
+  // Open financings lead, and point at /open-financings rather than the closed
+  // archive they used to. Rounds still accepting subscriptions are the only
+  // thing here a reader can act on today; closed ones are reference.
+  {
+    title: "Participate in Open Financings",
+    href: "/open-financings",
+    badge: "Live",
+  },
+  { title: `${AVAILABLE_COUNT} Investor Tools`, href: "/investor-tools" },
+  { title: "Unlimited AI Company Research", href: "/companies" },
+  // Was absent entirely despite being the main reason to hold an account.
+  { title: "Your Daily Briefing", href: "/daily-briefing" },
   { title: "Weekly Financial Snapshot", href: "/reports/weekly", badge: "New" },
   { title: "Company Database", href: "/companies" },
+  { title: "Closed Financings Archive", href: "/closed-financings" },
   { title: "Live Company Forums", href: "/companies", badge: "Live" },
   { title: "Speaking Events", href: "/companies", badge: "Live" },
-  { title: "Prospector's Exchange", href: "/properties", badge: "Live" },
-  { title: "15 Investor Tools", href: "/investor-tools" },
-  { title: "Financing Tracker", href: "/closed-financings" },
   { title: "Real-Time Metals", href: "/metals" },
+  // Prospector's Exchange is deliberately last and unbadged: it had 0 listings
+  // on 2026-08-26, and a "Live" badge on an empty marketplace sends people to
+  // an empty room. Restore the badge when there are listings to see.
+  { title: "Prospector's Exchange", href: "/properties" },
 ];
 
 /* ─── Secondary hero links ───
