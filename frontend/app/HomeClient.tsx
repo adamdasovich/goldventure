@@ -64,9 +64,10 @@ export default function HomeClient({ initialArticles }: HomeClientProps) {
   const newsSectionRef = useRef<HTMLElement>(null);
   const chatSectionRef = useRef<HTMLElement>(null);
 
-  // Platform stats
+  // Platform stats. The fallback is what renders server-side and on first
+  // paint, so it has to be a claim that is true — 500 was not.
   const [stats, setStats] = useState({
-    companies: 500,
+    companies: 390,
     projects: 0,
     financings: 0,
     news_articles: 0,
