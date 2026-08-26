@@ -3018,16 +3018,19 @@ class CompanyDataScraper:
                 w if any(c.isupper() for c in w) else w.capitalize()
                 for w in candidate.split()
             )
-            names_a_project = bool(candidate) and (
-                bool(
-                    re.search(
-                        r'\b(project|property|deposit|mine|district|claim|prospect|'
-                        r'zone|trend|belt)\b',
-                        candidate,
-                        re.IGNORECASE,
-                    )
+            # The slug must actually name a project. An earlier version also
+            # accepted any two-word segment, which fired on
+            # /operations/technical_report/ and /overview-why-peru -- both
+            # rejected later, but a rule relying on a downstream filter to undo
+            # it is the wrong rule.
+            names_a_project = bool(candidate) and bool(
+                re.search(
+                    r'\b(project|property|deposit|mine|district|claim|prospect|'
+                    r'zone|trend|belt|lake|creek|river|mountain|ridge|hill|'
+                    r'valley|basin|peak|springs|canyon)\b',
+                    candidate,
+                    re.IGNORECASE,
                 )
-                or len(candidate.split()) >= 2
             )
 
             if names_a_project and self._is_valid_project_name(candidate):
