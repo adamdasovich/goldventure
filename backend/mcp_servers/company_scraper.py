@@ -2968,6 +2968,43 @@ class CompanyDataScraper:
                             if not any(p.get('name', '').lower() == project['name'].lower() for p in projects_found):
                                 projects_found.append(project)
 
+            # Nothing usable on the page. Fall back to the URL, which is the
+            # company's own naming and beats an arbitrary heading.
+            #
+            # Scorpio Gold publishes at /manhattan-district/ and
+            # /north-star-project/, and the first heading on each is "Drilling
+            # Highlights" -- a section title. Storing that was wrong; storing
+            # nothing left the company with no projects at all and out of the
+            # sitemap.
+            if not projects_found:
+                slug = urlparse(url).path.rstrip('/').split('/')[-1]
+                candidate = slug.replace('-', ' ').replace('_', ' ').strip()
+                # Title-case only the words that are not already mixed case, so
+                # an acronym in a slug is not mangled.
+                candidate = ' '.join(
+                    w if any(c.isupper() for c in w) else w.capitalize()
+                    for w in candidate.split()
+                )
+                words = candidate.split()
+                looks_named = len(words) >= 2 or bool(
+                    re.search(
+                        r'\b(project|property|deposit|mine|district|claim|prospect)\b',
+                        candidate,
+                        re.IGNORECASE,
+                    )
+                )
+                if candidate and looks_named and self._is_valid_project_name(candidate):
+                    logger.info(
+                        f"[PROJECT-SLUG] No usable heading on {url}; "
+                        f"naming it {candidate!r} from the URL"
+                    )
+                    projects_found.append({
+                        'name': candidate[:200],
+                        'description': '',
+                        'location': None,
+                        'source_url': url,
+                    })
+
             # Add found projects
             self.extracted_data['projects'].extend(projects_found)
 
