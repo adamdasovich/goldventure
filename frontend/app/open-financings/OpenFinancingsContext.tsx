@@ -37,6 +37,10 @@ const FAQS = [
     a: "Shares bought in a Canadian private placement typically cannot be sold for four months under National Instrument 45-102. That date is knowable in advance, and it is when subscribers who bought at a discount first become able to sell. Deals done under the listed issuer financing exemption are free-trading immediately, which changes the supply picture considerably.",
   },
   {
+    q: "How do I take part in a financing listed here?",
+    a: "Open the company from the table above and go to its financing page, where a Participate in Financing flow lets you register the amount you would want. Each open round shows how much interest has already been registered against the size of the raise, so you can see how it is filling. Registering interest is not a subscription agreement — it signals that you want an allocation, and the company follows up. You will still need to qualify under the relevant exemption before subscribing.",
+  },
+  {
     q: "Does a company raising money mean it is in trouble?",
     a: "Not by itself — an explorer with no revenue has no other way to fund drilling, so raising is the normal state rather than a warning. What is worth reading is the trend: whether successive raises are priced higher or lower, whether they are getting larger relative to the share count, and whether the company is raising into results or ahead of them.",
   },
@@ -104,6 +108,59 @@ export default function OpenFinancingsContext() {
               above the current price creates a known ceiling: every rally into
               that strike releases new supply, and enough layers of them will
               hold a stock down regardless of what the drill returns.
+            </p>
+          </div>
+        </section>
+
+        {/* The page listed every open round and never told anyone they could
+            act on one: zero occurrences of "participate" or "register
+            interest" before 2026-08-26. The registration flow lives on each
+            company's financing page and is the most actionable thing on the
+            site, so it belongs in the server-rendered copy rather than only
+            inside the client table. */}
+        <section>
+          <h2 className="text-2xl font-bold text-gold-400 mb-5">
+            How this list works
+          </h2>
+          <div className="flex flex-col gap-4 text-slate-300 leading-relaxed">
+            <p>
+              <strong className="text-slate-100">
+                Every open round is on this page.
+              </strong>{" "}
+              The table above is the complete set of junior mining financings
+              currently accepting subscriptions — not a selection, and not a
+              weekly digest. It updates as new raises are announced, so a deal
+              announced this morning appears here today rather than in a roundup
+              on Friday. That timing is most of the value: a financing is only
+              actionable while it is still open, and the window is often days.
+            </p>
+            <p>
+              <strong className="text-slate-100">
+                You can register interest in any of them.
+              </strong>{" "}
+              Open the company, and its financing page carries a{" "}
+              <em>Participate in Financing</em> flow where you enter the amount
+              you would want. Each round shows how much interest has already
+              been registered against the size of the raise, so you can see how
+              a deal is filling before you commit. Registering interest is not a
+              subscription agreement — it tells the company you want an
+              allocation, and the company comes back to you.
+            </p>
+            <p>
+              <strong className="text-slate-100">
+                Closed rounds stay searchable.
+              </strong>{" "}
+              Once a deal closes it moves to the{" "}
+              <Link
+                href="/closed-financings"
+                className="text-gold-400 hover:underline font-medium"
+              >
+                closed financings database
+              </Link>
+              , which is the history you need to read a company properly —
+              whether successive raises have been priced higher or lower, how
+              much the share count has grown, and what warrant overhang those
+              deals left behind.
             </p>
           </div>
         </section>

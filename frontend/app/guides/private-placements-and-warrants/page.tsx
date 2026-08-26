@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import SiteNav from "@/components/SiteNav";
-import { RelatedResources, OPEN_FINANCINGS } from "@/components/guides/RelatedResources";
+import { RelatedResources, OPEN_FINANCINGS, CLOSED_FINANCINGS } from "@/components/guides/RelatedResources";
 
 const CANONICAL =
   "https://juniorminingintelligence.com/guides/private-placements-and-warrants";
@@ -519,7 +519,7 @@ export default function PrivatePlacementsWarrantsGuide() {
             </section>
           
             <RelatedResources
-              slugs={["warrant-radar","dilution-tracker","financing-flow"]} extra={[OPEN_FINANCINGS]}
+              slugs={["warrant-radar","dilution-tracker","financing-flow"]} extra={[OPEN_FINANCINGS, CLOSED_FINANCINGS]}
               intro="Warrant overhang and dilution are measurable rather than guessed at. These do the measuring:"
             />
           </article>

@@ -96,9 +96,16 @@ export function RelatedResources({
  */
 export const OPEN_FINANCINGS: ExtraLink = {
   href: "/open-financings",
-  title: "Open Financings",
+  title: "Open Financings — Participate",
   description:
-    "Every junior mining raise currently open — private placements, bought deals and flow-through, with terms, warrants and closing dates. The rounds you can still participate in.",
+    "Every junior mining raise currently accepting subscriptions, updated as deals are announced. Register the amount you want through the Participate in Financing flow on the company page, and see how far each round has already filled.",
+};
+
+export const CLOSED_FINANCINGS: ExtraLink = {
+  href: "/closed-financings",
+  title: "Closed Financings Database",
+  description:
+    "The full history of completed raises — pricing, size and warrant terms deal by deal. How you tell whether a company is raising into strength or grinding its share count higher.",
 };
 
 export const COMPANY_DATABASE: ExtraLink = {

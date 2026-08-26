@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import SiteNav from "@/components/SiteNav";
-import { RelatedResources, COMPANY_DATABASE } from "@/components/guides/RelatedResources";
+import { RelatedResources, COMPANY_DATABASE, OPEN_FINANCINGS } from "@/components/guides/RelatedResources";
 
 const CANONICAL =
   "https://juniorminingintelligence.com/guides/how-to-read-ni-43-101-report";
@@ -1660,7 +1660,7 @@ export default function HowToReadNI43101Guide() {
             </section>
           
             <RelatedResources
-              slugs={["ni43-101-analyzer","resource-growth","grade-ranker"]} extra={[COMPANY_DATABASE]}
+              slugs={["ni43-101-analyzer","resource-growth","grade-ranker"]} extra={[COMPANY_DATABASE, OPEN_FINANCINGS]}
               intro="Reading one report is slow. These read across all of them:"
             />
           </article>

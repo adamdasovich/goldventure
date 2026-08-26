@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import SiteNav from "@/components/SiteNav";
-import { RelatedResources, COMPANY_DATABASE, OPEN_FINANCINGS, ALL_TOOLS } from "@/components/guides/RelatedResources";
+import { RelatedResources, COMPANY_DATABASE, OPEN_FINANCINGS, ALL_TOOLS, CLOSED_FINANCINGS } from "@/components/guides/RelatedResources";
 
 export const metadata: Metadata = {
   title:
@@ -1791,7 +1791,7 @@ export default function JuniorGoldMiningCompaniesGuide() {
             </section>
           
             <RelatedResources
-              slugs={["grade-ranker","peer-comparison","dilution-tracker"]} extra={[COMPANY_DATABASE, OPEN_FINANCINGS, ALL_TOOLS]}
+              slugs={["grade-ranker","peer-comparison","dilution-tracker"]} extra={[COMPANY_DATABASE, OPEN_FINANCINGS, ALL_TOOLS, CLOSED_FINANCINGS]}
               intro="Everything described above is already assembled for 500+ juniors — you do not have to compile it yourself:"
             />
           </article>

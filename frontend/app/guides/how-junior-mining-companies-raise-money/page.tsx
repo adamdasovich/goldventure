@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import SiteNav from "@/components/SiteNav";
-import { RelatedResources, OPEN_FINANCINGS } from "@/components/guides/RelatedResources";
+import { RelatedResources, OPEN_FINANCINGS, CLOSED_FINANCINGS } from "@/components/guides/RelatedResources";
 
 const CANONICAL =
   "https://juniorminingintelligence.com/guides/how-junior-mining-companies-raise-money";
@@ -1418,7 +1418,7 @@ export default function FinancingPillarGuide() {
             </section>
           
             <RelatedResources
-              slugs={["financing-flow","dilution-tracker","warrant-radar"]} extra={[OPEN_FINANCINGS]}
+              slugs={["financing-flow","dilution-tracker","warrant-radar"]} extra={[OPEN_FINANCINGS, CLOSED_FINANCINGS]}
               intro="Financings are only useful information while they are still open. These track the raises and what they cost existing holders:"
             />
           </article>
