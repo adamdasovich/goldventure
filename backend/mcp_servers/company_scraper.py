@@ -2201,6 +2201,24 @@ class CompanyDataScraper:
         name_lower = name.lower().strip()
         name_stripped = name.strip()
 
+        # ===== SECTION HEADINGS AND BARE DESCRIPTORS =====
+        # These reach here from project pages whose first usable heading is a
+        # section title rather than a name. They were rejected only in
+        # _post_process_data, so a page could "succeed" with one of them and
+        # suppress the URL-slug fallback, then have it thrown away later --
+        # which is how Scorpio Gold ended up with no projects at all.
+        _SECTION_HEADINGS = (
+            'drilling highlights', 'exploration highlights', 'highlights',
+            'recent results', 'key results', 'latest results',
+            'high-grade project', 'high grade project', 'flagship project',
+            'flagship property', 'core project', 'main project',
+            'current project', 'project highlights', 'property highlights',
+        )
+        if name_lower in _SECTION_HEADINGS:
+            return False
+        if name_lower.endswith(' highlights') or name_lower.startswith('highlights'):
+            return False
+
         # ===== SECTION HEADINGS =====
         # A section heading with any modifier in front of it. The exact-match
         # list below catches "projects" and "our projects" but not "Flagship
@@ -2976,7 +2994,15 @@ class CompanyDataScraper:
             # Highlights" -- a section title. Storing that was wrong; storing
             # nothing left the company with no projects at all and out of the
             # sitemap.
-            if not projects_found:
+            # "Nothing usable" rather than "nothing at all": a page whose only
+            # heading is a section title produces a candidate that will be
+            # discarded later, and that must not suppress this fallback.
+            usable = [
+                p for p in projects_found
+                if self._is_valid_project_name(p.get('name', ''))
+            ]
+            if not usable:
+                projects_found = usable
                 slug = urlparse(url).path.rstrip('/').split('/')[-1]
                 candidate = slug.replace('-', ' ').replace('_', ' ').strip()
                 # Title-case only the words that are not already mixed case, so
