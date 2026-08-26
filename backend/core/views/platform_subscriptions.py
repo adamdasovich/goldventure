@@ -388,3 +388,43 @@ def platform_stripe_webhook(request):
     if result.get('success'):
         return Response({'status': 'ok'})
     return Response({'error': result.get('error', 'Processing failed')}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def platform_signup_offer(request):
+    """
+    GET /api/platform/signup-offer/
+    Public. Describes what a brand-new registration actually grants *right now*.
+
+    Exists so landing-page copy can state the offer truthfully instead of
+    hardcoding it. Registration calls deliver_welcome() -> grant_free_month(),
+    but only when WELCOME_FREE_MONTH_ENABLED is on. That is an env var: flip it
+    off to end the promo and any hardcoded "free month" copy silently becomes a
+    lie, with nothing to catch it. Read this instead.
+
+    `free_trial_days` is introspected from grant_free_month's own default rather
+    than repeated here, so changing the grant length cannot leave the marketing
+    copy behind.
+    """
+    import inspect
+    from django.conf import settings
+
+    enabled = bool(getattr(settings, 'WELCOME_FREE_MONTH_ENABLED', True))
+    days = inspect.signature(
+        PlatformSubscription.grant_free_month
+    ).parameters['days'].default
+
+    return Response({
+        # What a new signup gets today.
+        'free_trial_enabled': enabled,
+        'free_trial_days': days,
+        'free_trial_tier': 'prospector',
+        # Unlimited chat is the strongest thing in the offer, so derive it
+        # rather than asserting it. CHAT_LIMITS uses 0 to mean unlimited.
+        'free_trial_unlimited_chat': CHAT_LIMITS.get('prospector', 5) == 0,
+        # Where they land when the grant lapses -- is_active checks trial_end at
+        # read time, so this happens on its own with no job involved.
+        'fallback_tier': 'explorer',
+        'fallback_chat_limit': CHAT_LIMITS.get('explorer', 5),
+    })

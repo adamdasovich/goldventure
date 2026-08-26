@@ -150,6 +150,7 @@ urlpatterns = [
 
     # Platform Subscription endpoints
     path('platform/tiers/', views.platform_subscription_tiers, name='platform_subscription_tiers'),
+    path('platform/signup-offer/', views.platform_signup_offer, name='platform_signup_offer'),
     path('platform/subscription/', views.platform_subscription_status, name='platform_subscription_status'),
     path('platform/checkout/', views.platform_create_checkout, name='platform_create_checkout'),
     path('platform/checkout/confirm/', views.platform_confirm_checkout, name='platform_confirm_checkout'),

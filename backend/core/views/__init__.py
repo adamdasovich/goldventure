@@ -173,6 +173,7 @@ from .market_quality import (  # noqa: F401
 )
 from .platform_subscriptions import (  # noqa: F401
     platform_subscription_tiers,
+    platform_signup_offer,
     platform_subscription_status,
     platform_create_checkout,
     platform_confirm_checkout,

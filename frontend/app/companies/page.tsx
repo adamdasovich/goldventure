@@ -1,5 +1,6 @@
 import CompaniesClient from "./CompaniesClient";
 import CompanyDirectoryIndex from "./CompanyDirectoryIndex";
+import { fetchSignupOffer } from "@/lib/signupOffer";
 
 const API_BASE_URL =
   process.env.API_BASE_URL ||
@@ -23,11 +24,16 @@ export default async function CompaniesPage() {
     // Fall back to client-side fetch
   }
 
+  // Read server-side so the CTA copy is correct in the first paint. Paid search
+  // traffic should never see the wrong offer flash and then change.
+  const signupOffer = await fetchSignupOffer();
+
   return (
     <>
       <CompaniesClient
         initialCompanies={initialCompanies}
         initialTotalCount={initialTotalCount}
+        signupOffer={signupOffer}
       />
       {/*
         The grid above server-renders nine companies and paginates in client

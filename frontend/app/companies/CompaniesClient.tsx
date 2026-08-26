@@ -17,6 +17,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { companyHref } from "@/lib/companyUrl";
 import { LoginModal, RegisterModal } from "@/components/auth";
 import { FreeAccountCTA } from "@/components/FreeAccountCTA";
+import type { SignupOffer } from "@/lib/signupOffer";
 
 // Commodity filter options grouped by category
 const COMMODITY_GROUPS = {
@@ -61,11 +62,14 @@ const PAGE_SIZE = 9;
 interface CompaniesClientProps {
   initialCompanies?: Company[];
   initialTotalCount?: number;
+  /** Fetched server-side in page.tsx so the CTA copy is right on first paint. */
+  signupOffer?: SignupOffer;
 }
 
 export default function CompaniesClient({
   initialCompanies,
   initialTotalCount,
+  signupOffer,
 }: CompaniesClientProps) {
   const { user, accessToken } = useAuth();
   const [companies, setCompanies] = useState<Company[]>(initialCompanies || []);
@@ -249,6 +253,7 @@ export default function CompaniesClient({
             <FreeAccountCTA
               variant="banner"
               className="max-w-3xl mx-auto animate-slide-in-up"
+              offer={signupOffer}
               onRegister={() => setShowRegister(true)}
             />
           )}
@@ -907,6 +912,7 @@ export default function CompaniesClient({
           {!user && (
             <FreeAccountCTA
               className="mt-16"
+              offer={signupOffer}
               onRegister={() => setShowRegister(true)}
               onSignIn={() => setShowLogin(true)}
             />
