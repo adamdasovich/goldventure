@@ -61,6 +61,41 @@ const FEATURE_ROWS = [
     prospector: "All open rounds",
     miner: "All open rounds",
   },
+  {
+    // requires_tier('prospector') on register_investment_interest. Explorers
+    // can see the rounds they are allowed to see; acting on one is paid.
+    label: "Participate in Financings",
+    explorer: false,
+    prospector: true,
+    miner: true,
+  },
+  {
+    // tier_gated(stub=('companies',)) on daily_briefing. Explorers keep the
+    // headline and stats and lose the per-company detail, so this is a
+    // truncation rather than a lock.
+    label: "Daily Briefing",
+    explorer: "Headline only",
+    prospector: "Full detail",
+    miner: "Full detail",
+  },
+  {
+    // Re-added 2026-08-26. The note above is right that this was advertised
+    // once without existing; export_companies_csv now does, behind
+    // requires_tier('prospector'). Do not list a feature here before the
+    // endpoint that backs it is live.
+    label: "Database CSV Export",
+    explorer: false,
+    prospector: true,
+    miner: true,
+  },
+  {
+    // Any authenticated user can join — ForumConsumer only checks
+    // is_authenticated, with no tier check — so Explorer gets a tick.
+    label: "Company Discussion Boards",
+    explorer: true,
+    prospector: true,
+    miner: true,
+  },
   { label: "Company Directory", explorer: true, prospector: true, miner: true },
   { label: "News Feed", explorer: true, prospector: true, miner: true },
   { label: "Metals Pricing", explorer: true, prospector: true, miner: true },
@@ -222,7 +257,8 @@ export default function PricingPage() {
           </h1>
           <p className="text-lg text-slate-300 max-w-2xl mx-auto">
             Start free with Explorer. Upgrade when you need unlimited AI chat,
-            more investor tools, and every open financing round.
+            all 19 investor tools, every open financing round — and the ability
+            to participate in one.
           </p>
         </div>
 

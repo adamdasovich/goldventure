@@ -52,8 +52,15 @@ function copyFor(offer: SignupOffer) {
       sub: `Creating an account starts a ${offer.free_trial_days}-day Prospector trial. No credit card, nothing to cancel — it reverts to the free plan on its own.`,
       benefits: [
         chat,
-        "Every investor tool",
-        "Open financing rounds as they post",
+        // Free accounts see 5 of the live rounds; the trial opens all of them
+        // and the flow to act on one. Verified in open_financings.py and
+        // requires_tier on register_investment_interest.
+        "Every open financing round, and the ability to participate",
+        "All 19 investor tools, and the database as CSV",
+        // Capability, not activity: 389 of 396 discussions had no messages as
+        // of 2026-08-26, so "see what investors are saying" would be a promise
+        // most company pages cannot keep.
+        "A live discussion board on every company",
       ],
       cta: "Start free trial",
     };
@@ -65,7 +72,7 @@ function copyFor(offer: SignupOffer) {
     sub: "A free account unlocks the research tools behind this directory. No credit card, no trial to cancel.",
     benefits: [
       `Ask the AI ${offer.fallback_chat_limit} research questions a day`,
-      "See the latest open financing rounds",
+      "A live discussion board on every company",
       "Daily metals pricing and company news",
     ],
     cta: "Create free account",
