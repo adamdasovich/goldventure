@@ -33,7 +33,39 @@ export const PUBLIC_ROUTES = [
  * `networkidle` never fires on /properties — it holds a WebSocket open — so
  * wait on DOM readiness and give client-side data a moment to land instead.
  */
+/**
+ * Analytics hosts this suite must never reach.
+ *
+ * The suite is designed to run against production (see README), and every
+ * visit() loads the real page with the real Google tag on it. On 2026-08-24-25
+ * a run put ~1,000 sessions into GA4 from one IP: mobile Safari, ~4 second
+ * sessions, 0% engagement, walking PUBLIC_ROUTES in order. That is 94% of the
+ * week and it landed in the middle of a paid-ads test, so conversion rate and
+ * channel mix were both unreadable.
+ *
+ * Blocking at the network layer rather than filtering in GA4 afterwards: a
+ * filter is retroactive, per-property and easy to forget, whereas a run that
+ * cannot reach the collector cannot pollute anything.
+ */
+const ANALYTICS_HOSTS = [
+  "**://www.googletagmanager.com/**",
+  "**://www.google-analytics.com/**",
+  "**://analytics.google.com/**",
+  "**://*.analytics.google.com/**",
+  "**://googleads.g.doubleclick.net/**",
+  "**://www.googleadservices.com/**",
+];
+
+/** Call once per page before navigating. Idempotent. */
+export async function blockAnalytics(page: Page) {
+  for (const pattern of ANALYTICS_HOSTS) {
+    await page.route(pattern, (route) => route.abort());
+  }
+}
+
 export async function visit(page: Page, route: string) {
+  // Registered before goto, so the tag never loads on the first navigation.
+  await blockAnalytics(page);
   await page.goto(route, { waitUntil: "domcontentloaded" });
   await page.waitForLoadState("load").catch(() => {});
   await page.waitForTimeout(1200);

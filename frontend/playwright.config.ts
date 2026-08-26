@@ -12,6 +12,11 @@ import { defineConfig, type ViewportSize } from "@playwright/test";
  *   PW_CHANNEL= npx playwright install chromium
  *   PW_CHANNEL= npm run test:mobile
  *
+ * Analytics are blocked per-page in helpers.visit() — see blockAnalytics().
+ * A production run without it puts ~1,000 zero-engagement sessions into GA4
+ * from one IP, which is what happened on 2026-08-24. Do not add a spec that
+ * calls page.goto() directly; it would bypass the block.
+ *
  * NOTE: do NOT spread `devices["iPhone SE"]` here. Those descriptors set
  * `defaultBrowserType: "webkit"`, and webkit rejects a Chrome channel, so the
  * whole run dies with `Unsupported webkit channel "chrome"`. The mobile

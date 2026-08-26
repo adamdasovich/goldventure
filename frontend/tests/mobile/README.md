@@ -62,3 +62,17 @@ back to `networkidle`.
 
 `touch-targets.spec.ts` has an `ALLOWED` list. Every entry carries a reason.
 Keep it short and argued — an entry there is a decision, not a snooze button.
+
+## Analytics are blocked
+
+`helpers.visit()` calls `blockAnalytics()` before every navigation, aborting
+requests to googletagmanager, google-analytics, doubleclick and googleadservices.
+
+This matters because the suite is meant to be pointed at production. A run on
+2026-08-24 added ~1,000 sessions to GA4 from a single IP — mobile Safari, ~4
+second sessions, 0% engagement, walking `PUBLIC_ROUTES` in order. That was 94%
+of the week's traffic and it landed mid paid-ads test, so both conversion rate
+and channel mix were unreadable until it was traced.
+
+If you add a spec, navigate through `visit()`. A bare `page.goto()` bypasses
+the block and starts polluting again silently.
