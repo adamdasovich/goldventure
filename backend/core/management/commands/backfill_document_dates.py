@@ -46,11 +46,11 @@ MONTH_RE = '|'.join(sorted(MONTHS, key=len, reverse=True))
 # Ordered most-specific first: a title carrying a full date should never be
 # read as the weaker month-only form.
 #
-# Digit guards, not word boundaries:  does not fire between a digit and a
+# Digit guards, not word boundaries: \b does not fire between a digit and a
 # letter or after an underscore, so "Oct 2019a" and "report_20191015_final"
 # both went unmatched.
 #
-# Digit guards rather than : word boundaries do not fire between a digit and
+# Digit guards rather than \b: word boundaries do not fire between a digit and
 # a letter, so "Oct 2019a" and "report_20191015_final" both slipped through.
 PATTERNS = [
     # 2019-10-15 / 2019_10_15 / 20191015
@@ -90,6 +90,88 @@ def parse_date_from_text(text):
     return None
 
 
+# How far into a document to look. A cover page or a news-release dateline sits
+# at the very top; a 300-page technical report goes on to cite dozens of other
+# dates (drill campaigns, prior studies, claim filings) that must not be read as
+# its publication date.
+BODY_SCAN_CHARS = 3000
+
+_D = r'(?P<d>\d{1,2})'
+_Y = r'(?P<y>(?:19|20)\d{2})'
+_M = r'(?P<m>' + MONTH_RE + r')'
+
+# Full dates only — a bare month/year is handled separately and ranked lower.
+FULL_DATE_PATTERNS = [
+    re.compile(_M + r'\s+' + _D + r'(?:st|nd|rd|th)?,?\s+' + _Y, re.I),   # January 30, 2026
+    re.compile(_D + r'(?:st|nd|rd|th)?\s+' + _M + r',?\s+' + _Y, re.I),   # 30 January 2026
+    re.compile(r'(?P<y>(?:19|20)\d{2})-(?P<m>\d{2})-(?P<d>\d{2})'),      # 2026-01-30
+]
+
+# A labelled date is the document stating its own date, so it outranks anything
+# found loose in the text.
+DATE_LABEL = re.compile(
+    r'(?:report\s+date|date\s+of\s+report|issue\s+date|dated|effective\s+date)'
+    r'\s*:?\s*$', re.I)
+
+MONTH_YEAR = re.compile(r'\b' + _M + r'\s+' + _Y, re.I)
+
+
+def _build(match):
+    """Turn a regex match into a plausible date, or None."""
+    parts = match.groupdict()
+    try:
+        year = int(parts['y'])
+        raw_month = parts['m']
+        month = MONTHS[raw_month.lower()] if not raw_month.isdigit() else int(raw_month)
+        day = int(parts.get('d') or 1)
+        parsed = date(year, month, day)
+    except (ValueError, KeyError, TypeError):
+        return None
+    if not (1990 <= year <= date.today().year) or parsed > date.today():
+        return None
+    return parsed
+
+
+def parse_date_from_body(text):
+    """Read a document's own publication date out of its opening text.
+
+    Ordered by how strongly the document asserts the date:
+      1. a labelled date ("Report Date: March 31, 2019") — the document saying
+         so itself;
+      2. the first full date, which on a cover page or in a news-release
+         dateline is the publication date;
+      3. a bare month and year, taken as the first of the month — common on
+         presentation title slides ("September 2024").
+
+    Returns (date, how) so callers can record which rule fired, or (None, None).
+    """
+    if not text:
+        return None, None
+    head = text[:BODY_SCAN_CHARS]
+
+    best = None
+    for pattern in FULL_DATE_PATTERNS:
+        for match in pattern.finditer(head):
+            parsed = _build(match)
+            if not parsed:
+                continue
+            # Labelled if the ~40 characters before it introduce a date.
+            preceding = head[max(0, match.start() - 40):match.start()]
+            if DATE_LABEL.search(preceding.rstrip()):
+                return parsed, 'labelled'
+            if best is None or match.start() < best[1]:
+                best = (parsed, match.start())
+
+    if best:
+        return best[0], 'body'
+
+    for match in MONTH_YEAR.finditer(head):
+        parsed = _build(match)
+        if parsed:
+            return parsed, 'month-year'
+    return None, None
+
+
 class Command(BaseCommand):
     help = "Backfill document_date from titles for documents stamped with their ingest date."
 
@@ -115,17 +197,20 @@ class Command(BaseCommand):
         self.stdout.write(f"{total} document(s) carrying their ingest date\n")
 
         fixed = cascaded = 0
+        sources = {}
         unparsed = []
         for doc in candidates.iterator():
-            parsed = parse_date_from_text(doc.title) or parse_date_from_text(doc.file_url)
+            parsed, how = self._resolve_date(doc)
             if not parsed or parsed == doc.document_date:
                 unparsed.append(doc)
                 continue
+            sources[how] = sources.get(how, 0) + 1
 
             old = doc.document_date
             fixed += 1
             if fixed <= 25:
-                self.stdout.write(f"  #{doc.id:<5d} {old} -> {parsed}  {doc.title[:52]}")
+                self.stdout.write(
+                    f"  #{doc.id:<5d} {old} -> {parsed}  [{how}]  {doc.title[:44]}")
 
             if dry_run:
                 cascaded += self._cascade(doc, old, parsed, dry_run=True)
@@ -149,6 +234,31 @@ class Command(BaseCommand):
                 self.stdout.write(f"  #{doc.id:<5d} {doc.title[:66]}")
         if dry_run:
             self.stdout.write(self.style.NOTICE('\nDry run — nothing written.'))
+
+    def _resolve_date(self, doc):
+        """Find a document's date, most authoritative source first.
+
+        The document's own text beats its filename: a news release states
+        "Melbourne, Australia and Vancouver, Canada - January 30, 2026" in its
+        dateline while its URL is an opaque UUID, and a presentation's title
+        slide carries the month the filename may omit. Filename parsing stays
+        as the fallback for documents whose text was never chunked.
+        """
+        chunk = doc.chunks.order_by('chunk_index').first()
+        if chunk:
+            parsed, how = parse_date_from_body(chunk.text)
+            # A bare month/year off a title slide is weaker than an explicit
+            # date in the filename, so let the filename try first.
+            if parsed and how != 'month-year':
+                return parsed, how
+            fallback = parse_date_from_text(doc.title) or parse_date_from_text(doc.file_url)
+            if fallback:
+                return fallback, 'filename'
+            if parsed:
+                return parsed, how
+
+        parsed = parse_date_from_text(doc.title) or parse_date_from_text(doc.file_url)
+        return (parsed, 'filename') if parsed else (None, None)
 
     def _cascade(self, doc, old_date, new_date, dry_run):
         """Re-date estimates/studies that inherited this document's fallback date."""
