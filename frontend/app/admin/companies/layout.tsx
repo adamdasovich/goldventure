@@ -34,10 +34,16 @@ export default function CompanyAdminLayout({
     }
   }, [isLoading, isAuthenticated, user, router]);
 
-  // The drawer is display-toggled, not unmounted, so close it on navigation.
-  useEffect(() => {
+  /* Close on navigation. React's "adjusting state when a prop changes"
+     pattern rather than an effect: setState during render of the same
+     component is sanctioned and re-runs before the browser paints, where an
+     effect renders the stale value first and then immediately re-renders.
+     https://react.dev/learn/you-might-not-need-an-effect */
+  const [lastPath, setLastPath] = useState(pathname);
+  if (pathname !== lastPath) {
+    setLastPath(pathname);
     setNavOpen(false);
-  }, [pathname]);
+  }
 
   if (isLoading) {
     return (

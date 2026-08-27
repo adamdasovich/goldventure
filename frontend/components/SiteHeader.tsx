@@ -96,12 +96,17 @@ export default function SiteHeader({
   const openLogin = onLoginClick ?? (() => setShowLogin(true));
   const openRegister = onRegisterClick ?? (() => setShowRegister(true));
 
-  // The panel is display-toggled, not unmounted, on a client-side route
-  // change — close it so the next page doesn't open behind an open menu.
-  useEffect(() => {
+  /* Close on navigation. React's "adjusting state when a prop changes"
+     pattern rather than an effect: setState during render of the same
+     component is sanctioned and re-runs before the browser paints, where an
+     effect renders the stale value first and then immediately re-renders.
+     https://react.dev/learn/you-might-not-need-an-effect */
+  const [lastPath, setLastPath] = useState(pathname);
+  if (pathname !== lastPath) {
+    setLastPath(pathname);
     setMenuOpen(false);
     setToolsOpen(false);
-  }, [pathname]);
+  }
 
   // Crossing into desktop leaves the panel orphaned; drop it.
   useEffect(() => {
