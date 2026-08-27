@@ -10,7 +10,6 @@ import LogoMono from "@/components/LogoMono";
 import SiteHeader, { PRIMARY_NAV, TOOLS_MENU } from "@/components/SiteHeader";
 import HeroCards from "@/components/HeroCards";
 import SectionHeading from "@/components/SectionHeading";
-import PlatformMenu, { type PlatformLink } from "@/components/PlatformMenu";
 import { FreeAccountCTA } from "@/components/FreeAccountCTA";
 import { LoginModal, RegisterModal } from "@/components/auth";
 import MetalsTicker from "@/components/MetalsTicker";
@@ -24,20 +23,122 @@ import { AVAILABLE_COUNT } from "@/app/investor-tools/tools";
 // live — the same drift that put stale counts in the sitemap and the pricing
 // table, and that had /companies advertising 500+ companies against a database
 // of 396.
-const FEATURES: PlatformLink[] = [
-  { group: "Financings", title: "Participate in Open Financings", href: "/open-financings", badge: "Live" },
-  { group: "Financings", title: "Closed Financings Archive", href: "/closed-financings" },
-  { group: "Financings", title: "Weekly Financial Snapshot", href: "/reports/weekly", badge: "New" },
-  { group: "Research", title: "Company Database", href: "/companies" },
-  { group: "Research", title: "Unlimited AI Company Research", href: "/companies" },
-  { group: "Research", title: `${AVAILABLE_COUNT} Investor Tools`, href: "/investor-tools" },
-  { group: "Research", title: "Your Daily Briefing", href: "/daily-briefing" },
-  { group: "Live", title: "Live Company Forums", href: "/companies", badge: "Live" },
-  { group: "Live", title: "Speaking Events", href: "/companies", badge: "Live" },
-  // Unbadged: 0 listings on 2026-08-26, and a "Live" badge on an empty
-  // marketplace sends people to an empty room.
-  { group: "Live", title: "Prospector's Exchange", href: "/properties" },
-  { group: "Market", title: "Real-Time Metals", href: "/metals" },
+type FeatureGroup = "Research" | "Financings" | "Live" | "Market";
+
+const FEATURE_GROUPS: FeatureGroup[] = [
+  "Research",
+  "Financings",
+  "Live",
+  "Market",
+];
+
+/* Every destination the original homepage's eight buttons reached, grouped so
+   the tab strip shows one set at a time. Descriptions are back — stripping
+   them was the lost information; the strip is what keeps the page quiet. */
+const FEATURES: {
+  group: FeatureGroup;
+  title: string;
+  href: string;
+  description: string;
+  badge?: string;
+}[] = [
+  {
+    group: "Research",
+    title: "Unlimited AI Company Research",
+    href: "/companies",
+    description:
+      "Ask about any company's projects, resources, financings or news and get a plain-English answer from its filings.",
+  },
+  {
+    group: "Research",
+    title: `${AVAILABLE_COUNT} Investor Tools`,
+    href: "/investor-tools",
+    description:
+      "Rank by ore grade, compare peers, scan drill results, and check whether you could actually sell.",
+  },
+  {
+    group: "Research",
+    title: "Company Database",
+    href: "/companies",
+    description:
+      "Profiles for 390+ junior miners — projects, resource estimates, financing history and news.",
+  },
+  {
+    group: "Research",
+    title: "Your Daily Briefing",
+    href: "/daily-briefing",
+    description:
+      "What moved overnight across the companies you follow, with the release that explains it.",
+  },
+  {
+    group: "Financings",
+    title: "Participate in Open Financings",
+    href: "/open-financings",
+    badge: "Live",
+    description:
+      "Placements and bought deals still accepting subscriptions. Register interest directly with the company.",
+  },
+  {
+    group: "Financings",
+    title: "Closed Financings Archive",
+    href: "/closed-financings",
+    description:
+      "Every deal that has closed across the sector, with terms, warrants and who participated.",
+  },
+  {
+    group: "Financings",
+    title: "Weekly Financial Snapshot",
+    href: "/reports/weekly",
+    badge: "New",
+    description:
+      "Every Friday after the close: top movers with catalysts, new NI 43-101 reports and financings closed.",
+  },
+  {
+    group: "Live",
+    title: "Happening Now",
+    href: "#happening-now",
+    description:
+      "Events running today, financings open right now and a featured listing — further down this page.",
+  },
+  {
+    group: "Live",
+    title: "Live Company Forums",
+    href: "/companies",
+    badge: "Live",
+    description:
+      "Every company has a real-time board. Investors and management talk directly, and posts appear instantly.",
+  },
+  {
+    group: "Live",
+    title: "Speaking Events",
+    href: "/companies",
+    badge: "Live",
+    description:
+      "Live presentations from company management. Watch by video, ask questions and upvote the best ones.",
+  },
+  {
+    // Unbadged: 0 listings on 2026-08-26, and a "Live" badge on an empty
+    // marketplace sends people to an empty room.
+    group: "Live",
+    title: "Prospector's Exchange",
+    href: "/properties",
+    description:
+      "A marketplace of mineral claims and exploration properties. Message owners directly to negotiate.",
+  },
+  {
+    group: "Market",
+    title: "Real-Time Metals",
+    href: "/metals",
+    description:
+      "Live prices for gold, silver, platinum and palladium, plus the base and critical minerals that drive exploration.",
+  },
+  {
+    group: "Market",
+    title: "Latest Mining News",
+    href: "#news-section",
+    description:
+      "Discoveries, market moves and industry developments, updated three times a day — further down this page.",
+  },
 ];
 
 interface HomeClientProps {
@@ -48,6 +149,7 @@ export default function HomeClient({ initialArticles }: HomeClientProps) {
   const [showLogin, setShowLogin] = useState(false);
   const [showRegister, setShowRegister] = useState(false);
   const [isVibrating, setIsVibrating] = useState(false);
+  const [activeGroup, setActiveGroup] = useState<FeatureGroup>("Research");
   /* One assistant for the site, provided by ClientLayout — the header opens
      the same instance from every page. */
   const { open: openChat } = useAssistant();
@@ -194,12 +296,76 @@ export default function HomeClient({ initialArticles }: HomeClientProps) {
         id="features"
         className="py-10 md:py-14 px-4 sm:px-6 lg:px-8 scroll-mt-24"
       >
-        <div className="max-w-5xl mx-auto">
-          <SectionHeading title="What&rsquo;s on the platform" />
+        <div className="max-w-4xl mx-auto">
+          <SectionHeading
+            title="What&rsquo;s on the platform"
+            description="Everything below is included — the research tools, the live rooms and the financings."
+          />
 
-          <div className="flex justify-center">
-            <PlatformMenu links={FEATURES} />
+          {/* The integrated tab strip from the company pages. One group
+              visible at a time, so every feature is reachable without the
+              page carrying eleven of anything at once. Rows, not cards. */}
+          <div
+            role="tablist"
+            aria-label="Platform sections"
+            className="-mx-4 sm:mx-0 mb-6 flex gap-1 overflow-x-auto scrollbar-none border-b border-slate-800 px-4 sm:px-0 sm:rounded-xl sm:border sm:border-slate-800 sm:bg-slate-900/60 sm:p-1"
+          >
+            {FEATURE_GROUPS.map((group) => {
+              const isActive = group === activeGroup;
+              return (
+                <button
+                  key={group}
+                  role="tab"
+                  type="button"
+                  {...{ "aria-selected": isActive }}
+                  aria-controls="platform-panel"
+                  onClick={() => setActiveGroup(group)}
+                  className={`whitespace-nowrap px-4 py-2.5 min-h-11 text-sm font-medium rounded-lg transition-colors ${
+                    isActive
+                      ? "bg-gold-500/15 text-gold-300 border border-gold-500/40"
+                      : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 border border-transparent"
+                  }`}
+                >
+                  {group}
+                </button>
+              );
+            })}
           </div>
+
+          <ul
+            id="platform-panel"
+            role="tabpanel"
+            className="divide-y divide-slate-800"
+          >
+            {FEATURES.filter((x) => x.group === activeGroup).map((feature) => (
+              <li key={feature.href + feature.title}>
+                <Link
+                  href={feature.href}
+                  className="group flex items-baseline gap-3 py-4 transition-colors"
+                >
+                  <span className="flex-1 min-w-0">
+                    <span className="block font-medium text-slate-100 group-hover:text-gold-400 transition-colors">
+                      {feature.title}
+                      {feature.badge && (
+                        <span className="ml-2 align-middle text-[10px] font-semibold uppercase tracking-wide text-gold-400">
+                          {feature.badge}
+                        </span>
+                      )}
+                    </span>
+                    <span className="mt-1 block text-sm text-slate-400">
+                      {feature.description}
+                    </span>
+                  </span>
+                  <span
+                    aria-hidden="true"
+                    className="shrink-0 text-slate-600 group-hover:text-gold-400"
+                  >
+                    &rarr;
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
         </div>
       </section>
 

@@ -4,8 +4,6 @@ import { useState, useEffect } from "react";
 import SectionHeading from "@/components/SectionHeading";
 import Link from "next/link";
 import Image from "next/image";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/Card";
-import { Badge } from "@/components/ui/Badge";
 import { useAuth } from "@/contexts/AuthContext";
 import { companyHref } from "@/lib/companyUrl";
 
@@ -65,10 +63,13 @@ interface HeroCardsProps {
   onRegisterClick: () => void;
 }
 
+type LiveTab = "Events" | "Financings" | "Property";
+
 export function HeroCards({ onLoginClick }: HeroCardsProps) {
   const { user } = useAuth();
   const [data, setData] = useState<HeroData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [tab, setTab] = useState<LiveTab | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -148,16 +149,44 @@ export function HeroCards({ onLoginClick }: HeroCardsProps) {
 
   if (loading || error || !hasData) return null;
 
+  const tabs: { key: LiveTab; label: string; count: number }[] = [
+    {
+      key: "Events",
+      label: "Events",
+      count: data?.upcoming_events?.length ?? 0,
+    },
+    {
+      key: "Financings",
+      label: "Financings",
+      count:
+        data?.total_open_financings ?? data?.active_financings?.length ?? 0,
+    },
+    {
+      key: "Property",
+      label: "Property",
+      count: data?.featured_property ? 1 : 0,
+    },
+  ];
+  /* Start on the first tab that has something in it, so the section never
+     opens on an empty state while another tab is full. */
+  const activeTab =
+    tab && tabs.some((t) => t.key === tab && t.count > 0)
+      ? tab
+      : (tabs.find((t) => t.count > 0)?.key ?? "Events");
+
+  const property = data?.featured_property;
+  const liveNow = data?.upcoming_events?.some((e) => e.status === "live");
+
   return (
     <section
       id="happening-now"
       className="py-10 md:py-14 px-4 sm:px-6 lg:px-8 scroll-mt-24"
     >
-      <div className="max-w-7xl mx-auto">
+      <div className="max-w-4xl mx-auto">
         <SectionHeading
           eyebrow="Live on the platform"
           title="Live now"
-          description="Upcoming company events, open financing rounds, and a featured listing from the Prospector's Exchange."
+          description="Company events running or scheduled, financing rounds still open, and this week's featured listing."
         />
         {!user && (
           <p className="-mt-4 mb-6 text-center text-sm text-slate-500">
@@ -165,354 +194,227 @@ export function HeroCards({ onLoginClick }: HeroCardsProps) {
           </p>
         )}
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {/* Card 1: Upcoming Speaking Events */}
-          <Card
-            variant="glass-card"
-            className="hover:border-gold-400/50 transition-all duration-300"
-          >
-            <CardHeader className="pb-2">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-lg text-gold-400">
-                  Upcoming Events
-                </CardTitle>
-                {data?.upcoming_events.some((e) => e.status === "live") && (
-                  <Badge
-                    variant="gold"
-                    className="bg-red-500 border-red-500 animate-pulse text-xs"
-                  >
-                    Live Now
-                  </Badge>
+        {/* Same strip as the company pages. Three columns of cards became
+            three tabs over one list. */}
+        <div
+          role="tablist"
+          aria-label="Live platform activity"
+          className="-mx-4 sm:mx-0 mb-2 flex gap-1 overflow-x-auto scrollbar-none border-b border-slate-800 px-4 sm:px-0 sm:rounded-xl sm:border sm:border-slate-800 sm:bg-slate-900/60 sm:p-1"
+        >
+          {tabs.map((t) => {
+            const isActive = t.key === activeTab;
+            return (
+              <button
+                key={t.key}
+                role="tab"
+                type="button"
+                {...{ "aria-selected": isActive }}
+                aria-controls="live-panel"
+                onClick={() => setTab(t.key)}
+                className={`whitespace-nowrap px-4 py-2.5 min-h-11 text-sm font-medium rounded-lg transition-colors ${
+                  isActive
+                    ? "bg-gold-500/15 text-gold-300 border border-gold-500/40"
+                    : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 border border-transparent"
+                }`}
+              >
+                {t.label}
+                {t.count > 0 && (
+                  <span className="ml-2 font-mono text-xs tabular-nums text-slate-500">
+                    {t.count}
+                  </span>
                 )}
-              </div>
-            </CardHeader>
-            <CardContent className="pt-2">
-              {data?.upcoming_events && data.upcoming_events.length > 0 ? (
-                <div className="max-h-[280px] overflow-y-auto space-y-3 pr-1">
-                  {data.upcoming_events.map((event) => (
-                    <Link
-                      key={event.id}
-                      href={companyHref({
-                        id: event.company_id,
-                        slug: event.company_slug,
-                      })}
-                      onClick={(e) => handleCardClick(e, true)}
-                      className="block"
-                    >
-                      <div
-                        className={`p-3 rounded-lg transition-all ${
-                          event.status === "live"
-                            ? "bg-red-500/10 border border-red-500/30 hover:bg-red-500/20"
-                            : "bg-slate-800/50 hover:bg-slate-700/50"
-                        }`}
-                      >
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="flex-1 min-w-0">
-                            <h4 className="text-sm font-medium text-white truncate">
-                              {event.title}
-                            </h4>
-                            <p className="text-xs text-slate-400 mt-1">
-                              {event.company_name}
-                            </p>
-                          </div>
-                          {event.status === "live" ? (
-                            <Badge
-                              variant="gold"
-                              className="bg-red-500 border-red-500 text-xs flex-shrink-0"
-                            >
-                              <span className="w-1.5 h-1.5 bg-white rounded-full mr-1 animate-pulse"></span>
-                              Live
-                            </Badge>
-                          ) : (
-                            <span className="text-xs text-gold-400 flex-shrink-0">
-                              {getTimeUntil(event.scheduled_start)}
-                            </span>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-2 mt-2 text-xs text-slate-500">
-                          <span>{formatDate(event.scheduled_start)}</span>
-                          <span>•</span>
-                          <span>{formatTime(event.scheduled_start)}</span>
-                        </div>
-                      </div>
-                    </Link>
-                  ))}
-                  {data.upcoming_events.length > 3 && (
-                    <p className="text-xs text-slate-500 text-center mt-2">
-                      +{data.upcoming_events.length - 3} more events
-                    </p>
-                  )}
-                </div>
-              ) : (
-                <div className="text-center py-6 text-slate-400">
-                  <p className="text-sm mb-3">
-                    No company events scheduled this week
-                  </p>
-                  <p className="text-xs text-slate-500 mb-4">
-                    Check back Monday — company presentations are listed here as
-                    they&apos;re scheduled.
-                  </p>
-                  <Link
-                    href="/companies"
-                    className="text-xs text-gold-400 hover:underline"
-                  >
-                    Browse Companies →
-                  </Link>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+                {t.key === "Events" && liveNow && (
+                  <span
+                    className="ml-1.5 inline-block h-1.5 w-1.5 rounded-full bg-red-500 align-middle animate-pulse"
+                    aria-label="live now"
+                  />
+                )}
+              </button>
+            );
+          })}
+        </div>
 
-          {/* Card 2: Available Financing Opportunities */}
-          <Card
-            variant="glass-card"
-            className="hover:border-gold-400/50 transition-all duration-300"
-          >
-            <CardHeader className="pb-2">
-              <CardTitle className="text-lg text-gold-400">
-                Financing Opportunities
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="pt-2">
-              {data?.active_financings && data.active_financings.length > 0 ? (
-                <>
-                  <div className="max-h-[280px] overflow-y-auto space-y-3 pr-1">
-                    {data.active_financings.map((financing) => (
+        <div id="live-panel" role="tabpanel">
+          {/* ── Events ── */}
+          {activeTab === "Events" &&
+            (data?.upcoming_events?.length ? (
+              <>
+                <ul className="divide-y divide-slate-800">
+                  {data.upcoming_events.map((event) => (
+                    <li key={event.id}>
                       <Link
-                        key={financing.id}
+                        href={companyHref({
+                          id: event.company_id,
+                          slug: event.company_slug,
+                        })}
+                        onClick={(e) => handleCardClick(e, true)}
+                        className="group flex items-baseline gap-3 py-4"
+                      >
+                        <span className="flex-1 min-w-0">
+                          <span className="block truncate font-medium text-slate-100 transition-colors group-hover:text-gold-400">
+                            {event.title}
+                          </span>
+                          <span className="mt-1 block text-sm text-slate-400">
+                            {event.company_name} &middot;{" "}
+                            {formatDate(event.scheduled_start)}{" "}
+                            {formatTime(event.scheduled_start)}
+                          </span>
+                        </span>
+                        {event.status === "live" ? (
+                          <span className="shrink-0 text-xs font-semibold uppercase tracking-wide text-red-400">
+                            Live
+                          </span>
+                        ) : (
+                          <span className="shrink-0 font-mono text-xs tabular-nums text-gold-400">
+                            {getTimeUntil(event.scheduled_start)}
+                          </span>
+                        )}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+                <Link
+                  href="/companies"
+                  className="mt-4 inline-block py-2 text-sm text-gold-400 hover:text-gold-300"
+                >
+                  Browse companies &rarr;
+                </Link>
+              </>
+            ) : (
+              <p className="py-8 text-sm text-slate-400">
+                No company events scheduled this week.{" "}
+                <Link
+                  href="/companies"
+                  className="text-gold-400 hover:underline"
+                >
+                  Browse companies &rarr;
+                </Link>
+              </p>
+            ))}
+
+          {/* ── Financings ── */}
+          {activeTab === "Financings" &&
+            (data?.active_financings?.length ? (
+              <>
+                <ul className="divide-y divide-slate-800">
+                  {data.active_financings.map((financing) => (
+                    <li key={financing.id}>
+                      <Link
                         href={`/companies/${financing.company_id}/financing`}
                         onClick={(e) => handleCardClick(e, true)}
-                        className="block"
+                        className="group flex items-baseline gap-3 py-4"
                       >
-                        <div className="p-3 rounded-lg bg-slate-800/50 hover:bg-slate-700/50 transition-all">
-                          <div className="flex items-start justify-between gap-2">
-                            <div className="flex-1 min-w-0">
-                              <h4 className="text-sm font-medium text-white truncate">
-                                {financing.company_name}
-                              </h4>
-                              <p className="text-xs text-slate-400 mt-1">
-                                {financing.company_ticker}
-                              </p>
-                            </div>
-                            <Badge
-                              variant="copper"
-                              className="text-xs flex-shrink-0"
-                            >
-                              {financing.financing_type_display}
-                            </Badge>
-                          </div>
-                          <div className="flex items-center justify-between mt-2">
-                            {financing.amount_raised_usd && (
-                              <span className="text-sm font-semibold text-gold-400">
-                                {formatCurrency(financing.amount_raised_usd)}
-                              </span>
-                            )}
+                        <span className="flex-1 min-w-0">
+                          <span className="block truncate font-medium text-slate-100 transition-colors group-hover:text-gold-400">
+                            {financing.company_name}
+                          </span>
+                          <span className="mt-1 block text-sm text-slate-400">
+                            {financing.company_ticker} &middot;{" "}
+                            {financing.financing_type_display}
                             {financing.closing_date && (
-                              <span className="text-xs text-slate-500">
-                                Closes: {formatDate(financing.closing_date)}
-                              </span>
+                              <>
+                                {" "}
+                                &middot; closes{" "}
+                                {formatDate(financing.closing_date)}
+                              </>
                             )}
-                          </div>
-                        </div>
-                      </Link>
-                    ))}
-                  </div>
-                  <div className="mt-3 pt-3 border-t border-slate-800 text-center">
-                    <Link
-                      href="/open-financings"
-                      className="text-xs text-gold-400 hover:text-gold-300 hover:underline"
-                    >
-                      {data.total_open_financings &&
-                      data.total_open_financings > data.active_financings.length
-                        ? `Showing ${data.active_financings.length} of ${data.total_open_financings} open financings — View all →`
-                        : "View all open financings →"}
-                    </Link>
-                  </div>
-                </>
-              ) : (
-                <div className="text-center py-8 text-slate-500">
-                  <svg
-                    className="w-12 h-12 mx-auto mb-3 opacity-50"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                    aria-hidden="true"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={1.5}
-                      d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                    />
-                  </svg>
-                  <p className="text-sm mb-3">
-                    No open financing rounds right now
-                  </p>
-                  <p className="text-xs text-slate-500 mb-4">
-                    Companies raising capital appear here while their deals are
-                    open.
-                  </p>
-                  <Link
-                    href="/closed-financings"
-                    className="text-xs text-gold-400 hover:underline"
-                  >
-                    View Closed Financings →
-                  </Link>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Card 3: Featured Prospector's Listing */}
-          <Card
-            variant="glass-card"
-            className="hover:border-gold-400/50 transition-all duration-300 relative overflow-hidden"
-          >
-            <CardHeader className="pb-2">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-lg text-gold-400">
-                  Featured Property
-                </CardTitle>
-                <Badge variant="gold" className="text-xs">
-                  Featured
-                </Badge>
-              </div>
-            </CardHeader>
-            <CardContent className="pt-2">
-              {data?.featured_property ? (
-                <Link
-                  href={`/properties/${data.featured_property.slug}`}
-                  onClick={(e) => handleCardClick(e, true)}
-                  className="block"
-                >
-                  <div className="max-h-[280px] overflow-y-auto space-y-3 pr-1">
-                    {/* Property Image */}
-                    {data.featured_property.primary_image_url ? (
-                      <div className="relative h-32 rounded-lg overflow-hidden">
-                        <Image
-                          src={data.featured_property.primary_image_url}
-                          alt={data.featured_property.title}
-                          fill
-                          sizes="(max-width: 768px) 100vw, 33vw"
-                          className="object-cover"
-                        />
-                        <div className="absolute inset-0 bg-gradient-to-t from-slate-900/80 to-transparent"></div>
-                        <div className="absolute bottom-2 left-2 right-2">
-                          <h4 className="text-sm font-semibold text-white truncate">
-                            {data.featured_property.title}
-                          </h4>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="h-32 rounded-lg bg-gradient-to-br from-gold-500/20 to-copper-500/20 flex items-center justify-center">
-                        <div className="text-center">
-                          <svg
-                            className="w-8 h-8 mx-auto text-gold-400/50 mb-1"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                            aria-hidden="true"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={1.5}
-                              d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
-                            />
-                          </svg>
-                          <h4 className="text-sm font-semibold text-white truncate px-2">
-                            {data.featured_property.title}
-                          </h4>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Property Details */}
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-2 text-xs text-slate-400">
-                        <svg
-                          className="w-3.5 h-3.5"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                          aria-hidden="true"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
-                          />
-                        </svg>
-                        <span>
-                          {data.featured_property.location},{" "}
-                          {data.featured_property.country}
+                          </span>
                         </span>
-                      </div>
-
-                      <div className="flex flex-wrap gap-2">
-                        <Badge variant="slate" className="text-xs">
-                          {data.featured_property.primary_mineral}
-                        </Badge>
-                        <Badge variant="slate" className="text-xs">
-                          {data.featured_property.exploration_stage}
-                        </Badge>
-                      </div>
-
-                      {data.featured_property.asking_price && (
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm font-semibold text-gold-400">
-                            {formatCurrency(
-                              data.featured_property.asking_price,
-                              data.featured_property.price_currency,
-                            )}
+                        {financing.amount_raised_usd && (
+                          <span className="shrink-0 font-mono text-sm tabular-nums text-gold-400">
+                            {formatCurrency(financing.amount_raised_usd)}
                           </span>
-                          <span className="text-xs text-slate-500">
-                            {data.featured_property.listing_type}
-                          </span>
-                        </div>
-                      )}
-
-                      {data.featured_property.total_hectares && (
-                        <p className="text-xs text-slate-500">
-                          {data.featured_property.total_hectares.toLocaleString()}{" "}
-                          hectares
-                        </p>
-                      )}
-                    </div>
-                  </div>
+                        )}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+                <Link
+                  href="/open-financings"
+                  className="mt-4 inline-block py-2 text-sm text-gold-400 hover:text-gold-300"
+                >
+                  {data.total_open_financings &&
+                  data.total_open_financings > data.active_financings.length
+                    ? `View all ${data.total_open_financings} open financings `
+                    : "View all open financings "}
+                  &rarr;
                 </Link>
-              ) : (
-                <div className="text-center py-8 text-slate-500">
-                  <svg
-                    className="w-12 h-12 mx-auto mb-3 opacity-50"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                    aria-hidden="true"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={1.5}
-                      d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
-                    />
-                  </svg>
-                  <p className="text-sm mb-3">No featured property this week</p>
-                  <p className="text-xs text-slate-500 mb-4">
-                    A mining property from the marketplace is showcased here
-                    each week.
-                  </p>
-                  <Link
-                    href="/properties"
-                    className="text-xs text-gold-400 hover:underline"
-                  >
-                    Browse Properties →
-                  </Link>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+              </>
+            ) : (
+              <p className="py-8 text-sm text-slate-400">
+                No open financing rounds right now.{" "}
+                <Link
+                  href="/closed-financings"
+                  className="text-gold-400 hover:underline"
+                >
+                  View closed financings &rarr;
+                </Link>
+              </p>
+            ))}
+
+          {/* ── Featured property ── */}
+          {activeTab === "Property" &&
+            (property ? (
+              <>
+                <Link
+                  href={`/properties/${property.slug}`}
+                  onClick={(e) => handleCardClick(e, true)}
+                  className="group flex items-start gap-4 py-4"
+                >
+                  {property.primary_image_url && (
+                    <span className="relative block h-16 w-24 shrink-0 overflow-hidden rounded-lg">
+                      <Image
+                        src={property.primary_image_url}
+                        alt=""
+                        fill
+                        sizes="96px"
+                        className="object-cover"
+                      />
+                    </span>
+                  )}
+                  <span className="flex-1 min-w-0">
+                    <span className="block font-medium text-slate-100 transition-colors group-hover:text-gold-400">
+                      {property.title}
+                    </span>
+                    <span className="mt-1 block text-sm text-slate-400">
+                      {property.location}, {property.country} &middot;{" "}
+                      {property.primary_mineral} &middot;{" "}
+                      {property.exploration_stage}
+                      {property.total_hectares && (
+                        <>
+                          {" "}
+                          &middot; {property.total_hectares.toLocaleString()} ha
+                        </>
+                      )}
+                    </span>
+                  </span>
+                  {property.asking_price && (
+                    <span className="shrink-0 font-mono text-sm tabular-nums text-gold-400">
+                      {formatCurrency(
+                        property.asking_price,
+                        property.price_currency,
+                      )}
+                    </span>
+                  )}
+                </Link>
+                <Link
+                  href="/properties"
+                  className="mt-4 inline-block py-2 text-sm text-gold-400 hover:text-gold-300"
+                >
+                  Browse all listings &rarr;
+                </Link>
+              </>
+            ) : (
+              <p className="py-8 text-sm text-slate-400">
+                No featured property this week.{" "}
+                <Link
+                  href="/properties"
+                  className="text-gold-400 hover:underline"
+                >
+                  Browse listings &rarr;
+                </Link>
+              </p>
+            ))}
         </div>
       </div>
     </section>

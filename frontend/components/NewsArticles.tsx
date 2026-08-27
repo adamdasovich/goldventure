@@ -185,20 +185,22 @@ export default function NewsArticles({
         </button>
       </div>
 
-      {/* Articles List */}
-      <div className="space-y-3">
+      {/* Articles list. Each headline used to sit in its own bordered,
+          filled panel; five of them ran to 1,055px on a phone. Rows on a
+          hairline divider carry the same information in about half of it. */}
+      <div>
         {articles.map((article) => (
           <a
             key={article.id}
             href={article.url}
             target="_blank"
             rel="noopener noreferrer"
-            className="group block p-4 bg-slate-800/50 border border-slate-700/50 rounded-lg hover:bg-slate-800/80 hover:border-gold-400/30 transition-all duration-200"
+            className="group block border-b border-slate-800 py-4 last:border-b-0"
           >
             <div className="flex items-start justify-between gap-4">
               <div className="flex-1 min-w-0">
                 {/* Title */}
-                <h4 className="font-medium text-white group-hover:text-gold-400 transition-colors line-clamp-2">
+                <h4 className="font-medium text-slate-100 group-hover:text-gold-400 transition-colors line-clamp-2">
                   {article.title}
                 </h4>
 
@@ -218,7 +220,7 @@ export default function NewsArticles({
 
                 {/* Summary if available */}
                 {article.summary && (
-                  <p className="mt-2 text-sm text-slate-400 line-clamp-2">
+                  <p className="mt-1 text-sm text-slate-400 line-clamp-2">
                     {article.summary}
                   </p>
                 )}
@@ -232,7 +234,7 @@ export default function NewsArticles({
 
         {/* Load More Button */}
         {showLoadMore && hasMore && (
-          <div className="pt-4 text-center">
+          <div className="pt-6 text-center">
             <button
               onClick={handleLoadMore}
               disabled={loadingMore}
