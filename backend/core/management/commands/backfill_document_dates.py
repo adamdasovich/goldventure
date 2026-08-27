@@ -252,6 +252,10 @@ class Command(BaseCommand):
             f"\n{fixed} document date(s) recovered, {cascaded} estimate/study row(s) "
             f"re-dated, {len(unparsed)} with no parseable date"
         ))
+        if sources:
+            self.stdout.write('Recovered by source:')
+            for how, n in sorted(sources.items(), key=lambda kv: -kv[1]):
+                self.stdout.write(f'  {how:<12s} {n}')
         if unparsed[:8]:
             self.stdout.write("\nExamples with no parseable date:")
             for doc in unparsed[:8]:
