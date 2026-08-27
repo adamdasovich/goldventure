@@ -409,6 +409,7 @@ CELERY_TASK_ROUTES = {
     'core.tasks.scrape_mining_news_task':               {'queue': 'scrape'},
     'core.tasks.auto_discover_and_process_documents_task': {'queue': 'scrape'},
     'core.tasks.reconcile_chroma_index_task':           {'queue': 'scrape'},
+    'core.tasks.backfill_document_dates_task':          {'queue': 'scrape'},
     'core.tasks.process_company_news_for_rag_task':     {'queue': 'scrape'},
     'core.tasks.store_company_profile_in_rag_task':     {'queue': 'scrape'},
 
@@ -513,6 +514,14 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'core.tasks.reconcile_chroma_index_task',
         'schedule': crontab(minute=20),
         'kwargs': {'repair_limit': 5000},
+    },
+
+    # Date documents the GPU worker ingested with document_date NULL. Runs ten
+    # minutes before the Chroma reconcile so a document is dated before its
+    # chunks are indexed, and is a no-op when nothing is undated.
+    'backfill-document-dates-hourly': {
+        'task': 'core.tasks.backfill_document_dates_task',
+        'schedule': crontab(minute=10),
     },
 
     # Worker health check every 5 minutes

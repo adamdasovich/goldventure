@@ -256,11 +256,21 @@ def process_general_document(document_url: str, document_type: str,
             'pea': 'Preliminary Economic Assessment',
         }
 
+        # Read the publication date out of the document itself. Stamping
+        # datetime.now() here made every document look simultaneous, which
+        # collapsed Resource Growth's timeline and left Grade Ranker unable to
+        # tell which estimate superseded which. The titles assigned below are
+        # generic ("Corporate Presentation"), so the text is the only source —
+        # and it is already in hand. None is recorded when it cannot be read;
+        # unknown beats a plausible lie.
+        from core.document_dates import parse_date_from_body
+        parsed_date, _how = parse_date_from_body(docling_data.get('text', ''))
+
         document = Document.objects.create(
             company=company,
             title=doc_title_map.get(document_type, 'Document'),
             document_type=document_type,
-            document_date=datetime.now().date(),
+            document_date=parsed_date,
             file_url=document_url,
             description=f"Auto-processed on {datetime.now().strftime('%Y-%m-%d')}"
         )
@@ -2257,6 +2267,30 @@ def generate_weekly_industry_report_task(self, week_ending: str = None):
 # =============================================================================
 # CHROMADB / POSTGRESQL INDEX RECONCILIATION
 # =============================================================================
+
+@shared_task(bind=True, time_limit=900, soft_time_limit=840, on_failure=log_task_failure)
+def backfill_document_dates_task(self):
+    """Date documents the GPU worker ingested without one.
+
+    The GPU worker inserts document_date NULL because it has no publication
+    date at insert time, and stamping today's date made every document look
+    simultaneous — which collapsed Resource Growth's timeline and left Grade
+    Ranker unable to tell which estimate superseded which. The text lands in
+    Postgres a moment later, so the date is recovered here rather than guessed
+    there.
+
+    A no-op when nothing is undated.
+    """
+    from io import StringIO
+
+    from django.core.management import call_command
+
+    out = StringIO()
+    call_command('backfill_document_dates', stdout=out)
+    summary = next((ln for ln in out.getvalue().splitlines() if 'recovered' in ln), '')
+    logger.info("backfill_document_dates: %s", summary or 'nothing to do')
+    return summary
+
 
 @shared_task(bind=True, time_limit=1800, soft_time_limit=1740, on_failure=log_task_failure)
 def reconcile_chroma_index_task(self, repair_limit=2000):
