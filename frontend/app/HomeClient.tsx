@@ -309,7 +309,13 @@ export default function HomeClient({ initialArticles }: HomeClientProps) {
           <div
             role="tablist"
             aria-label="Platform sections"
-            className="-mx-4 sm:mx-0 mb-6 flex gap-1 overflow-x-auto scrollbar-none border-b border-slate-800 px-4 sm:px-0 sm:rounded-xl sm:border sm:border-slate-800 sm:bg-slate-900/60 sm:p-1"
+            /* sm:justify-center, not justify-center: the strip scrolls
+               horizontally below sm, and centring an overflowing flex row
+               puts its left end out of reach of the scroll. Four tabs fit
+               inside the bar from sm up, so there is nothing to overflow
+               there — and left-packed tabs under a centred heading are what
+               made this section look off-centre. */
+            className="-mx-4 sm:mx-0 mb-6 flex gap-1 overflow-x-auto scrollbar-none border-b border-slate-800 px-4 sm:px-0 sm:justify-center sm:rounded-xl sm:border sm:border-slate-800 sm:bg-slate-900/60 sm:p-1"
           >
             {FEATURE_GROUPS.map((group) => {
               const isActive = group === activeGroup;
