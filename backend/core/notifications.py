@@ -9,7 +9,69 @@ from django.conf import settings
 from django.template.loader import render_to_string
 from django.utils.html import strip_tags
 
+from .email_service import _get_sendgrid_api_key
+
 logger = logging.getLogger(__name__)
+
+
+def _parse_from_email():
+    """DEFAULT_FROM_EMAIL is written as "Name <addr>"; SendGrid wants them apart."""
+    raw = getattr(settings, 'DEFAULT_FROM_EMAIL', '') or 'noreply@juniorminingintelligence.com'
+    if '<' in raw and '>' in raw:
+        return raw.split('<')[1].split('>')[0].strip(), raw.split('<')[0].strip()
+    return raw, 'Junior Gold Mining Intelligence'
+
+
+def _deliver(subject, plain_message, html_message, recipient):
+    """
+    Send one notification through the SendGrid Web API, falling back to SMTP.
+
+    These four alerts used Django's send_mail over SMTP while the rest of the
+    platform's mail already went through the API. That difference was invisible
+    until it mattered: DigitalOcean blocks outbound 25/465/587 on this droplet,
+    so every one of them connected to nothing and hung until Celery's soft time
+    limit killed the task. Nothing was sent, nothing was logged as sent, and
+    nothing appeared in any Sent folder. Fixed on 2026-08-27 by moving
+    EMAIL_PORT to 2525, which SendGrid also listens on; going over HTTPS here
+    means no blocked port can reproduce it.
+
+    SMTP remains the fallback for local development, where SENDGRID_API_KEY is
+    usually absent. Raises on failure so the callers' existing try/except keeps
+    logging the same way.
+    """
+    api_key = _get_sendgrid_api_key()
+    if not (api_key and api_key.startswith('SG.')):
+        logger.info("SendGrid key absent; sending %r over SMTP instead", subject)
+        send_mail(
+            subject=subject,
+            message=plain_message,
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=[recipient],
+            html_message=html_message,
+            fail_silently=False,
+        )
+        return True
+
+    from sendgrid import SendGridAPIClient
+    from sendgrid.helpers.mail import Mail, Email, To, Content, HtmlContent
+
+    from_email, from_name = _parse_from_email()
+    message = Mail(
+        from_email=Email(from_email, from_name),
+        to_emails=To(recipient),
+        subject=subject,
+        plain_text_content=Content("text/plain", plain_message),
+        html_content=HtmlContent(html_message),
+    )
+
+    response = SendGridAPIClient(api_key).send(message)
+    # 2xx is accepted-for-delivery; anything else is a failure worth raising so
+    # the caller logs it rather than reporting a send that did not happen.
+    if not 200 <= response.status_code < 300:
+        raise RuntimeError(
+            f"SendGrid rejected the message with status {response.status_code}"
+        )
+    return True
 
 
 def send_ni43101_discovery_notification(document, company):
@@ -73,14 +135,7 @@ Automated Document Discovery System
     """
 
     try:
-        send_mail(
-            subject=subject,
-            message=plain_message,
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            recipient_list=[settings.NI43101_NOTIFICATION_EMAIL],
-            html_message=html_message,
-            fail_silently=False,
-        )
+        _deliver(subject, plain_message, html_message, settings.NI43101_NOTIFICATION_EMAIL)
         logger.info(f"Sent NI 43-101 discovery notification for {company.name}")
         return True
     except Exception as e:
@@ -169,14 +224,7 @@ Automated Financing Detection System
     """
 
     try:
-        send_mail(
-            subject=subject,
-            message=plain_message,
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            recipient_list=[settings.FINANCING_NOTIFICATION_EMAIL],
-            html_message=html_message,
-            fail_silently=False,
-        )
+        _deliver(subject, plain_message, html_message, settings.FINANCING_NOTIFICATION_EMAIL)
         logger.info(f"Sent financing flag notification for {company.name}")
         return True
     except Exception as e:
@@ -292,14 +340,7 @@ Junior Mining Intelligence Platform
     """
 
     try:
-        send_mail(
-            subject=subject,
-            message=plain_message,
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            recipient_list=[settings.FINANCING_NOTIFICATION_EMAIL],
-            html_message=html_message,
-            fail_silently=False,
-        )
+        _deliver(subject, plain_message, html_message, settings.FINANCING_NOTIFICATION_EMAIL)
         logger.info(f"Sent financing notification for {company.name} - ${financing.amount_raised_usd:,.0f}")
         return True
     except Exception as e:
@@ -385,14 +426,7 @@ Ask the Editor
         return False
 
     try:
-        send_mail(
-            subject=subject,
-            message=plain_message,
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            recipient_list=[recipient],
-            html_message=html_message,
-            fail_silently=False,
-        )
+        _deliver(subject, plain_message, html_message, recipient)
         logger.info(f"Sent editor question notification for thread {thread.id}")
         return True
     except Exception as e:
