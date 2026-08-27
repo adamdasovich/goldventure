@@ -10,6 +10,7 @@ import LogoMono from "@/components/LogoMono";
 import SiteHeader, { PRIMARY_NAV, TOOLS_MENU } from "@/components/SiteHeader";
 import HeroCards from "@/components/HeroCards";
 import SectionHeading from "@/components/SectionHeading";
+import PlatformMenu, { type PlatformLink } from "@/components/PlatformMenu";
 import { FreeAccountCTA } from "@/components/FreeAccountCTA";
 import { LoginModal, RegisterModal } from "@/components/auth";
 import MetalsTicker from "@/components/MetalsTicker";
@@ -23,29 +24,20 @@ import { AVAILABLE_COUNT } from "@/app/investor-tools/tools";
 // live — the same drift that put stale counts in the sitemap and the pricing
 // table, and that had /companies advertising 500+ companies against a database
 // of 396.
-const FEATURES: { title: string; href: string; badge?: string }[] = [
-  // Open financings lead, and point at /open-financings rather than the closed
-  // archive they used to. Rounds still accepting subscriptions are the only
-  // thing here a reader can act on today; closed ones are reference.
-  {
-    title: "Participate in Open Financings",
-    href: "/open-financings",
-    badge: "Live",
-  },
-  { title: `${AVAILABLE_COUNT} Investor Tools`, href: "/investor-tools" },
-  { title: "Unlimited AI Company Research", href: "/companies" },
-  // Was absent entirely despite being the main reason to hold an account.
-  { title: "Your Daily Briefing", href: "/daily-briefing" },
-  { title: "Weekly Financial Snapshot", href: "/reports/weekly", badge: "New" },
-  { title: "Company Database", href: "/companies" },
-  { title: "Closed Financings Archive", href: "/closed-financings" },
-  { title: "Live Company Forums", href: "/companies", badge: "Live" },
-  { title: "Speaking Events", href: "/companies", badge: "Live" },
-  { title: "Real-Time Metals", href: "/metals" },
-  // Prospector's Exchange is deliberately last and unbadged: it had 0 listings
-  // on 2026-08-26, and a "Live" badge on an empty marketplace sends people to
-  // an empty room. Restore the badge when there are listings to see.
-  { title: "Prospector's Exchange", href: "/properties" },
+const FEATURES: PlatformLink[] = [
+  { group: "Financings", title: "Participate in Open Financings", href: "/open-financings", badge: "Live" },
+  { group: "Financings", title: "Closed Financings Archive", href: "/closed-financings" },
+  { group: "Financings", title: "Weekly Financial Snapshot", href: "/reports/weekly", badge: "New" },
+  { group: "Research", title: "Company Database", href: "/companies" },
+  { group: "Research", title: "Unlimited AI Company Research", href: "/companies" },
+  { group: "Research", title: `${AVAILABLE_COUNT} Investor Tools`, href: "/investor-tools" },
+  { group: "Research", title: "Your Daily Briefing", href: "/daily-briefing" },
+  { group: "Live", title: "Live Company Forums", href: "/companies", badge: "Live" },
+  { group: "Live", title: "Speaking Events", href: "/companies", badge: "Live" },
+  // Unbadged: 0 listings on 2026-08-26, and a "Live" badge on an empty
+  // marketplace sends people to an empty room.
+  { group: "Live", title: "Prospector's Exchange", href: "/properties" },
+  { group: "Market", title: "Real-Time Metals", href: "/metals" },
 ];
 
 interface HomeClientProps {
@@ -158,10 +150,10 @@ export default function HomeClient({ initialArticles }: HomeClientProps) {
 
           {/* Near-white, not gold gradient. The accent is spent on the
               figures below and the primary CTA, where it means something. */}
-          <h1 className="font-display text-2xl sm:text-[1.75rem] lg:text-[2rem] leading-snug font-semibold tracking-tight mb-4 text-gold-400 text-balance italic">
+          <h1 className="font-display text-xl sm:text-2xl md:text-3xl font-semibold mb-4 text-gold-400 leading-tight text-balance italic tracking-tight">
             Junior mining research, in minutes
           </h1>
-          <p className="text-base sm:text-lg text-slate-400 mb-7 max-w-xl mx-auto leading-relaxed">
+          <p className="text-base sm:text-lg md:text-xl text-slate-300 max-w-2xl mx-auto mb-6">
             Profiles, financials and news on {stats.companies} juniors, with an
             AI assistant that answers questions about any of them.
           </p>
@@ -205,21 +197,8 @@ export default function HomeClient({ initialArticles }: HomeClientProps) {
         <div className="max-w-5xl mx-auto">
           <SectionHeading title="What&rsquo;s on the platform" />
 
-          <div className="flex flex-wrap justify-center gap-2">
-            {FEATURES.map((feature) => (
-              <Link
-                key={feature.href + feature.title}
-                href={feature.href}
-                className="group inline-flex items-center gap-2 rounded-full border border-slate-700 px-4 py-2.5 min-h-11 text-sm text-slate-300 transition-colors hover:border-gold-500/40 hover:text-gold-400"
-              >
-                {feature.title}
-                {feature.badge && (
-                  <span className="text-[10px] font-semibold uppercase tracking-wide text-gold-400">
-                    {feature.badge}
-                  </span>
-                )}
-              </Link>
-            ))}
+          <div className="flex justify-center">
+            <PlatformMenu links={FEATURES} />
           </div>
         </div>
       </section>

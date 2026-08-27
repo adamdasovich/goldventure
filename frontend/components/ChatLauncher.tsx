@@ -25,7 +25,7 @@ export default function ChatLauncher({
       <button
         type="button"
         onClick={() => onOpen()}
-        className="group flex w-full items-center gap-3 rounded-xl border border-gold-500/40 bg-gold-500/5 px-4 py-4 text-left transition-colors hover:border-gold-500/70 hover:bg-gold-500/10"
+        className="group flex w-full items-center gap-3 rounded-lg border border-gold-500/40 bg-gold-500/5 px-4 py-4 text-left transition-colors hover:border-gold-500/70 hover:bg-gold-500/10"
       >
         <svg
           className="h-5 w-5 shrink-0 text-gold-400"
@@ -56,7 +56,7 @@ export default function ChatLauncher({
             type="button"
             title={example.prompt}
             onClick={() => onOpen(example.prompt)}
-            className="shrink-0 whitespace-nowrap rounded-full border border-slate-700 px-4 py-2.5 min-h-11 inline-flex items-center text-sm text-slate-400 transition-colors hover:border-gold-500/40 hover:text-gold-400"
+            className="shrink-0 whitespace-nowrap rounded-lg border border-slate-700 px-4 py-2.5 min-h-11 inline-flex items-center text-sm text-slate-400 transition-colors hover:border-gold-500/40 hover:text-gold-400"
           >
             {example.label}
           </button>
