@@ -2629,91 +2629,6 @@ export default function CompanyDetailClient({
                     </Card>
                   ) : (
                     <div className="space-y-8">
-                      {/* Financial News Section */}
-                      <div>
-                        <h3 className="text-xl font-bold text-copper-400 mb-4 flex items-center gap-2">
-                          <svg
-                            className="w-5 h-5"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"
-                            />
-                          </svg>
-                          Financial News
-                        </h3>
-                        {newsData?.financial &&
-                        newsData.financial.length > 0 ? (
-                          <div className="grid grid-cols-1 gap-4">
-                            {newsData.financial.map((release) => (
-                              <Card key={release.id} variant="glass-card">
-                                <CardHeader>
-                                  <div className="flex items-start justify-between">
-                                    <CardTitle className="text-lg text-white">
-                                      {release.title}
-                                    </CardTitle>
-                                    <Badge variant="gold">Financial</Badge>
-                                  </div>
-                                  {release.release_date && (
-                                    <div className="text-sm text-slate-400 mt-1">
-                                      {new Date(
-                                        release.release_date + "T00:00:00",
-                                      ).toLocaleDateString("en-US", {
-                                        year: "numeric",
-                                        month: "long",
-                                        day: "numeric",
-                                      })}
-                                    </div>
-                                  )}
-                                </CardHeader>
-                                <CardContent>
-                                  <p className="text-slate-300 text-sm mb-3">
-                                    {release.summary}
-                                  </p>
-                                  {release.url && (
-                                    <a
-                                      href={release.url}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="text-gold-400 hover:text-gold-300 text-sm flex items-center gap-1"
-                                    >
-                                      <span>Read Full Release</span>
-                                      <svg
-                                        className="w-3 h-3"
-                                        fill="none"
-                                        stroke="currentColor"
-                                        viewBox="0 0 24 24"
-                                      >
-                                        <path
-                                          strokeLinecap="round"
-                                          strokeLinejoin="round"
-                                          strokeWidth={2}
-                                          d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
-                                        />
-                                      </svg>
-                                    </a>
-                                  )}
-                                </CardContent>
-                              </Card>
-                            ))}
-                          </div>
-                        ) : (
-                          <Card variant="glass-card">
-                            <CardContent className="py-8 text-center">
-                              <div className="text-slate-400 text-sm">
-                                No financial news releases available
-                              </div>
-                            </CardContent>
-                          </Card>
-                        )}
-                      </div>
-
-                      {/* Non-Financial News Section */}
                       <div>
                         <h3 className="text-xl font-bold text-copper-400 mb-4 flex items-center gap-2">
                           <svg
@@ -2741,8 +2656,21 @@ export default function CompanyDetailClient({
                                     <CardTitle className="text-lg text-white">
                                       {release.title}
                                     </CardTitle>
-                                    <Badge variant="copper">
-                                      {release.release_type.replace(/_/g, " ")}
+                                    {/* Financing releases used to live in a
+                                        separate "Financial News" section that
+                                        duplicated this list; the gold badge is
+                                        what survives of that distinction. */}
+                                    <Badge
+                                      variant={
+                                        release.is_material ? "gold" : "copper"
+                                      }
+                                    >
+                                      {release.is_material
+                                        ? "Financial"
+                                        : release.release_type.replace(
+                                            /_/g,
+                                            " ",
+                                          )}
                                     </Badge>
                                   </div>
                                   {release.release_date && (

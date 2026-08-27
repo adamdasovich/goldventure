@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import CompanyDetailClient from "./CompanyDetailClient";
 import CompanyProfileContent from "./CompanyProfileContent";
 import { parseCompanyIdParam } from "@/lib/companyUrl";
+import { dedupeReleases } from "@/lib/newsReleases";
 
 const API_BASE_URL =
   process.env.API_BASE_URL ||
@@ -88,15 +89,17 @@ export default async function CompanyDetailPage({ params }: Props) {
     ? projects
     : projects.results || [];
 
-  // The news endpoint splits releases into financial / non-financial buckets;
-  // the profile summary wants them merged and date-sorted.
+  // The news endpoint returns a `financial` bucket that is a SUBSET of
+  // `non_financial` (which is really "all releases"), so a naive merge lists
+  // every financing release twice. Dedupe by id.
   let news: any[] = [];
   if (newsRes?.ok) {
     try {
       const payload = await newsRes.json();
-      news = Array.isArray(payload)
+      const merged = Array.isArray(payload)
         ? payload
         : [...(payload.financial || []), ...(payload.non_financial || [])];
+      news = dedupeReleases(merged);
     } catch {
       news = [];
     }

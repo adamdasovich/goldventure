@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { companyHref, parseCompanyIdParam } from "@/lib/companyUrl";
+import { dedupeReleases } from "@/lib/newsReleases";
 
 const API_BASE_URL =
   process.env.API_BASE_URL ||
@@ -142,14 +143,18 @@ export default async function CompanyLayout({ children, params }: Props) {
     if (cRes.ok) company = await cRes.json();
     if (nRes.ok) {
       const np = await nRes.json().catch(() => null);
-      newsReleases = Array.isArray(np)
-        ? np
-        : [
-            ...(np?.financial || []),
-            ...(np?.non_financial || []),
-            ...(np?.results || []),
-            ...(np?.news_releases || []),
-          ];
+      // `financial` is a subset of `non_financial`, so this concatenation
+      // repeats every financing release — dedupe before emitting JSON-LD.
+      newsReleases = dedupeReleases(
+        Array.isArray(np)
+          ? np
+          : [
+              ...(np?.financial || []),
+              ...(np?.non_financial || []),
+              ...(np?.results || []),
+              ...(np?.news_releases || []),
+            ],
+      );
       newsReleases.sort(
         (a, b) =>
           new Date(b.release_date || 0).getTime() -
