@@ -6,13 +6,12 @@ import Image from "next/image";
 import ChatLauncher from "@/components/ChatLauncher";
 import { useAssistant } from "@/contexts/AssistantContext";
 import NewsArticles from "@/components/NewsArticles";
-import { Button } from "@/components/ui/Button";
 import LogoMono from "@/components/LogoMono";
 import SiteHeader, { PRIMARY_NAV, TOOLS_MENU } from "@/components/SiteHeader";
 import HeroCards from "@/components/HeroCards";
 import SectionHeading from "@/components/SectionHeading";
+import { FreeAccountCTA } from "@/components/FreeAccountCTA";
 import { LoginModal, RegisterModal } from "@/components/auth";
-import { useAuth } from "@/contexts/AuthContext";
 import MetalsTicker from "@/components/MetalsTicker";
 import { AVAILABLE_COUNT } from "@/app/investor-tools/tools";
 
@@ -49,36 +48,6 @@ const FEATURES: { title: string; href: string; badge?: string }[] = [
   { title: "Prospector's Exchange", href: "/properties" },
 ];
 
-/* ─── Secondary hero links ───
-   These used to be six more full-width primary-looking buttons. They are
-   jump links, so they belong in a row, not the CTA stack. */
-type ScrollAction = "chat" | "happening" | "news";
-
-const SECONDARY_LINKS: {
-  label: string;
-  href?: string;
-  action?: ScrollAction;
-  /** Rendered in gold — the assistant is the reason most people are here. */
-  primary?: boolean;
-}[] = [
-  { label: "Ask the AI Assistant", action: "chat", primary: true },
-  { label: "Happening Now", action: "happening" },
-  { label: "Mining News", action: "news" },
-  { label: "Open Financings", href: "/open-financings" },
-  { label: "Closed Financings", href: "/closed-financings" },
-  { label: "Weekly Snapshot", href: "/reports/weekly" },
-];
-
-const PRIMARY_CHIP =
-  "shrink-0 px-4 py-2.5 min-h-11 inline-flex items-center whitespace-nowrap " +
-  "rounded-full border border-gold-500/60 bg-gold-500/10 text-gold-300 text-sm " +
-  "font-medium transition-colors hover:bg-gold-500/20 hover:border-gold-500";
-
-const SECONDARY_CHIP =
-  "shrink-0 px-4 py-2.5 min-h-11 inline-flex items-center whitespace-nowrap " +
-  "rounded-full border border-slate-600 text-slate-300 text-sm transition-colors " +
-  "hover:text-gold-400 hover:border-gold-500/50";
-
 interface HomeClientProps {
   initialArticles?: any[];
 }
@@ -90,9 +59,7 @@ export default function HomeClient({ initialArticles }: HomeClientProps) {
   /* One assistant for the site, provided by ClientLayout — the header opens
      the same instance from every page. */
   const { open: openChat } = useAssistant();
-  const { user } = useAuth();
   const newsSectionRef = useRef<HTMLElement>(null);
-  const chatSectionRef = useRef<HTMLElement>(null);
 
   /* Platform stats. These render server-side and on first paint, so they are
      seeded with true floors rather than zeros — /platform-stats/ currently
@@ -114,8 +81,6 @@ export default function HomeClient({ initialArticles }: HomeClientProps) {
       .catch(() => {});
   }, []);
 
-  const scrollToChat = () => openChat();
-
   // Socrates easter egg — click the mascot for a fart sound + shimmy
   const handleSocratesFart = useCallback(() => {
     if (isVibrating) return;
@@ -130,26 +95,6 @@ export default function HomeClient({ initialArticles }: HomeClientProps) {
 
     setTimeout(() => setIsVibrating(false), 1200);
   }, [isVibrating]);
-
-  const scrollToHappening = () => {
-    document
-      .getElementById("happening-now")
-      ?.scrollIntoView({ behavior: "smooth" });
-  };
-
-  const scrollToFeatures = () => {
-    document.getElementById("features")?.scrollIntoView({ behavior: "smooth" });
-  };
-
-  const scrollToNews = () => {
-    newsSectionRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
-
-  const SCROLL_ACTIONS: Record<ScrollAction, () => void> = {
-    chat: scrollToChat,
-    happening: scrollToHappening,
-    news: scrollToNews,
-  };
 
   return (
     <div className="min-h-screen">
@@ -221,91 +166,32 @@ export default function HomeClient({ initialArticles }: HomeClientProps) {
             AI assistant that answers questions about any of them.
           </p>
 
-          {/* Two primary CTAs. There were eight, all the same weight and all
-              full width on a phone — about 780px of stacked buttons before a
-              visitor saw any content, and no signal about where to start. */}
-          <div className="flex flex-col sm:flex-row gap-3 justify-center animate-slide-in-up">
-            <Button
-              variant="primary"
-              size="md"
-              onClick={scrollToFeatures}
-              className="cta-glow w-full sm:w-auto"
-            >
-              Platform Features
-            </Button>
-            <Link href="/companies" className="w-full sm:w-auto">
-              <Button variant="secondary" size="md" className="w-full">
-                Explore Companies
-              </Button>
-            </Link>
-          </div>
+          {/* The assistant is the primary action, so it sits in the hero
+              rather than a section of its own below the fold. */}
+          <ChatLauncher onOpen={openChat} className="mt-2" />
 
-          {/* Live figures from /platform-stats/. Real numbers in the first
-              screen do more to establish the product than another paragraph
-              claiming it is comprehensive. Mono + tabular so they line up. */}
-          <dl className="mt-8 grid grid-cols-2 sm:grid-cols-4 gap-px overflow-hidden rounded-xl border border-slate-800 bg-slate-800">
+          {/* One thin line of real figures. These were four bordered tiles,
+              which is more furniture than four numbers deserve. */}
+          <dl className="mt-8 flex flex-wrap items-baseline justify-center gap-x-6 gap-y-2 text-sm">
             {[
-              { label: "Companies", value: stats.companies },
-              { label: "Projects", value: stats.projects },
-              { label: "Financings", value: stats.financings },
-              { label: "News items", value: stats.news_articles },
+              { label: "companies", value: stats.companies },
+              { label: "projects", value: stats.projects },
+              { label: "financings", value: stats.financings },
+              { label: "news items", value: stats.news_articles },
             ].map((s) => (
-              <div key={s.label} className="bg-slate-900/90 px-3 py-4">
-                <dd className="font-mono text-xl sm:text-2xl font-medium tracking-tight text-gold-400 tabular-nums">
-                  {s.value ? s.value.toLocaleString() : "—"}
+              <div key={s.label} className="flex items-baseline gap-1.5">
+                <dt className="sr-only">{s.label}</dt>
+                <dd className="font-mono tabular-nums tracking-tight text-gold-400">
+                  {s.value.toLocaleString()}
                 </dd>
-                <dt className="mt-1 text-[11px] uppercase tracking-[0.12em] text-slate-500">
+                <span aria-hidden="true" className="text-slate-500">
                   {s.label}
-                </dt>
+                </span>
               </div>
             ))}
           </dl>
-
-          {/* The other six are jump links, not calls to action, so they read
-              as a compact row: swipeable below sm, wrapped above. */}
-          <div className="mt-6">
-            <div className="flex gap-2 overflow-x-auto scrollbar-none sm:flex-wrap sm:justify-center sm:overflow-visible -mx-4 px-4 sm:mx-0 sm:px-0">
-              {SECONDARY_LINKS.map((item) =>
-                item.href ? (
-                  <Link
-                    key={item.label}
-                    href={item.href}
-                    className={SECONDARY_CHIP}
-                  >
-                    {item.label}
-                  </Link>
-                ) : (
-                  <button
-                    key={item.label}
-                    type="button"
-                    onClick={SCROLL_ACTIONS[item.action!]}
-                    className={item.primary ? PRIMARY_CHIP : SECONDARY_CHIP}
-                  >
-                    {item.label}
-                  </button>
-                ),
-              )}
-            </div>
-          </div>
         </div>
       </section>
-
-      {/* ════════ AI Chat Interface Section ════════ */}
-      {/* The section heading said the same thing as the chat card's own title
-          and description directly beneath it. The card is self-evidently a
-          chatbot; it does not need announcing twice. */}
-      <section
-        ref={chatSectionRef}
-        id="chat-section"
-        className="py-10 md:py-14 px-4 sm:px-6 lg:px-8 bg-gradient-slate"
-      >
-        <div className="max-w-7xl mx-auto">
-          <ChatLauncher onOpen={openChat} />
-        </div>
-      </section>
-
-      {/* Section Divider */}
-      <div className="section-divider"></div>
 
       {/* ════════ Features Showcase ════════ */}
       {/* Eight description cards ran to 2,197px on a phone — 3.3 screens of
@@ -319,18 +205,16 @@ export default function HomeClient({ initialArticles }: HomeClientProps) {
         <div className="max-w-5xl mx-auto">
           <SectionHeading title="What&rsquo;s on the platform" />
 
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
+          <div className="flex flex-wrap justify-center gap-2">
             {FEATURES.map((feature) => (
               <Link
                 key={feature.href + feature.title}
                 href={feature.href}
-                className="group flex items-center justify-between gap-2 rounded-lg border border-slate-700/70 bg-slate-800/40 px-3 py-3 min-h-16 transition-colors hover:border-gold-500/40 hover:bg-slate-800/70"
+                className="group inline-flex items-center gap-2 rounded-full border border-slate-700 px-4 py-2.5 min-h-11 text-sm text-slate-300 transition-colors hover:border-gold-500/40 hover:text-gold-400"
               >
-                <span className="text-sm font-medium text-slate-200 group-hover:text-gold-400 transition-colors">
-                  {feature.title}
-                </span>
+                {feature.title}
                 {feature.badge && (
-                  <span className="shrink-0 self-start rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-gold-400 bg-gold-500/10">
+                  <span className="text-[10px] font-semibold uppercase tracking-wide text-gold-400">
                     {feature.badge}
                   </span>
                 )}
@@ -375,38 +259,16 @@ export default function HomeClient({ initialArticles }: HomeClientProps) {
       {/* Section Divider */}
       <div className="section-divider"></div>
 
-      {/* ════════ Pricing CTA Section ════════ */}
-      <section className="py-16 md:py-20 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-2xl mx-auto text-center">
-          <h2 className="font-display text-2xl sm:text-3xl font-semibold text-gold-400 mb-4 tracking-tight italic">
-            Start Free — No Card Required
-          </h2>
-          <p className="text-slate-300 mb-6">
-            5 AI questions a day and 2 investor tools, free forever. Upgrade for
-            unlimited access, all 10 tools, and full data.
-          </p>
-          <div className="flex flex-col sm:flex-row gap-3 justify-center">
-            {!user && (
-              <Button
-                variant="primary"
-                size="lg"
-                onClick={() => setShowRegister(true)}
-                className="cta-glow w-full sm:w-auto"
-              >
-                Create Free Account
-              </Button>
-            )}
-            <Link href="/pricing">
-              <Button
-                variant={user ? "primary" : "secondary"}
-                size="lg"
-                className={`w-full sm:w-auto ${user ? "cta-glow" : ""}`}
-              >
-                View Plans &amp; Pricing
-              </Button>
-            </Link>
-          </div>
-        </div>
+      {/* ════════ Sign-up CTA ════════ */}
+      {/* The banner /companies uses, rather than a section of its own with a
+          heading, a paragraph and two large buttons. */}
+      <section className="py-10 md:py-14 px-4 sm:px-6 lg:px-8">
+        <FreeAccountCTA
+          variant="banner"
+          className="max-w-3xl mx-auto"
+          onRegister={() => setShowRegister(true)}
+          onSignIn={() => setShowLogin(true)}
+        />
       </section>
 
       {/* ════════ Footer ════════ */}
