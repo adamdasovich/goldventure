@@ -90,28 +90,38 @@ def parse_date_from_text(text):
     return None
 
 
-# How far into a document to look. A cover page or a news-release dateline sits
-# at the very top; a 300-page technical report goes on to cite dozens of other
-# dates (drill campaigns, prior studies, claim filings) that must not be read as
-# its publication date.
-BODY_SCAN_CHARS = 3000
+# A publication date sits at the very top — a news-release dateline, a cover
+# page, a title slide. Everything past that is other dates: prior studies,
+# drill campaigns, "dated September 24, 2019" references to earlier filings.
+# Scanning wide finds those instead, so the window is deliberately narrow.
+HEAD_SCAN_CHARS = 800
+
+# Technical reports put a labelled date on a verbose cover page, so a labelled
+# date is allowed a wider window — but only when the narrow scan found nothing.
+LABEL_SCAN_CHARS = 3000
 
 _D = r'(?P<d>\d{1,2})'
 _Y = r'(?P<y>(?:19|20)\d{2})'
 _M = r'(?P<m>' + MONTH_RE + r')'
 
-# Full dates only — a bare month/year is handled separately and ranked lower.
 FULL_DATE_PATTERNS = [
-    re.compile(_M + r'\s+' + _D + r'(?:st|nd|rd|th)?,?\s+' + _Y, re.I),   # January 30, 2026
-    re.compile(_D + r'(?:st|nd|rd|th)?\s+' + _M + r',?\s+' + _Y, re.I),   # 30 January 2026
-    re.compile(r'(?P<y>(?:19|20)\d{2})-(?P<m>\d{2})-(?P<d>\d{2})'),      # 2026-01-30
+    re.compile(_M + r'\s+' + _D + r'(?:st|nd|rd|th)?,?\s+' + _Y, re.I),
+    re.compile(_D + r'(?:st|nd|rd|th)?\s+' + _M + r',?\s+' + _Y, re.I),
+    re.compile(r'(?P<y>(?:19|20)\d{2})-(?P<m>\d{2})-(?P<d>\d{2})'),
 ]
 
-# A labelled date is the document stating its own date, so it outranks anything
-# found loose in the text.
 DATE_LABEL = re.compile(
-    r'(?:report\s+date|date\s+of\s+report|issue\s+date|dated|effective\s+date)'
-    r'\s*:?\s*$', re.I)
+    r'(?:report\s+date|date\s+of\s+report|date\s+of\s+this\s+announcement'
+    r'|issue\s+date|dated|effective\s+date)\s*:?\s*'
+    # ASX filings write "Date of this announcement Friday July 12, 2024", so a
+    # weekday may sit between the label and the date.
+    r'(?:mon|tues|wednes|thurs|fri|satur|sun)?(?:day)?\s*,?\s*$', re.I)
+
+# Dates a document looks BACK to rather than is published on: "as at December
+# 31, 2024" on a presentation is the balance-sheet date, not the deck's date.
+BACKWARD_LOOKING = re.compile(
+    r'(?:as\s+at|as\s+of|year\s+ended|quarter\s+ended|period\s+ended|ended'
+    r'|since|prior\s+to|before|until|through)\s*$', re.I)
 
 MONTH_YEAR = re.compile(r'\b' + _M + r'\s+' + _Y, re.I)
 
@@ -132,40 +142,54 @@ def _build(match):
     return parsed
 
 
-def parse_date_from_body(text):
-    """Read a document's own publication date out of its opening text.
-
-    Ordered by how strongly the document asserts the date:
-      1. a labelled date ("Report Date: March 31, 2019") — the document saying
-         so itself;
-      2. the first full date, which on a cover page or in a news-release
-         dateline is the publication date;
-      3. a bare month and year, taken as the first of the month — common on
-         presentation title slides ("September 2024").
-
-    Returns (date, how) so callers can record which rule fired, or (None, None).
-    """
-    if not text:
-        return None, None
-    head = text[:BODY_SCAN_CHARS]
-
-    best = None
+def _dates_in(text, limit):
+    """Every plausible full date in the first `limit` chars, in position order."""
+    head = text[:limit]
+    found = []
     for pattern in FULL_DATE_PATTERNS:
         for match in pattern.finditer(head):
             parsed = _build(match)
             if not parsed:
                 continue
-            # Labelled if the ~40 characters before it introduce a date.
-            preceding = head[max(0, match.start() - 40):match.start()]
-            if DATE_LABEL.search(preceding.rstrip()):
-                return parsed, 'labelled'
-            if best is None or match.start() < best[1]:
-                best = (parsed, match.start())
+            # 48 chars so a full label fits ("Date of this announcement Friday "),
+            # but the backward-looking test only reads the last 30 — a wider
+            # window there would suppress dates over unrelated earlier prose.
+            preceding = head[max(0, match.start() - 48):match.start()]
+            if BACKWARD_LOOKING.search(preceding[-30:].rstrip()):
+                continue
+            found.append((match.start(), parsed, preceding))
+    found.sort(key=lambda t: t[0])
+    return found
 
-    if best:
-        return best[0], 'body'
 
-    for match in MONTH_YEAR.finditer(head):
+def parse_date_from_body(text):
+    """Read a document's own publication date out of its opening text.
+
+    Position is the strongest signal, so the first qualifying date in a narrow
+    head window wins. An earlier version preferred any labelled date anywhere
+    in 3000 characters, which made a LAURION release read 2019-09-24 from a
+    "dated September 24, 2019" reference to a prior filing while its own
+    dateline said October 28 — the label rule now only applies when the head
+    window is empty.
+
+    Returns (date, how), or (None, None).
+    """
+    if not text:
+        return None, None
+
+    head = _dates_in(text, HEAD_SCAN_CHARS)
+    if head:
+        position, parsed, preceding = head[0]
+        return parsed, 'labelled' if DATE_LABEL.search(preceding.rstrip()) else 'head'
+
+    for position, parsed, preceding in _dates_in(text, LABEL_SCAN_CHARS):
+        if DATE_LABEL.search(preceding.rstrip()):
+            return parsed, 'labelled'
+
+    for match in MONTH_YEAR.finditer(text[:HEAD_SCAN_CHARS]):
+        preceding = text[max(0, match.start() - 30):match.start()]
+        if BACKWARD_LOOKING.search(preceding.rstrip()):
+            continue
         parsed = _build(match)
         if parsed:
             return parsed, 'month-year'
