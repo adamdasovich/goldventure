@@ -7,6 +7,8 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import SiteHeader from "@/components/SiteHeader";
 import { LoginModal, RegisterModal } from "@/components/auth";
+import { Modal } from "@/components/ui/Modal";
+import { useAuth } from "@/contexts/AuthContext";
 import { companyHref } from "@/lib/companyUrl";
 
 interface OpenFinancing {
@@ -51,10 +53,52 @@ interface OpenFinancingsClientProps {
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api";
 
+const STATUS_OPTIONS = [
+  { value: "announced", label: "Announced" },
+  { value: "closing", label: "Closing" },
+  { value: "closed", label: "Closed" },
+  { value: "cancelled", label: "Cancelled" },
+];
+
+type FinancingForm = {
+  financing_type: string;
+  status: string;
+  amount_raised_usd: string;
+  price_per_share: string;
+  shares_issued: string;
+  has_warrants: boolean;
+  warrant_strike_price: string;
+  warrant_expiry_date: string;
+  announced_date: string;
+  closing_date: string;
+  lead_agent: string;
+  use_of_proceeds: string;
+  press_release_url: string;
+  notes: string;
+  is_closed: boolean;
+};
+
+const EMPTY_FORM: FinancingForm = {
+  financing_type: "private_placement",
+  status: "announced",
+  amount_raised_usd: "",
+  price_per_share: "",
+  shares_issued: "",
+  has_warrants: false,
+  warrant_strike_price: "",
+  warrant_expiry_date: "",
+  announced_date: "",
+  closing_date: "",
+  lead_agent: "",
+  use_of_proceeds: "",
+  press_release_url: "",
+  notes: "",
+  is_closed: false,
+};
+
 export default function OpenFinancingsClient({
   initialData,
 }: OpenFinancingsClientProps) {
-
   const [data, setData] = useState<OpenFinancingsResponse | null>(
     initialData ?? null,
   );
@@ -71,8 +115,124 @@ export default function OpenFinancingsClient({
   const seeded = !!initialData;
   const didMountRef = useRef(false);
 
+  /* Superuser editing. The rows on this page and the ones on
+     /closed-financings are the same Financing records split by is_closed, so
+     both edit through the same endpoint. */
+  const { user } = useAuth();
+  const canEdit = !!user?.is_superuser;
+  const [editingFinancing, setEditingFinancing] =
+    useState<OpenFinancing | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [formData, setFormData] = useState<FinancingForm>(EMPTY_FORM);
+
   const accessToken =
     typeof window !== "undefined" ? localStorage.getItem("accessToken") : null;
+
+  const handleOpenEdit = (financing: OpenFinancing) => {
+    setFormError(null);
+    setEditingFinancing(financing);
+    setFormData({
+      financing_type: financing.financing_type,
+      status: financing.status || "announced",
+      amount_raised_usd: financing.amount_raised_usd
+        ? String(financing.amount_raised_usd)
+        : "",
+      price_per_share: financing.price_per_share
+        ? String(financing.price_per_share)
+        : "",
+      shares_issued: financing.shares_issued
+        ? String(financing.shares_issued)
+        : "",
+      has_warrants: !!financing.has_warrants,
+      warrant_strike_price: financing.warrant_strike_price
+        ? String(financing.warrant_strike_price)
+        : "",
+      warrant_expiry_date: financing.warrant_expiry_date || "",
+      announced_date: financing.announced_date || "",
+      closing_date: financing.closing_date || "",
+      lead_agent: financing.lead_agent || "",
+      use_of_proceeds: financing.use_of_proceeds || "",
+      press_release_url: financing.press_release_url || "",
+      notes: financing.notes || "",
+      is_closed: false,
+    });
+  };
+
+  const handleCloseEdit = () => {
+    setEditingFinancing(null);
+    setFormData(EMPTY_FORM);
+    setFormError(null);
+  };
+
+  const handleSubmitEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingFinancing) return;
+
+    if (!formData.amount_raised_usd) {
+      setFormError("Amount raised is required.");
+      return;
+    }
+    if (!formData.announced_date) {
+      setFormError("Announced date is required.");
+      return;
+    }
+
+    setFormError(null);
+    setSubmitting(true);
+    try {
+      const token = accessToken || localStorage.getItem("accessToken");
+      const response = await fetch(
+        `${API_URL}/closed-financings/${editingFinancing.id}/update/`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            financing_type: formData.financing_type,
+            status: formData.status,
+            amount_raised_usd: parseFloat(formData.amount_raised_usd),
+            price_per_share: formData.price_per_share
+              ? parseFloat(formData.price_per_share)
+              : null,
+            shares_issued: formData.shares_issued
+              ? parseInt(formData.shares_issued, 10)
+              : null,
+            has_warrants: formData.has_warrants,
+            warrant_strike_price: formData.warrant_strike_price
+              ? parseFloat(formData.warrant_strike_price)
+              : null,
+            warrant_expiry_date: formData.warrant_expiry_date || null,
+            announced_date: formData.announced_date,
+            closing_date: formData.closing_date || null,
+            lead_agent: formData.lead_agent,
+            use_of_proceeds: formData.use_of_proceeds,
+            press_release_url: formData.press_release_url,
+            notes: formData.notes,
+            is_closed: formData.is_closed,
+          }),
+        },
+      );
+
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.error || "Failed to save the financing.");
+      }
+
+      handleCloseEdit();
+      // A row marked closed leaves this list, so refetch rather than patching
+      // the local copy.
+      fetchOpenFinancings({ silent: true });
+    } catch (err) {
+      setFormError(
+        err instanceof Error ? err.message : "Failed to save the financing.",
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   useEffect(() => {
     // The server already seeded default-sorted anonymous preview data. Skip the
@@ -190,6 +350,269 @@ export default function OpenFinancingsClient({
             setShowLogin(true);
           }}
         />
+      )}
+
+      {editingFinancing && (
+        <Modal
+          onClose={handleCloseEdit}
+          size="2xl"
+          labelledBy="edit-financing-title"
+        >
+          <form onSubmit={handleSubmitEdit} className="p-6">
+            <h2
+              id="edit-financing-title"
+              className="font-display text-xl font-semibold text-gold-400"
+            >
+              Edit financing
+            </h2>
+            <p className="mt-1 mb-6 text-sm text-slate-400">
+              {editingFinancing.company_name} (
+              {editingFinancing.company_exchange}:
+              {editingFinancing.company_ticker})
+            </p>
+
+            {formError && (
+              <p className="mb-4 rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+                {formError}
+              </p>
+            )}
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <Field label="Type">
+                <select
+                  value={formData.financing_type}
+                  onChange={(e) =>
+                    setFormData({ ...formData, financing_type: e.target.value })
+                  }
+                  className={INPUT_CLASS}
+                >
+                  {(data?.financing_types || []).map((t) => (
+                    <option key={t.value} value={t.value}>
+                      {t.label}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+
+              <Field label="Status">
+                <select
+                  value={formData.status}
+                  onChange={(e) =>
+                    setFormData({ ...formData, status: e.target.value })
+                  }
+                  className={INPUT_CLASS}
+                >
+                  {STATUS_OPTIONS.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+
+              <Field label="Amount raised (CAD)" required>
+                <input
+                  type="number"
+                  step="0.01"
+                  required
+                  value={formData.amount_raised_usd}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      amount_raised_usd: e.target.value,
+                    })
+                  }
+                  className={INPUT_CLASS}
+                />
+              </Field>
+
+              <Field label="Price per share">
+                <input
+                  type="number"
+                  step="0.0001"
+                  value={formData.price_per_share}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      price_per_share: e.target.value,
+                    })
+                  }
+                  className={INPUT_CLASS}
+                />
+              </Field>
+
+              <Field label="Shares issued">
+                <input
+                  type="number"
+                  value={formData.shares_issued}
+                  onChange={(e) =>
+                    setFormData({ ...formData, shares_issued: e.target.value })
+                  }
+                  className={INPUT_CLASS}
+                />
+              </Field>
+
+              <Field label="Lead agent">
+                <input
+                  type="text"
+                  value={formData.lead_agent}
+                  onChange={(e) =>
+                    setFormData({ ...formData, lead_agent: e.target.value })
+                  }
+                  className={INPUT_CLASS}
+                />
+              </Field>
+
+              <Field label="Announced date" required>
+                <input
+                  type="date"
+                  required
+                  value={formData.announced_date}
+                  onChange={(e) =>
+                    setFormData({ ...formData, announced_date: e.target.value })
+                  }
+                  className={INPUT_CLASS}
+                />
+              </Field>
+
+              <Field label="Closing date">
+                <input
+                  type="date"
+                  value={formData.closing_date}
+                  onChange={(e) =>
+                    setFormData({ ...formData, closing_date: e.target.value })
+                  }
+                  className={INPUT_CLASS}
+                />
+              </Field>
+            </div>
+
+            <label className="mt-4 flex items-center gap-3 py-2 text-sm text-slate-300">
+              <input
+                type="checkbox"
+                checked={formData.has_warrants}
+                onChange={(e) =>
+                  setFormData({ ...formData, has_warrants: e.target.checked })
+                }
+                className="h-5 w-5 rounded border-slate-600 bg-slate-800 text-gold-500"
+              />
+              Includes warrants
+            </label>
+
+            {formData.has_warrants && (
+              <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <Field label="Warrant strike price">
+                  <input
+                    type="number"
+                    step="0.0001"
+                    value={formData.warrant_strike_price}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        warrant_strike_price: e.target.value,
+                      })
+                    }
+                    className={INPUT_CLASS}
+                  />
+                </Field>
+                <Field label="Warrant expiry">
+                  <input
+                    type="date"
+                    value={formData.warrant_expiry_date}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        warrant_expiry_date: e.target.value,
+                      })
+                    }
+                    className={INPUT_CLASS}
+                  />
+                </Field>
+              </div>
+            )}
+
+            <div className="mt-4 space-y-4">
+              <Field label="Use of proceeds">
+                <textarea
+                  rows={3}
+                  value={formData.use_of_proceeds}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      use_of_proceeds: e.target.value,
+                    })
+                  }
+                  className={INPUT_CLASS}
+                />
+              </Field>
+
+              <Field label="Press release URL">
+                <input
+                  type="url"
+                  value={formData.press_release_url}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      press_release_url: e.target.value,
+                    })
+                  }
+                  className={INPUT_CLASS}
+                />
+              </Field>
+
+              <Field label="Notes">
+                <textarea
+                  rows={2}
+                  value={formData.notes}
+                  onChange={(e) =>
+                    setFormData({ ...formData, notes: e.target.value })
+                  }
+                  className={INPUT_CLASS}
+                />
+              </Field>
+            </div>
+
+            {/* The flag the two public pages split on. Ticking it moves this
+                round off /open-financings and onto /closed-financings, and
+                stamps who closed it. */}
+            <label className="mt-6 flex items-start gap-3 rounded-lg border border-slate-700 bg-slate-800/40 p-4 text-sm text-slate-300">
+              <input
+                type="checkbox"
+                checked={formData.is_closed}
+                onChange={(e) =>
+                  setFormData({
+                    ...formData,
+                    is_closed: e.target.checked,
+                    status: e.target.checked ? "closed" : formData.status,
+                  })
+                }
+                className="mt-0.5 h-5 w-5 shrink-0 rounded border-slate-600 bg-slate-800 text-gold-500"
+              />
+              <span>
+                <span className="block font-medium text-slate-100">
+                  Mark this round closed
+                </span>
+                <span className="mt-0.5 block text-slate-400">
+                  Moves it off this page and onto Closed Financings.
+                </span>
+              </span>
+            </label>
+
+            <div className="mt-6 flex flex-col-reverse sm:flex-row sm:justify-end gap-3">
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={handleCloseEdit}
+                disabled={submitting}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" variant="primary" disabled={submitting}>
+                {submitting ? "Saving…" : "Save changes"}
+              </Button>
+            </div>
+          </form>
+        </Modal>
       )}
 
       {/* Hero */}
@@ -332,6 +755,7 @@ export default function OpenFinancingsClient({
                       financing={financing}
                       formatCurrency={formatCurrency}
                       formatDate={formatDate}
+                      onEdit={canEdit ? handleOpenEdit : undefined}
                     />
                   )}
                 </div>
@@ -356,10 +780,13 @@ function OpenFinancingCard({
   financing,
   formatCurrency,
   formatDate,
+  onEdit,
 }: {
   financing: OpenFinancing;
   formatCurrency: (amount: string | number) => string;
   formatDate: (dateString: string) => string;
+  /** Passed only for superusers; undefined hides the button entirely. */
+  onEdit?: (financing: OpenFinancing) => void;
 }) {
   return (
     <Card
@@ -465,6 +892,16 @@ function OpenFinancingCard({
                   Press Release
                 </Button>
               </a>
+            )}
+            {onEdit && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="w-full text-slate-400 hover:text-gold-400"
+                onClick={() => onEdit(financing)}
+              >
+                Edit
+              </Button>
             )}
           </div>
         </div>
@@ -602,5 +1039,30 @@ function UpgradeBanner({ lockedCount }: { lockedCount: number }) {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+/* Shared control styling for the edit form. 16px on mobile so iOS does not
+   zoom the viewport when a field takes focus. */
+const INPUT_CLASS =
+  "w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2.5 min-h-11 text-base sm:text-sm text-slate-100 placeholder-slate-500 focus:border-gold-500/60 focus:outline-none";
+
+function Field({
+  label,
+  required,
+  children,
+}: {
+  label: string;
+  required?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <label className="block">
+      <span className="mb-1.5 block text-sm text-slate-400">
+        {label}
+        {required && <span className="ml-1 text-gold-400">*</span>}
+      </span>
+      {children}
+    </label>
   );
 }

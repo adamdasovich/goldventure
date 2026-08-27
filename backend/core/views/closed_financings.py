@@ -440,18 +440,27 @@ def update_closed_financing(request, financing_id):
         "lead_agent": "Agent Name",
         "use_of_proceeds": "Exploration activities",
         "press_release_url": "https://...",
-        "notes": "Optional notes"
+        "notes": "Optional notes",
+        "status": "announced" | "closing" | "closed" | "cancelled",
+        "is_closed": true
     }
+
+    Despite the name, this operates on ANY financing by id — there is no
+    is_closed filter on the lookup — so /open-financings edits through it too.
+    `is_closed` is what decides which of the two pages a row appears on;
+    setting it true here stamps closed_at/closed_by and moves the row from
+    /open-financings to /closed-financings.
 
     Superuser access required.
     """
     from core.models import Financing
     from decimal import Decimal
+    from django.utils import timezone
 
     # Superuser check
     if not request.user.is_superuser:
         return Response(
-            {'error': 'Only superusers can update closed financings'},
+            {'error': 'Only superusers can update financings'},
             status=status.HTTP_403_FORBIDDEN
         )
 
@@ -515,6 +524,30 @@ def update_closed_financing(request, financing_id):
         if 'notes' in request.data:
             financing.notes = request.data['notes'] or ''
 
+        if 'status' in request.data:
+            new_status = request.data['status']
+            valid = [choice[0] for choice in Financing.STATUS_CHOICES]
+            if new_status not in valid:
+                return Response(
+                    {'error': f"Invalid status. Expected one of: {', '.join(valid)}"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            financing.status = new_status
+
+        # is_closed is the flag the two public pages split on, so flipping it
+        # is what moves a row between /open-financings and /closed-financings.
+        # Only stamp closed_at/closed_by on the transition — re-saving an
+        # already-closed financing must not rewrite who closed it or when.
+        if 'is_closed' in request.data:
+            now_closed = bool(request.data['is_closed'])
+            if now_closed and not financing.is_closed:
+                financing.closed_at = timezone.now()
+                financing.closed_by = request.user
+            elif not now_closed and financing.is_closed:
+                financing.closed_at = None
+                financing.closed_by = None
+            financing.is_closed = now_closed
+
         financing.save()
 
         return Response({
@@ -526,6 +559,8 @@ def update_closed_financing(request, financing_id):
                 'financing_type': financing.financing_type,
                 'amount_raised_usd': str(financing.amount_raised_usd),
                 'closing_date': financing.closing_date.isoformat() if financing.closing_date else None,
+                'status': financing.status,
+                'is_closed': financing.is_closed,
             }
         }, status=status.HTTP_200_OK)
 
