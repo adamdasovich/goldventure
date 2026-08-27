@@ -1075,3 +1075,39 @@ class NewsReportFlagAdmin(admin.ModelAdmin):
     def _title(self, obj):
         return obj.news_release.title[:80]
     _title.short_description = "News title"
+
+
+from .models import EditorQuestionThread, EditorQuestionMessage
+
+
+class EditorQuestionMessageInline(admin.TabularInline):
+    model = EditorQuestionMessage
+    extra = 0
+    readonly_fields = ["sender", "is_from_editor", "content", "is_read", "created_at"]
+    can_delete = False
+    ordering = ["created_at"]
+
+    def has_add_permission(self, request, obj=None):
+        # Replies belong in /admin/ask-editor, which pushes them over the
+        # WebSocket. A row typed in here would never reach the reader's widget.
+        return False
+
+
+@admin.register(EditorQuestionThread)
+class EditorQuestionThreadAdmin(admin.ModelAdmin):
+    list_display = ["id", "_user", "_preview", "unread_for_editor", "is_resolved", "last_message_at"]
+    list_filter = ["is_resolved", "last_message_at"]
+    search_fields = ["user__username", "user__email", "user__first_name",
+                     "user__last_name", "messages__content"]
+    readonly_fields = ["user", "last_message_at", "last_message_preview",
+                       "unread_for_editor", "unread_for_user", "created_at", "updated_at"]
+    list_select_related = ["user"]
+    inlines = [EditorQuestionMessageInline]
+
+    def _user(self, obj):
+        return obj.user.get_full_name() or obj.user.username
+    _user.short_description = "Reader"
+
+    def _preview(self, obj):
+        return obj.last_message_preview[:80]
+    _preview.short_description = "Last message"

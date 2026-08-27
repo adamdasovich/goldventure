@@ -305,3 +305,96 @@ Junior Mining Intelligence Platform
     except Exception as e:
         logger.error(f"Failed to send financing notification: {str(e)}")
         return False
+
+
+def send_editor_question_notification(thread, message):
+    """Alert the editor that a user asked a question from the "Ask the Editor" widget.
+
+    The widget is a live WebSocket chat, but nobody sits on the inbox all day,
+    so an unanswered question would otherwise just sit there. Throttled by the
+    caller (see core.tasks.notify_editor_question_task) so a burst of messages
+    in one conversation produces one email, not ten.
+
+    Args:
+        thread: EditorQuestionThread instance
+        message: EditorQuestionMessage instance that triggered the alert
+    """
+    asker = thread.user
+    asker_name = asker.get_full_name() or asker.username
+    inbox_url = 'https://juniorminingintelligence.com/admin/ask-editor'
+
+    subject = f'💬 Question from {asker_name} — Ask the Editor'
+
+    html_message = f"""
+    <html>
+    <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+        <div style="max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f5f5f5;">
+            <div style="background-color: #ffffff; padding: 30px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                <h2 style="color: #D4AF37; margin-top: 0;">New question from a reader</h2>
+
+                <div style="background-color: #f9f9f9; padding: 20px; border-left: 4px solid #D4AF37; margin: 20px 0;">
+                    <p style="margin: 0 0 10px 0;"><strong>From:</strong> {asker_name} ({asker.username})</p>
+                    <p style="margin: 0 0 10px 0;"><strong>Email:</strong> {asker.email or 'not set'}</p>
+                    <p style="margin: 0 0 16px 0;"><strong>Asked:</strong> {message.created_at.strftime('%b %d, %Y at %I:%M %p UTC')}</p>
+                    <p style="margin: 0; white-space: pre-wrap;">{strip_tags(message.content)}</p>
+                </div>
+
+                <p style="margin: 24px 0;">
+                    <a href="{inbox_url}"
+                       style="background-color: #D4AF37; color: #1e293b; padding: 12px 24px;
+                              border-radius: 6px; text-decoration: none; font-weight: bold;">
+                        Reply in the editor inbox
+                    </a>
+                </p>
+
+                <p style="color: #666; font-size: 14px;">
+                    Replies you send from the inbox appear in the reader's widget instantly.
+                </p>
+
+                <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #ddd;">
+                    <p style="color: #999; font-size: 12px; margin: 0;">
+                        Junior Mining Intelligence Platform<br>
+                        Ask the Editor
+                    </p>
+                </div>
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+
+    plain_message = f"""
+New question from a reader
+
+From: {asker_name} ({asker.username})
+Email: {asker.email or 'not set'}
+Asked: {message.created_at.strftime('%b %d, %Y at %I:%M %p UTC')}
+
+{strip_tags(message.content)}
+
+Reply in the editor inbox: {inbox_url}
+
+---
+Junior Mining Intelligence Platform
+Ask the Editor
+    """
+
+    recipient = getattr(settings, 'EDITOR_NOTIFICATION_EMAIL', '') or ''
+    if not recipient:
+        logger.warning("EDITOR_NOTIFICATION_EMAIL is not set; skipping editor question alert")
+        return False
+
+    try:
+        send_mail(
+            subject=subject,
+            message=plain_message,
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=[recipient],
+            html_message=html_message,
+            fail_silently=False,
+        )
+        logger.info(f"Sent editor question notification for thread {thread.id}")
+        return True
+    except Exception as e:
+        logger.error(f"Failed to send editor question notification: {str(e)}")
+        return False

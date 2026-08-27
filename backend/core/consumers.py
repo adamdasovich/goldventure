@@ -5,6 +5,7 @@ This module implements the WebSocket consumers that handle real-time
 communication for the forum discussion and guest speaker Q&A features.
 """
 
+import asyncio
 import json
 import logging
 from datetime import datetime
@@ -1968,6 +1969,490 @@ class InquiryConsumer(AsyncWebsocketConsumer):
 
     async def send_error(self, message: str):
         """Send error message to client."""
+        await self.send(text_data=json.dumps({
+            'type': 'error',
+            'error': message,
+        }))
+
+
+# ============================================================================
+# ASK THE EDITOR CONSUMER (Reader <-> editor/developer live chat)
+# ============================================================================
+
+# Every connected staff member sits in this one group, so a reader's question
+# lights up whichever editors happen to be online without the reader needing
+# to know who they are.
+EDITOR_GROUP = 'ask_editor_editors'
+
+
+class EditorChatConsumer(AsyncWebsocketConsumer):
+    """
+    WebSocket consumer for the homepage "Ask the Editor" widget.
+
+    Two kinds of connection share this consumer:
+
+    * A reader (any authenticated user) joins only their own thread group and
+      can send messages into their own thread. Their thread row is created
+      lazily on first send.
+    * An editor (is_staff or is_superuser) additionally joins EDITOR_GROUP and
+      may open any thread and reply into it.
+
+    Authorisation is decided once at connect time and stored on
+    ``self.is_editor``; every handler that can touch another user's thread
+    re-checks it, so a reader who forges a thread_id gets an error rather
+    than someone else's conversation.
+    """
+
+    # --------------------------------------------------------------- lifecycle
+
+    async def connect(self):
+        self.user = self.scope.get('user')
+
+        if not self.user or not self.user.is_authenticated:
+            logger.warning("Unauthenticated connection attempt to ask-editor")
+            await self.close(code=4001)
+            return
+
+        self.is_editor = bool(
+            getattr(self.user, 'is_staff', False)
+            or getattr(self.user, 'is_superuser', False)
+        )
+        self.user_group = f'ask_editor_user_{self.user.id}'
+
+        await self.accept()
+        await self.channel_layer.group_add(self.user_group, self.channel_name)
+        if self.is_editor:
+            await self.channel_layer.group_add(EDITOR_GROUP, self.channel_name)
+
+        logger.info(
+            f"User {self.user.id} connected to ask-editor "
+            f"({'editor' if self.is_editor else 'reader'})"
+        )
+
+        await self.send(text_data=json.dumps({
+            'type': 'connection.established',
+            'user_id': self.user.id,
+            'is_editor': self.is_editor,
+        }))
+        await self.send_initial_state()
+
+    async def disconnect(self, close_code):
+        if hasattr(self, 'user_group'):
+            await self.channel_layer.group_discard(self.user_group, self.channel_name)
+        if getattr(self, 'is_editor', False):
+            await self.channel_layer.group_discard(EDITOR_GROUP, self.channel_name)
+
+    async def receive(self, text_data):
+        try:
+            data = json.loads(text_data)
+            message_type = data.get('type')
+
+            # Reads and typing pings are cheap and frequent; only rate-limit
+            # the handler that writes rows and fans out to other people.
+            if message_type == 'message.send':
+                if not await _cache_rate_limit(self.user.id, 'ask_editor', limit=15, window=60):
+                    await self.send_error("You are sending messages too quickly. Give it a moment.")
+                    return
+
+            handlers = {
+                'message.send': self.handle_message_send,
+                'thread.open': self.handle_thread_open,
+                'thread.read': self.handle_thread_read,
+                'thread.resolve': self.handle_thread_resolve,
+                'typing.start': self.handle_typing_start,
+                'typing.stop': self.handle_typing_stop,
+                'presence.ping': self.handle_presence_ping,
+            }
+
+            handler = handlers.get(message_type)
+            if handler:
+                await handler(data)
+            else:
+                logger.warning(f"Unknown ask-editor message type: {message_type}")
+                await self.send_error(f"Unknown message type: {message_type}")
+
+        except json.JSONDecodeError as e:
+            logger.error(f"Invalid JSON received on ask-editor: {e}")
+            await self.send_error("Invalid JSON format")
+        except Exception as e:
+            logger.error(f"Error handling ask-editor message: {e}", exc_info=True)
+            await self.send_error("Internal server error")
+
+    # ------------------------------------------------------------ inbound types
+
+    async def handle_message_send(self, data: Dict[str, Any]):
+        """Send a message. Readers write to their own thread; editors reply
+        into the thread named by `thread_id`."""
+        content = (data.get('content') or '').strip()
+        if not content:
+            await self.send_error("Message cannot be empty")
+            return
+        if len(content) > 5000:
+            await self.send_error("Message too long (max 5000 characters)")
+            return
+
+        thread_id = data.get('thread_id')
+
+        if thread_id and not self.is_editor:
+            await self.send_error("Not permitted")
+            return
+
+        as_editor = bool(self.is_editor and thread_id)
+
+        result = await self.save_message(content, thread_id, as_editor)
+        if not result:
+            await self.send_error("Could not send that message.")
+            return
+
+        payload = {
+            'type': 'message.new',
+            'thread_id': result['thread_id'],
+            'message': result['message'],
+            'thread': result['thread'],
+        }
+
+        # The reader's own group, so their other open tabs stay in sync too.
+        await self.channel_layer.group_send(
+            f"ask_editor_user_{result['reader_id']}",
+            {'type': 'chat_message', 'payload': payload},
+        )
+        # Editors always see the traffic, in both directions - an answer typed
+        # by one editor should land in every other editor's inbox as well.
+        await self.channel_layer.group_send(
+            EDITOR_GROUP,
+            {'type': 'chat_message', 'payload': payload},
+        )
+
+        if not as_editor:
+            # Fire-and-forget. Dispatching to Celery talks to Redis, and a
+            # Redis blip makes that retry for ~90s - the reader must not sit
+            # there waiting on an email they never see. Their message is
+            # already saved and already delivered to any live editor.
+            asyncio.create_task(
+                self.queue_editor_alert(result['thread_id'], result['message']['id'])
+            )
+
+    async def handle_thread_open(self, data: Dict[str, Any]):
+        """Editor-only: load one thread's full history."""
+        if not self.is_editor:
+            await self.send_error("Not permitted")
+            return
+
+        thread_id = data.get('thread_id')
+        if not thread_id:
+            await self.send_error("thread_id is required")
+            return
+
+        history = await self.get_thread_history(thread_id)
+        if history is None:
+            await self.send_error("Conversation not found")
+            return
+
+        await self.send(text_data=json.dumps({
+            'type': 'thread.history',
+            'thread_id': thread_id,
+            **history,
+        }))
+
+        # Opening a conversation IS reading it. Doing this server-side rather
+        # than making the client send a second `thread.read` keeps the badge
+        # honest even if that follow-up never arrives.
+        await self.handle_thread_read({'thread_id': thread_id})
+
+    async def handle_thread_read(self, data: Dict[str, Any]):
+        """Clear the unread badge for whichever side is reading."""
+        thread = await self.mark_read(data.get('thread_id'))
+        if not thread:
+            return
+
+        payload = {'type': 'thread.updated', 'thread': thread}
+        if self.is_editor:
+            # This socket is in EDITOR_GROUP, so the fan-out covers it too -
+            # sending directly as well would deliver the same update twice.
+            await self.channel_layer.group_send(
+                EDITOR_GROUP, {'type': 'chat_message', 'payload': payload},
+            )
+        else:
+            await self.send(text_data=json.dumps(payload))
+
+    async def handle_thread_resolve(self, data: Dict[str, Any]):
+        """Editor-only: mark a conversation handled (or reopen it)."""
+        if not self.is_editor:
+            await self.send_error("Not permitted")
+            return
+
+        thread = await self.set_resolved(
+            data.get('thread_id'), bool(data.get('resolved', True))
+        )
+        if thread:
+            await self.channel_layer.group_send(
+                EDITOR_GROUP,
+                {'type': 'chat_message', 'payload': {
+                    'type': 'thread.updated', 'thread': thread,
+                }},
+            )
+
+    async def handle_typing_start(self, data: Dict[str, Any]):
+        await self.broadcast_typing(data, True)
+
+    async def handle_typing_stop(self, data: Dict[str, Any]):
+        await self.broadcast_typing(data, False)
+
+    async def handle_presence_ping(self, data: Dict[str, Any]):
+        """Heartbeat. Answered so the client can tell a live socket from a
+        half-open one that will not error until it tries to write."""
+        await self.send(text_data=json.dumps({'type': 'presence.pong'}))
+
+    async def broadcast_typing(self, data: Dict[str, Any], is_typing: bool):
+        thread_id = data.get('thread_id')
+        payload = {
+            'type': 'typing.indicator',
+            'thread_id': thread_id,
+            'from_editor': self.is_editor,
+            'is_typing': is_typing,
+        }
+        if self.is_editor:
+            if not thread_id:
+                return
+            reader_id = await self.get_thread_reader(thread_id)
+            if reader_id:
+                await self.channel_layer.group_send(
+                    f'ask_editor_user_{reader_id}',
+                    {'type': 'chat_message', 'payload': payload},
+                )
+        else:
+            await self.channel_layer.group_send(
+                EDITOR_GROUP,
+                {'type': 'chat_message', 'payload': payload},
+            )
+
+    # ---------------------------------------------------------- group handlers
+
+    async def chat_message(self, event):
+        """Relay a group_send payload straight through to this socket."""
+        await self.send(text_data=json.dumps(event['payload']))
+
+    # -------------------------------------------------------------- db helpers
+
+    @database_sync_to_async
+    def save_message(self, content: str, thread_id, as_editor: bool):
+        """Persist a message and return it alongside refreshed thread state."""
+        from core.models import EditorQuestionThread, EditorQuestionMessage
+
+        if as_editor:
+            thread = (
+                EditorQuestionThread.objects
+                .select_related('user')
+                .filter(id=thread_id)
+                .first()
+            )
+            if not thread:
+                return None
+        else:
+            # Lazy creation: opening the widget and closing it leaves no row.
+            thread, _ = EditorQuestionThread.objects.select_related('user').get_or_create(
+                user=self.user
+            )
+
+        message = EditorQuestionMessage.objects.create(
+            thread=thread,
+            sender=self.user,
+            is_from_editor=as_editor,
+            content=content,
+        )
+
+        thread.last_message_at = message.created_at
+        thread.last_message_preview = content[:200]
+        if as_editor:
+            thread.unread_for_user += 1
+            # An editor replying is by definition caught up on this thread.
+            thread.unread_for_editor = 0
+        else:
+            thread.unread_for_editor += 1
+            thread.unread_for_user = 0
+            # A new question reopens a conversation the editor had closed.
+            thread.is_resolved = False
+        thread.save(update_fields=[
+            'last_message_at', 'last_message_preview',
+            'unread_for_editor', 'unread_for_user', 'is_resolved', 'updated_at',
+        ])
+
+        return {
+            'thread_id': thread.id,
+            'reader_id': thread.user_id,
+            'message': self._serialize_message(message),
+            'thread': self._serialize_thread(thread),
+        }
+
+    @database_sync_to_async
+    def get_thread_history(self, thread_id):
+        from core.models import EditorQuestionThread
+
+        thread = (
+            EditorQuestionThread.objects
+            .select_related('user')
+            .filter(id=thread_id)
+            .first()
+        )
+        if not thread:
+            return None
+
+        messages = thread.messages.select_related('sender').order_by('created_at')[:200]
+        return {
+            'thread': self._serialize_thread(thread),
+            'messages': [self._serialize_message(m) for m in messages],
+        }
+
+    @database_sync_to_async
+    def mark_read(self, thread_id):
+        from core.models import EditorQuestionThread
+
+        qs = EditorQuestionThread.objects.select_related('user')
+        if self.is_editor:
+            if not thread_id:
+                return None
+            thread = qs.filter(id=thread_id).first()
+        else:
+            # A reader can only ever clear their own badge, whatever they send.
+            thread = qs.filter(user=self.user).first()
+        if not thread:
+            return None
+
+        side = 'unread_for_editor' if self.is_editor else 'unread_for_user'
+        if getattr(thread, side) == 0:
+            return self._serialize_thread(thread)
+
+        setattr(thread, side, 0)
+        thread.save(update_fields=[side, 'updated_at'])
+        thread.messages.filter(
+            is_read=False,
+            is_from_editor=not self.is_editor,
+        ).update(is_read=True)
+        return self._serialize_thread(thread)
+
+    @database_sync_to_async
+    def set_resolved(self, thread_id, resolved: bool):
+        from core.models import EditorQuestionThread
+
+        thread = (
+            EditorQuestionThread.objects
+            .select_related('user')
+            .filter(id=thread_id)
+            .first()
+        )
+        if not thread:
+            return None
+        thread.is_resolved = resolved
+        thread.save(update_fields=['is_resolved', 'updated_at'])
+        return self._serialize_thread(thread)
+
+    @database_sync_to_async
+    def get_thread_reader(self, thread_id):
+        from core.models import EditorQuestionThread
+
+        return (
+            EditorQuestionThread.objects
+            .filter(id=thread_id)
+            .values_list('user_id', flat=True)
+            .first()
+        )
+
+    @database_sync_to_async
+    def get_initial_state(self):
+        """Reader: their own conversation. Editor: the whole inbox."""
+        from core.models import EditorQuestionThread
+
+        if self.is_editor:
+            threads = (
+                EditorQuestionThread.objects
+                .select_related('user')
+                .order_by('-last_message_at')[:100]
+            )
+            return {
+                'threads': [self._serialize_thread(t) for t in threads],
+                'thread': None,
+                'messages': [],
+            }
+
+        thread = (
+            EditorQuestionThread.objects
+            .select_related('user')
+            .filter(user=self.user)
+            .first()
+        )
+        if not thread:
+            # No row yet - the widget opens on an empty conversation.
+            return {'threads': [], 'thread': None, 'messages': []}
+
+        messages = thread.messages.select_related('sender').order_by('created_at')[:200]
+        return {
+            'threads': [],
+            'thread': self._serialize_thread(thread),
+            'messages': [self._serialize_message(m) for m in messages],
+        }
+
+    @database_sync_to_async
+    def queue_editor_alert(self, thread_id: int, message_id: int):
+        """Hand the email off to Celery - send_mail must not block the loop.
+
+        ignore_result=True keeps this off the Redis *result* backend, which
+        nothing ever reads for a fire-and-forget email and which is what
+        turns an unreachable Redis into a 20-attempt retry loop.
+        """
+        try:
+            from core.tasks import notify_editor_question_task
+            notify_editor_question_task.apply_async(
+                args=[thread_id, message_id], ignore_result=True
+            )
+        except Exception as e:
+            # A broker hiccup must not cost the reader their message - it is
+            # already saved and already on its way to any live editor.
+            logger.error(f"[ASK-EDITOR] could not queue email alert: {e}")
+
+    # ------------------------------------------------------------- serializers
+
+    @staticmethod
+    def _serialize_message(message) -> Dict[str, Any]:
+        sender = message.sender
+        return {
+            'id': message.id,
+            'thread_id': message.thread_id,
+            'content': message.content,
+            'is_from_editor': message.is_from_editor,
+            'is_read': message.is_read,
+            'sender_name': (
+                (sender.get_full_name() or sender.username) if sender else 'Deleted user'
+            ),
+            'created_at': message.created_at.isoformat(),
+        }
+
+    @staticmethod
+    def _serialize_thread(thread) -> Dict[str, Any]:
+        reader = thread.user
+        return {
+            'id': thread.id,
+            'user_id': thread.user_id,
+            'user_name': reader.get_full_name() or reader.username,
+            'user_email': reader.email or '',
+            'last_message_at': (
+                thread.last_message_at.isoformat() if thread.last_message_at else None
+            ),
+            'last_message_preview': thread.last_message_preview,
+            'unread_for_editor': thread.unread_for_editor,
+            'unread_for_user': thread.unread_for_user,
+            'is_resolved': thread.is_resolved,
+        }
+
+    # ------------------------------------------------------------------ helpers
+
+    async def send_initial_state(self):
+        state = await self.get_initial_state()
+        await self.send(text_data=json.dumps({
+            'type': 'initial.state',
+            **state,
+        }))
+
+    async def send_error(self, message: str):
         await self.send(text_data=json.dumps({
             'type': 'error',
             'error': message,

@@ -1222,3 +1222,88 @@ class ProcessedStripeEvent(models.Model):
 # FAILED TASK LOG - Dead Letter Queue for Celery
 # ============================================================================
 
+
+
+# ============================================================================
+# ASK THE EDITOR - Direct user <-> editor/developer conversations
+# ============================================================================
+
+class EditorQuestionThread(models.Model):
+    """One running conversation between a signed-in user and the site editor.
+
+    Deliberately one thread per user rather than one per question: people ask
+    follow-ups, and a support conversation that keeps its history is far more
+    useful to whoever answers it than a pile of disconnected tickets.
+
+    Created lazily - the row only exists once the user actually sends
+    something, so opening the widget and closing it again leaves no trace.
+    """
+
+    user = models.OneToOneField(
+        User,
+        on_delete=models.CASCADE,
+        related_name='editor_question_thread',
+        help_text="The person asking. The editor side is any staff/superuser.",
+    )
+
+    # Denormalised so the editor inbox can sort and badge the thread list
+    # without a subquery per row.
+    last_message_at = models.DateTimeField(auto_now_add=True)
+    last_message_preview = models.CharField(max_length=200, blank=True, default='')
+    unread_for_editor = models.PositiveIntegerField(default=0)
+    unread_for_user = models.PositiveIntegerField(default=0)
+
+    is_resolved = models.BooleanField(
+        default=False,
+        help_text="Editor marked this conversation as handled.",
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'editor_question_threads'
+        ordering = ['-last_message_at']
+        indexes = [
+            models.Index(fields=['-last_message_at']),
+            models.Index(fields=['is_resolved', '-last_message_at']),
+        ]
+
+    def __str__(self):
+        return f"Editor thread: {self.user.username}"
+
+
+class EditorQuestionMessage(models.Model):
+    """A single message in an EditorQuestionThread, from either side."""
+
+    thread = models.ForeignKey(
+        EditorQuestionThread,
+        on_delete=models.CASCADE,
+        related_name='messages',
+    )
+    sender = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name='editor_question_messages',
+    )
+    # Denormalised from sender because the answering editor is whichever staff
+    # member happened to be on, and `sender == thread.user` stops being a safe
+    # test the moment an editor answers their own thread.
+    is_from_editor = models.BooleanField(default=False)
+
+    content = models.TextField(max_length=5000)
+    is_read = models.BooleanField(default=False)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'editor_question_messages'
+        ordering = ['created_at']
+        indexes = [
+            models.Index(fields=['thread', 'created_at']),
+        ]
+
+    def __str__(self):
+        who = 'editor' if self.is_from_editor else 'user'
+        return f"{who}: {self.content[:50]}"

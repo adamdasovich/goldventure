@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import ChatLauncher from "@/components/ChatLauncher";
+import AskEditorWidget from "@/components/AskEditorWidget";
 import { useAssistant } from "@/contexts/AssistantContext";
 import NewsArticles from "@/components/NewsArticles";
 import LogoMono from "@/components/LogoMono";
@@ -530,6 +531,10 @@ export default function HomeClient({ initialArticles }: HomeClientProps) {
           </div>
         </div>
       </footer>
+
+      {/* Live line to a human, distinct from the AI assistant in the hero.
+          Floats bottom-right; the homepage has no other fixed UI there. */}
+      <AskEditorWidget onSignInClick={() => setShowLogin(true)} />
     </div>
   );
 }

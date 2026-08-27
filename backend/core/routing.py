@@ -17,4 +17,8 @@ websocket_urlpatterns = [
 
     # Property inquiry inbox WebSocket (real-time messaging)
     re_path(r'^ws/inbox/$', consumers.InquiryConsumer.as_asgi()),
+
+    # "Ask the Editor" WebSocket — homepage widget for readers, and the
+    # /admin/ask-editor inbox for staff. Both sides share one consumer.
+    re_path(r'^ws/ask-editor/$', consumers.EditorChatConsumer.as_asgi()),
 ]

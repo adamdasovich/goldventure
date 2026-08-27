@@ -2485,3 +2485,36 @@ def notify_expiring_comp_grants_task(days_ahead: int = 5):
         f"(window: {days_ahead}d)"
     )
     return {'sent': sent, 'skipped': skipped, 'failed': failed}
+
+
+@shared_task(bind=True, max_retries=3, retry_backoff=True, time_limit=120,
+             soft_time_limit=110, on_failure=log_task_failure)
+def notify_editor_question_task(self, thread_id: int, message_id: int):
+    """Email the editor about a new "Ask the Editor" question.
+
+    Dispatched from EditorChatConsumer, which runs in the ASGI event loop -
+    send_mail is a blocking SMTP round trip and must not happen there.
+
+    Throttled to one email per thread per 15 minutes: someone typing four
+    short messages in a row is one question, not four, and the inbox link is
+    the same either way. The cache key is set before the send so a retry
+    storm can't multiply the mail.
+    """
+    from .models import EditorQuestionThread, EditorQuestionMessage
+    from .notifications import send_editor_question_notification
+
+    throttle_key = f'editor_question_notified:{thread_id}'
+    if cache.get(throttle_key):
+        logger.info(f"[ASK-EDITOR] alert for thread {thread_id} throttled")
+        return {'sent': False, 'reason': 'throttled'}
+    cache.set(throttle_key, 1, 15 * 60)
+
+    try:
+        thread = EditorQuestionThread.objects.select_related('user').get(id=thread_id)
+        message = EditorQuestionMessage.objects.get(id=message_id)
+    except (EditorQuestionThread.DoesNotExist, EditorQuestionMessage.DoesNotExist):
+        logger.warning(f"[ASK-EDITOR] thread {thread_id} / message {message_id} vanished")
+        return {'sent': False, 'reason': 'missing'}
+
+    sent = send_editor_question_notification(thread, message)
+    return {'sent': bool(sent)}

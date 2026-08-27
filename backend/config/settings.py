@@ -244,6 +244,9 @@ WELCOME_FREE_MONTH_ENABLED = os.getenv('WELCOME_FREE_MONTH_ENABLED', 'True') == 
 ADMIN_EMAIL = os.getenv('ADMIN_EMAIL', 'admin@example.com')
 NI43101_NOTIFICATION_EMAIL = os.getenv('NI43101_NOTIFICATION_EMAIL', 'notifications@example.com')
 FINANCING_NOTIFICATION_EMAIL = os.getenv('FINANCING_NOTIFICATION_EMAIL', 'notifications@example.com')
+# Where "Ask the Editor" questions are emailed. Falls back to ADMIN_EMAIL so a
+# question is never silently dropped just because the specific var is unset.
+EDITOR_NOTIFICATION_EMAIL = os.getenv('EDITOR_NOTIFICATION_EMAIL', ADMIN_EMAIL)
 
 # ============================================================================
 # DJANGO CHANNELS & WEBSOCKET CONFIGURATION
