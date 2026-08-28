@@ -23,8 +23,17 @@ import json
 import re
 from urllib.parse import urlparse
 
-from docling.document_converter import DocumentConverter
-from docling_core.types.doc import ImageRefMode, PictureItem, TableItem
+# NOTE: docling is deliberately NOT imported at module level. That single
+# import costs ~806MB of RSS - it pulls in torch, torchvision, transformers,
+# scipy, sklearn, sympy and triton - and this module is reachable from
+# core/views (via claude_integration/client.py) and core/tasks.py, so every
+# gunicorn worker, all three celery workers and beat were each paying it.
+# Daphne, which imports neither, runs at 75MB; beat, which does nothing but
+# fire cron entries, was at 672MB. Documents are processed on the GPU worker,
+# so on this box the cost bought nothing. Imported lazily below instead:
+# DocumentConverter in the doc_converter property, TableItem in
+# _process_with_docling. ImageRefMode and PictureItem were imported here and
+# never used at all.
 
 from .base import BaseMCPServer
 from .rlm_processor import RLMProcessor, DecompositionStrategy
@@ -117,8 +126,23 @@ class HybridDocumentProcessor(BaseMCPServer):
         self.claude_client = anthropic.Anthropic(
             api_key=settings.ANTHROPIC_API_KEY
         )
-        self.doc_converter = DocumentConverter()
+        self._doc_converter = None
         self.rlm_processor = RLMProcessor()
+
+    @property
+    def doc_converter(self):
+        """The Docling converter, built on first use.
+
+        Constructing this eagerly in __init__ was what made the lazy import
+        pointless in practice: ClaudeClient builds a HybridDocumentProcessor
+        in its own __init__, so every AI chat request on the web server
+        loaded torch. Built here instead, so only a request that actually
+        converts a PDF pays for it.
+        """
+        if self._doc_converter is None:
+            from docling.document_converter import DocumentConverter
+            self._doc_converter = DocumentConverter()
+        return self._doc_converter
 
     def _register_tools(self):
         """Register all document processing tools"""
@@ -360,6 +384,10 @@ class HybridDocumentProcessor(BaseMCPServer):
 
     def _process_with_docling(self, pdf_path: Path) -> Dict:
         """Extract structure and content using Docling"""
+        # Local import: see the note at the top of this module. By the time
+        # this runs the property below has already loaded docling anyway.
+        from docling_core.types.doc import TableItem
+
         try:
             # Convert document
             result = self.doc_converter.convert(pdf_path)
