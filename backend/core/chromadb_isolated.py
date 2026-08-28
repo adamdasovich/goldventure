@@ -192,8 +192,6 @@ django.setup()
 try:
     import chromadb
     from chromadb.config import Settings as ChromaSettings
-    from pathlib import Path
-    from django.conf import settings
     from mcp_servers.embeddings import get_embedding_function
     from core.models import Company
 
@@ -232,14 +230,22 @@ try:
 
     full_profile = "\\n\\n".join(profile_parts)
 
-    # Store in ChromaDB
-    chroma_path = Path(settings.BASE_DIR) / "chroma_db"
-    chroma_path.mkdir(exist_ok=True)
-
-    chroma_client = chromadb.PersistentClient(
-        path=str(chroma_path),
+    # Store in ChromaDB via chromadb.service, not the store on disk.
+    #
+    # This was a PersistentClient on ./chroma_db. Different collection from
+    # the news path, but the same store, and the same problem: `chroma run`
+    # already owns those files and its persistent client assumes exclusive
+    # access to the SQLite file and HNSW segments. See the comment in
+    # mcp_servers/rag_utils.py. The subprocess below still isolates SIGSEGV,
+    # but there should no longer be a second writer to segfault over.
+    chroma_client = chromadb.HttpClient(
+        host=os.environ.get('CHROMA_HOST', 'localhost'),
+        port=int(os.environ.get('CHROMA_PORT', 8002)),
         settings=ChromaSettings(anonymized_telemetry=False)
     )
+    # Fail here rather than at the first write, so a stopped chromadb.service
+    # is an obvious error instead of a confusing storage failure.
+    chroma_client.heartbeat()
 
     # Get embedding function
     embedding_function = get_embedding_function()
