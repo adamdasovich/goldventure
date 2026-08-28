@@ -167,12 +167,12 @@ export function HeroCards({ onLoginClick }: HeroCardsProps) {
       count: data?.featured_property ? 1 : 0,
     },
   ];
-  /* Start on the first tab that has something in it, so the section never
-     opens on an empty state while another tab is full. */
-  const activeTab =
-    tab && tabs.some((t) => t.key === tab && t.count > 0)
-      ? tab
-      : (tabs.find((t) => t.count > 0)?.key ?? "Events");
+  /* The counts choose the OPENING tab only, so the section never opens on an
+     empty state while another tab is full. Once someone taps a tab their
+     choice wins, empty or not — the earlier version also required the chosen
+     tab to be non-empty, which silently bounced every click on Events and
+     Property back to Financings and read as two dead buttons. */
+  const activeTab = tab ?? tabs.find((t) => t.count > 0)?.key ?? "Events";
 
   const property = data?.featured_property;
   const liveNow = data?.upcoming_events?.some((e) => e.status === "live");
