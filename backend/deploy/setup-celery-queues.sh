@@ -77,8 +77,9 @@ chmod 0755 /usr/local/sbin/celery-reap.sh
 # Emit one unit file.
 #   $1 unit name  $2 description  $3 -Q value  $4 node name
 #   $5 concurrency  $6 MemoryHigh  $7 MemoryMax  $8 max-tasks-per-child
+#   $9 MemorySwapMax
 write_unit() {
-  local unit="$1" desc="$2" queues="$3" node="$4" conc="$5" high="$6" max="$7" maxtasks="$8"
+  local unit="$1" desc="$2" queues="$3" node="$4" conc="$5" high="$6" max="$7" maxtasks="$8" swapmax="${9:-infinity}"
   echo "==> Writing /etc/systemd/system/${unit}"
   cat > "/etc/systemd/system/${unit}" <<UNIT
 [Unit]
@@ -113,6 +114,7 @@ KillSignal=SIGTERM
 
 MemoryHigh=${high}
 MemoryMax=${max}
+MemorySwapMax=${swapmax}
 
 [Install]
 WantedBy=multi-user.target
@@ -128,9 +130,24 @@ UNIT
 # the light `default` queue recycles far less often than the browser queues.
 # CELERY_TASK_ACKS_LATE=True, so a task in flight at recycle time is redelivered.
 
+# MemorySwapMax caps how much of the shared 2 GB swapfile one unit can take.
+# Added 2026-08-28. MemoryMax bounds a cgroup's RAM but says nothing about
+# swap, so `scrape` was free to consume the entire swapfile and did: a single
+# Chromium page hit 1592 MB RSS + 863 MB swapped, the cgroup held 1405 MB of
+# swap, and the box thrashed at 12-19 MB/s swap-in with 18% iowait — starving
+# gunicorn, Postgres and the other workers, which is what made an Ask the
+# Editor alert email exceed its 110s Celery soft limit and get killed.
+#
+# 1024M, not lower: the peak observed was 1405M and oom_kill is still 0 on this
+# unit, so the goal is to halve the blast radius on shared swap rather than
+# convert "slow" into "killed". The cgroup can still reach 2400M RAM + 1024M
+# swap. Tighten only if `memory.swap.events` shows sustained `max` hits AND
+# `memory.events` oom_kill stays 0; if oom_kill starts climbing, this is too
+# tight and the browser work needs bounding instead.
+# CELERY_TASK_ACKS_LATE=True, so a task killed at the wall is redelivered.
 write_unit celery-scrape.service \
   "Celery Worker (scrape queue) for GoldVenture" \
-  "scrape,celery" "scrape@%%h" 2 "2000M" "2400M" 25
+  "scrape,celery" "scrape@%%h" 2 "2000M" "2400M" 25 "1024M"
 
 write_unit celery-interactive.service \
   "Celery Worker (interactive queue) for GoldVenture" \
