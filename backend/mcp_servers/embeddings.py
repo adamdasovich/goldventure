@@ -12,12 +12,21 @@ logger = logging.getLogger(__name__)
 from typing import List, Optional
 from chromadb.api.types import EmbeddingFunction, Documents, Embeddings
 
-# Try to import voyageai
-try:
-    import voyageai
-    VOYAGE_AVAILABLE = True
-except ImportError:
-    VOYAGE_AVAILABLE = False
+# Is voyageai installed? Answered WITHOUT importing it: find_spec locates the
+# module but does not execute it.
+#
+# This used to be a plain `import voyageai` in a try/except, and that probe
+# alone cost ~800MB of RSS on every process that reached this module - voyageai
+# imports langchain_text_splitters, which imports transformers, which imports
+# torch. The chain runs core/views/companies.py -> claude_integration/client.py
+# -> document_search.py -> rag_utils.py -> here, so it was paid by gunicorn and
+# every celery worker just to set a boolean.
+#
+# voyageai itself is imported where it is actually used: VoyageEmbeddingFunction
+# .__init__ and embed_query.
+from importlib.util import find_spec
+
+VOYAGE_AVAILABLE = find_spec('voyageai') is not None
 
 
 class VoyageEmbeddingFunction(EmbeddingFunction[Documents]):
@@ -47,6 +56,7 @@ class VoyageEmbeddingFunction(EmbeddingFunction[Documents]):
             raise ValueError("Voyage AI API key not provided. Set VOYAGE_API_KEY environment variable.")
 
         self.model = model
+        import voyageai  # deferred: see the note at the top of this module
         self.client = voyageai.Client(api_key=self.api_key)
 
     def __call__(self, input: Documents) -> Embeddings:
@@ -123,6 +133,7 @@ def embed_query(query: str) -> Optional[List[float]]:
         return None  # Let ChromaDB handle it
 
     try:
+        import voyageai  # deferred: see the note at the top of this module
         client = voyageai.Client(api_key=api_key)
         result = client.embed(
             texts=[query],
