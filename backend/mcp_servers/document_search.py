@@ -4,7 +4,6 @@ Provides semantic search across processed NI 43-101 reports and other documents
 """
 
 from .base import BaseMCPServer
-from .rag_utils import RAGManager
 from typing import Dict, List
 
 
@@ -13,7 +12,25 @@ class DocumentSearchServer(BaseMCPServer):
 
     def __init__(self, company_id: int = None, user=None):
         super().__init__(company_id=company_id, user=user)
-        self.rag_manager = RAGManager()
+        # RAGManager is heavy: it opens a ChromaDB client and builds the
+        # embedding function, and the Voyage embedding function imports
+        # voyageai -> transformers -> torch. Constructing it here cost 783MB
+        # per ClaudeClient, and ClaudeClient builds one of these on every AI
+        # chat request whether or not the conversation ever runs a search.
+        #
+        # Built on first use instead. insights_tools.py and ni43101_reports.py
+        # already do exactly this; this server was the last one that didn't.
+        self._rag_manager = None
+
+    @property
+    def rag_manager(self):
+        if self._rag_manager is None:
+            # Local import for the same reason: module import of rag_utils is
+            # cheap, but keeping it beside the construction makes the cost
+            # obvious to whoever reads this next.
+            from .rag_utils import RAGManager
+            self._rag_manager = RAGManager()
+        return self._rag_manager
 
     def _register_tools(self):
         """Register tools with the MCP server (required by base class)"""
