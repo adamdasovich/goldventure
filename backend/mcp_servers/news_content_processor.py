@@ -8,6 +8,7 @@ Uses Voyage AI for fast embeddings when available, falls back to local model.
 
 import logging
 import asyncio
+import os
 import requests
 
 logger = logging.getLogger(__name__)
@@ -17,8 +18,6 @@ from bs4 import BeautifulSoup
 import tiktoken
 import chromadb
 from chromadb.config import Settings
-from pathlib import Path
-from django.conf import settings
 from django.db import transaction
 
 from core.models import (
@@ -66,13 +65,34 @@ class NewsContentProcessor(BaseMCPServer):
 
     @property
     def chroma_client(self):
+        """Talk to chromadb.service over HTTP, not to the store on disk.
+
+        This used to be a PersistentClient on ./chroma_db — the same directory
+        `chroma run` serves on :8002, and the same news_chunks collection
+        RAGManager reads. Chroma's persistent client assumes exclusive access
+        to its SQLite file and HNSW segments, so that put a second independent
+        writer on a store the server already owned. rag_utils.py was moved to
+        HttpClient for exactly this reason; its comment names news_chunks as
+        the segment that later aborted the process with SIGSEGV on any read.
+        This file was the remaining writer.
+
+        core/chromadb_isolated.py runs _process_company_news in a subprocess to
+        contain those crashes. That stays as defence in depth, but with the
+        writes going through the server there should be nothing left to
+        contain here.
+        """
         if self._chroma_client is None:
-            chroma_path = Path(settings.BASE_DIR) / "chroma_db"
-            chroma_path.mkdir(exist_ok=True)
-            self._chroma_client = chromadb.PersistentClient(
-                path=str(chroma_path),
-                settings=Settings(anonymized_telemetry=False)
+            host = os.environ.get('CHROMA_HOST', 'localhost')
+            port = int(os.environ.get('CHROMA_PORT', 8002))
+            self._chroma_client = chromadb.HttpClient(
+                host=host,
+                port=port,
+                settings=Settings(anonymized_telemetry=False),
             )
+            # Fail here rather than at first query, so a stopped
+            # chromadb.service is an obvious error rather than a confusing
+            # retrieval failure. Same reasoning as RAGManager.
+            self._chroma_client.heartbeat()
         return self._chroma_client
 
     @property
