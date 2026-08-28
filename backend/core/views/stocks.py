@@ -407,8 +407,11 @@ def top_movers(request):
         return Response(cached)
 
     today = timezone.now().date()
-    start_date = today - timedelta(days=days)
-    lookback = start_date - timedelta(days=5)
+
+    # How far below the window start we will reach for the comparison price.
+    # Covers weekends, holidays and a missed scrape, so a one-day change still
+    # finds the previous session rather than giving up.
+    GRACE_DAYS = 7
 
     # A "mover" has to be a comparison of two prices for the same company, in
     # the same currency, both recent enough to mean anything. Without these
@@ -432,12 +435,22 @@ def top_movers(request):
         if not latest:
             continue
 
+        # Anchor the comparison window to the latest trading date we actually
+        # hold, not to today's calendar date. Markets close at weekends and
+        # holidays, and scrapes can miss a day; with days=1 on a Monday a
+        # calendar-anchored window lands on the same row as `latest` and
+        # reports 0.00% for the entire market. Anchoring to latest.date makes
+        # "1 day" mean "the previous session we have", which is what the
+        # metals ticker shows.
+        window_start = latest.date - timedelta(days=days)
+        window_floor = window_start - timedelta(days=GRACE_DAYS)
+
         earlier = MarketData.objects.filter(
-            company=company, date__gte=lookback, date__lte=start_date
+            company=company, date__gte=window_floor, date__lte=window_start
         ).order_by('-date').first()
         if not earlier:
             earlier = StockPrice.objects.filter(
-                company=company, date__gte=lookback, date__lte=start_date
+                company=company, date__gte=window_floor, date__lte=window_start
             ).order_by('-date').first()
 
         if not earlier or not earlier.close_price or float(earlier.close_price) == 0:

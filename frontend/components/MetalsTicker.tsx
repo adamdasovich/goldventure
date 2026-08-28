@@ -17,6 +17,9 @@ interface TickerItem {
   change: number;
   href?: string;
   isMetal?: boolean;
+  /* Days the change covers. Labelled from this rather than hardcoded, so the
+     strip cannot claim a period the API did not return. */
+  periodDays: number;
 }
 
 export default function MetalsTicker() {
@@ -27,7 +30,7 @@ export default function MetalsTicker() {
     try {
       const [metalsData, moversData] = await Promise.allSettled([
         metalsAPI.getPrices(),
-        marketAPI.getTopMovers(10, 7),
+        marketAPI.getTopMovers(10, 1),
       ]);
 
       const tickerItems: TickerItem[] = [];
@@ -52,6 +55,7 @@ export default function MetalsTicker() {
             change: m.change_percent,
             href: "/metals",
             isMetal: true,
+            periodDays: 1,
           });
         }
       }
@@ -65,6 +69,7 @@ export default function MetalsTicker() {
             price: `$${m.price.toFixed(2)}`,
             change: m.change_percent,
             href: companyHref({ id: m.company_id, slug: m.company_slug }),
+            periodDays: moversData.value.period_days ?? 1,
           });
         }
       }
@@ -103,23 +108,26 @@ export default function MetalsTicker() {
               <span className="text-sm font-bold text-slate-200">
                 {item.price}
               </span>
-              {/* Metals carry a 1-day change and stocks a 7-day one, so the
-                  period is spelled out. Rendered identically they read as one
-                  number, and every stock move looked like today's. */}
+              {/* Both sides are a one-session change now, but the period is
+                  still spelled out and comes from the item rather than a
+                  literal. Metals and stocks previously carried 1-day and
+                  7-day changes rendered identically, so every stock move read
+                  as today's; labelling from the data means the strip cannot
+                  drift out of step with the window it asked for again. */}
               <span
                 className={`text-xs font-medium flex items-center gap-0.5 ${
                   item.change >= 0 ? "text-emerald-400" : "text-red-400"
                 }`}
                 title={
-                  item.isMetal
-                    ? "Change over the previous close"
-                    : "Change over the past 7 days"
+                  item.periodDays === 1
+                    ? "Change since the previous close"
+                    : `Change over the past ${item.periodDays} days`
                 }
               >
                 {item.change >= 0 ? "\u25B2" : "\u25BC"}
                 {Math.abs(item.change).toFixed(2)}%
                 <span className="ml-0.5 text-[10px] text-slate-500">
-                  {item.isMetal ? "1d" : "7d"}
+                  {item.periodDays}d
                 </span>
               </span>
               {/* Separator dot */}
