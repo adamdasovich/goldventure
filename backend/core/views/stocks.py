@@ -410,6 +410,15 @@ def top_movers(request):
     start_date = today - timedelta(days=days)
     lookback = start_date - timedelta(days=5)
 
+    # A "mover" has to be a comparison of two prices for the same company, in
+    # the same currency, both recent enough to mean anything. Without these
+    # three guards the endpoint happily divided a USD close by a CAD one and
+    # reported -99.93% for Rocky Shore Gold, and because the result is sorted
+    # by absolute change, that bad row led the homepage ticker.
+    MAX_STALENESS_DAYS = 5
+    stale_before = today - timedelta(days=MAX_STALENESS_DAYS)
+    skipped = {'stale': 0, 'currency': 0, 'no_earlier': 0}
+
     companies = Company.objects.filter(
         is_active=True,
         ticker_symbol__isnull=False,
@@ -432,6 +441,23 @@ def top_movers(request):
             ).order_by('-date').first()
 
         if not earlier or not earlier.close_price or float(earlier.close_price) == 0:
+            skipped['no_earlier'] += 1
+            continue
+
+        # A price from three weeks ago is not a mover, and presenting it in a
+        # live ticker states something untrue about right now.
+        if latest.date < stale_before:
+            skipped['stale'] += 1
+            continue
+
+        # Currency is per-row, not per-company: some records carry USD and some
+        # CAD for the same ticker. Dividing across them produces a number that
+        # means nothing. Note this is not "USD is wrong" — Equinox Gold is
+        # legitimately USD-quoted with 144 valid rows.
+        latest_currency = getattr(latest, 'currency', None)
+        earlier_currency = getattr(earlier, 'currency', None)
+        if latest_currency and earlier_currency and latest_currency != earlier_currency:
+            skipped['currency'] += 1
             continue
 
         latest_price = float(latest.close_price)
@@ -443,11 +469,19 @@ def top_movers(request):
         ticker = company.ticker_symbol or ''
         exchange = company.exchange or ''
 
+        # Some ticker_symbol values already carry their exchange suffix, so
+        # appending unconditionally produced labels like "VRR.V.TSXV" in the
+        # homepage ticker. Only add the exchange when the symbol has none.
+        if ticker and exchange and '.' not in ticker:
+            display_ticker = f"{ticker}.{exchange.upper()}"
+        else:
+            display_ticker = ticker
+
         movers.append({
             'company_id': company.id,
             'company_slug': company.slug,
             'company_name': company.name,
-            'ticker': f"{ticker}.{exchange.upper()}" if ticker and exchange else ticker,
+            'ticker': display_ticker,
             'price': round(latest_price, 4),
             'change_percent': round(pct_change, 2),
             'change_amount': round(latest_price - earlier_price, 4),
@@ -463,6 +497,9 @@ def top_movers(request):
         'movers': movers[:limit],
         'period_days': days,
         'total_analyzed': len(movers),
+        # Reported so a collapse in coverage is visible rather than looking
+        # like a quiet market.
+        'skipped': skipped,
         'timestamp': timezone.now().isoformat(),
     }
 

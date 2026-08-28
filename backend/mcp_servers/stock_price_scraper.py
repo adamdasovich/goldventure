@@ -25,6 +25,30 @@ class StockPriceScraper:
     Falls back to Alpha Vantage or Yahoo Finance if Stockwatch fails.
     """
 
+    # Exchanges we will let Alpha Vantage answer for, and the suffix it wants.
+    # Anything absent gets no Alpha Vantage call — see fetch_quote_alpha_vantage.
+    #
+    # This list is short on purpose. In the 2026-08-28 audit every wrong price
+    # in the database came from Alpha Vantage and none from Stockwatch, and the
+    # failures were not confined to unmapped exchanges: NFG and GLDC are TSXV
+    # and were correctly suffixed '.V', yet came back as an $80 and a $12 USD
+    # listing. CSE is excluded because '.CN' is likewise not honoured — that is
+    # how Rocky Shore Gold returned ResMed at $219.53.
+    #
+    # ASX and AIM are deliberately excluded rather than given plausible-looking
+    # suffixes. Their companies hold little or no price history, so
+    # _is_plausible() has no baseline to judge a first quote against, and a
+    # wrong one would become the baseline. No data beats another company's data.
+    ALPHA_VANTAGE_SUFFIXES = {
+        'tsx': '.TO',
+        'tsxv': '.V',
+    }
+
+    # A quote this far from our last stored close is treated as a different
+    # instrument rather than a real move. Juniors are volatile, so the band is
+    # wide; the collisions we saw were 26x to 1,514x.
+    MAX_PRICE_RATIO = 5.0
+
     def __init__(self):
         self.alpha_vantage_key = getattr(settings, 'ALPHA_VANTAGE_API_KEY', None)
         self.alpha_vantage_url = "https://www.alphavantage.co/query"
@@ -223,15 +247,23 @@ class StockPriceScraper:
         if not self.alpha_vantage_key:
             return None
 
+        # Alpha Vantage resolves an unknown symbol to whatever US listing shares
+        # the letters, so a bare ticker silently returns a different company.
+        # That is how Rocky Shore Gold (CSE:RSG, $0.145 CAD) came back as
+        # ResMed at $219.53 USD, Waratah Minerals (ASX:WTM, ~A$0.30) as White
+        # Mountains Insurance at $2,114.80, and Jindalee Lithium (ASX:JLL) as
+        # Jones Lang LaSalle at $384.31. Refuse to guess: an exchange we have
+        # no suffix for gets no Alpha Vantage call at all.
+        suffix = self.ALPHA_VANTAGE_SUFFIXES.get((exchange or '').lower())
+        if suffix is None:
+            logger.debug(
+                "No Alpha Vantage suffix for exchange %r; skipping %s rather "
+                "than querying the bare symbol", exchange, ticker
+            )
+            return None
+
         try:
-            # Format ticker for Alpha Vantage
-            api_ticker = ticker.upper()
-            if exchange == 'tsx':
-                api_ticker = f"{ticker}.TO"
-            elif exchange == 'tsxv':
-                api_ticker = f"{ticker}.V"
-            elif exchange == 'cse':
-                api_ticker = f"{ticker}.CN"
+            api_ticker = f"{ticker.upper()}{suffix}"
 
             params = {
                 "function": "GLOBAL_QUOTE",
@@ -281,15 +313,65 @@ class StockPriceScraper:
         # For Canadian exchanges, try Stockwatch first
         if exchange in ['tsx', 'tsxv', 'cse']:
             quote = self.fetch_quote_stockwatch(ticker, exchange)
-            if quote:
+            if quote and self._is_plausible(company, quote):
                 return quote
 
         # Fallback to Alpha Vantage
         quote = self.fetch_quote_alpha_vantage(ticker, exchange)
-        if quote:
+        if quote and self._is_plausible(company, quote):
             return quote
 
         return None
+
+    def _is_plausible(self, company, quote: Dict) -> bool:
+        """
+        Reject a quote that cannot belong to this company.
+
+        A symbol collision does not look like an error — it looks like a
+        perfectly well-formed quote for the wrong business, and it flows
+        straight into the database and out to the ticker. The only cheap tell
+        is magnitude: a junior at $0.145 does not print $219.53. Comparing
+        against our own last stored close catches that without needing to know
+        anything about the other listing.
+
+        Returns True when there is no history to compare against, so a
+        company's first ever quote is never blocked.
+        """
+        from core.models import StockPrice
+
+        close = quote.get('close')
+        if close is None:
+            return False
+        try:
+            close = float(close)
+        except (TypeError, ValueError):
+            return False
+        if close <= 0:
+            return False
+
+        previous = (
+            StockPrice.objects
+            .filter(company=company)
+            .order_by('-date')
+            .values_list('close_price', flat=True)
+            .first()
+        )
+        if not previous or float(previous) <= 0:
+            return True
+
+        previous = float(previous)
+        ratio = close / previous
+        if ratio > self.MAX_PRICE_RATIO or ratio < 1 / self.MAX_PRICE_RATIO:
+            logger.warning(
+                "Rejecting %s quote for %s (%s): %s vs last stored %s — %.0fx "
+                "apart, almost certainly a different listing",
+                quote.get('source', 'unknown'), company.ticker_symbol,
+                company.exchange, close, previous,
+                ratio if ratio > 1 else 1 / ratio,
+            )
+            return False
+
+        return True
 
     def save_price(self, company, quote: Dict) -> bool:
         """

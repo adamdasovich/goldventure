@@ -103,13 +103,24 @@ export default function MetalsTicker() {
               <span className="text-sm font-bold text-slate-200">
                 {item.price}
               </span>
+              {/* Metals carry a 1-day change and stocks a 7-day one, so the
+                  period is spelled out. Rendered identically they read as one
+                  number, and every stock move looked like today's. */}
               <span
                 className={`text-xs font-medium flex items-center gap-0.5 ${
                   item.change >= 0 ? "text-emerald-400" : "text-red-400"
                 }`}
+                title={
+                  item.isMetal
+                    ? "Change over the previous close"
+                    : "Change over the past 7 days"
+                }
               >
                 {item.change >= 0 ? "\u25B2" : "\u25BC"}
                 {Math.abs(item.change).toFixed(2)}%
+                <span className="ml-0.5 text-[10px] text-slate-500">
+                  {item.isMetal ? "1d" : "7d"}
+                </span>
               </span>
               {/* Separator dot */}
               <span className="text-slate-700 ml-2">&middot;</span>
