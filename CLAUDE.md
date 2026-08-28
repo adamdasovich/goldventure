@@ -50,6 +50,8 @@ set -o pipefail                     # so a failed build is NOT masked by the pip
 # If package.json changed, install FIRST — plain `npm install`, no flags:
 npm install
 
+rm -rf .next/cache                  # see the stale-chunk NOTE below
+
 # Build, and restart ONLY if the build succeeded (note the &&, not a newline):
 npm run build 2>&1 | grep -v baseline-browser-mapping \
   && pm2 restart goldventure-frontend                  # ~2-4 min; serves from .next/
@@ -57,7 +59,29 @@ npm run build 2>&1 | grep -v baseline-browser-mapping \
 # Useful:
 pm2 list                            # status / restart count
 pm2 logs goldventure-frontend       # tail logs (check after a deploy)
+
+# ALWAYS verify assets after a deploy — a 200 on / does not mean the page works:
+curl -s https://juniorminingintelligence.com/ \
+  | grep -oE '/_next/static/[a-zA-Z0-9/._-]+\.(js|css)' | sort -u \
+  | while read u; do
+      echo "$(curl -s -o /dev/null -w '%{http_code}' "https://juniorminingintelligence.com$u") $u"
+    done | grep -v '^200' || echo "all assets 200"
 ```
+
+> **CRITICAL:** `rm -rf .next/cache` before every build. Next reuses
+> prerendered HTML from that directory across builds, and it can serve pages
+> referencing CSS/JS chunk hashes from an **earlier** build. Those chunks no
+> longer exist, so the browser gets a 404 with an HTML body and reports
+> `Refused to apply style ... because its MIME type` — the page returns **200
+> with broken styling and dead client JS**. It happened on 2026-08-28: the
+> homepage served a missing stylesheet and a missing script, `MetalsTicker`
+> rendered nothing, and the only outward symptom was that a component silently
+> disappeared. Deleting `.next/cache` (NOT `.next` itself, which the running
+> `next start` is serving) and rebuilding fixes it.
+>
+> Because a broken page still returns 200, `curl -o /dev/null -w '%{http_code}'`
+> on `/` proves nothing. Run the asset loop above, or load the page in a real
+> browser and check for console errors.
 
 > **NOTE:** The `grep -v` filters an unsuppressable build warning
 > (`[baseline-browser-mapping] The data in this module is over two months old`).
