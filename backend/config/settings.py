@@ -234,6 +234,12 @@ EMAIL_USE_TLS = os.getenv('EMAIL_USE_TLS', 'True') == 'True'
 EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', '')
 EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', '')
 DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'Junior Mining Intelligence <noreply@juniorminingintelligence.com>')
+# Socket timeout for the SMTP conversation. Unset, Python's smtplib blocks
+# forever, so a stalled send holds a Celery slot until the task's soft time
+# limit kills it — on 2026-08-27 two Ask the Editor alerts each burned 110s
+# that way on a memory-starved box. A healthy send here takes ~0.7s, so 20s
+# is generous; failing fast lets the task retry instead of being killed.
+EMAIL_TIMEOUT = int(os.getenv('EMAIL_TIMEOUT', '20'))
 
 # Early-access promo: grant new registrations a 1-month comp Prospector
 # subscription along with the welcome email. Flip to 'False' via env once the

@@ -2497,9 +2497,18 @@ def notify_editor_question_task(self, thread_id: int, message_id: int):
 
     Throttled to one email per thread per 15 minutes: someone typing four
     short messages in a row is one question, not four, and the inbox link is
-    the same either way. The cache key is set before the send so a retry
-    storm can't multiply the mail.
+    the same either way. The key is claimed BEFORE the send so a retry storm
+    can't multiply the mail - but it is released again on failure, because a
+    throttle that outlives a failed send silently eats the retry, and the
+    question the editor never hears about is the whole point of the feature.
+
+    Retries on failure. send_editor_question_notification swallows its own
+    exceptions and returns False, so the bool is the only failure signal
+    there is; without this, one bad send lost the alert permanently. That is
+    exactly what happened to the first two questions on 2026-08-27, when a
+    memory-starved box pushed the SMTP call past the soft time limit.
     """
+    from celery.exceptions import SoftTimeLimitExceeded
     from .models import EditorQuestionThread, EditorQuestionMessage
     from .notifications import send_editor_question_notification
 
@@ -2516,5 +2525,25 @@ def notify_editor_question_task(self, thread_id: int, message_id: int):
         logger.warning(f"[ASK-EDITOR] thread {thread_id} / message {message_id} vanished")
         return {'sent': False, 'reason': 'missing'}
 
-    sent = send_editor_question_notification(thread, message)
-    return {'sent': bool(sent)}
+    try:
+        sent = send_editor_question_notification(thread, message)
+    except SoftTimeLimitExceeded:
+        # The send outlived the task. Release the claim so the retry is not
+        # throttled out, then let it propagate - re-raising inside the
+        # handler is what stops this being swallowed as a silent success.
+        cache.delete(throttle_key)
+        logger.error(f"[ASK-EDITOR] alert for thread {thread_id} hit the soft time limit")
+        raise
+
+    if not sent:
+        cache.delete(throttle_key)
+        logger.warning(
+            f"[ASK-EDITOR] alert for thread {thread_id} failed; "
+            f"retry {self.request.retries + 1}/{self.max_retries}"
+        )
+        raise self.retry(
+            exc=RuntimeError(f'editor alert send failed for thread {thread_id}'),
+            countdown=30 * (2 ** self.request.retries),
+        )
+
+    return {'sent': True}
