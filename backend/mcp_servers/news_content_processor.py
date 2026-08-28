@@ -47,24 +47,43 @@ class NewsContentProcessor(BaseMCPServer):
         # Initialize tokenizer
         self.tokenizer = tiktoken.get_encoding("cl100k_base")
 
-        # Initialize ChromaDB
-        chroma_path = Path(settings.BASE_DIR) / "chroma_db"
-        chroma_path.mkdir(exist_ok=True)
+        # ChromaDB and the embedding function are built on first use, not here.
+        #
+        # get_embedding_function() returns the Voyage function, which imports
+        # voyageai -> transformers -> torch: 795MB, measured. ClaudeClient
+        # constructs one of these servers on every AI chat request, so every
+        # chat paid for it even though only the news-processing tools ever
+        # touch the collection.
+        self._chroma_client = None
+        self._embedding_function = None
+        self._collection = None
 
-        self.chroma_client = chromadb.PersistentClient(
-            path=str(chroma_path),
-            settings=Settings(anonymized_telemetry=False)
-        )
+    @property
+    def embedding_function(self):
+        if self._embedding_function is None:
+            self._embedding_function = get_embedding_function()
+        return self._embedding_function
 
-        # Get embedding function (Voyage AI if available, else ChromaDB default)
-        self.embedding_function = get_embedding_function()
+    @property
+    def chroma_client(self):
+        if self._chroma_client is None:
+            chroma_path = Path(settings.BASE_DIR) / "chroma_db"
+            chroma_path.mkdir(exist_ok=True)
+            self._chroma_client = chromadb.PersistentClient(
+                path=str(chroma_path),
+                settings=Settings(anonymized_telemetry=False)
+            )
+        return self._chroma_client
 
-        # Get or create collection for news chunks
-        self.collection = self.chroma_client.get_or_create_collection(
-            name="news_chunks",
-            metadata={"hnsw:space": "cosine"},
-            embedding_function=self.embedding_function
-        )
+    @property
+    def collection(self):
+        if self._collection is None:
+            self._collection = self.chroma_client.get_or_create_collection(
+                name="news_chunks",
+                metadata={"hnsw:space": "cosine"},
+                embedding_function=self.embedding_function
+            )
+        return self._collection
 
     def _register_tools(self):
         """Register MCP tools"""
