@@ -11,6 +11,37 @@ import { Input } from "@/components/ui/Input";
 import { LoginModal, RegisterModal } from "@/components/auth";
 import type { StoreShippingRate, ShippingAddress } from "@/types/api";
 
+/** Where the checkout form waits out the reload that signing in causes.
+ *
+ *  sessionStorage, not localStorage: this is a postal address, and it should
+ *  not outlive the tab. It is written only when the sign-in modal opens and
+ *  deleted the moment it is read back, so it exists for one round trip. */
+const CHECKOUT_DRAFT_KEY = "jmi_checkout_draft";
+
+interface CheckoutDraft {
+  shippingAddress: ShippingAddress;
+  selectedRateId: number | null;
+}
+
+function stashCheckoutDraft(draft: CheckoutDraft) {
+  try {
+    sessionStorage.setItem(CHECKOUT_DRAFT_KEY, JSON.stringify(draft));
+  } catch {
+    // Private mode or storage disabled: they retype the address. Losing a
+    // draft must never stop a checkout.
+  }
+}
+
+function takeCheckoutDraft(): CheckoutDraft | null {
+  try {
+    const raw = sessionStorage.getItem(CHECKOUT_DRAFT_KEY);
+    sessionStorage.removeItem(CHECKOUT_DRAFT_KEY);
+    return raw ? (JSON.parse(raw) as CheckoutDraft) : null;
+  } catch {
+    return null;
+  }
+}
+
 export default function CheckoutPage() {
   const {
     items,
@@ -38,6 +69,16 @@ export default function CheckoutPage() {
     postal_code: "",
     country: "US",
   });
+
+  // Pick the form back up after the reload that signing in causes.
+  useEffect(() => {
+    const draft = takeCheckoutDraft();
+    if (!draft) return;
+    if (draft.shippingAddress) setShippingAddress(draft.shippingAddress);
+    // Safe before the rates arrive: the auto-select below only fires when
+    // nothing is selected yet.
+    if (draft.selectedRateId) setSelectedRateId(draft.selectedRateId);
+  }, []);
 
   // Fetch shipping rates when country changes
   useEffect(() => {
@@ -77,6 +118,11 @@ export default function CheckoutPage() {
     // 404 with a full cart. Signing in here leaves the cart and the address
     // they have already typed exactly where they are.
     if (!isAuthenticated) {
+      // AuthContext.login() ends in window.location.reload(), so anything held
+      // in component state is gone by the time they are signed in. Park the
+      // form first and pick it up on the way back, or they return to an empty
+      // address they have already typed once.
+      stashCheckoutDraft({ shippingAddress, selectedRateId });
       setShowLogin(true);
       return;
     }
