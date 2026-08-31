@@ -96,6 +96,21 @@ const EMPTY_FORM: FinancingForm = {
   is_closed: false,
 };
 
+/** Share count implied by the size of the round at its announced price.
+ *
+ *  Upsizing a placement is what this form is mostly used for, and the share
+ *  count moves with the amount — left behind, it publishes a figure that no
+ *  longer matches the dollars beside it. Returns null when there is no usable
+ *  price, so the existing count is left alone rather than blanked. */
+function sharesFromAmount(amount: string, price: string): string | null {
+  const raised = parseFloat(amount);
+  const perShare = parseFloat(price);
+  if (!Number.isFinite(raised) || !Number.isFinite(perShare) || perShare <= 0) {
+    return null;
+  }
+  return String(Math.round(raised / perShare));
+}
+
 export default function OpenFinancingsClient({
   initialData,
 }: OpenFinancingsClientProps) {
@@ -416,12 +431,18 @@ export default function OpenFinancingsClient({
                   step="0.01"
                   required
                   value={formData.amount_raised_usd}
-                  onChange={(e) =>
+                  onChange={(e) => {
+                    const amount = e.target.value;
+                    const shares = sharesFromAmount(
+                      amount,
+                      formData.price_per_share,
+                    );
                     setFormData({
                       ...formData,
-                      amount_raised_usd: e.target.value,
-                    })
-                  }
+                      amount_raised_usd: amount,
+                      ...(shares === null ? {} : { shares_issued: shares }),
+                    });
+                  }}
                   className={INPUT_CLASS}
                 />
               </Field>
@@ -450,6 +471,10 @@ export default function OpenFinancingsClient({
                   }
                   className={INPUT_CLASS}
                 />
+                <p className="mt-1 text-xs text-slate-500">
+                  Recalculated as amount &divide; price per share whenever you
+                  change the amount. Type here to override it.
+                </p>
               </Field>
 
               <Field label="Lead agent">
