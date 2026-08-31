@@ -7,6 +7,7 @@ import logging
 from rest_framework import viewsets, status, permissions
 
 from ..models import (
+from ..query_guard import guard_query_params
     Company, Project, ResourceEstimate, EconomicStudy,
     Financing, Investor, MarketData, NewsRelease, Document,
     SpeakerEvent, EventSpeaker, EventRegistration, EventQuestion, EventReaction,
@@ -96,6 +97,7 @@ from django.db.models import Count, Q
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
+@guard_query_params("company", "date_from", "date_to", "financing_type", "sort_by", "sort_order")
 def closed_financings_list(request):
     """
     List all closed financings for display on the /closed-financings page.

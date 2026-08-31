@@ -171,6 +171,27 @@ fi
 
 trap - ERR INT TERM
 cleanup
+# The numbers the site publishes must still match the database. Four count bugs
+# shipped in one week and every one was a plausible wrong figure with no error:
+# ?status=open returning all 297 financings when 21 were open, the homepage
+# counting 1.9k scraped articles instead of 17.9k company releases, "500+
+# companies" against a database of 396, and a company list that would have kept
+# serving soft-deleted rows. None broke a page, so none of the checks above
+# would have caught them.
+#
+# Deliberately NOT part of the rollback: a count mismatch means the copy is
+# wrong, not that the build is broken. Rolling back would restore an older build
+# carrying the same wrong numbers. So this warns loudly and leaves the deploy up.
+log "Checking published counts against the database"
+if ( cd ../backend && ./venv/bin/python manage.py check_counts ); then
+  echo "  counts agree with the database"
+else
+  echo ""
+  echo "WARNING: published counts no longer match the database."
+  echo "  The deploy stands - this is a copy/data problem, not a broken build."
+  echo "  Run: cd backend && ./venv/bin/python manage.py check_counts"
+fi
+
 log "Deployed. Every page and asset checked returned 200."
 echo "Previous build kept at $PREV_DIR until the next deploy."
 pm2 list | grep "$APP" || true

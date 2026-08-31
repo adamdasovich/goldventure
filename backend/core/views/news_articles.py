@@ -8,6 +8,7 @@ from datetime import timedelta
 from rest_framework import viewsets, status, permissions
 
 from ..models import (
+from ..query_guard import guard_query_params
     Company, Project, ResourceEstimate, EconomicStudy,
     Financing, Investor, MarketData, NewsRelease, Document,
     SpeakerEvent, EventSpeaker, EventRegistration, EventQuestion, EventReaction,
@@ -97,6 +98,7 @@ from django.db.models import Count, Q
 
 @api_view(['GET'])
 @permission_classes([AllowAny])
+@guard_query_params("days", "limit", "offset", "source", strict=False)
 def news_articles_list(request):
     """
     Get list of recent news articles.

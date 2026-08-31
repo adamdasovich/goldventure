@@ -16,6 +16,7 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
 from ..entitlements import PAID_TIERS, resolve_effective_tier
+from ..query_guard import guard_query_params
 from ..models import Financing
 
 
@@ -87,6 +88,7 @@ def _locked_row(financing) -> dict:
 
 @api_view(['GET'])
 @permission_classes([AllowAny])
+@guard_query_params("financing_type", "sort_by", "sort_order")
 def open_financings_list(request):
     """
     GET /api/open-financings/
