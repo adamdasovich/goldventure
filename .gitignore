@@ -45,5 +45,9 @@ backend/company_scraper.py
 backend/onboard_company.py
 backend/_*.py
 
-# PM2 ecosystem config (server-specific)
-ecosystem.config.js
+# PM2 ecosystem config is TRACKED, deliberately. It was excluded as
+# "server-specific", but it holds no secrets — public NEXT_PUBLIC_* values
+# and a loopback backend URL — and being untracked meant the cluster
+# settings that keep deploys from dropping requests existed in exactly one
+# place, on one droplet, recoverable from nothing.
+#   ecosystem.config.js

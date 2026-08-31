@@ -57,10 +57,25 @@ The app runs in **pm2 cluster mode with two instances**, so `deploy.sh` can use
 `pm2 reload` and cycle them one at a time — the other keeps answering, and a
 deploy costs no downtime at all. A single fork-mode process had to be restarted
 outright, which measured 4 consecutive 502s over ~0.87s on every deploy. The
-second instance costs about 190MB resident. The pm2 config lives at
-`/var/www/goldventure/ecosystem.config.js` **on the server only** (it is not in
-git) and must point `script` at `./node_modules/next/dist/bin/next` rather than
-npm: pm2 cannot cluster a shell wrapper.
+second instance costs about 190MB resident. The pm2 config is `ecosystem.config.js` at the repo root, deployed by `git
+pull` to `/var/www/goldventure/ecosystem.config.js`. It must point `script` at
+`./node_modules/next/dist/bin/next` rather than npm — pm2 cannot cluster a shell
+wrapper, npm being a shell script that owns no listening socket.
+
+> **Editing that file is not picked up by a deploy.** `deploy.sh` runs
+> `pm2 reload goldventure-frontend`, which reloads the *running* process using
+> the config pm2 already has in memory. After changing `ecosystem.config.js`,
+> apply it explicitly:
+>
+> ```bash
+> cd /var/www/goldventure
+> pm2 delete goldventure-frontend      # required for instances / exec_mode changes
+> pm2 start ecosystem.config.js
+> pm2 save                             # or a reboot reverts to the last saved list
+> ```
+>
+> `pm2 save` matters: `pm2-root.service` restores the **saved** process list on
+> boot, not the file.
 
 `deploy.sh` builds into `.next-build`, and only once that succeeds does it move
 the directory into place and reload pm2. It also copies the previous build's
