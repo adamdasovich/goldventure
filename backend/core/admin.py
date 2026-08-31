@@ -1032,9 +1032,13 @@ class PlatformSubscriptionAdmin(admin.ModelAdmin):
     Platform access tiers (Explorer free / Prospector / Miner).
 
     To comp a colleague free full access: click "Add platform subscription",
-    pick the user, set Tier = Miner and Status = Active, and leave all the
+    pick the user, set Tier = Prospector and Status = Active, and leave all the
     Stripe fields blank. They get full access and are never billed. To revoke,
     delete the record or use the "Revoke to Explorer" action.
+
+    Do NOT use Miner: it was retired on 2026-08-31 and reads as Prospector
+    anyway. This action used to comp Miner, which is how 39 readers ended up
+    holding a tier that no longer exists.
     """
     list_display = [
         'user', 'tier', 'status', 'effective_tier', 'is_active',
@@ -1045,12 +1049,12 @@ class PlatformSubscriptionAdmin(admin.ModelAdmin):
     search_fields = ['user__username', 'user__email', 'stripe_customer_id', 'stripe_subscription_id']
     autocomplete_fields = ['user']
     readonly_fields = ['created_at', 'updated_at']
-    actions = ['comp_miner_access', 'revoke_to_explorer']
+    actions = ['comp_full_access', 'revoke_to_explorer']
 
-    @admin.action(description='Comp full (Miner) access — no billing')
-    def comp_miner_access(self, request, queryset):
-        n = queryset.update(tier='miner', status='active')
-        self.message_user(request, f'{n} subscription(s) set to comped Miner access.')
+    @admin.action(description='Comp full (Prospector) access — no billing')
+    def comp_full_access(self, request, queryset):
+        n = queryset.update(tier='prospector', status='active')
+        self.message_user(request, f'{n} subscription(s) set to comped Prospector access.')
 
     @admin.action(description='Revoke to free (Explorer) tier')
     def revoke_to_explorer(self, request, queryset):

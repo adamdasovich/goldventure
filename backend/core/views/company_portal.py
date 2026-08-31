@@ -95,6 +95,33 @@ from django.db.models import Count, Q
 # COMPANY PORTAL VIEWSETS (Resources, Events, Subscriptions)
 # ============================================================================
 
+def _require_company_management(user, company, verb):
+    """Raise unless `user` may edit `company`, naming what they were denied.
+
+    Editing rights need an approved representative link AND an active company
+    subscription - see core/company_access.py. Every write path in this module
+    goes through here so the rule is stated once; it used to be written out by
+    hand six times, all of them testing the link alone.
+    """
+    from rest_framework.exceptions import PermissionDenied
+    from ..company_access import access_state
+
+    state = access_state(user, company)
+    if state['can_edit']:
+        return
+
+    if state['requires_subscription']:
+        raise PermissionDenied({
+            'error': 'subscription_required',
+            'detail': (
+                f"{company.name} needs an active company subscription before "
+                f"you can {verb} it."
+            ),
+            'requires_subscription': True,
+        })
+
+    raise PermissionDenied(f"You can only {verb} your own company.")
+
 class CompanyResourceViewSet(viewsets.ModelViewSet):
     """
     ViewSet for Company Resources (documents, images, videos)
@@ -156,26 +183,20 @@ class CompanyResourceViewSet(viewsets.ModelViewSet):
         return queryset.order_by('sort_order', '-uploaded_at')
 
     def perform_create(self, serializer):
-        # Verify user can add resources to this company
         company = serializer.validated_data.get('company')
         if not self.request.user.is_staff:
-            if self.request.user.company != company:
-                raise PermissionError("You can only add resources to your own company")
+            _require_company_management(self.request.user, company, 'add resources to')
         serializer.save(uploaded_by=self.request.user)
 
     def perform_update(self, serializer):
-        # Verify user can update this resource
         instance = self.get_object()
         if not self.request.user.is_staff:
-            if self.request.user.company != instance.company:
-                raise PermissionError("You can only update resources for your own company")
+            _require_company_management(self.request.user, instance.company, 'update resources for')
         serializer.save()
 
     def perform_destroy(self, instance):
-        # Verify user can delete this resource
         if not self.request.user.is_staff:
-            if self.request.user.company != instance.company:
-                raise PermissionError("You can only delete resources for your own company")
+            _require_company_management(self.request.user, instance.company, 'delete resources for')
         instance.delete()
 
     @action(detail=False, methods=['get'])
@@ -234,13 +255,27 @@ class CompanyResourceViewSet(viewsets.ModelViewSet):
         # Validate company access
         try:
             company = Company.objects.get(id=company_id)
-            if not request.user.is_staff and request.user.company != company:
-                return Response(
-                    {'error': 'You can only upload resources for your own company'},
-                    status=status.HTTP_403_FORBIDDEN
-                )
         except Company.DoesNotExist:
             return Response({'error': 'Company not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        if not request.user.is_staff:
+            from ..company_access import access_state
+            state = access_state(request.user, company)
+            if not state['can_edit']:
+                return Response(
+                    {
+                        'error': 'subscription_required' if state['requires_subscription']
+                                 else 'permission_denied',
+                        'detail': (
+                            f'{company.name} needs an active company subscription '
+                            f'before you can upload resources for it.'
+                            if state['requires_subscription']
+                            else 'You can only upload resources for your own company.'
+                        ),
+                        'requires_subscription': state['requires_subscription'],
+                    },
+                    status=status.HTTP_403_FORBIDDEN
+                )
 
         # Generate unique filename
         ext = os.path.splitext(file.name)[1].lower()
@@ -344,26 +379,20 @@ class SpeakingEventViewSet(viewsets.ModelViewSet):
         return queryset.order_by('-start_datetime')
 
     def perform_create(self, serializer):
-        # Verify user can add events for this company
         company = serializer.validated_data.get('company')
         if not self.request.user.is_staff:
-            if self.request.user.company != company:
-                raise PermissionError("You can only create events for your own company")
+            _require_company_management(self.request.user, company, 'create events for')
         serializer.save(created_by=self.request.user)
 
     def perform_update(self, serializer):
-        # Verify user can update this event
         instance = self.get_object()
         if not self.request.user.is_staff:
-            if self.request.user.company != instance.company:
-                raise PermissionError("You can only update events for your own company")
+            _require_company_management(self.request.user, instance.company, 'update events for')
         serializer.save()
 
     def perform_destroy(self, instance):
-        # Verify user can delete this event
         if not self.request.user.is_staff:
-            if self.request.user.company != instance.company:
-                raise PermissionError("You can only delete events for your own company")
+            _require_company_management(self.request.user, instance.company, 'delete events for')
         instance.delete()
 
     @action(detail=False, methods=['get'])

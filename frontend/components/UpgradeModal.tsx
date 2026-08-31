@@ -6,14 +6,11 @@ import { Button } from "@/components/ui/Button";
 interface UpgradeModalProps {
   onClose: () => void;
   feature: string;
-  requiredTier?: "prospector" | "miner";
 }
 
-export default function UpgradeModal({
-  onClose,
-  feature,
-  requiredTier = "prospector",
-}: UpgradeModalProps) {
+// Prospector is the only paid investor plan since Miner was retired, so there
+// is no tier to name — everything gated is gated at the same height.
+export default function UpgradeModal({ onClose, feature }: UpgradeModalProps) {
   return (
     <div
       className="fixed inset-0 z-[60] flex items-center justify-center p-4"
@@ -70,8 +67,7 @@ export default function UpgradeModal({
         </h3>
         <p className="text-slate-400 text-center text-sm mb-6">
           <strong className="text-gold-400">{feature}</strong> is available on
-          the {requiredTier === "miner" ? "Miner" : "Prospector"} plan and
-          above. Upgrade to get full access.
+          the Prospector plan. Upgrade to get full access.
         </p>
 
         <div className="space-y-3">

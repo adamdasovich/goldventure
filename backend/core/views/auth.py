@@ -282,15 +282,16 @@ def login_user(request):
 def _subscription_payload(user):
     """Tier/features payload for a user.
 
-    Superusers always receive full (miner-tier) access, even if they have
-    no PlatformSubscription row. effective_tier on the model also enforces
-    this, so any code path that reads it stays consistent.
+    Superusers always receive the top tier (Prospector, since Miner was
+    retired), even if they have no PlatformSubscription row. effective_tier on
+    the model also enforces this, so any code path that reads it stays
+    consistent.
     """
     from ..models import PlatformSubscription
     try:
         sub = PlatformSubscription.objects.get(user=user)
     except Exception:
-        tier = 'miner' if user.is_superuser else 'explorer'
+        tier = 'prospector' if user.is_superuser else 'explorer'
         sub = PlatformSubscription(user=user, tier=tier, status='active')
     return {
         'tier': sub.tier,

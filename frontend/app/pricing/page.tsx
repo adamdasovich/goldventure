@@ -9,8 +9,10 @@ import {
 } from "@/app/investor-tools/tools";
 import {
   platformAPI,
+  companyPlanAPI,
   type PlatformTier,
   type PlatformSubscriptionStatus,
+  type CompanyPlan,
 } from "@/lib/api";
 import { SIGNUP_OFFER_FALLBACK, type SignupOffer } from "@/lib/signupOffer";
 import { trackSubscribe } from "@/lib/analytics";
@@ -26,45 +28,50 @@ const TIER_FALLBACK: Record<
 > = {
   explorer: { monthly: "Free", annual: "Free", savings: "", trialDays: 0 },
   prospector: { monthly: "$10", annual: "$100", savings: "$20", trialDays: 7 },
-  miner: { monthly: "$50", annual: "$500", savings: "$100", trialDays: 7 },
+};
+
+// Same idea for /company/plan/. The company plan is not a tier — it buys
+// editing rights on one company's own page, not access to this platform — so
+// it has its own endpoint and its own fallback.
+const COMPANY_FALLBACK = {
+  monthly_price: "$50",
+  annual_price: "$500",
+  annual_savings: "$100",
+  trial_days: 7,
 };
 
 // Only differences the backend actually enforces belong in this table. It
 // previously advertised CSV export, an API, email alerts and priority chat -
 // none of which exist.
 //
-// Miner is deliberately thin right now. The early-access welcome email of
-// 2026-08-04 told recipients Prospector included unlimited chat and all the
-// tools that existed then, so those cannot be moved behind Miner without
-// breaking that promise. Only tools introduced after that date are eligible;
-// Warrant Overhang Radar (2026-08-11) is the first.
+// Two columns since the Miner tier was retired on 2026-08-31: Prospector has
+// every tool now, including Warrant Overhang Radar, which was the only thing
+// Miner ever bought. The Company plan is not a column here - it sells editing
+// rights on one company's own page, which is a different axis entirely.
 const FEATURE_ROWS = [
   {
     label: "AI Chat (Claude)",
     explorer: "5 messages/day",
     prospector: "Unlimited",
-    miner: "Unlimited",
   },
   {
     // Derived from the tool catalogue, not hand-counted. These said
-    // "2 / 16 / All 17" while 19 tools were live — the same drift that put
+    // "2 / 16 / All 17" while 19 tools were live - the same drift that put
     // stale counts in the sitemap.
     label: "Investor Tools",
     explorer: `${FREE_TOOL_SLUGS.length} tools`,
-    prospector: `${PROSPECTOR_COUNT} tools`,
-    miner: `All ${AVAILABLE_COUNT} tools`,
+    prospector: `All ${AVAILABLE_COUNT} tools`,
   },
   {
+    // Moved down from Miner when that tier was retired.
     label: "Warrant Overhang Radar",
     explorer: false,
-    prospector: false,
-    miner: true,
+    prospector: true,
   },
   {
     label: "Open Financings",
     explorer: "5 latest only",
     prospector: "All open rounds",
-    miner: "All open rounds",
   },
   {
     // requires_tier('prospector') on register_investment_interest. Explorers
@@ -72,7 +79,6 @@ const FEATURE_ROWS = [
     label: "Participate in Financings",
     explorer: false,
     prospector: true,
-    miner: true,
   },
   {
     // tier_gated(stub=('companies',)) on daily_briefing. Explorers keep the
@@ -81,7 +87,6 @@ const FEATURE_ROWS = [
     label: "Daily Briefing",
     explorer: "Headline only",
     prospector: "Full detail",
-    miner: "Full detail",
   },
   {
     // Re-added 2026-08-26. The note above is right that this was advertised
@@ -91,25 +96,18 @@ const FEATURE_ROWS = [
     label: "Database CSV Export",
     explorer: false,
     prospector: true,
-    miner: true,
   },
   {
-    // Any authenticated user can join — ForumConsumer only checks
-    // is_authenticated, with no tier check — so Explorer gets a tick.
+    // Any authenticated user can join - ForumConsumer only checks
+    // is_authenticated, with no tier check - so Explorer gets a tick.
     label: "Company Discussion Boards",
     explorer: true,
     prospector: true,
-    miner: true,
   },
-  { label: "Company Directory", explorer: true, prospector: true, miner: true },
-  { label: "News Feed", explorer: true, prospector: true, miner: true },
-  { label: "Metals Pricing", explorer: true, prospector: true, miner: true },
-  {
-    label: "Prospector's Exchange",
-    explorer: true,
-    prospector: true,
-    miner: true,
-  },
+  { label: "Company Directory", explorer: true, prospector: true },
+  { label: "News Feed", explorer: true, prospector: true },
+  { label: "Metals Pricing", explorer: true, prospector: true },
+  { label: "Prospector's Exchange", explorer: true, prospector: true },
 ];
 
 function formatDay(iso: string | null) {
@@ -138,6 +136,22 @@ export default function PricingPage() {
       })
       .catch(() => {
         /* keep the fallback prices */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const [companyPlan, setCompanyPlan] = useState<CompanyPlan | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    companyPlanAPI
+      .getPlan()
+      .then((res) => {
+        if (!cancelled) setCompanyPlan(res);
+      })
+      .catch(() => {
+        /* keep COMPANY_FALLBACK */
       });
     return () => {
       cancelled = true;
@@ -302,9 +316,12 @@ export default function PricingPage() {
       ? `Start ${trialDays}-Day Free Trial`
       : "Subscribe";
 
-  /** The button under a paid plan, plus the line explaining a comp grant. */
-  const planCta = (tier: "prospector" | "miner", primary: boolean) => {
-    const onThisPlan = currentTier === tier;
+  /** The button under a paid plan, plus the line explaining a comp grant.
+   *  Prospector is the only investor plan since Miner was retired; the
+   *  parameter stays so a second one is a one-line change. */
+  const planCta = (tier: "prospector", primary: boolean) => {
+    // A legacy 'miner' row resolves to prospector server-side, so it counts.
+    const onThisPlan = currentTier === tier || currentTier === "miner";
 
     if (onThisPlan && hasBilling) {
       return (
@@ -524,27 +541,32 @@ export default function PricingPage() {
             {planCta("prospector", true)}
           </div>
 
-          {/* Miner - price comes from /platform/tiers/, never from here */}
-          <div
-            className={`glass-card rounded-2xl p-6 flex flex-col ${currentTier === "miner" ? "border-gold-500/40" : ""}`}
-          >
+          {/* Company — sold to mining companies, not investors, and bought by
+              an approved representative from their own company page rather
+              than from here. It takes the slot the retired Miner tier left. */}
+          <div className="glass-card rounded-2xl p-6 flex flex-col">
             <div className="mb-6">
-              <h3 className="text-xl font-bold text-slate-200">Miner</h3>
+              <h3 className="text-xl font-bold text-slate-200">Company</h3>
               <p className="text-sm text-slate-400 mt-1">
-                Maximum power for professionals
+                For mining companies managing their own profile
               </p>
               <div className="mt-4">
                 <span className="text-4xl font-bold text-white">
                   {interval === "month"
-                    ? priceOf("miner").monthly
-                    : priceOf("miner").annual}
+                    ? (companyPlan?.monthly_price ??
+                      COMPANY_FALLBACK.monthly_price)
+                    : (companyPlan?.annual_price ??
+                      COMPANY_FALLBACK.annual_price)}
                 </span>
                 <span className="text-slate-400 ml-1">
                   /{interval === "month" ? "month" : "year"}
                 </span>
                 {interval === "year" && (
                   <span className="block text-xs text-emerald-400 mt-1">
-                    Save {priceOf("miner").savings}/year vs monthly
+                    Save{" "}
+                    {companyPlan?.annual_savings ??
+                      COMPANY_FALLBACK.annual_savings}
+                    /year vs monthly
                   </span>
                 )}
               </div>
@@ -552,14 +574,35 @@ export default function PricingPage() {
             <ul className="space-y-3 mb-8 flex-1">
               <li className="flex items-start gap-2 text-sm text-slate-300">
                 <span className="text-gold-400 mt-0.5">&#10003;</span>
-                Everything in Prospector, plus:
+                Edit your company description
               </li>
               <li className="flex items-start gap-2 text-sm text-slate-300">
                 <span className="text-gold-400 mt-0.5">&#10003;</span>
-                Warrant Overhang Radar
+                Add and update your projects
+              </li>
+              <li className="flex items-start gap-2 text-sm text-slate-300">
+                <span className="text-gold-400 mt-0.5">&#10003;</span>
+                Publish resources and presentations
+              </li>
+              <li className="flex items-start gap-2 text-sm text-slate-300">
+                <span className="text-gold-400 mt-0.5">&#10003;</span>
+                Post speaking events and conferences
               </li>
             </ul>
-            {planCta("miner", false)}
+            <Button
+              variant="secondary"
+              size="lg"
+              className="w-full"
+              onClick={() => {
+                window.location.href = "/companies";
+              }}
+            >
+              Find your company
+            </Button>
+            <p className="mt-2 text-center text-[11px] text-slate-500">
+              Open your company&apos;s page and request access. Once we&apos;ve
+              verified you work there, you can subscribe from that page.
+            </p>
           </div>
         </div>
 
@@ -581,9 +624,6 @@ export default function PricingPage() {
                   <th className="text-center py-3 px-4 text-sm font-medium text-gold-400">
                     Prospector
                   </th>
-                  <th className="text-center py-3 px-4 text-sm font-medium text-slate-400">
-                    Miner
-                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -597,9 +637,6 @@ export default function PricingPage() {
                     </td>
                     <td className="py-3 px-4 text-center bg-gold-500/5">
                       {renderCellValue(row.prospector)}
-                    </td>
-                    <td className="py-3 px-4 text-center">
-                      {renderCellValue(row.miner)}
                     </td>
                   </tr>
                 ))}

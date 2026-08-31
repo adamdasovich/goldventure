@@ -161,6 +161,15 @@ urlpatterns = [
     path('platform/reactivate/', views.platform_reactivate_subscription, name='platform_reactivate_subscription'),
     path('platform/webhooks/stripe/', views.platform_stripe_webhook, name='platform_stripe_webhook'),
 
+    # Company plan — a mining company paying to edit its own page. Not a
+    # platform tier; see core/company_access.py for who this actually unlocks.
+    path('company/plan/', views.company_plan, name='company_plan'),
+    path('company/subscription/', views.company_subscription_status, name='company_subscription_status'),
+    path('company/checkout/', views.company_create_checkout, name='company_create_checkout'),
+    path('company/checkout/confirm/', views.company_confirm_checkout, name='company_confirm_checkout'),
+    path('company/billing-portal/', views.company_billing_portal, name='company_billing_portal'),
+    path('company/webhooks/stripe/', views.company_stripe_webhook, name='company_stripe_webhook'),
+
     # Store endpoints
     path('store/ticker/', views.store_ticker, name='store_ticker'),
     path('store/badges/', views.user_store_badges, name='user_store_badges'),

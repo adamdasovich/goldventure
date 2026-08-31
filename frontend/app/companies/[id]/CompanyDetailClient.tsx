@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import {
   companyAPI,
+  companyPlanAPI,
   projectAPI,
   newsAPI,
   accessRequestAPI,
@@ -185,6 +186,13 @@ export default function CompanyDetailClient({
 
   // Editable description states
   const [canEditCompany, setCanEditCompany] = useState(false);
+  /* Approved representative of this company whose employer isn't paying. The
+     only denial a visitor can act on, so it's the only one that gets UI. */
+  const [requiresSubscription, setRequiresSubscription] = useState(false);
+  const [startingCheckout, setStartingCheckout] = useState(false);
+  const [subscriptionNotice, setSubscriptionNotice] = useState<string | null>(
+    null,
+  );
   const [isEditingDescription, setIsEditingDescription] = useState(false);
   const [editedDescription, setEditedDescription] = useState("");
   const [savingDescription, setSavingDescription] = useState(false);
@@ -251,42 +259,40 @@ export default function CompanyDetailClient({
     }
   }, [accessToken, companyId, user]);
 
+  /* Ask the server rather than deriving this from user.company_id.
+     Editing needs an approved link AND an active company subscription, and the
+     client can only see the first half — so deriving it locally showed edit
+     buttons that the API then refused. */
   const checkRepresentativeStatus = async () => {
     if (!accessToken) {
       setIsCompanyRep(false);
       setPendingRequest(null);
       setCanEditCompany(false);
+      setRequiresSubscription(false);
       return;
     }
 
     try {
-      // Reset state first
-      setIsCompanyRep(false);
       setPendingRequest(null);
-      setCanEditCompany(false);
 
-      // Superusers and staff have access to all companies
-      if (user?.is_superuser || user?.is_staff) {
-        setIsCompanyRep(true);
-        setCanEditCompany(true);
-        return;
-      }
-
-      // Check if user is a representative for this specific company
       const companyIdNum = parseInt(companyId);
+      const access = await companyAPI
+        .canEdit(companyIdNum, accessToken)
+        .catch(() => null);
 
-      if (user?.company_id === companyIdNum) {
-        setIsCompanyRep(true);
-        setCanEditCompany(true);
-        return;
-      }
+      setCanEditCompany(!!access?.can_edit);
+      setIsCompanyRep(
+        !!access?.is_representative || !!user?.is_superuser || !!user?.is_staff,
+      );
+      setRequiresSubscription(!!access?.requires_subscription);
 
-      // Check for pending request for this company
+      // Only look for a pending request when they aren't already attached.
+      if (access?.is_representative) return;
+
       const response = await accessRequestAPI
         .getMyRequest(accessToken)
         .catch(() => null);
       if (response && "id" in response) {
-        // User has a pending request - check if it's for this company
         const request = response as CompanyAccessRequest;
         if (request.company === companyIdNum && request.status === "pending") {
           setPendingRequest(request);
@@ -294,6 +300,65 @@ export default function CompanyDetailClient({
       }
     } catch (err) {
       console.error("Failed to check representative status:", err);
+    }
+  };
+
+  /* Back from Stripe. The webhook is asynchronous, so reconcile against the
+     session id in the URL rather than leaving the page read-only for however
+     long the event takes to arrive. */
+  useEffect(() => {
+    if (!accessToken) return;
+    const query = new URLSearchParams(window.location.search);
+    const outcome = query.get("company_subscription");
+    if (!outcome) return;
+
+    if (outcome === "canceled") {
+      setSubscriptionNotice("Checkout cancelled — nothing was charged.");
+      return;
+    }
+    if (outcome !== "success") return;
+
+    const sessionId = query.get("session_id");
+    if (!sessionId) return;
+
+    setSubscriptionNotice("Confirming your subscription…");
+    companyPlanAPI
+      .confirmCheckout(accessToken, sessionId)
+      .then((res) => {
+        setSubscriptionNotice(
+          res.is_active
+            ? "Subscription active — you can edit this page now."
+            : "Payment received — editing will unlock shortly.",
+        );
+        if (res.is_active) checkRepresentativeStatus();
+      })
+      .catch(() => {
+        setSubscriptionNotice(
+          "Payment received — editing will unlock shortly.",
+        );
+      });
+    // checkRepresentativeStatus is stable enough for this one-shot effect; it
+    // reads accessToken/companyId, both of which are in the dep list already.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [accessToken, companyId]);
+
+  /** Send an approved representative to Stripe to subscribe their company. */
+  const handleCompanySubscribe = async (interval: "month" | "year") => {
+    if (!accessToken) return;
+    setStartingCheckout(true);
+    setSubscriptionNotice(null);
+    try {
+      const res = await companyPlanAPI.createCheckout(
+        accessToken,
+        interval,
+        window.location.origin,
+      );
+      window.location.href = res.checkout_url;
+    } catch (err) {
+      setSubscriptionNotice(
+        err instanceof Error ? err.message : "Could not start checkout.",
+      );
+      setStartingCheckout(false);
     }
   };
 
@@ -739,6 +804,55 @@ export default function CompanyDetailClient({
         onLoginClick={() => setShowLogin(true)}
         onRegisterClick={() => setShowRegister(true)}
       />
+
+      {/* Approved representative, unpaid company. Shown only to them — a
+          visitor has no business seeing an invoice prompt for a company they
+          have nothing to do with. */}
+      {requiresSubscription && company && (
+        <div className="border-b border-gold-500/30 bg-gold-500/5">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-gold-400">
+                You&apos;re approved to manage {company.name}
+              </p>
+              <p className="text-sm text-slate-300">
+                Subscribe to edit this page — the description, projects,
+                resources and speaking events.
+              </p>
+              {subscriptionNotice && (
+                <p className="mt-1 text-sm text-red-300">
+                  {subscriptionNotice}
+                </p>
+              )}
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
+              <Button
+                variant="primary"
+                onClick={() => handleCompanySubscribe("year")}
+                disabled={startingCheckout}
+              >
+                {startingCheckout ? "Redirecting…" : "Subscribe annually"}
+              </Button>
+              <Button
+                variant="secondary"
+                onClick={() => handleCompanySubscribe("month")}
+                disabled={startingCheckout}
+              >
+                Monthly
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Just back from Stripe. */}
+      {subscriptionNotice && !requiresSubscription && (
+        <div className="border-b border-emerald-500/30 bg-emerald-500/10">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3">
+            <p className="text-sm text-emerald-300">{subscriptionNotice}</p>
+          </div>
+        </div>
+      )}
 
       {/* Auth Modals */}
       {showLogin && (

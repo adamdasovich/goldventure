@@ -207,7 +207,9 @@ def _roll_up_companies(tranches):
 
 @api_view(['GET'])
 @permission_classes([AllowAny])
-@tier_gated(stub=('companies', 'tranches'), truncate=('expiry_wall',), requires='miner')
+# Was Miner-only, which was the entire difference between Miner and Prospector.
+# Miner is retired; this is a Prospector tool now, like every other one.
+@tier_gated(stub=('companies', 'tranches'), truncate=('expiry_wall',))
 def warrant_radar(request):
     """
     Live warrant overhang, sector-wide or for one company.

@@ -8,7 +8,6 @@ import { useAuth } from "@/contexts/AuthContext";
 import {
   AVAILABLE_COUNT,
   FREE_TOOL_SLUGS,
-  MINER_TOOL_SLUGS,
   TOOLS,
   TOOL_GROUPS,
   type Tool,
@@ -26,34 +25,27 @@ import {
 export default function ToolsGrid() {
   const { subscription } = useAuth();
   const [showUpgrade, setShowUpgrade] = useState(false);
-  const [upgradeTier, setUpgradeTier] = useState<"prospector" | "miner">(
-    "prospector",
-  );
   const tier = subscription?.effective_tier || "explorer";
+  // 'miner' still appears on legacy rows; the backend resolves it to
+  // prospector, and it means the same thing here.
   const hasFullAccess = tier === "prospector" || tier === "miner";
 
   const isToolFree = (slug: string) => FREE_TOOL_SLUGS.includes(slug);
-  const isToolMinerOnly = (slug: string) => MINER_TOOL_SLUGS.includes(slug);
 
-  /** The lowest tier that can open this tool, or null if the user already can. */
-  const requiredTierFor = (slug: string): "prospector" | "miner" | null => {
-    if (isToolFree(slug)) return null;
-    if (isToolMinerOnly(slug)) return tier === "miner" ? null : "miner";
-    return hasFullAccess ? null : "prospector";
-  };
+  /** True when this tool needs a plan the user doesn't have. Since Miner was
+   *  retired there is only one paid tier, so this is a boolean, not a ladder. */
+  const isToolLocked = (slug: string) => !isToolFree(slug) && !hasFullAccess;
 
   const handleToolClick = (e: React.MouseEvent, tool: Tool) => {
     if (!tool.available) return;
-    const required = requiredTierFor(tool.slug);
-    if (required) {
+    if (isToolLocked(tool.slug)) {
       e.preventDefault();
-      setUpgradeTier(required);
       setShowUpgrade(true);
     }
   };
 
   const renderCard = (tool: Tool) => {
-    const isLocked = tool.available && requiredTierFor(tool.slug) !== null;
+    const isLocked = tool.available && isToolLocked(tool.slug);
 
     return (
       <Link
@@ -136,12 +128,7 @@ export default function ToolsGrid() {
       {showUpgrade && (
         <UpgradeModal
           onClose={() => setShowUpgrade(false)}
-          feature={
-            upgradeTier === "miner"
-              ? "Miner-only analysis tools"
-              : `All ${AVAILABLE_COUNT} Investor Tools`
-          }
-          requiredTier={upgradeTier}
+          feature={`All ${AVAILABLE_COUNT} Investor Tools`}
         />
       )}
 

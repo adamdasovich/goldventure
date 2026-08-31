@@ -10,27 +10,29 @@ enough to see what exists, not enough to use it.
 import functools
 
 
+# 'miner' is retired (2026-08-31) but kept in every mapping here: stored rows
+# and Stripe metadata can still say 'miner', and a tier that resolves to nothing
+# would silently drop a paying customer to Explorer. Prospector is the top
+# investor tier now. Mining companies pay for editing rights on their own page
+# instead, through CompanySubscription, which is not a tier at all.
 PAID_TIERS = ('prospector', 'miner')
 
-# Tiers are cumulative: Miner gets everything Prospector gets.
+# Tiers are cumulative: Miner got everything Prospector gets.
 TIER_RANK = {'explorer': 0, 'prospector': 1, 'miner': 2}
 
 # The tool split is the substance of the paid tiers, so it is defined here once
 # and read by the model's feature flags, the public tiers endpoint and the
 # decorators on the views. Anything not listed is Prospector-and-up.
 FREE_TOOLS = ('grade-ranker', 'sector-pulse')
-# Only tools introduced *after* the early-access welcome email of 2026-08-04
-# may sit behind Miner. That email told recipients Prospector included "All 10
-# tools", and property-valuation, portfolio-xray and due-diligence all existed
-# at the time, so they are inside that promise. Warrant Radar shipped on
-# 2026-08-11 and was never promised.
-MINER_TOOLS = (
-    'warrant-radar',
-)
+
+# Empty since Miner was retired: Warrant Overhang Radar moved to Prospector,
+# which now gets every tool. The tuple stays because the split is worth keeping
+# ready — put a slug back here and it is Miner-only again, and re-add the tier's
+# entry to TIER_PRICING.
+MINER_TOOLS = ()
 
 # Chat messages per day. 0 means unlimited.
-# The same email promised 'Unlimited on Prospector', so Prospector is
-# unlimited and chat volume cannot be a Miner differentiator.
+# The early-access email of 2026-08-04 promised 'Unlimited on Prospector'.
 CHAT_LIMITS = {'explorer': 5, 'prospector': 0, 'miner': 0}
 
 

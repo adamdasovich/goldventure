@@ -1102,14 +1102,20 @@ class PlatformSubscription(models.Model):
 
     @property
     def effective_tier(self):
-        """Return the tier the user should be treated as right now."""
+        """Return the tier the user should be treated as right now.
+
+        Miner was retired on 2026-08-31 and reads as Prospector, which now has
+        every tool. Normalising here rather than rewriting history means a row
+        still stamped 'miner' — an old comp, a Stripe price whose metadata says
+        so — keeps full access instead of falling somewhere undefined.
+        """
         # Superusers always get the top tier — full access to every tool/feature.
         if self.user_id and self.user.is_superuser:
-            return 'miner'
+            return 'prospector'
         if self.tier == 'explorer':
             return 'explorer'
         if self.is_active:
-            return self.tier
+            return 'prospector' if self.tier == 'miner' else self.tier
         # Paid sub that lapsed -> treat as explorer
         return 'explorer'
 
@@ -1123,12 +1129,13 @@ class PlatformSubscription(models.Model):
     def allowed_tools(self):
         """Which investor tools this tier can access.
 
-        'all' for Miner; Prospector gets everything except the Miner-only set.
+        Prospector gets everything except MINER_TOOLS, which is empty since
+        Miner was retired — so in practice, every tool.
         """
         from ..entitlements import FREE_TOOLS, MINER_TOOLS
 
         tier = self.effective_tier
-        if tier == 'miner':
+        if tier == 'miner':  # legacy rows; effective_tier no longer returns it
             return 'all'
         if tier == 'prospector':
             return {'excludes': list(MINER_TOOLS)}
@@ -1141,7 +1148,8 @@ class PlatformSubscription(models.Model):
         Only flags the backend actually enforces belong here. api_access,
         ni43101_full_access and priority_chat used to sit in this dict with
         nothing behind them, which is how Miner ended up costing 3.3x
-        Prospector while delivering exactly the same product.
+        Prospector while delivering exactly the same product — and eventually
+        why it was retired rather than repriced.
         """
         from ..entitlements import MINER_TOOLS
 

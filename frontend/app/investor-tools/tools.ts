@@ -25,7 +25,10 @@ export type Tool = {
 export const FREE_TOOL_SLUGS = ["grade-ranker", "sector-pulse"];
 
 // Mirrors MINER_TOOLS in backend/core/entitlements.py, which is the authority.
-export const MINER_TOOL_SLUGS = ["warrant-radar"];
+// Empty since the Miner tier was retired on 2026-08-31: warrant-radar moved to
+// Prospector, which now gets every tool. Kept so the two stay in step if a
+// tool is ever put behind a higher tier again.
+export const MINER_TOOL_SLUGS: string[] = [];
 
 export const TOOLS: Tool[] = [
   {

@@ -28,13 +28,16 @@ def platform_subscription_tiers(request):
     """
     GET /api/platform/tiers/
     Public endpoint returning available subscription tiers and pricing.
+
+    Investor plans only. The company plan is not a tier — it buys editing
+    rights on one company's page, not access to this platform — and lives at
+    /api/company/plan/.
     """
     def money(cents):
-        """$15 / $150 - whole dollars, since every plan is priced that way."""
+        """$10 / $100 - whole dollars, since every plan is priced that way."""
         return f"${cents // 100:,}"
 
     prospector = TIER_PRICING['prospector']
-    miner = TIER_PRICING['miner']
 
     tiers = [
         {
@@ -63,23 +66,9 @@ def platform_subscription_tiers(request):
             'trial_days': TRIAL_DAYS,
             'features': {
                 'daily_chat_limit': CHAT_LIMITS['prospector'],
+                # MINER_TOOLS is empty since Miner was retired, so this excludes
+                # nothing — Prospector has every tool.
                 'investor_tools': {'excludes': list(MINER_TOOLS)},
-            }
-        },
-        {
-            'id': 'miner',
-            'name': 'Miner',
-            'tagline': 'Maximum power for professionals',
-            'monthly_price_cents': miner['month'],
-            'annual_price_cents': miner['year'],
-            'monthly_price': money(miner['month']),
-            'annual_price': money(miner['year']),
-            'annual_savings': money(miner['month'] * 12 - miner['year']),
-            'trial_days': TRIAL_DAYS,
-            'features': {
-                'daily_chat_limit': CHAT_LIMITS['miner'],
-                'investor_tools': 'all',
-                'miner_only_tools': list(MINER_TOOLS),
             }
         },
     ]
@@ -147,15 +136,19 @@ def platform_subscription_status(request):
 def platform_create_checkout(request):
     """
     POST /api/platform/checkout/
-    Body: { "tier": "prospector"|"miner", "interval": "month"|"year" }
+    Body: { "tier": "prospector", "interval": "month"|"year" }
     Creates a Stripe Checkout Session and returns the URL.
+
+    Validated against TIER_PRICING rather than a hardcoded list, so retiring a
+    tier (Miner, 2026-08-31) closes its checkout in the same edit that removes
+    its price, instead of leaving a purchasable plan with no price behind it.
     """
     tier = request.data.get('tier')
     interval = request.data.get('interval', 'month')
 
-    if tier not in ('prospector', 'miner'):
+    if tier not in TIER_PRICING:
         return Response(
-            {'error': 'Invalid tier. Must be "prospector" or "miner".'},
+            {'error': f'Invalid tier. Must be one of: {", ".join(sorted(TIER_PRICING))}.'},
             status=status.HTTP_400_BAD_REQUEST
         )
     if interval not in ('month', 'year'):

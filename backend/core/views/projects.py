@@ -98,11 +98,59 @@ class ProjectViewSet(viewsets.ModelViewSet):
     """API endpoint for projects"""
     queryset = Project.objects.all()
 
+    WRITE_ACTIONS = ('create', 'update', 'partial_update', 'destroy')
+
     def get_permissions(self):
-        """Allow anyone to read, but only superusers can create/update/delete"""
-        if self.action in ['create', 'update', 'partial_update', 'destroy']:
-            return [IsAdminUser()]
+        """Anyone may read. Writes need authentication; which company you may
+        write to is settled per-object in the perform_* hooks below.
+
+        This was IsAdminUser, which meant the "+ Add Project" button a company
+        representative could see on their own page would have 403'd. Nobody
+        had ever been granted a company link, so it was never hit.
+        """
+        if self.action in self.WRITE_ACTIONS:
+            return [IsAuthenticated()]
         return [AllowAny()]
+
+    def _check_company(self, company):
+        """Staff edit anything; a representative edits their own paid company."""
+        from rest_framework.exceptions import PermissionDenied
+        from ..company_access import access_state
+
+        user = self.request.user
+        if user.is_staff:
+            return
+
+        state = access_state(user, company)
+        if state['can_edit']:
+            return
+
+        if state['requires_subscription']:
+            raise PermissionDenied({
+                'error': 'subscription_required',
+                'detail': (
+                    f'{company.name} needs an active company subscription before '
+                    f'its projects can be edited.'
+                ),
+                'requires_subscription': True,
+            })
+        raise PermissionDenied('You can only edit projects for your own company.')
+
+    def perform_create(self, serializer):
+        self._check_company(serializer.validated_data.get('company'))
+        serializer.save()
+
+    def perform_update(self, serializer):
+        # Check the company it belongs to now, and the one it would move to.
+        self._check_company(serializer.instance.company)
+        target = serializer.validated_data.get('company')
+        if target and target != serializer.instance.company:
+            self._check_company(target)
+        serializer.save()
+
+    def perform_destroy(self, instance):
+        self._check_company(instance.company)
+        instance.delete()
 
     def get_serializer_class(self):
         if self.action == 'retrieve':

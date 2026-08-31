@@ -209,23 +209,35 @@ class CompanyViewSet(viewsets.ModelViewSet):
 
         Only allowed for:
         - Superusers (is_superuser=True)
-        - Company representatives (user.company == this company)
+        - Approved company representatives whose company holds an active
+          company subscription
 
         Request body:
         {
             "description": "New company description text..."
         }
         """
+        from ..company_access import access_state
+
         company = self.get_object()
-        user = request.user
+        state = access_state(request.user, company)
 
-        # Check authorization
-        is_authorized = (
-            user.is_superuser or
-            (user.company and user.company.id == company.id)
-        )
-
-        if not is_authorized:
+        if not state['can_edit']:
+            # A representative who simply hasn't paid gets a different answer
+            # from a stranger: theirs is a checkout away, so say so rather than
+            # returning a flat "no permission" they cannot act on.
+            if state['requires_subscription']:
+                return Response(
+                    {
+                        'error': 'subscription_required',
+                        'detail': (
+                            f'{company.name} needs an active company subscription '
+                            f'before its page can be edited.'
+                        ),
+                        'requires_subscription': True,
+                    },
+                    status=status.HTTP_403_FORBIDDEN
+                )
             return Response(
                 {'error': 'You do not have permission to edit this company description.'},
                 status=status.HTTP_403_FORBIDDEN
@@ -259,34 +271,19 @@ class CompanyViewSet(viewsets.ModelViewSet):
         Returns:
         {
             "can_edit": true/false,
-            "reason": "superuser" | "company_representative" | null
+            "reason": "superuser" | "company_representative" | null,
+            "is_representative": true/false,
+            "subscription_active": true/false,
+            "requires_subscription": true/false
         }
+
+        `requires_subscription` is the state worth rendering something for: an
+        approved representative whose company isn't paying. Everyone else is
+        either allowed in or has nothing to do about it.
         """
-        company = self.get_object()
-        user = request.user
+        from ..company_access import access_state
 
-        if not user.is_authenticated:
-            return Response({
-                'can_edit': False,
-                'reason': None
-            })
-
-        if user.is_superuser:
-            return Response({
-                'can_edit': True,
-                'reason': 'superuser'
-            })
-
-        if user.company and user.company.id == company.id:
-            return Response({
-                'can_edit': True,
-                'reason': 'company_representative'
-            })
-
-        return Response({
-            'can_edit': False,
-            'reason': None
-        })
+        return Response(access_state(request.user, self.get_object()))
 
     def create(self, request, *args, **kwargs):
         """

@@ -115,7 +115,6 @@ export default function ExportCompaniesButton({
         <UpgradeModal
           onClose={() => setShowUpgrade(false)}
           feature="CSV export of the full company database"
-          requiredTier="prospector"
         />
       )}
     </>

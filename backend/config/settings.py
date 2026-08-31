@@ -227,6 +227,12 @@ STRIPE_PLATFORM_PRODUCT_ID_MINER = os.getenv('STRIPE_PLATFORM_PRODUCT_ID_MINER',
 # the id stays recorded; nothing reads it since the per-tier split.
 STRIPE_PLATFORM_PRODUCT_ID = os.getenv('STRIPE_PLATFORM_PRODUCT_ID', '')
 
+# The company plan (mining companies editing their own page). Its own product,
+# its own webhook endpoint, its own signing secret — sharing a secret between
+# endpoints means rotating one silently breaks the others.
+STRIPE_COMPANY_PRODUCT_ID = os.getenv('STRIPE_COMPANY_PRODUCT_ID', '')
+STRIPE_COMPANY_WEBHOOK_SECRET = os.getenv('STRIPE_COMPANY_WEBHOOK_SECRET', '')
+
 # Promotion code offered to early-access users when their comp grant lapses.
 # Empty disables the offer; the expiry email simply omits it.
 STRIPE_LAUNCH_PROMO_CODE = os.getenv('STRIPE_LAUNCH_PROMO_CODE', '')

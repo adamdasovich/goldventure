@@ -33,10 +33,12 @@ TIER_PRICING = {
         'month': 1000,   # $10/month
         'year': 10000,   # $100/year (10x monthly)
     },
-    'miner': {
-        'month': 5000,   # $50/month
-        'year': 50000,   # $500/year (10x monthly)
-    },
+    # 'miner' retired 2026-08-31. It bought exactly one extra tool, which now
+    # belongs to Prospector; mining companies pay for page editing through
+    # CompanySubscription instead. To bring it back, restore this entry — the
+    # product id and name below are still here, and its Stripe prices still
+    # exist:
+    #     'miner': {'month': 5000, 'year': 50000},
 }
 
 TRIAL_DAYS = 7  # 7-day free trial for paid tiers

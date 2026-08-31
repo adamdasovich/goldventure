@@ -844,9 +844,11 @@ class CompanySubscription(models.Model):
         ('paused', 'Paused'),
     ]
 
+    # Priced in core/company_stripe_service.py (COMPANY_PRICING), which is the
+    # authority. These labels are for the Django admin dropdown only.
     PLAN_TYPES = [
-        ('monthly', 'Monthly ($20/month)'),
-        ('annual', 'Annual ($200/year)'),
+        ('monthly', 'Monthly (CA$50/month)'),
+        ('annual', 'Annual (CA$500/year)'),
     ]
 
     company = models.OneToOneField(Company, on_delete=models.CASCADE, related_name='subscription')
@@ -859,7 +861,7 @@ class CompanySubscription(models.Model):
     # Subscription details
     plan_type = models.CharField(max_length=20, choices=PLAN_TYPES, default='monthly')
     status = models.CharField(max_length=30, choices=SUBSCRIPTION_STATUS, default='trialing')
-    price_cents = models.IntegerField(default=2000, help_text="Price in cents (2000 = $20)")
+    price_cents = models.IntegerField(default=5000, help_text="Price in cents (5000 = CA$50)")
 
     # Trial period
     trial_start = models.DateTimeField(null=True, blank=True)

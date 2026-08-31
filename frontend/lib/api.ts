@@ -160,13 +160,23 @@ export const companyAPI = {
     ),
 
   canEdit: (companyId: number, accessToken?: string) =>
-    apiFetch<{ can_edit: boolean; reason: string | null }>(
-      `/companies/${companyId}/can_edit/`,
-      {
-        headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
-      },
-    ),
+    apiFetch<CompanyEditAccess>(`/companies/${companyId}/can_edit/`, {
+      headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
+    }),
 };
+
+/** Who may edit a company page, as the server decides it. Never derive this
+ *  from user.company_id on the client: editing also needs the company to hold
+ *  an active company subscription, which the client cannot see. */
+export interface CompanyEditAccess {
+  can_edit: boolean;
+  reason: "superuser" | "company_representative" | null;
+  /** Approved for this company, paid or not. */
+  is_representative: boolean;
+  subscription_active: boolean;
+  /** Approved but not paying — the one state a subscribe prompt belongs on. */
+  requires_subscription: boolean;
+}
 
 // Project API
 export const projectAPI = {
@@ -1343,6 +1353,80 @@ export interface PlatformTier {
   trial_days: number;
   features: Record<string, unknown>;
 }
+
+// ============================================================================
+// Company Plan — a mining company paying to edit its own page
+// ============================================================================
+
+/** GET /company/plan/ — public pricing. Not a platform tier. */
+export interface CompanyPlan {
+  id: "company";
+  name: string;
+  tagline: string;
+  audience: "company";
+  monthly_price_cents: number;
+  annual_price_cents: number;
+  monthly_price: string;
+  annual_price: string;
+  annual_savings: string;
+  trial_days: number;
+  currency: string;
+}
+
+/** GET /company/subscription/ — the caller's own company plan. */
+export interface CompanySubscriptionStatus {
+  company: { id: number; name: string; slug: string } | null;
+  is_representative: boolean;
+  can_edit: boolean;
+  requires_subscription: boolean;
+  has_subscription: boolean;
+  is_active: boolean;
+  status: string | null;
+  plan_type: string | null;
+  price_cents: number;
+  trial_end: string | null;
+  current_period_end: string | null;
+  cancel_at_period_end: boolean;
+  has_billing_account: boolean;
+  trial_eligible: boolean;
+}
+
+export const companyPlanAPI = {
+  getPlan: () => apiFetch<CompanyPlan>("/company/plan/"),
+
+  getSubscription: (accessToken: string) =>
+    apiFetch<CompanySubscriptionStatus>("/company/subscription/", {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    }),
+
+  createCheckout: (accessToken: string, interval: string, baseUrl?: string) =>
+    apiFetch<{ checkout_url: string; session_id: string }>(
+      "/company/checkout/",
+      {
+        method: "POST",
+        headers: { Authorization: `Bearer ${accessToken}` },
+        body: JSON.stringify({ interval, base_url: baseUrl }),
+      },
+    ),
+
+  /** Reconcile a completed checkout instead of waiting on the webhook. */
+  confirmCheckout: (accessToken: string, sessionId: string) =>
+    apiFetch<{ status: string; is_active: boolean }>(
+      "/company/checkout/confirm/",
+      {
+        method: "POST",
+        headers: { Authorization: `Bearer ${accessToken}` },
+        body: JSON.stringify({ session_id: sessionId }),
+      },
+    ),
+
+  getBillingPortal: (accessToken: string, returnUrl?: string) =>
+    apiFetch<{ portal_url: string }>("/company/billing-portal/", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${accessToken}` },
+      body: JSON.stringify({ return_url: returnUrl }),
+    }),
+};
 
 /** GET /platform/subscription/ — the caller's own plan, as the server sees it. */
 export interface PlatformSubscriptionStatus {
