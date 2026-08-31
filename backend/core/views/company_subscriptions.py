@@ -16,7 +16,11 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
-from ..company_access import access_state
+from ..company_access import (
+    access_state,
+    company_subscription_active,
+    has_live_subscription,
+)
 from ..company_stripe_service import (
     COMPANY_PRICING,
     TRIAL_DAYS,
@@ -173,11 +177,25 @@ def company_create_checkout(request):
             status=status.HTTP_503_SERVICE_UNAVAILABLE,
         )
 
-    existing = CompanySubscription.objects.filter(company=company).first()
-    if existing and existing.is_active and existing.stripe_subscription_id:
+    # Refuse whenever a live Stripe subscription exists, not merely an *active*
+    # one. A past_due subscription is not active — the card failed — but it is
+    # very much still there, and letting them check out again would leave the
+    # company paying for two. Repairing the card belongs in the billing portal.
+    if has_live_subscription(company):
+        subscription_active = company_subscription_active(company)
         return Response(
-            {'error': f'{company.name} already has an active subscription. '
-                      f'Use the billing portal to change plans.'},
+            {
+                'error': 'subscription_exists',
+                'detail': (
+                    f'{company.name} already has a subscription. Use the billing '
+                    f'portal to change plans.'
+                    if subscription_active
+                    else f"{company.name}'s subscription needs a payment method "
+                         f'updating. Use the billing portal rather than '
+                         f'subscribing again.'
+                ),
+                'needs_billing_portal': True,
+            },
             status=status.HTTP_400_BAD_REQUEST,
         )
 

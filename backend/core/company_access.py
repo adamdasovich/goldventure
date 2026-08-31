@@ -24,6 +24,20 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+# A subscription in one of these states is finished: nothing will revive it, so
+# a fresh checkout is the right move. Anything else (including past_due and
+# unpaid) is a live Stripe subscription that must be repaired in the billing
+# portal instead — checking out again would leave the company paying twice.
+DEAD_SUBSCRIPTION_STATUSES = ('canceled', 'incomplete_expired')
+
+
+def company_subscription(company):
+    """The company's subscription row, or None. Tolerates a missing relation."""
+    if company is None:
+        return None
+    return getattr(company, 'subscription', None)
+
+
 def company_subscription_active(company) -> bool:
     """True if `company` holds a live company subscription.
 
@@ -31,12 +45,23 @@ def company_subscription_active(company) -> bool:
     related object, which is the common case for the 396 companies nobody has
     claimed.
     """
-    if company is None:
-        return False
-    subscription = getattr(company, 'subscription', None)
+    subscription = company_subscription(company)
     if subscription is None:
         return False
     return bool(subscription.is_active)
+
+
+def has_live_subscription(company) -> bool:
+    """True if a Stripe subscription exists that is not finished.
+
+    Distinguishes "never subscribed" from "subscribed and the card failed".
+    The second cannot be fixed with a new checkout — that just bills them
+    twice — so both the API and the copy have to tell them apart.
+    """
+    subscription = company_subscription(company)
+    if subscription is None or not subscription.stripe_subscription_id:
+        return False
+    return subscription.status not in DEAD_SUBSCRIPTION_STATUSES
 
 
 def is_company_representative(user, company) -> bool:
@@ -73,9 +98,13 @@ def access_state(user, company) -> dict:
     ``requires_subscription`` approved but not paying - the one state worth a
                              prompt, since it is the only one the visitor can
                              fix by getting out a card
+    ``payment_needs_attention`` approved, not paying, but a live Stripe
+                             subscription exists: the card failed. They must
+                             repair it in the billing portal, NOT check out
+                             again, which would bill them twice.
     """
-    superuser = bool(getattr(user, 'is_superuser', False)) and bool(
-        getattr(user, 'is_authenticated', False)
+    superuser = bool(getattr(user, 'is_authenticated', False)) and bool(
+        getattr(user, 'is_superuser', False)
     )
     rep = is_company_representative(user, company)
     paid = company_subscription_active(company)
@@ -88,9 +117,13 @@ def access_state(user, company) -> dict:
         reason = None
 
     return {
-        'can_edit': superuser or (rep and paid),
+        # Deliberately can_manage_company() and not a second copy of the rule.
+        # This function used to recompute it from `superuser or (rep and paid)`,
+        # which is the same thing right up until one of them is edited.
+        'can_edit': can_manage_company(user, company),
         'reason': reason,
         'is_representative': rep,
         'subscription_active': paid,
         'requires_subscription': rep and not paid,
+        'payment_needs_attention': rep and not paid and has_live_subscription(company),
     }

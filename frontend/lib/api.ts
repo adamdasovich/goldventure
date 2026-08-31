@@ -176,6 +176,9 @@ export interface CompanyEditAccess {
   subscription_active: boolean;
   /** Approved but not paying — the one state a subscribe prompt belongs on. */
   requires_subscription: boolean;
+  /** Approved, not paying, but a live subscription exists: the card failed.
+   *  Send them to the billing portal — checking out again bills them twice. */
+  payment_needs_attention: boolean;
 }
 
 // Project API

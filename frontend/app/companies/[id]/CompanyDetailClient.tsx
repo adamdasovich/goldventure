@@ -189,6 +189,9 @@ export default function CompanyDetailClient({
   /* Approved representative of this company whose employer isn't paying. The
      only denial a visitor can act on, so it's the only one that gets UI. */
   const [requiresSubscription, setRequiresSubscription] = useState(false);
+  /* Same denial, different cause: a subscription exists and the card failed.
+     Telling them to subscribe again would bill the company twice. */
+  const [paymentNeedsAttention, setPaymentNeedsAttention] = useState(false);
   const [startingCheckout, setStartingCheckout] = useState(false);
   const [subscriptionNotice, setSubscriptionNotice] = useState<string | null>(
     null,
@@ -285,6 +288,7 @@ export default function CompanyDetailClient({
         !!access?.is_representative || !!user?.is_superuser || !!user?.is_staff,
       );
       setRequiresSubscription(!!access?.requires_subscription);
+      setPaymentNeedsAttention(!!access?.payment_needs_attention);
 
       // Only look for a pending request when they aren't already attached.
       if (access?.is_representative) return;
@@ -341,6 +345,25 @@ export default function CompanyDetailClient({
     // reads accessToken/companyId, both of which are in the dep list already.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [accessToken, companyId]);
+
+  /** Open the company's Stripe billing portal — where a failed card is fixed. */
+  const handleCompanyBilling = async () => {
+    if (!accessToken) return;
+    setSubscriptionNotice(null);
+    try {
+      const res = await companyPlanAPI.getBillingPortal(
+        accessToken,
+        window.location.href,
+      );
+      window.location.href = res.portal_url;
+    } catch (err) {
+      setSubscriptionNotice(
+        err instanceof Error
+          ? err.message
+          : "Could not open the billing portal.",
+      );
+    }
+  };
 
   /** Send an approved representative to Stripe to subscribe their company. */
   const handleCompanySubscribe = async (interval: "month" | "year") => {
@@ -813,11 +836,14 @@ export default function CompanyDetailClient({
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="min-w-0">
               <p className="text-sm font-semibold text-gold-400">
-                You&apos;re approved to manage {company.name}
+                {paymentNeedsAttention
+                  ? `${company.name}'s subscription needs attention`
+                  : `You're approved to manage ${company.name}`}
               </p>
               <p className="text-sm text-slate-300">
-                Subscribe to edit this page — the description, projects,
-                resources and speaking events.
+                {paymentNeedsAttention
+                  ? "The last payment didn't go through. Update the payment method to restore editing."
+                  : "Subscribe to edit this page — the description, projects, resources and speaking events."}
               </p>
               {subscriptionNotice && (
                 <p className="mt-1 text-sm text-red-300">
@@ -825,21 +851,32 @@ export default function CompanyDetailClient({
                 </p>
               )}
             </div>
+            {/* A failed card is repaired in the portal. Offering "subscribe"
+                here would start a second subscription alongside the broken
+                one, and the company would be billed twice. */}
             <div className="flex shrink-0 items-center gap-2">
-              <Button
-                variant="primary"
-                onClick={() => handleCompanySubscribe("year")}
-                disabled={startingCheckout}
-              >
-                {startingCheckout ? "Redirecting…" : "Subscribe annually"}
-              </Button>
-              <Button
-                variant="secondary"
-                onClick={() => handleCompanySubscribe("month")}
-                disabled={startingCheckout}
-              >
-                Monthly
-              </Button>
+              {paymentNeedsAttention ? (
+                <Button variant="primary" onClick={handleCompanyBilling}>
+                  Update payment method
+                </Button>
+              ) : (
+                <>
+                  <Button
+                    variant="primary"
+                    onClick={() => handleCompanySubscribe("year")}
+                    disabled={startingCheckout}
+                  >
+                    {startingCheckout ? "Redirecting…" : "Subscribe annually"}
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    onClick={() => handleCompanySubscribe("month")}
+                    disabled={startingCheckout}
+                  >
+                    Monthly
+                  </Button>
+                </>
+              )}
             </div>
           </div>
         </div>

@@ -5,7 +5,6 @@ import ToolsGrid from "./ToolsGrid";
 import {
   AVAILABLE_COUNT,
   FREE_TOOL_SLUGS,
-  PROSPECTOR_COUNT,
   QUESTION_MAP,
   TOOL_GROUPS,
   toolBySlug,
@@ -79,7 +78,7 @@ async function getSectorStats() {
 const FAQS = [
   {
     q: "Which investor tools are free?",
-    a: `${FREE_TOOL_SLUGS.length} of the ${AVAILABLE_COUNT} tools are open to anyone without an account: the Resource Grade Ranker and the Sector Pulse Dashboard. A Prospector subscription unlocks ${PROSPECTOR_COUNT}, and Miner adds the Warrant Overhang Radar on top.`,
+    a: `${FREE_TOOL_SLUGS.length} of the ${AVAILABLE_COUNT} tools are open to anyone without an account: the Resource Grade Ranker and the Sector Pulse Dashboard. A Prospector subscription unlocks all ${AVAILABLE_COUNT}, including the Warrant Overhang Radar.`,
   },
   {
     q: "What is a good EV per ounce for a junior mining company?",

@@ -171,11 +171,22 @@ def platform_create_checkout(request):
     # therefore unable to pay us anything. They upgrade through a normal
     # checkout instead; the webhook overwrites the comp row with the real
     # subscription.
+    #
+    # "Live" is not the same as "active": a past_due subscription is not active,
+    # because the card failed, but it still exists in Stripe. Testing is_active
+    # alone let that customer check out again and end up paying for two. Only a
+    # subscription Stripe considers finished may be replaced with a new one.
+    from ..company_access import DEAD_SUBSCRIPTION_STATUSES
+
     try:
         existing = PlatformSubscription.objects.get(user=request.user)
-        if existing.is_active and existing.is_paid_tier and existing.stripe_subscription_id:
+        if (
+            existing.stripe_subscription_id
+            and existing.status not in DEAD_SUBSCRIPTION_STATUSES
+        ):
             return Response(
-                {'error': 'You already have an active subscription. Use the billing portal to change plans.'},
+                {'error': 'You already have a subscription. Use the billing portal to '
+                          'change plans or update your payment method.'},
                 status=status.HTTP_400_BAD_REQUEST
             )
     except PlatformSubscription.DoesNotExist:
