@@ -163,8 +163,8 @@ export default function HomeClient({ initialArticles }: HomeClientProps) {
   const [stats, setStats] = useState({
     companies: 390,
     projects: 1300,
-    financings: 290,
-    news_articles: 1900,
+    financings: 300,
+    news_releases: 17000,
   });
 
   useEffect(() => {
@@ -272,7 +272,11 @@ export default function HomeClient({ initialArticles }: HomeClientProps) {
               { label: "companies", value: stats.companies },
               { label: "projects", value: stats.projects },
               { label: "financings", value: stats.financings },
-              { label: "news items", value: stats.news_articles },
+              // NewsRelease, not NewsArticle. This read 1,920 — the scraped
+              // industry feed — while the platform holds ~17.9k company press
+              // releases, so the headline figure understated the database
+              // tenfold.
+              { label: "news releases", value: stats.news_releases },
             ].map((s) => (
               <div key={s.label} className="flex items-baseline gap-1.5">
                 <dt className="sr-only">{s.label}</dt>

@@ -103,22 +103,38 @@ def platform_stats(request):
     """
     from django.core.cache import cache
 
-    cached = cache.get('platform_stats')
+    # Key is versioned: the payload gained fields on 2026-08-31 and the old
+    # 10-minute cache would otherwise keep serving the previous shape, which
+    # looks exactly like a deploy that did not take.
+    cached = cache.get('platform_stats_v2')
     if cached:
         return Response(cached)
 
-    company_count = Company.objects.count()
+    # Excludes soft-deleted rows. Identical today (396 either way) but the
+    # unfiltered count silently inflates the moment a company is deleted, and
+    # this figure is printed on the homepage.
+    company_count = Company.objects.filter(is_deleted=False).count()
     project_count = Project.objects.count()
     financing_count = Financing.objects.count()
+    open_financing_count = Financing.objects.filter(is_closed=False).count()
+
+    # Two different things, and the homepage was showing the smaller one.
+    # NewsArticle is the industry feed scraped from outside publishers (~1.9k).
+    # NewsRelease is company press releases, which is what the platform is
+    # actually built on (~17.9k) and by far the more meaningful figure.
     news_article_count = NewsArticle.objects.count()
+    news_release_count = NewsRelease.objects.count()
 
     data = {
         'companies': company_count,
         'projects': project_count,
         'financings': financing_count,
+        'open_financings': open_financing_count,
+        'news_releases': news_release_count,
+        # Kept so an older client cannot break on a missing key.
         'news_articles': news_article_count,
     }
-    cache.set('platform_stats', data, 600)  # 10 minutes
+    cache.set('platform_stats_v2', data, 600)  # 10 minutes
     return Response(data)
 
 
