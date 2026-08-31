@@ -767,7 +767,7 @@ export default function OpenFinancingsClient({
                 >
                   <option value="announced_date">Date Announced</option>
                   <option value="closing_date">Closing Date</option>
-                  <option value="amount">Amount Raised</option>
+                  <option value="amount">Amount</option>
                   <option value="company">Company Name</option>
                 </select>
                 <button
