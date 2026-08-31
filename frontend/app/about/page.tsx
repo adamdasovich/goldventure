@@ -1,11 +1,12 @@
 import { Metadata } from 'next';
 import Link from 'next/link';
 import { OrganizationSchema } from '@/components/StructuredData';
+import { fetchPlatformStats } from '@/lib/platformStats';
 import SiteNav from "@/components/SiteNav";
 
 export const metadata: Metadata = {
   title: 'About Us - Junior Mining Intelligence Platform',
-  description: 'Learn about Junior Mining Intelligence, the AI-powered platform providing 396 junior mining companies, 17,800+ news releases and 3,200+ NI 43-101 documents, with AI research, 19 investor tools and live financing rounds.',
+  description: 'Learn about Junior Mining Intelligence, the AI-powered platform providing 390+ junior mining companies, 17,000+ news releases and 3,200+ NI 43-101 documents, with AI research, purpose-built investor tools and live financing rounds.',
   keywords: [
     'about junior mining intelligence',
     'mining data platform',
@@ -17,7 +18,7 @@ export const metadata: Metadata = {
   ],
   openGraph: {
     title: 'About Us - Junior Mining Intelligence Platform',
-    description: 'AI-powered platform providing 396 junior mining companies, 17,800+ news releases and 3,200+ NI 43-101 documents, with AI research, 19 investor tools and live financing rounds.',
+    description: 'AI-powered platform providing 390+ junior mining companies, 17,000+ news releases and 3,200+ NI 43-101 documents, with AI research, purpose-built investor tools and live financing rounds.',
     url: 'https://juniorminingintelligence.com/about',
     type: 'website',
     images: [
@@ -32,7 +33,7 @@ export const metadata: Metadata = {
   twitter: {
     card: 'summary_large_image',
     title: 'About Us - Junior Mining Intelligence Platform',
-    description: 'A research platform covering 396 junior mining companies, with AI analysis, 19 investor tools and live financing rounds.',
+    description: 'A research platform covering 390+ junior mining companies, with AI analysis, purpose-built investor tools and live financing rounds.',
     images: ['/og-image.png'],
   },
   alternates: {
@@ -47,7 +48,7 @@ const aboutPageSchema = {
   '@id': 'https://juniorminingintelligence.com/about',
   url: 'https://juniorminingintelligence.com/about',
   name: 'About Junior Mining Intelligence',
-  description: 'Learn about Junior Mining Intelligence, a research platform covering 396 junior mining companies with AI analysis, 19 investor tools and live financing rounds.',
+  description: 'Learn about Junior Mining Intelligence, a research platform covering 390+ junior mining companies with AI analysis, purpose-built investor tools and live financing rounds.',
   mainEntity: {
     '@type': 'Organization',
     '@id': 'https://juniorminingintelligence.com/#organization',
@@ -72,7 +73,9 @@ const aboutPageSchema = {
   },
 };
 
-export default function AboutPage() {
+export default async function AboutPage() {
+  // Read, do not retype. These are the figures that drifted as "500+".
+  const stats = await fetchPlatformStats();
   return (
     <>
       <SiteNav />
@@ -93,9 +96,11 @@ export default function AboutPage() {
                 About Junior Mining Intelligence
               </h1>
               <p className="text-xl md:text-2xl text-slate-300 max-w-4xl mx-auto leading-relaxed">
-                A research platform for junior mining investors: 396 companies,
-                17,800+ news releases and 3,200+ technical documents — with the
-                tools to actually do something with them.
+                A research platform for junior mining investors:{" "}
+                {stats.companies.toLocaleString()} companies,{" "}
+                {stats.news_releases.toLocaleString()} news releases and 3,200+
+                technical documents — with the tools to actually do something
+                with them.
               </p>
             </div>
           </div>
@@ -369,7 +374,7 @@ export default function AboutPage() {
               Start Exploring Junior Mining Companies
             </h2>
             <p className="text-xl text-slate-300 mb-8">
-              396 junior miners across gold, silver, lithium, copper and critical minerals — with the tools to research them and the financings to act on
+              390+ junior miners across gold, silver, lithium, copper and critical minerals — with the tools to research them and the financings to act on
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <Link

@@ -119,9 +119,14 @@ class CompanyViewSet(viewsets.ModelViewSet):
         return CompanySerializer
 
     def get_queryset(self):
-        # Filter to active companies only
-        # Note: is_deleted field requires migration 0041 to be applied
-        queryset = Company.objects.filter(is_active=True)
+        # is_active and is_deleted are DIFFERENT fields. Soft-deleting a company
+        # sets is_deleted=True and leaves is_active alone, so filtering only on
+        # is_active kept deleted companies in the directory, the API and the
+        # sitemap. Zero soft-deleted rows existed when this was found on
+        # 2026-08-31, so it had never fired — it would have on the first delete.
+        # The note this replaces said the field "requires migration 0041 to be
+        # applied"; 0041 has long since applied, and the filter was never added.
+        queryset = Company.objects.filter(is_active=True, is_deleted=False)
 
         # Only show approved companies to non-superusers
         if not (self.request.user and self.request.user.is_superuser):
