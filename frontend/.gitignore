@@ -15,6 +15,9 @@
 
 # next.js
 /.next/
+# deploy.sh builds here, then swaps it into /.next and keeps one rollback.
+/.next-build/
+/.next-previous/
 /out/
 
 # production

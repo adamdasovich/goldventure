@@ -7,6 +7,17 @@ const scriptSrc = isDev
   : "script-src 'self' 'unsafe-inline' https://www.googletagmanager.com https://www.google-analytics.com";
 
 const nextConfig: NextConfig = {
+  // Build somewhere else, then swap it in. `next start` serves from whatever
+  // this points at, and building straight into it replaces the chunks under
+  // the running server: every request arriving during the 2-4 minute build
+  // gets MODULE_NOT_FOUND for a chunk that no longer exists. That is most of
+  // what fills the pm2 error log on a deploy day.
+  //
+  // deploy.sh sets NEXT_DIST_DIR=.next-build for the build and then moves the
+  // finished directory into place, so the only exposure is the pm2 restart.
+  // Unset — which is how `next start` and `next dev` run — this is ".next".
+  distDir: process.env.NEXT_DIST_DIR || ".next",
+
   // Enable React strict mode for better development experience
   reactStrictMode: true,
 

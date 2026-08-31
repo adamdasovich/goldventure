@@ -45,30 +45,33 @@ output, so editing source without `npm run build` has no effect.
 ```bash
 # After git pull on the server:
 cd /var/www/goldventure/frontend
-set -o pipefail                     # so a failed build is NOT masked by the pipe
-
-# If package.json changed, install FIRST — plain `npm install`, no flags:
-npm install
-
-rm -rf .next/cache                  # see the stale-chunk NOTE below
-
-# Build, and restart ONLY if the build succeeded (note the &&, not a newline):
-npm run build 2>&1 | grep -v baseline-browser-mapping \
-  && pm2 restart goldventure-frontend                  # ~2-4 min; serves from .next/
+./deploy.sh                 # ~2-4 min
+./deploy.sh --install       # same, but npm install first (package.json changed)
 
 # Useful:
 pm2 list                            # status / restart count
 pm2 logs goldventure-frontend       # tail logs (check after a deploy)
-
-# ALWAYS verify assets after a deploy — a 200 on / does not mean the page works:
-curl -s https://juniorminingintelligence.com/ \
-  | grep -oE '/_next/static/[a-zA-Z0-9/._-]+\.(js|css)' | sort -u \
-  | while read u; do
-      echo "$(curl -s -o /dev/null -w '%{http_code}' "https://juniorminingintelligence.com$u") $u"
-    done | grep -v '^200' || echo "all assets 200"
 ```
 
-> **CRITICAL:** `rm -rf .next/cache` before every build. Next reuses
+`deploy.sh` builds into `.next-build`, and only once that succeeds does it move
+the directory into place and restart pm2. It then checks every `/_next/static/`
+asset on five pages and, if any is not a 200, **puts the previous build back and
+restarts**. A failed deploy costs a restart rather than an outage.
+
+> **Do not go back to `npm run build` in place.** `next start` serves out of
+> `.next`, and building into that same directory rewrites it underneath the
+> running server: for the whole 2-4 minutes, live requests get chunk URLs the
+> server is about to delete and then `MODULE_NOT_FOUND` when it tries to load
+> them — a 500 for every visitor, on every deploy. On 2026-08-31 that put
+> ~15,000 lines into the pm2 error log across six deploys before anyone looked.
+> `next.config.ts` reads `NEXT_DIST_DIR` for exactly this; unset — which is how
+> `next start` and `next dev` run — it is `.next`.
+
+> **NOTE (historical, now handled):** this stale-chunk trap is why
+> `rm -rf .next/cache` used to be mandatory. `deploy.sh` builds into a fresh
+> `.next-build` every time, so there is no cache left to go stale — but the
+> failure mode is worth keeping, because it returns the moment anyone builds
+> in place again. Next reuses
 > prerendered HTML from that directory across builds, and it can serve pages
 > referencing CSS/JS chunk hashes from an **earlier** build. Those chunks no
 > longer exist, so the browser gets a 404 with an HTML body and reports

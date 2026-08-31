@@ -4,6 +4,7 @@ import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
+import { SignInRequired } from "@/components/auth";
 import LogoMono from "@/components/LogoMono";
 
 const adminNavItems = [
@@ -59,11 +60,10 @@ export default function AdminLayoutClient({
   const router = useRouter();
   const { user, isAuthenticated, isLoading } = useAuth();
 
-  useEffect(() => {
-    if (!isLoading && !isAuthenticated) {
-      router.push("/auth/login?redirect=" + encodeURIComponent(pathname));
-    }
-  }, [isLoading, isAuthenticated, router, pathname]);
+  // No redirect for signed-out visitors: this used to push them to
+  // /auth/login, a route that has never existed, so they landed on a 404.
+  // The sign-in modal is rendered in place below instead, which also keeps
+  // them on the admin URL they asked for.
 
   useEffect(() => {
     if (
@@ -96,7 +96,13 @@ export default function AdminLayoutClient({
     );
   }
 
-  if (!isAuthenticated || (!user?.is_staff && !user?.is_superuser)) {
+  // Signed out and lacking privileges are different problems: one is fixed by
+  // signing in, the other cannot be fixed here at all.
+  if (!isAuthenticated) {
+    return <SignInRequired destination="the admin area" />;
+  }
+
+  if (!user?.is_staff && !user?.is_superuser) {
     return (
       <div className="min-h-screen bg-slate-900 flex items-center justify-center">
         <div className="text-center">

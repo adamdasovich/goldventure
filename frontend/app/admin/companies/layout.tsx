@@ -1,15 +1,28 @@
-'use client';
+"use client";
 
-import React, { useEffect, useState } from 'react';
-import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
-import { useAuth } from '@/contexts/AuthContext';
-import LogoMono from '@/components/LogoMono';
+import React, { useEffect, useState } from "react";
+import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
+import { useAuth } from "@/contexts/AuthContext";
+import { SignInRequired } from "@/components/auth";
+import LogoMono from "@/components/LogoMono";
 
 const companyAdminNavItems = [
-  { href: '/admin/companies', label: 'Onboard Company', icon: 'M12 4v16m8-8H4' },
-  { href: '/admin/companies/jobs', label: 'Scraping Jobs', icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2' },
-  { href: '/admin/companies/failed', label: 'Failed Discoveries', icon: 'M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z' },
+  {
+    href: "/admin/companies",
+    label: "Onboard Company",
+    icon: "M12 4v16m8-8H4",
+  },
+  {
+    href: "/admin/companies/jobs",
+    label: "Scraping Jobs",
+    icon: "M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2",
+  },
+  {
+    href: "/admin/companies/failed",
+    label: "Failed Discoveries",
+    icon: "M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z",
+  },
 ];
 
 export default function CompanyAdminLayout({
@@ -22,15 +35,19 @@ export default function CompanyAdminLayout({
   const router = useRouter();
   const { user, isAuthenticated, isLoading } = useAuth();
 
-  useEffect(() => {
-    if (!isLoading && !isAuthenticated) {
-      router.push('/auth/login?redirect=' + encodeURIComponent(pathname));
-    }
-  }, [isLoading, isAuthenticated, router, pathname]);
+  // Signed-out visitors get the sign-in modal rendered in place, below. This
+  // used to push them at /auth/login, a route that does not exist on this
+  // site — logging in has always been a modal — so it served a 404.
 
   useEffect(() => {
-    if (!isLoading && isAuthenticated && user && !user.is_staff && !user.is_superuser) {
-      router.push('/');
+    if (
+      !isLoading &&
+      isAuthenticated &&
+      user &&
+      !user.is_staff &&
+      !user.is_superuser
+    ) {
+      router.push("/");
     }
   }, [isLoading, isAuthenticated, user, router]);
 
@@ -53,12 +70,20 @@ export default function CompanyAdminLayout({
     );
   }
 
-  if (!isAuthenticated || !user?.is_staff && !user?.is_superuser) {
+  if (!isAuthenticated) {
+    return <SignInRequired destination="the company admin area" />;
+  }
+
+  if (!user?.is_staff && !user?.is_superuser) {
     return (
       <div className="min-h-screen bg-slate-900 flex items-center justify-center">
         <div className="text-center">
-          <h1 className="text-2xl font-bold text-slate-100 mb-4">Access Denied</h1>
-          <p className="text-slate-400">You need admin privileges to access this area.</p>
+          <h1 className="text-2xl font-bold text-slate-100 mb-4">
+            Access Denied
+          </h1>
+          <p className="text-slate-400">
+            You need admin privileges to access this area.
+          </p>
         </div>
       </div>
     );
@@ -102,12 +127,22 @@ export default function CompanyAdminLayout({
                     href={item.href}
                     className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${
                       isActive
-                        ? 'bg-gold-500/20 text-gold-400 border border-gold-500/40'
-                        : 'text-slate-400 hover:text-slate-200 hover:bg-slate-700/50'
+                        ? "bg-gold-500/20 text-gold-400 border border-gold-500/40"
+                        : "text-slate-400 hover:text-slate-200 hover:bg-slate-700/50"
                     }`}
                   >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d={item.icon} />
+                    <svg
+                      className="w-5 h-5"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={1.5}
+                        d={item.icon}
+                      />
                     </svg>
                     {item.label}
                   </Link>
@@ -120,15 +155,27 @@ export default function CompanyAdminLayout({
           <div className="my-4 border-t border-slate-700" />
 
           {/* Other Admin Areas */}
-          <p className="px-3 text-xs text-slate-500 uppercase tracking-wider mb-2">Other Admin</p>
+          <p className="px-3 text-xs text-slate-500 uppercase tracking-wider mb-2">
+            Other Admin
+          </p>
           <ul className="space-y-1">
             <li>
               <Link
                 href="/admin/store"
                 className="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-700/50 transition-colors"
               >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
+                <svg
+                  className="w-5 h-5"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={1.5}
+                    d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"
+                  />
                 </svg>
                 Store Admin
               </Link>
@@ -142,8 +189,18 @@ export default function CompanyAdminLayout({
             href="/companies"
             className="flex items-center gap-2 text-sm text-slate-400 hover:text-gold-400 transition-colors"
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+            <svg
+              className="w-4 h-4"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M10 19l-7-7m0 0l7-7m-7 7h18"
+              />
             </svg>
             Back to Companies
           </Link>
@@ -162,8 +219,19 @@ export default function CompanyAdminLayout({
               aria-controls="company-admin-nav"
               className="lg:hidden -ml-2 p-3 rounded-lg text-slate-300 hover:text-gold-400 hover:bg-slate-700/50"
             >
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+              <svg
+                className="w-6 h-6"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+                aria-hidden="true"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M4 6h16M4 12h16M4 18h16"
+                />
               </svg>
             </button>
             <h1 className="text-lg font-semibold text-slate-100 flex-1 min-w-0 truncate">
@@ -175,7 +243,7 @@ export default function CompanyAdminLayout({
               </span>
               <div className="w-8 h-8 rounded-full bg-gold-500/20 flex items-center justify-center">
                 <span className="text-gold-400 text-sm font-medium">
-                  {(user?.full_name || user?.username || 'A')[0].toUpperCase()}
+                  {(user?.full_name || user?.username || "A")[0].toUpperCase()}
                 </span>
               </div>
             </div>
@@ -183,9 +251,7 @@ export default function CompanyAdminLayout({
         </header>
 
         {/* Page Content */}
-        <div className="p-3 sm:p-6">
-          {children}
-        </div>
+        <div className="p-3 sm:p-6">{children}</div>
       </main>
     </div>
   );
