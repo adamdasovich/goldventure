@@ -226,19 +226,43 @@ export async function fetchGlossaryTerms(
     // an empty page into the static build for an hour and drops the category
     // out of the sitemap -- which is exactly what happened on the first build
     // of these pages: five of six came out blank after one ConnectTimeoutError.
+    //
+    // An HTTP error counts. This used to `break` out of the retry on any
+    // non-OK response, so only thrown network errors were ever retried -- and
+    // the failures that actually happen here are a 429 from the anonymous rate
+    // limit or a 502 while gunicorn restarts, both of which arrive as a
+    // perfectly normal response object. One of those on 2026-08-31 emptied the
+    // finance category, which tripped the "no matching row" guard on
+    // /glossary/[term] and failed the whole deploy.
+    const ATTEMPTS = 4;
     let data: any = null;
-    for (let attempt = 0; attempt < 3; attempt++) {
+    let lastProblem = "unknown";
+    for (let attempt = 0; attempt < ATTEMPTS; attempt++) {
       try {
         const res = await fetch(url, init);
-        if (!res.ok) break;
-        data = await res.json();
-        break;
-      } catch {
-        if (attempt === 2) break;
-        await new Promise((r) => setTimeout(r, 500 * (attempt + 1)));
+        if (res.ok) {
+          data = await res.json();
+          break;
+        }
+        lastProblem = `HTTP ${res.status}`;
+      } catch (err) {
+        lastProblem = err instanceof Error ? err.message : String(err);
+      }
+      if (attempt < ATTEMPTS - 1) {
+        await new Promise((r) => setTimeout(r, 750 * (attempt + 1)));
       }
     }
-    if (!data) break;
+
+    // Fail loudly. A half-fetched or empty category is not a smaller version of
+    // the truth: it silently deletes terms from the site and the sitemap for as
+    // long as the cache holds, and the only reason anyone noticed last time was
+    // an unrelated guard turning it into a build error by accident.
+    if (!data) {
+      throw new Error(
+        `Glossary fetch failed for category "${apiCategory}" page ${page} ` +
+          `after ${ATTEMPTS} attempts (${lastProblem}): ${url}`,
+      );
+    }
 
     const results: GlossaryTerm[] =
       data.results || (Array.isArray(data) ? data : []);
