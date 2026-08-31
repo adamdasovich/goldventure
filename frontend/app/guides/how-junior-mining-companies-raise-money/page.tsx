@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import SiteNav from "@/components/SiteNav";
 import { RelatedResources, OPEN_FINANCINGS, CLOSED_FINANCINGS } from "@/components/guides/RelatedResources";
+import { FinancingCTA } from "@/components/guides/FinancingCTA";
 
 const CANONICAL =
   "https://juniorminingintelligence.com/guides/how-junior-mining-companies-raise-money";
@@ -302,6 +303,14 @@ export default function FinancingPillarGuide() {
             </p>
           </div>
 
+          {/*
+            Placed here rather than with the other link blocks. Those sit at
+            lines 1290 and 1420 -- past 5,600 words. This is the first point at
+            which a reader knows what a placement is, which is when they are
+            most likely to want to see one.
+          */}
+          <FinancingCTA />
+
           {/* TOC */}
           <div className="bg-slate-800 border border-slate-700 rounded-lg p-6 mb-12">
             <h2 className="text-xl font-bold text-gold-400 mb-4">
@@ -517,13 +526,14 @@ export default function FinancingPillarGuide() {
                 </li>
               </ul>
               <p className="text-slate-300 mb-4 leading-relaxed">
-                For a focused deep-dive on private placement mechanics,
-                exemptions, and the subscription agreement process, see our{" "}
+                For how a unit is put together — the share, the warrant, the
+                strike and the expiry — and how to read a placement
+                announcement line by line, see{" "}
                 <Link
-                  href="/guides/how-junior-mining-companies-raise-money"
+                  href="/guides/private-placements-and-warrants"
                   className="text-gold-400 hover:underline"
                 >
-                  Private Placements Guide
+                  Warrants and Units in Junior Mining Financings
                 </Link>
                 .
               </p>
@@ -1324,16 +1334,21 @@ export default function FinancingPillarGuide() {
                     metal, and exchange. See where institutional money is going.
                   </p>
                 </Link>
+                {/*
+                  This card used to link to this same page. A self-link in a
+                  "related" grid is a dead end for a reader and a wasted slot in
+                  a block that exists to pass equity elsewhere.
+                */}
                 <Link
-                  href="/guides/how-junior-mining-companies-raise-money"
+                  href="/guides/private-placements-and-warrants"
                   className="block bg-slate-800 border border-slate-700 hover:border-gold-500/50 rounded-lg p-5 transition-colors"
                 >
                   <h3 className="text-lg font-bold text-gold-400 mb-2">
-                    Private Placements Guide →
+                    Private Placements &amp; Warrants →
                   </h3>
                   <p className="text-sm text-slate-300 mb-0">
-                    Deep dive on placement mechanics, prospectus exemptions, and
-                    the subscription agreement process.
+                    How warrant coverage, strike prices and expiry dates decide
+                    what a placement actually costs an existing shareholder.
                   </p>
                 </Link>
               </div>
@@ -1400,10 +1415,10 @@ export default function FinancingPillarGuide() {
                 </li>
                 <li>
                   <Link
-                    href="/guides/how-junior-mining-companies-raise-money"
+                    href="/guides/private-placements-and-warrants"
                     className="text-gold-400 hover:underline"
                   >
-                    Private Placements Guide (Financial Hub) →
+                    Warrants and Units in Junior Mining Financings →
                   </Link>
                 </li>
                 <li>

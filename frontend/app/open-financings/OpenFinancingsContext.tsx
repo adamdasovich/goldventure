@@ -118,7 +118,8 @@ export default function OpenFinancingsContext() {
             company's financing page and is the most actionable thing on the
             site, so it belongs in the server-rendered copy rather than only
             inside the client table. */}
-        <section>
+        {/* Anchor target for the CTA on the financing guides. */}
+        <section id="how-this-list-works" className="scroll-mt-24">
           <h2 className="text-2xl font-bold text-gold-400 mb-5">
             How this list works
           </h2>
