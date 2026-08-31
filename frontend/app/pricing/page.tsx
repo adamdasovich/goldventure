@@ -633,8 +633,12 @@ export default function PricingPage() {
                 a: `You're charged automatically at the end of the ${trialDays} days unless you cancel first. The trial is once per customer — if you've subscribed before, a new plan starts billing immediately.`,
               },
               {
+                // True as of 2026-08-31, when plan switching was actually
+                // enabled on the Stripe portal configuration: switching on,
+                // proration always_invoice, both tier products eligible.
+                // Do not promise proration again if that is ever turned off.
                 q: "Can I switch between plans?",
-                a: "Yes. Change plans from the billing portal once you're subscribed.",
+                a: "Yes, from the billing portal. You're credited for the unused part of the period you've already paid for and charged the new rate for the rest of it, so you only pay the difference. Switching during a free trial ends the trial and starts billing immediately.",
               },
               {
                 q: "Is my payment secure?",
