@@ -59,8 +59,8 @@ export function FinancingCTA({ heading, children }: FinancingCTAProps) {
         )}
       </div>
 
-      {/* Stacks on narrow screens; both targets clear 44px. */}
-      <div className="flex flex-col sm:flex-row gap-3">
+      {/* Stacks on narrow screens; every target clears 44px. */}
+      <div className="flex flex-col sm:flex-row sm:flex-wrap gap-3">
         <Link
           href="/open-financings"
           className="inline-flex min-h-11 items-center justify-center rounded-lg bg-gold-500 px-5 py-3 font-semibold text-slate-900 transition-colors hover:bg-gold-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold-400"
@@ -73,12 +73,25 @@ export function FinancingCTA({ heading, children }: FinancingCTAProps) {
         >
           How participation works
         </Link>
+        <Link
+          href="/financial-hub/qualification"
+          className="inline-flex min-h-11 items-center justify-center rounded-lg border border-slate-600 px-5 py-3 font-semibold text-slate-200 transition-colors hover:border-gold-500/60 hover:text-gold-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold-400"
+        >
+          Accredited investor status
+        </Link>
       </div>
 
+      {/*
+        Earlier copy here said a reader had to "qualify under the relevant
+        exemption before subscribing", which overstates the barrier. The
+        accreditation checkbox in the interest modal is a self-declaration and
+        the Participate button gates on nothing but sign-in.
+      */}
       <p className="mt-4 mb-0 text-sm text-slate-400">
-        Registering interest is not a subscription agreement — it tells the
-        company you want an allocation, and you still qualify under the relevant
-        exemption before subscribing.
+        Registering interest is open to anyone with an account — it tells the
+        company how much of an allocation you want, and is not a subscription
+        agreement. Accredited status unlocks additional deals and can be set in
+        the Financial Hub.
       </p>
     </aside>
   );
