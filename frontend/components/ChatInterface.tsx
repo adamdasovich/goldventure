@@ -8,6 +8,12 @@ import { Button } from "./ui/Button";
 import { Badge } from "./ui/Badge";
 import { claudeAPI } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
+import { LoginModal, RegisterModal } from "@/components/auth";
+import {
+  fetchSignupOfferClient,
+  SIGNUP_OFFER_FALLBACK,
+  type SignupOffer,
+} from "@/lib/signupOffer";
 import type { ChatMessage } from "@/types/api";
 
 /* Short label on the chip, full question sent. Six sentence-long chips only
@@ -57,6 +63,27 @@ export default function ChatInterface({
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [limitReached, setLimitReached] = useState(false);
+  // Signed-out visitors used to get a dead end here: the assistant replied
+  // "Please log in to use the AI assistant" as plain text, with nothing to
+  // click. Asking the assistant a question is the highest-intent action an
+  // anonymous visitor takes on this site — the hero CTA leads straight to it —
+  // so that sentence was terminating the funnel at its best moment.
+  const [needsAccount, setNeedsAccount] = useState(false);
+  const [showRegister, setShowRegister] = useState(false);
+  const [showLogin, setShowLogin] = useState(false);
+  const [offer, setOffer] = useState<SignupOffer>(SIGNUP_OFFER_FALLBACK);
+
+  // Fetched rather than hardcoded so the prompt cannot promise a trial that
+  // WELCOME_FREE_MONTH_ENABLED has since turned off.
+  useEffect(() => {
+    let cancelled = false;
+    fetchSignupOfferClient().then((o) => {
+      if (!cancelled) setOffer(o);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const composerRef = useRef<HTMLInputElement>(null);
@@ -84,15 +111,10 @@ export default function ChatInterface({
     if (!msg || isLoading) return;
 
     if (!accessToken) {
-      setMessages([
-        ...messages,
-        { role: "user", content: msg },
-        {
-          role: "assistant",
-          content:
-            "Please log in to use the AI assistant. It's free to get started!",
-        },
-      ]);
+      // Keep their question on screen — it is the reason they are here, and
+      // seeing it sit there unanswered is what makes the ask land.
+      setMessages([...messages, { role: "user", content: msg }]);
+      setNeedsAccount(true);
       setInput("");
       return;
     }
@@ -157,6 +179,7 @@ export default function ChatInterface({
   };
 
   return (
+    <>
     <Card
       id="chat-panel"
       variant="glass-strong"
@@ -271,6 +294,34 @@ export default function ChatInterface({
                 </div>
               </div>
             )}
+            {needsAccount && (
+              <div className="rounded-xl border border-gold-500/40 bg-slate-900/70 p-5 animate-slide-in-up">
+                <p className="text-white font-semibold mb-1">
+                  {offer.free_trial_enabled
+                    ? `Create a free account to get your answer`
+                    : "Create a free account to get your answer"}
+                </p>
+                <p className="text-slate-300 text-sm leading-relaxed mb-4">
+                  {offer.free_trial_enabled
+                    ? `It also starts a ${offer.free_trial_days}-day trial with unlimited research across every company, every investor tool, and every open financing. No credit card.`
+                    : `You get ${offer.fallback_chat_limit} research questions a day, free. No credit card.`}
+                </p>
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <Button variant="primary" onClick={() => setShowRegister(true)}>
+                    {offer.free_trial_enabled
+                      ? "Start free trial"
+                      : "Create free account"}
+                  </Button>
+                  <button
+                    type="button"
+                    onClick={() => setShowLogin(true)}
+                    className="text-sm text-slate-400 hover:text-gold-300 transition-colors px-3 py-2 min-h-11 text-left sm:text-center"
+                  >
+                    Already have an account? Sign in
+                  </button>
+                </div>
+              </div>
+            )}
             <div ref={messagesEndRef} />
           </>
         )}
@@ -316,6 +367,25 @@ export default function ChatInterface({
           </Button>
         </div>
       </div>
-    </Card>
+      </Card>
+      {showLogin && (
+        <LoginModal
+          onClose={() => setShowLogin(false)}
+          onSwitchToRegister={() => {
+            setShowLogin(false);
+            setShowRegister(true);
+          }}
+        />
+      )}
+      {showRegister && (
+        <RegisterModal
+          onClose={() => setShowRegister(false)}
+          onSwitchToLogin={() => {
+            setShowRegister(false);
+            setShowLogin(true);
+          }}
+        />
+      )}
+    </>
   );
 }

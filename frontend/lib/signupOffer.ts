@@ -54,3 +54,26 @@ export async function fetchSignupOffer(): Promise<SignupOffer> {
     return SIGNUP_OFFER_FALLBACK;
   }
 }
+
+/**
+ * Client-side variant, for components that cannot be server-rendered.
+ *
+ * ChatInterface is mounted globally by AssistantProvider and is a client
+ * component, so it cannot receive the offer as a server prop the way
+ * /companies does. Same conservative fallback: an unreachable endpoint means
+ * we assume the promo is off rather than promise a trial that registration
+ * will not grant.
+ */
+export async function fetchSignupOfferClient(): Promise<SignupOffer> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/platform/signup-offer/`);
+    if (!res.ok) return SIGNUP_OFFER_FALLBACK;
+    const data = (await res.json()) as Partial<SignupOffer>;
+    if (typeof data.free_trial_enabled !== "boolean") {
+      return SIGNUP_OFFER_FALLBACK;
+    }
+    return { ...SIGNUP_OFFER_FALLBACK, ...data } as SignupOffer;
+  } catch {
+    return SIGNUP_OFFER_FALLBACK;
+  }
+}
