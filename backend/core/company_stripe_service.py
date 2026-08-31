@@ -249,18 +249,29 @@ def plan_from_stripe_subscription(stripe_sub):
     price = items[0].get('price') or {}
     price_id = price.get('id') or ''
     amount = price.get('unit_amount')
-    interval = (price.get('metadata') or {}).get('interval') or (
-        price.get('recurring') or {}
-    ).get('interval')
+    metadata = price.get('metadata') or {}
+    interval = metadata.get('interval') or (price.get('recurring') or {}).get('interval')
 
-    if interval not in COMPANY_PRICING:
-        # Unknown price - identify by amount before giving up.
+    # Our own prices are stamped when created, and that marker is what makes the
+    # interval trustworthy: with it, the amount is simply whatever we charge
+    # today, so a future price change resolves correctly instead of failing.
+    ours = metadata.get('type') == 'company_subscription'
+
+    if not ours:
+        # Unmarked price. The interval alone proves nothing — every monthly
+        # subscription in Stripe has one — so it has to match an amount we
+        # actually charge. Checking the interval first, as this did until
+        # 2026-08-31, resolved a $12.34/month subscription as our monthly plan
+        # and recorded $12.34 as the price of it.
         for candidate, candidate_amount in COMPANY_PRICING.items():
             if amount == candidate_amount:
                 interval = candidate
                 break
         else:
             return None
+
+    if interval not in COMPANY_PRICING:
+        return None
 
     plan_type = 'annual' if interval == 'year' else 'monthly'
     return plan_type, amount, price_id, interval

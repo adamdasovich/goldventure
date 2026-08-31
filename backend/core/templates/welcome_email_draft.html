@@ -6,7 +6,9 @@
   Subject: Welcome to Junior Mining Intelligence — here's where to start
 
   Tier framing (verified against core/models/community.py + open_financings.py):
-    - Explorer (free), Prospector ($15/mo CAD), Miner ($50/mo CAD)
+    - Explorer (free) and Prospector. Miner was retired 2026-08-31.
+     Prices live in platform_stripe_service.TIER_PRICING and are served by
+     /api/platform/tiers/ - restating them here is how they drift.
     - Soft-gold line under each feature shows what's free vs. what unlocks on a paid plan.
 
   Feature deep-links (verified against frontend/app/HomeClient.tsx routes):
@@ -252,7 +254,6 @@
                         "
                       >
                         ✦ 5 questions/day on Explorer · Unlimited on Prospector
-                        &amp; Miner
                       </div>
                     </td>
                   </tr>
@@ -337,8 +338,7 @@
                           margin-top: 6px;
                         "
                       >
-                        ✦ 2 tools free · 16 of 17 tools on Prospector
-                        (API access on Miner)
+                        ✦ 2 tools free · every tool on Prospector
                       </div>
                     </td>
                   </tr>
@@ -677,7 +677,7 @@
                     Upgrade to Paid subscriptions are now live and fully
                     operational. Upgrade to
                     <strong style="color: #f1f5f9">Prospector</strong> for
-                    unlimited AI chat, 16 of 17 investor tools, and every open
+                    unlimited AI chat, every investor tool, and every open
                     financing round. Start with a
                     <strong style="color: #f1f5f9">7-day free trial</strong>
                     — cancel anytime.
