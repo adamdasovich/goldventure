@@ -33,6 +33,20 @@ cd "$(dirname "$0")"
 log() { printf '\n\033[1m==> %s\033[0m\n' "$*"; }
 fail() { printf '\n\033[31mFAILED: %s\033[0m\n' "$*" >&2; exit 1; }
 
+# Wait for the site to answer after a restart. `next start` takes about a second
+# to bind, so anything asked before that gets a 502 from nginx — including the
+# rollback's own check, which is how a rollback could otherwise report success
+# over a site that never came back up.
+wait_for_site() {
+  local attempts="${1:-30}"
+  local i
+  for ((i = 0; i < attempts; i++)); do
+    sleep 1
+    if curl -sf -o /dev/null "$SITE/"; then return 0; fi
+  done
+  return 1
+}
+
 # One deploy at a time. More than one agent works in this repo, and two runs
 # overlapping would have each moving the other's directories mid-flight.
 exec 9>"$LOCK_FILE"
@@ -62,7 +76,15 @@ rollback() {
   rm -rf "$LIVE_DIR"
   mv "$PREV_DIR" "$LIVE_DIR"
   pm2 restart "$APP" >/dev/null || true
-  printf '\033[31mRolled back — the previous build is live again.\033[0m\n' >&2
+
+  # Check the rollback, rather than announcing it. Returning while the site is
+  # still down is how "rolled back" becomes a sentence nobody should trust.
+  if wait_for_site 30; then
+    printf '\033[31mRolled back — the previous build is live again and answering.\033[0m\n' >&2
+  else
+    printf '\033[31mROLLED BACK BUT THE SITE IS NOT ANSWERING. Check `pm2 logs %s` now.\033[0m\n' \
+      "$APP" >&2
+  fi
   exit "$status"
 }
 
@@ -104,16 +126,7 @@ SWAPPED=1
 log "Restarting $APP"
 pm2 restart "$APP" >/dev/null
 
-# Give the server a moment to bind before asking it anything. Written as an if
-# rather than `curl ... && break`: under `set -e` a failing curl in an && list
-# ends the script, so the first attempt — which almost always fails, the server
-# having just restarted — would abort the deploy it is meant to be waiting for.
-ready=0
-for _ in $(seq 1 30); do
-  sleep 1
-  if curl -sf -o /dev/null "$SITE/"; then ready=1; break; fi
-done
-[ "$ready" = "1" ] || fail "site did not answer within 30s of the restart"
+wait_for_site 30 || fail "site did not answer within 30s of the restart"
 
 log "Verifying assets (a 200 on / proves nothing — chunks are what break)"
 bad=""
