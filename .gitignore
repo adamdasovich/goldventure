@@ -51,3 +51,14 @@ backend/_*.py
 # settings that keep deploys from dropping requests existed in exactly one
 # place, on one droplet, recoverable from nothing.
 #   ecosystem.config.js
+
+# Kept on the server beside the code, never in the repo. Untracked files here
+# used to block `git pull` the moment a commit landed on the same path — which
+# broke two deploys on 2026-08-31 — so they are ignored explicitly rather than
+# left to chance.
+# One-off scripts run once against production, kept for reference.
+backend/scratch/
+# Local vector store.
+backend/chromadb_data/
+*.bak
+.env*.bak*
