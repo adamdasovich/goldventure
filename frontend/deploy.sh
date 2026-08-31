@@ -41,10 +41,18 @@ fi
 
 log "Building into $BUILD_DIR (live site still served from $LIVE_DIR)"
 rm -rf "$BUILD_DIR"
-# The grep filters an unsuppressable warning from Next's vendored browserslist;
-# set -o pipefail (from set -e above plus this) keeps a failed build fatal.
-set -o pipefail
-NEXT_DIST_DIR="$BUILD_DIR" npm run build 2>&1 | grep -v baseline-browser-mapping
+
+# Log the build and filter for display afterwards, rather than piping into
+# grep: piped, the pipeline's status is grep's, so a build that printed only
+# filtered lines would look like a failure and a failed build could look fine.
+# This way npm's exit status is npm's alone.
+BUILD_LOG="$(mktemp)"
+if ! NEXT_DIST_DIR="$BUILD_DIR" npm run build >"$BUILD_LOG" 2>&1; then
+  grep -v baseline-browser-mapping "$BUILD_LOG" | tail -40
+  fail "build failed — $LIVE_DIR untouched, site still serving the old build"
+fi
+grep -v baseline-browser-mapping "$BUILD_LOG" | tail -12 || true
+rm -f "$BUILD_LOG"
 
 [ -f "$BUILD_DIR/BUILD_ID" ] || fail "no BUILD_ID in $BUILD_DIR — build produced nothing usable"
 
@@ -56,10 +64,13 @@ mv "$BUILD_DIR" "$LIVE_DIR"
 log "Restarting $APP"
 pm2 restart "$APP" >/dev/null
 
-# Give the server a moment to bind before asking it anything.
+# Give the server a moment to bind before asking it anything. Written as an if
+# rather than `curl ... && break`: under `set -e` a failing curl in an && list
+# ends the script, so the first attempt — which almost always fails, the server
+# having just restarted — would abort the deploy it is meant to be waiting for.
 for _ in $(seq 1 20); do
   sleep 1
-  curl -sf -o /dev/null "$SITE/" && break
+  if curl -sf -o /dev/null "$SITE/"; then break; fi
 done
 
 log "Verifying assets (a 200 on / proves nothing — chunks are what break)"
