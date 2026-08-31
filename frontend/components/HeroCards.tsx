@@ -275,7 +275,7 @@ export function HeroCards({ onLoginClick }: HeroCardsProps) {
                 </ul>
                 <Link
                   href="/companies"
-                  className="mt-4 inline-block py-2 text-sm text-gold-400 hover:text-gold-300"
+                  className="mt-4 inline-block py-3 text-sm text-gold-400 hover:text-gold-300"
                 >
                   Browse companies &rarr;
                 </Link>
@@ -331,7 +331,7 @@ export function HeroCards({ onLoginClick }: HeroCardsProps) {
                 </ul>
                 <Link
                   href="/open-financings"
-                  className="mt-4 inline-block py-2 text-sm text-gold-400 hover:text-gold-300"
+                  className="mt-4 inline-block py-3 text-sm text-gold-400 hover:text-gold-300"
                 >
                   {data.total_open_financings &&
                   data.total_open_financings > data.active_financings.length
@@ -399,7 +399,7 @@ export function HeroCards({ onLoginClick }: HeroCardsProps) {
                 </Link>
                 <Link
                   href="/properties"
-                  className="mt-4 inline-block py-2 text-sm text-gold-400 hover:text-gold-300"
+                  className="mt-4 inline-block py-3 text-sm text-gold-400 hover:text-gold-300"
                 >
                   Browse all listings &rarr;
                 </Link>
