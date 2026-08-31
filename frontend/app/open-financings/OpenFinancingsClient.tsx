@@ -222,7 +222,7 @@ export default function OpenFinancingsClient({
 
     const amountRaised = parseFloat(unformatAmount(formData.amount_raised_usd));
     if (!Number.isFinite(amountRaised)) {
-      setFormError("Amount raised is required.");
+      setFormError("Amount is required.");
       return;
     }
     if (!formData.announced_date) {
@@ -462,7 +462,7 @@ export default function OpenFinancingsClient({
                 </select>
               </Field>
 
-              <Field label="Amount raised (CAD)" required>
+              <Field label="Amount (CAD)" required>
                 <input
                   type="text"
                   inputMode="decimal"
@@ -908,7 +908,7 @@ function OpenFinancingCard({
                 <p className="text-2xl font-bold text-gold-400">
                   {formatCurrency(financing.amount_raised_usd)}
                 </p>
-                <p className="text-xs text-slate-500">Amount Raised</p>
+                <p className="text-xs text-slate-500">Amount</p>
               </div>
             )}
             <div className="flex flex-col sm:flex-row lg:flex-col gap-2 text-sm">
@@ -1039,7 +1039,7 @@ function LockedFinancingCard({ financing }: { financing: OpenFinancing }) {
               >
                 $••••••••
               </p>
-              <p className="text-xs text-slate-500">Amount Raised</p>
+              <p className="text-xs text-slate-500">Amount</p>
             </div>
             <div className="flex flex-col sm:flex-row lg:flex-col gap-2 text-sm">
               <div>
