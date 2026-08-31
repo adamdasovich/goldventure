@@ -7,6 +7,12 @@ const LINKS = [
   { href: "/companies", label: "Companies" },
   { href: "/properties", label: "Prospector's Exchange" },
   { href: "/guides", label: "Guides" },
+  // The guides rank; the financings are what they should lead to. Neither
+  // these nor the Financial Hub appeared on any page using this nav, which is
+  // 17 of the site's server-rendered routes and most of what search traffic
+  // lands on.
+  { href: "/open-financings", label: "Open Financings" },
+  { href: "/financial-hub", label: "Financial Hub" },
 ];
 
 const FEATURED = { href: "/reports/weekly", label: "Weekly Snapshot" };
