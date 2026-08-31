@@ -68,6 +68,17 @@ class PlatformStripeService:
         'miner': 'Junior Mining Intelligence — Miner',
     }
 
+    # Stripe lets a Product be created with an id of our choosing, which makes
+    # "get or create" a retrieve-then-create on a known key instead of a search.
+    # That matters: Product.search is eventually consistent, and on 2026-08-31
+    # two calls 300ms apart each failed to see the other's product and created
+    # their own, leaving one tier's monthly and annual prices on two different
+    # products - which is exactly the shape that breaks plan switching.
+    PRODUCT_IDS = {
+        'prospector': 'jmi_platform_prospector',
+        'miner': 'jmi_platform_miner',
+    }
+
     @staticmethod
     def _get_or_create_product(tier):
         """Get or create the Stripe Product for one tier.
@@ -81,39 +92,40 @@ class PlatformStripeService:
         The old shared product (STRIPE_PLATFORM_PRODUCT_ID) and its prices are
         left alone; nothing points at them any more.
 
-        Set STRIPE_PLATFORM_PRODUCT_ID_PROSPECTOR / _MINER to pin these. Without
-        a pin it falls back to a metadata search, which is only eventually
-        consistent in Stripe: a product created moments earlier isn't findable
-        yet, so two calls in quick succession each conclude none exists and
-        create their own. That is how this account ended up with four
-        identically named products.
-
-        The search is also scoped to active products, so archiving a duplicate
-        doesn't leave this handing back a product that Price.create will reject.
+        Addressed by a fixed id (PRODUCT_IDS) rather than found by search, so
+        this is idempotent no matter how many callers race. Stripe's search
+        index lags creation by a moment; two calls that both miss each other
+        both create, and this account collected six products that way before
+        the ids were pinned down. STRIPE_PLATFORM_PRODUCT_ID_PROSPECTOR /
+        _MINER override the id if one ever needs repointing.
         """
         if tier not in PlatformStripeService.PRODUCT_NAMES:
             raise ValueError(f"Invalid tier: {tier}")
 
         get_stripe_api_key()
 
-        pinned = getattr(settings, f'STRIPE_PLATFORM_PRODUCT_ID_{tier.upper()}', None)
-        if pinned:
-            return stripe.Product.retrieve(pinned)
+        product_id = (
+            getattr(settings, f'STRIPE_PLATFORM_PRODUCT_ID_{tier.upper()}', '')
+            or PlatformStripeService.PRODUCT_IDS[tier]
+        )
 
-        products = stripe.Product.search(
-            query=(
-                "metadata['type']:'platform_subscription' "
-                f"AND metadata['tier']:'{tier}' AND active:'true'"
+        try:
+            return stripe.Product.retrieve(product_id)
+        except stripe.error.InvalidRequestError:
+            pass  # No such product yet - fall through and create it.
+
+        try:
+            product = stripe.Product.create(
+                id=product_id,
+                name=PlatformStripeService.PRODUCT_NAMES[tier],
+                description="AI-powered mining research and investor tools",
+                metadata={'type': 'platform_subscription', 'tier': tier},
             )
-        )
-        if products.data:
-            return products.data[0]
+        except stripe.error.InvalidRequestError:
+            # Lost a race to another worker; the id is taken, which is the
+            # outcome we wanted anyway.
+            return stripe.Product.retrieve(product_id)
 
-        product = stripe.Product.create(
-            name=PlatformStripeService.PRODUCT_NAMES[tier],
-            description="AI-powered mining research and investor tools",
-            metadata={'type': 'platform_subscription', 'tier': tier},
-        )
         logger.info(f"Created Stripe product {product.id} for tier {tier}")
         return product
 
