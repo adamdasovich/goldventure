@@ -60,37 +60,61 @@ class PlatformStripeService:
             return False
         return key.startswith('sk_test_') or key.startswith('sk_live_')
 
-    @staticmethod
-    def _get_or_create_product():
-        """Get or create the Stripe Product for platform subscriptions.
+    # Product names as customers see them, on the Checkout page and in the
+    # billing portal. One Product per tier, not one per platform - see
+    # _get_or_create_product.
+    PRODUCT_NAMES = {
+        'prospector': 'Junior Mining Intelligence — Prospector',
+        'miner': 'Junior Mining Intelligence — Miner',
+    }
 
-        Set STRIPE_PLATFORM_PRODUCT_ID to pin this. Without a pin it falls back
-        to a metadata search, which is only eventually consistent in Stripe: a
-        product created moments earlier isn't findable yet, so two calls in
-        quick succession each conclude none exists and create their own. That
-        is how this account ended up with four identically named products.
+    @staticmethod
+    def _get_or_create_product(tier):
+        """Get or create the Stripe Product for one tier.
+
+        ONE PRODUCT PER TIER, deliberately. Both tiers used to be Prices on a
+        single "Junior Mining Intelligence Platform" product with the tier only
+        in price metadata, and Stripe's Customer Portal refuses to make two
+        prices of the same product, interval and currency both switchable:
+        "Adding both would mean selling the same product at the same interval
+        at two different prices." Plan switching is impossible in that shape.
+        The old shared product (STRIPE_PLATFORM_PRODUCT_ID) and its prices are
+        left alone; nothing points at them any more.
+
+        Set STRIPE_PLATFORM_PRODUCT_ID_PROSPECTOR / _MINER to pin these. Without
+        a pin it falls back to a metadata search, which is only eventually
+        consistent in Stripe: a product created moments earlier isn't findable
+        yet, so two calls in quick succession each conclude none exists and
+        create their own. That is how this account ended up with four
+        identically named products.
 
         The search is also scoped to active products, so archiving a duplicate
         doesn't leave this handing back a product that Price.create will reject.
         """
+        if tier not in PlatformStripeService.PRODUCT_NAMES:
+            raise ValueError(f"Invalid tier: {tier}")
+
         get_stripe_api_key()
 
-        pinned = getattr(settings, 'STRIPE_PLATFORM_PRODUCT_ID', None)
+        pinned = getattr(settings, f'STRIPE_PLATFORM_PRODUCT_ID_{tier.upper()}', None)
         if pinned:
             return stripe.Product.retrieve(pinned)
 
         products = stripe.Product.search(
-            query="metadata['type']:'platform_subscription' AND active:'true'"
+            query=(
+                "metadata['type']:'platform_subscription' "
+                f"AND metadata['tier']:'{tier}' AND active:'true'"
+            )
         )
         if products.data:
             return products.data[0]
 
         product = stripe.Product.create(
-            name="Junior Mining Intelligence Platform",
+            name=PlatformStripeService.PRODUCT_NAMES[tier],
             description="AI-powered mining research and investor tools",
-            metadata={'type': 'platform_subscription'}
+            metadata={'type': 'platform_subscription', 'tier': tier},
         )
-        logger.info(f"Created Stripe product {product.id} for platform subscriptions")
+        logger.info(f"Created Stripe product {product.id} for tier {tier}")
         return product
 
     @staticmethod
@@ -105,17 +129,20 @@ class PlatformStripeService:
         if cache_key in _price_cache:
             return _price_cache[cache_key]
 
-        # Search for existing price scoped by currency AND amount, so changing
-        # the price (or currency) creates a fresh Stripe Price instead of
-        # reusing a stale one (Price.unit_amount/currency are immutable).
+        product = PlatformStripeService._get_or_create_product(tier)
+
+        # Scoped to the tier's own product as well as currency and amount.
+        # Without the product scope this happily returns the identically-priced
+        # price still hanging off the old shared product, and the split never
+        # takes effect. Amount is part of the key because Price.unit_amount and
+        # currency are immutable — changing a price makes a new one.
         prices = stripe.Price.search(
-            query=f"metadata['tier']:'{tier}' AND metadata['interval']:'{interval}' AND metadata['currency']:'{PRICE_CURRENCY}' AND metadata['amount']:'{amount}'"
+            query=f"product:'{product.id}' AND metadata['tier']:'{tier}' AND metadata['interval']:'{interval}' AND metadata['currency']:'{PRICE_CURRENCY}' AND metadata['amount']:'{amount}'"
         )
         if prices.data:
             _price_cache[cache_key] = prices.data[0].id
             return prices.data[0].id
 
-        product = PlatformStripeService._get_or_create_product()
         price = stripe.Price.create(
             product=product.id,
             unit_amount=amount,

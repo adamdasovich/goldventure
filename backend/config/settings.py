@@ -213,9 +213,18 @@ STRIPE_STORE_WEBHOOK_SECRET = os.getenv('STRIPE_STORE_WEBHOOK_SECRET', '')
 # Stripe Platform Subscription Webhook (user-level subscriptions)
 STRIPE_PLATFORM_WEBHOOK_SECRET = os.getenv('STRIPE_PLATFORM_WEBHOOK_SECRET', '')
 
-# Pin the Stripe Product for platform subscriptions. Optional, but without it
+# Pin the Stripe Product for each platform tier. Optional, but without a pin
 # _get_or_create_product() falls back to an eventually-consistent metadata
 # search that has previously created duplicate products.
+#
+# One product per tier is required, not a matter of taste: Stripe's Customer
+# Portal will not offer two prices of the same product/interval/currency as
+# switchable, so a single shared product makes plan switching impossible.
+STRIPE_PLATFORM_PRODUCT_ID_PROSPECTOR = os.getenv('STRIPE_PLATFORM_PRODUCT_ID_PROSPECTOR', '')
+STRIPE_PLATFORM_PRODUCT_ID_MINER = os.getenv('STRIPE_PLATFORM_PRODUCT_ID_MINER', '')
+
+# Legacy: the single shared product every tier used to hang off. Kept only so
+# the id stays recorded; nothing reads it since the per-tier split.
 STRIPE_PLATFORM_PRODUCT_ID = os.getenv('STRIPE_PLATFORM_PRODUCT_ID', '')
 
 # Promotion code offered to early-access users when their comp grant lapses.
