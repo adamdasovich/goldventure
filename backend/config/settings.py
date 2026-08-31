@@ -145,13 +145,21 @@ REST_FRAMEWORK = {
     'PAGE_SIZE': 50,
     # Rate limiting to prevent brute force and DoS attacks
     'DEFAULT_THROTTLE_CLASSES': [
-        'rest_framework.throttling.AnonRateThrottle',
+        'core.throttling.InternalAwareAnonRateThrottle',
         'rest_framework.throttling.UserRateThrottle',
     ],
     'DEFAULT_THROTTLE_RATES': {
         'anon': '5000/hour',
         'user': '10000/hour',
     },
+    # Count one proxy in front. Without this, DRF identifies an anonymous caller
+    # by the WHOLE X-Forwarded-For header, and nginx appends to that header
+    # rather than replacing it — so sending `X-Forwarded-For: <anything>` yields
+    # the throttle key `<anything>,<real ip>`, and varying it per request gives
+    # a fresh 5000/hour bucket every time. The limit was optional for anyone who
+    # knew. With one proxy declared, the key is the entry nginx appended, which
+    # is the real peer address and cannot be set from outside.
+    'NUM_PROXIES': 1,
 }
 
 # JWT Settings
