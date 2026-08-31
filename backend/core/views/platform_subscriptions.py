@@ -107,6 +107,10 @@ def platform_subscription_status(request):
             'is_active': sub.is_active,
             'plan_interval': sub.plan_interval,
             'price_cents': sub.price_cents,
+            # Is there a Stripe customer behind this row at all? A comp grant
+            # has none, so the pricing page must not offer those users a
+            # billing portal that can only 404 at them.
+            'has_billing_account': bool(sub.stripe_customer_id),
             'trial_end': sub.trial_end.isoformat() if sub.trial_end else None,
             'current_period_end': sub.current_period_end.isoformat() if sub.current_period_end else None,
             'cancel_at_period_end': sub.cancel_at_period_end,
@@ -119,6 +123,7 @@ def platform_subscription_status(request):
             'effective_tier': 'explorer',
             # No record at all means no prior Stripe subscription.
             'trial_eligible': True,
+            'has_billing_account': False,
             'status': 'active',
             'is_active': True,
             'plan_interval': None,
@@ -165,10 +170,17 @@ def platform_create_checkout(request):
             status=status.HTTP_503_SERVICE_UNAVAILABLE
         )
 
-    # Check if user already has an active paid subscription
+    # Block only a *real* Stripe subscription. A comp grant from
+    # grant_free_month() also reads as an active paid tier, and until
+    # 2026-08-31 that alone was enough to refuse checkout — while the billing
+    # portal this points them at 404s for exactly those users, because a comp
+    # carries no Stripe customer. Every comped early-access reader was
+    # therefore unable to pay us anything. They upgrade through a normal
+    # checkout instead; the webhook overwrites the comp row with the real
+    # subscription.
     try:
         existing = PlatformSubscription.objects.get(user=request.user)
-        if existing.is_active and existing.is_paid_tier:
+        if existing.is_active and existing.is_paid_tier and existing.stripe_subscription_id:
             return Response(
                 {'error': 'You already have an active subscription. Use the billing portal to change plans.'},
                 status=status.HTTP_400_BAD_REQUEST

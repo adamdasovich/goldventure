@@ -7,7 +7,12 @@ import {
   FREE_TOOL_SLUGS,
   PROSPECTOR_COUNT,
 } from "@/app/investor-tools/tools";
-import { platformAPI, type PlatformTier } from "@/lib/api";
+import {
+  platformAPI,
+  type PlatformTier,
+  type PlatformSubscriptionStatus,
+} from "@/lib/api";
+import { SIGNUP_OFFER_FALLBACK, type SignupOffer } from "@/lib/signupOffer";
 import { trackSubscribe } from "@/lib/analytics";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
@@ -20,7 +25,7 @@ const TIER_FALLBACK: Record<
   { monthly: string; annual: string; savings: string; trialDays: number }
 > = {
   explorer: { monthly: "Free", annual: "Free", savings: "", trialDays: 0 },
-  prospector: { monthly: "$15", annual: "$150", savings: "$30", trialDays: 7 },
+  prospector: { monthly: "$10", annual: "$100", savings: "$20", trialDays: 7 },
   miner: { monthly: "$50", annual: "$500", savings: "$100", trialDays: 7 },
 };
 
@@ -107,6 +112,13 @@ const FEATURE_ROWS = [
   },
 ];
 
+function formatDay(iso: string | null) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleDateString(undefined, { month: "long", day: "numeric" });
+}
+
 export default function PricingPage() {
   const { user, accessToken, subscription } = useAuth();
   const [interval, setInterval] = useState<"month" | "year">("year");
@@ -131,6 +143,48 @@ export default function PricingPage() {
       cancelled = true;
     };
   }, []);
+
+  // What a brand-new registration grants today. Read, never hardcoded: the
+  // grant is behind WELCOME_FREE_MONTH_ENABLED on the server, so writing "30
+  // days free" into this page would turn it into a lie the moment that env var
+  // is flipped. The fallback assumes the promo is OFF.
+  const [offer, setOffer] = useState<SignupOffer>(SIGNUP_OFFER_FALLBACK);
+  useEffect(() => {
+    let cancelled = false;
+    platformAPI
+      .getSignupOffer()
+      .then((res) => {
+        if (!cancelled) setOffer(res);
+      })
+      .catch(() => {
+        /* keep the conservative fallback */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Trial eligibility and whether there is a Stripe customer behind this user.
+  // /auth/me carries neither, and both change what the buttons should say.
+  const [status, setStatus] = useState<PlatformSubscriptionStatus | null>(null);
+  useEffect(() => {
+    if (!accessToken) {
+      setStatus(null);
+      return;
+    }
+    let cancelled = false;
+    platformAPI
+      .getSubscription(accessToken)
+      .then((res) => {
+        if (!cancelled) setStatus(res);
+      })
+      .catch(() => {
+        /* fall back to the optimistic defaults below */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [accessToken]);
 
   const priceOf = (id: string) => {
     const t = tiers?.find((x) => x.id === id);
@@ -226,6 +280,65 @@ export default function PricingPage() {
   };
 
   const currentTier = subscription?.effective_tier || "explorer";
+  const trialDays = priceOf("prospector").trialDays;
+
+  // One trial per customer: has_used_trial() means a returning subscriber pays
+  // from day one. Promising them a free week on the button and then charging
+  // at checkout is the kind of thing that produces a chargeback, so the label
+  // asks. Optimistic until the status arrives, matching the backend default.
+  const trialEligible = status ? status.trial_eligible : true;
+
+  // A comp grant (early-access gift) reads as an active paid tier but carries
+  // no Stripe customer, so there is no billing portal behind it. Offering one
+  // to those users produced "No billing account found." and nothing else.
+  const hasBilling = !!status?.has_billing_account;
+  const compEndsOn =
+    currentTier !== "explorer" && status && !hasBilling
+      ? (status.trial_end ?? status.current_period_end ?? null)
+      : null;
+
+  const ctaLabel =
+    trialEligible && trialDays > 0
+      ? `Start ${trialDays}-Day Free Trial`
+      : "Subscribe";
+
+  /** The button under a paid plan, plus the line explaining a comp grant. */
+  const planCta = (tier: "prospector" | "miner", primary: boolean) => {
+    const onThisPlan = currentTier === tier;
+
+    if (onThisPlan && hasBilling) {
+      return (
+        <Button
+          variant="secondary"
+          size="lg"
+          className="w-full"
+          onClick={handleManageBilling}
+        >
+          Manage Subscription
+        </Button>
+      );
+    }
+
+    return (
+      <>
+        <Button
+          variant={primary ? "primary" : "secondary"}
+          size="lg"
+          className={primary ? "w-full cta-glow" : "w-full"}
+          onClick={() => handleSubscribe(tier)}
+          disabled={loadingTier === tier}
+        >
+          {loadingTier === tier ? "Redirecting..." : ctaLabel}
+        </Button>
+        {onThisPlan && compEndsOn && (
+          <p className="mt-2 text-center text-xs text-slate-400">
+            Your free access runs to {formatDay(compEndsOn)}. Subscribe to keep
+            it after that.
+          </p>
+        )}
+      </>
+    );
+  };
 
   const renderCellValue = (value: string | boolean) => {
     if (value === true)
@@ -256,11 +369,28 @@ export default function PricingPage() {
             Mining Intelligence, Your Way
           </h1>
           <p className="text-lg text-slate-300 max-w-2xl mx-auto">
-            Start free with Explorer. Upgrade when you need unlimited AI chat,
-            all 19 investor tools, every open financing round — and the ability
-            to participate in one.
+            Start free with Explorer. Upgrade when you need unlimited AI chat,{" "}
+            {PROSPECTOR_COUNT} investor tools, every open financing round — and
+            the ability to participate in one.
           </p>
         </div>
+
+        {/* The signup grant is a better offer than anything on this page, and
+            it was the one thing /pricing never mentioned. Only shown to
+            logged-out visitors — anyone signed in already has it or has had
+            it — and only while the server says it is switched on. */}
+        {!user && offer.free_trial_enabled && (
+          <div className="mb-12 rounded-xl border border-gold-500/30 bg-slate-900/60 px-6 py-4 text-center">
+            <p className="text-slate-300">
+              <span className="font-semibold text-gold-400">
+                New accounts get {offer.free_trial_days} days of Prospector
+                free.
+              </span>{" "}
+              No credit card, nothing to cancel — it reverts to Explorer on its
+              own.
+            </p>
+          </div>
+        )}
 
         {/* Interval Toggle */}
         <div className="flex items-center justify-center gap-3 mb-12">
@@ -294,7 +424,7 @@ export default function PricingPage() {
 
         {/* Pricing Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-16">
-          {/* Explorer - Free */}
+          {/* Explorer - free forever */}
           <div
             className={`glass-card rounded-2xl p-6 flex flex-col ${currentTier === "explorer" ? "border-gold-500/40" : ""}`}
           >
@@ -341,7 +471,7 @@ export default function PricingPage() {
             )}
           </div>
 
-          {/* Prospector - $29/mo */}
+          {/* Prospector - price comes from /platform/tiers/, never from here */}
           <div
             className={`glass-card rounded-2xl p-6 flex flex-col relative border-gold-500/30 ${currentTier === "prospector" ? "border-gold-400/60" : ""}`}
           >
@@ -369,6 +499,9 @@ export default function PricingPage() {
                 )}
               </div>
             </div>
+            {/* Every line here is something the backend enforces. "Full company
+                profiles + resources" used to sit in this list and nothing gated
+                it — Explorer sees the same profiles. */}
             <ul className="space-y-3 mb-8 flex-1">
               <li className="flex items-start gap-2 text-sm text-slate-300">
                 <span className="text-gold-400 mt-0.5">&#10003;</span>
@@ -376,42 +509,22 @@ export default function PricingPage() {
               </li>
               <li className="flex items-start gap-2 text-sm text-slate-300">
                 <span className="text-gold-400 mt-0.5">&#10003;</span>
-                <strong className="text-white">16</strong>&nbsp;investor tools
+                <strong className="text-white">{PROSPECTOR_COUNT}</strong>
+                &nbsp;investor tools
               </li>
               <li className="flex items-start gap-2 text-sm text-slate-300">
                 <span className="text-gold-400 mt-0.5">&#10003;</span>
-                Every open financing round
+                Every open financing round, and the ability to participate
               </li>
               <li className="flex items-start gap-2 text-sm text-slate-300">
                 <span className="text-gold-400 mt-0.5">&#10003;</span>
-                Full company profiles + resources
+                The full company database as a CSV export
               </li>
             </ul>
-            {currentTier === "prospector" ? (
-              <Button
-                variant="secondary"
-                size="lg"
-                className="w-full"
-                onClick={handleManageBilling}
-              >
-                Manage Subscription
-              </Button>
-            ) : (
-              <Button
-                variant="primary"
-                size="lg"
-                className="w-full cta-glow"
-                onClick={() => handleSubscribe("prospector")}
-                disabled={loadingTier === "prospector"}
-              >
-                {loadingTier === "prospector"
-                  ? "Redirecting..."
-                  : "Start 7-Day Free Trial"}
-              </Button>
-            )}
+            {planCta("prospector", true)}
           </div>
 
-          {/* Miner - $79/mo */}
+          {/* Miner - price comes from /platform/tiers/, never from here */}
           <div
             className={`glass-card rounded-2xl p-6 flex flex-col ${currentTier === "miner" ? "border-gold-500/40" : ""}`}
           >
@@ -446,28 +559,7 @@ export default function PricingPage() {
                 Warrant Overhang Radar
               </li>
             </ul>
-            {currentTier === "miner" ? (
-              <Button
-                variant="secondary"
-                size="lg"
-                className="w-full"
-                onClick={handleManageBilling}
-              >
-                Manage Subscription
-              </Button>
-            ) : (
-              <Button
-                variant="secondary"
-                size="lg"
-                className="w-full"
-                onClick={() => handleSubscribe("miner")}
-                disabled={loadingTier === "miner"}
-              >
-                {loadingTier === "miner"
-                  ? "Redirecting..."
-                  : "Start 7-Day Free Trial"}
-              </Button>
-            )}
+            {planCta("miner", false)}
           </div>
         </div>
 
@@ -516,7 +608,10 @@ export default function PricingPage() {
           </div>
         </div>
 
-        {/* FAQ */}
+        {/* FAQ. The trial answer is assembled from the same two sources the
+            buttons use, because there are two different free periods here and
+            conflating them is how "you'll be charged automatically" ended up
+            attached to a 30-day grant that takes no card. */}
         <div className="max-w-3xl mx-auto">
           <h2 className="font-display text-2xl font-semibold text-gold-400 text-center mb-8 tracking-tight italic">
             Frequently Asked Questions
@@ -525,15 +620,21 @@ export default function PricingPage() {
             {[
               {
                 q: "Can I cancel anytime?",
-                a: "Yes. Cancel anytime from your billing portal. You'll keep access until the end of your billing period.",
+                a: "Yes. Cancel anytime from your billing portal. You'll keep access until the end of the period you've paid for.",
               },
               {
-                q: "What happens when my trial ends?",
-                a: "After your 7-day free trial, you'll be charged automatically. Cancel before the trial ends to avoid charges.",
+                q: "What free access is there?",
+                a: offer.free_trial_enabled
+                  ? `Two separate things. Creating an account gives you ${offer.free_trial_days} days of Prospector with no card — when it runs out you drop to Explorer and nothing is charged. Separately, the first time you start a paid plan it includes a ${trialDays}-day trial.`
+                  : `Explorer is free forever. The first time you start a paid plan it includes a ${trialDays}-day trial.`,
+              },
+              {
+                q: "What happens when the paid trial ends?",
+                a: `You're charged automatically at the end of the ${trialDays} days unless you cancel first. The trial is once per customer — if you've subscribed before, a new plan starts billing immediately.`,
               },
               {
                 q: "Can I switch between plans?",
-                a: "Yes. Upgrade or downgrade anytime through the billing portal. Changes are prorated.",
+                a: "Yes. Change plans from the billing portal once you're subscribed.",
               },
               {
                 q: "Is my payment secure?",

@@ -1,3 +1,4 @@
+import type { SignupOffer } from "./signupOffer";
 import type {
   Company,
   Project,
@@ -1343,8 +1344,30 @@ export interface PlatformTier {
   features: Record<string, unknown>;
 }
 
+/** GET /platform/subscription/ — the caller's own plan, as the server sees it. */
+export interface PlatformSubscriptionStatus {
+  tier: string;
+  effective_tier: string;
+  /** False once this customer has had a paid subscription: one trial each. */
+  trial_eligible: boolean;
+  /** False for a comp grant, which has no Stripe customer and so no portal. */
+  has_billing_account: boolean;
+  status: string;
+  is_active: boolean;
+  plan_interval: string | null;
+  price_cents: number;
+  trial_end: string | null;
+  current_period_end: string | null;
+  cancel_at_period_end: boolean;
+  features: Record<string, unknown>;
+}
+
 export const platformAPI = {
   getTiers: () => apiFetch<{ tiers: PlatformTier[] }>("/platform/tiers/"),
+
+  /** Public. What a brand-new registration actually grants right now — the
+   *  grant sits behind an env var, so copy has to ask rather than assume. */
+  getSignupOffer: () => apiFetch<SignupOffer>("/platform/signup-offer/"),
 
   /**
    * Reconcile a completed checkout instead of waiting on the webhook.
@@ -1361,7 +1384,7 @@ export const platformAPI = {
     ),
 
   getSubscription: (accessToken: string) =>
-    apiFetch<any>("/platform/subscription/", {
+    apiFetch<PlatformSubscriptionStatus>("/platform/subscription/", {
       headers: { Authorization: `Bearer ${accessToken}` },
     }),
 

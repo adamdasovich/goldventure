@@ -1,8 +1,17 @@
 import { Metadata } from "next";
+import { PROSPECTOR_COUNT } from "@/app/investor-tools/tools";
 
 const url = "https://juniorminingintelligence.com/pricing";
+
+// This is the text Google shows under the result, and it was the last place on
+// the site still advertising historical data and API access — neither of which
+// exists — alongside a tool count of 10 that had been wrong for months. Kept
+// free of prices so it cannot drift from Stripe; the count is derived.
 const description =
-  "Compare Junior Mining Intelligence plans. Start free with the Explorer tier, or upgrade to Prospector or Miner for unlimited AI research, all 10 investor tools, historical data, and API access.";
+  `Compare Junior Mining Intelligence plans. Explorer is free: 5 AI research ` +
+  `questions a day, the full company directory and the news feed. Prospector ` +
+  `adds unlimited AI chat, ${PROSPECTOR_COUNT} investor tools, every open ` +
+  `financing round and CSV export.`;
 
 export const metadata: Metadata = {
   title: "Pricing & Subscription Plans",

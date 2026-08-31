@@ -3,8 +3,13 @@ Stripe Service for Platform User Subscriptions
 
 Handles user-level subscription tiers:
 - Explorer: Free (no Stripe)
-- Prospector: $29/month or $249/year
-- Miner: $79/month or $699/year
+- Prospector: $10/month or $100/year
+- Miner: $50/month or $500/year
+
+TIER_PRICING below is the only place those numbers are written down. The public
+/platform/tiers/ endpoint reads them, so the pricing page cannot drift from what
+Stripe actually charges — this docstring did, and claimed $29/$249 and $79/$699
+for weeks after the real prices changed.
 
 Mirrors the pattern in stripe_service.py (company subscriptions).
 """
@@ -25,8 +30,8 @@ logger = logging.getLogger(__name__)
 # Pricing configuration (cents)
 TIER_PRICING = {
     'prospector': {
-        'month': 1500,   # $15/month
-        'year': 15000,   # $150/year (10x monthly)
+        'month': 1000,   # $10/month
+        'year': 10000,   # $100/year (10x monthly)
     },
     'miner': {
         'month': 5000,   # $50/month
