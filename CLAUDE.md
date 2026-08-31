@@ -53,8 +53,20 @@ pm2 list                            # status / restart count
 pm2 logs goldventure-frontend       # tail logs (check after a deploy)
 ```
 
+The app runs in **pm2 cluster mode with two instances**, so `deploy.sh` can use
+`pm2 reload` and cycle them one at a time — the other keeps answering, and a
+deploy costs no downtime at all. A single fork-mode process had to be restarted
+outright, which measured 4 consecutive 502s over ~0.87s on every deploy. The
+second instance costs about 190MB resident. The pm2 config lives at
+`/var/www/goldventure/ecosystem.config.js` **on the server only** (it is not in
+git) and must point `script` at `./node_modules/next/dist/bin/next` rather than
+npm: pm2 cannot cluster a shell wrapper.
+
 `deploy.sh` builds into `.next-build`, and only once that succeeds does it move
-the directory into place and restart pm2. It then checks every `/_next/static/`
+the directory into place and reload pm2. It also copies the previous build's
+`static/` across without overwriting (chunk names are content-hashed, so they
+barely overlap), which keeps pages already open in a browser — and the instance
+not yet cycled — from 404ing on chunks that just moved. It then checks every `/_next/static/`
 asset on five pages and, if any is not a 200, **puts the previous build back and
 restarts**. A failed deploy costs a restart rather than an outage.
 

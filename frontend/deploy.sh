@@ -75,6 +75,9 @@ rollback() {
   printf '\n\033[1m==> Rolling back to the previous build\033[0m\n'
   rm -rf "$LIVE_DIR"
   mv "$PREV_DIR" "$LIVE_DIR"
+  # restart, not reload: a rolling reload would leave instances running the
+  # build being rolled back for as long as the roll takes, and the reason we
+  # are here is that that build is broken. Take them all down at once.
   pm2 restart "$APP" >/dev/null || true
 
   # Check the rollback, rather than announcing it. Returning while the site is
@@ -123,8 +126,25 @@ mv "$LIVE_DIR" "$PREV_DIR"
 mv "$BUILD_DIR" "$LIVE_DIR"
 SWAPPED=1
 
-log "Restarting $APP"
-pm2 restart "$APP" >/dev/null
+# Carry the previous build's static assets across, without overwriting any of
+# the new ones (-n). Chunk filenames are content-hashed, so the two sets barely
+# overlap and the old files are simply extra.
+#
+# Two things need them. A page already open in someone's browser goes on asking
+# for the chunks its HTML named, and during a rolling reload the instance not
+# yet cycled is still serving that HTML — while the files it refers to have just
+# been moved to $PREV_DIR. Without this, both get a 404 on a stylesheet and
+# report it as a MIME type error, which is the confusing failure this repo has
+# hit before.
+if [ -d "$PREV_DIR/static" ]; then
+  cp -rn "$PREV_DIR/static/." "$LIVE_DIR/static/" 2>/dev/null || true
+fi
+
+# Rolling reload, not restart: pm2 cycles the cluster's instances one at a time,
+# so the other keeps answering. A restart takes every instance down together —
+# measured at 4 consecutive 502s over ~0.87s, on every single deploy.
+log "Reloading $APP (rolling, one instance at a time)"
+pm2 reload "$APP" >/dev/null
 
 wait_for_site 30 || fail "site did not answer within 30s of the restart"
 
