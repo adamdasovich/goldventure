@@ -96,6 +96,42 @@ const EMPTY_FORM: FinancingForm = {
   is_closed: false,
 };
 
+/** Amount raised is displayed grouped ("4,000,000.00"), so every read of it
+ *  has to strip the separators first — parseFloat("4,000,000") is 4, silently. */
+function unformatAmount(value: string): string {
+  return value.replace(/,/g, "");
+}
+
+/** Group the integer part in threes for display. Deliberately tolerant of a
+ *  half-typed number — a trailing "." and an empty string both survive — so
+ *  the field can reformat on every keystroke without fighting the typist. */
+function formatAmount(value: string): string {
+  const [whole, ...fraction] = value.replace(/[^0-9.]/g, "").split(".");
+  const grouped = whole.replace(/(?=(?:[0-9]{3})+$)(?!^)/g, ",");
+  // Only the first "." is a decimal point; later ones are typos, not a second.
+  return fraction.length ? `${grouped}.${fraction.join("")}` : grouped;
+}
+
+/** How many characters of a value survive formatting. Commas the typist never
+ *  pressed shift everything right, so the caret is restored by counting these
+ *  rather than by raw offset — otherwise an edit mid-number jumps to the end. */
+function significantCount(value: string): number {
+  return (value.match(/[0-9.]/g) || []).length;
+}
+
+/** Index just past the `count`-th significant character of `formatted`. */
+function caretAfter(formatted: string, count: number): number {
+  if (count <= 0) return 0;
+  let seen = 0;
+  for (let i = 0; i < formatted.length; i++) {
+    if (/[0-9.]/.test(formatted[i])) {
+      seen += 1;
+      if (seen === count) return i + 1;
+    }
+  }
+  return formatted.length;
+}
+
 /** Share count implied by the size of the round at its announced price.
  *
  *  Upsizing a placement is what this form is mostly used for, and the share
@@ -103,7 +139,7 @@ const EMPTY_FORM: FinancingForm = {
  *  longer matches the dollars beside it. Returns null when there is no usable
  *  price, so the existing count is left alone rather than blanked. */
 function sharesFromAmount(amount: string, price: string): string | null {
-  const raised = parseFloat(amount);
+  const raised = parseFloat(unformatAmount(amount));
   const perShare = parseFloat(price);
   if (!Number.isFinite(raised) || !Number.isFinite(perShare) || perShare <= 0) {
     return null;
@@ -151,7 +187,7 @@ export default function OpenFinancingsClient({
       financing_type: financing.financing_type,
       status: financing.status || "announced",
       amount_raised_usd: financing.amount_raised_usd
-        ? String(financing.amount_raised_usd)
+        ? formatAmount(String(financing.amount_raised_usd))
         : "",
       price_per_share: financing.price_per_share
         ? String(financing.price_per_share)
@@ -184,7 +220,8 @@ export default function OpenFinancingsClient({
     e.preventDefault();
     if (!editingFinancing) return;
 
-    if (!formData.amount_raised_usd) {
+    const amountRaised = parseFloat(unformatAmount(formData.amount_raised_usd));
+    if (!Number.isFinite(amountRaised)) {
       setFormError("Amount raised is required.");
       return;
     }
@@ -208,7 +245,7 @@ export default function OpenFinancingsClient({
           body: JSON.stringify({
             financing_type: formData.financing_type,
             status: formData.status,
-            amount_raised_usd: parseFloat(formData.amount_raised_usd),
+            amount_raised_usd: amountRaised,
             price_per_share: formData.price_per_share
               ? parseFloat(formData.price_per_share)
               : null,
@@ -427,12 +464,15 @@ export default function OpenFinancingsClient({
 
               <Field label="Amount raised (CAD)" required>
                 <input
-                  type="number"
-                  step="0.01"
+                  type="text"
+                  inputMode="decimal"
                   required
                   value={formData.amount_raised_usd}
                   onChange={(e) => {
-                    const amount = e.target.value;
+                    const input = e.target;
+                    const caret = input.selectionStart ?? input.value.length;
+                    const typed = significantCount(input.value.slice(0, caret));
+                    const amount = formatAmount(input.value);
                     const shares = sharesFromAmount(
                       amount,
                       formData.price_per_share,
@@ -441,6 +481,13 @@ export default function OpenFinancingsClient({
                       ...formData,
                       amount_raised_usd: amount,
                       ...(shares === null ? {} : { shares_issued: shares }),
+                    });
+                    // Put the caret back behind the same digit it was behind.
+                    // React rewrites value on the next paint, and a controlled
+                    // reformat otherwise drops it at the end of the field.
+                    requestAnimationFrame(() => {
+                      const pos = caretAfter(amount, typed);
+                      input.setSelectionRange(pos, pos);
                     });
                   }}
                   className={INPUT_CLASS}
