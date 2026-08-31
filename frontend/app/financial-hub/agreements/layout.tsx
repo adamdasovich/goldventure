@@ -1,36 +1,30 @@
 import type { Metadata } from "next";
 
 /**
- * Metadata for Subscription Agreements.
+ * Metadata for Your Subscription Agreements.
  *
- * Without this file the page inherited app/financial-hub/layout.tsx, whose
- * canonical is /financial-hub — so this route declared itself a duplicate of
- * the parent and shared its title. Anything published here would have been
- * canonicalised away.
+ * This page shows the signed-in user's own subscription agreements. It is an account page, not a content page — the
+ * same category as /dashboard and /account/orders, which are permanently
+ * noindex, nofollow. It renders nothing to a crawler because there is nothing
+ * a crawler should see, and that will not change when the Financial Hub gains
+ * content elsewhere.
  *
- * noindex until it renders something. The page is a client component that
- * shows a spinner on first render, so a crawler receives no content at all —
- * which is the thin-page pattern this project has been removing everywhere
- * else. Delete the robots block below once there is content to index.
+ * Do not remove the robots block. If this page ever needs a public,
+ * indexable explanation of what it does, that belongs on /financial-hub or in
+ * a guide, not here.
+ *
+ * The canonical is its own URL rather than the parent's. Every route under
+ * /financial-hub used to inherit `canonical: /financial-hub` from the parent
+ * layout, which declared five distinct pages duplicates of one another.
  */
 export const metadata: Metadata = {
-  title: "Subscription Agreements — Financial Hub",
+  title: "Your Subscription Agreements — Financial Hub",
   description:
-    "The subscription agreements attached to financings you are taking part in, and what each clause commits you to.",
+    "The subscription agreements attached to financings you are taking part in.",
   alternates: {
     canonical: "https://juniorminingintelligence.com/financial-hub/agreements",
   },
-  // See the note above: remove this once the page renders content.
-  robots: { index: false, follow: true },
-  openGraph: {
-    title: "Subscription Agreements — Financial Hub",
-    description:
-      "The subscription agreements attached to financings you are taking part in, and what each clause commits you to.",
-    url: "https://juniorminingintelligence.com/financial-hub/agreements",
-    type: "website",
-    siteName: "Junior Mining Intelligence",
-    images: [{ url: "/og-image.png", width: 1200, height: 630 }],
-  },
+  robots: { index: false, follow: false },
 };
 
 export default function AgreementsLayout({

@@ -92,6 +92,11 @@ from ..constants import CacheTTL, Timeouts
 
 from rest_framework.decorators import api_view, permission_classes, action
 from rest_framework.permissions import IsAuthenticated, AllowAny, IsAuthenticatedOrReadOnly
+
+# Staff-only permission, defined in store_admin and re-exported from
+# core.views. Imported directly to avoid a circular import through the
+# package __init__.
+from core.views.store_admin import IsAdminUser
 from rest_framework.response import Response
 from rest_framework.pagination import PageNumberPagination
 from django.db.models import Count, Q
@@ -110,7 +115,24 @@ class EducationalModuleViewSet(viewsets.ModelViewSet):
     - POST /api/education/modules/{id}/complete/ - Mark module as complete
     """
     serializer_class = EducationalModuleSerializer
-    permission_classes = [IsAuthenticated]
+
+    def get_permissions(self):
+        """
+        Published modules are public content; authoring them is not.
+
+        Reads used to require authentication, so four published modules
+        returned 401 to anonymous visitors and the page rendered a spinner to
+        every crawler. Worse, because this is a ModelViewSet, the same
+        `IsAuthenticated` granted create, update and destroy to every signed-in
+        account -- anyone could rewrite or delete the platform's educational
+        content.
+        """
+        if self.action in ['list', 'retrieve']:
+            return [AllowAny()]
+        if self.action == 'complete':
+            # A user recording their own progress against a module.
+            return [IsAuthenticated()]
+        return [IsAdminUser()]
 
     def get_queryset(self):
         return EducationalModule.objects.filter(is_published=True)

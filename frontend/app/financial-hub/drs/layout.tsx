@@ -1,36 +1,30 @@
 import type { Metadata } from "next";
 
 /**
- * Metadata for DRS Documents.
+ * Metadata for Your DRS Statements.
  *
- * Without this file the page inherited app/financial-hub/layout.tsx, whose
- * canonical is /financial-hub — so this route declared itself a duplicate of
- * the parent and shared its title. Anything published here would have been
- * canonicalised away.
+ * This page shows the signed-in user's own DRS statements and share records. It is an account page, not a content page — the
+ * same category as /dashboard and /account/orders, which are permanently
+ * noindex, nofollow. It renders nothing to a crawler because there is nothing
+ * a crawler should see, and that will not change when the Financial Hub gains
+ * content elsewhere.
  *
- * noindex until it renders something. The page is a client component that
- * shows a spinner on first render, so a crawler receives no content at all —
- * which is the thin-page pattern this project has been removing everywhere
- * else. Delete the robots block below once there is content to index.
+ * Do not remove the robots block. If this page ever needs a public,
+ * indexable explanation of what it does, that belongs on /financial-hub or in
+ * a guide, not here.
+ *
+ * The canonical is its own URL rather than the parent's. Every route under
+ * /financial-hub used to inherit `canonical: /financial-hub` from the parent
+ * layout, which declared five distinct pages duplicates of one another.
  */
 export const metadata: Metadata = {
-  title: "DRS Statements & Share Documents — Financial Hub",
+  title: "Your DRS Statements — Financial Hub",
   description:
-    "Direct Registration System statements and share ownership records for the placements you have participated in.",
+    "Direct Registration System statements and share ownership records for placements you have participated in.",
   alternates: {
     canonical: "https://juniorminingintelligence.com/financial-hub/drs",
   },
-  // See the note above: remove this once the page renders content.
-  robots: { index: false, follow: true },
-  openGraph: {
-    title: "DRS Statements & Share Documents — Financial Hub",
-    description:
-      "Direct Registration System statements and share ownership records for the placements you have participated in.",
-    url: "https://juniorminingintelligence.com/financial-hub/drs",
-    type: "website",
-    siteName: "Junior Mining Intelligence",
-    images: [{ url: "/og-image.png", width: 1200, height: 630 }],
-  },
+  robots: { index: false, follow: false },
 };
 
 export default function DrsLayout({
