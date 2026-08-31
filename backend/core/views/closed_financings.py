@@ -7,7 +7,6 @@ import logging
 from rest_framework import viewsets, status, permissions
 
 from ..models import (
-from ..query_guard import guard_query_params
     Company, Project, ResourceEstimate, EconomicStudy,
     Financing, Investor, MarketData, NewsRelease, Document,
     SpeakerEvent, EventSpeaker, EventRegistration, EventQuestion, EventReaction,
@@ -30,6 +29,7 @@ from ..query_guard import guard_query_params
     # Glossary
     GlossaryTerm, GlossaryTermSubmission,
 )
+from ..query_guard import guard_query_params
 
 from ..serializers import (
     CompanySerializer, CompanyDetailSerializer,
