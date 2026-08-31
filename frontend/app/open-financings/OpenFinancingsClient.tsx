@@ -940,6 +940,19 @@ function OpenFinancingCard({
           </div>
 
           <div className="flex flex-row lg:flex-col gap-2 lg:justify-start">
+            {/*
+              The round itself — terms, how far it has filled, and the
+              Participate in Financing flow. The card previously offered only
+              the company profile and the press release, so the list of open
+              deals had no route to acting on one. Same destination and wording
+              as the "View Financing Details" button on a company's financings
+              tab.
+            */}
+            <Link href={`/companies/${financing.company_id}/financing`}>
+              <Button variant="primary" size="sm" className="w-full">
+                View Financing Details
+              </Button>
+            </Link>
             <Link
               href={companyHref({
                 id: financing.company_id,

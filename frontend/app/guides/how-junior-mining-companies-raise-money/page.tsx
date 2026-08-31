@@ -261,7 +261,19 @@ export default function FinancingPillarGuide() {
         </div>
 
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          {/* 30-second answer */}
+          {/*
+          First thing in the article body, above the summary box.
+
+          The other link blocks on this page sit at lines 1290 and 1420, past
+          5,600 words, so almost nobody arriving from search ever saw them.
+          Someone landing here from "junior mining private placement" already
+          knows they want a placement — the summary box tells them what one is,
+          and this tells them where to find one. Putting it first means the
+          reader does not have to earn it by scrolling.
+        */}
+        <FinancingCTA />
+
+        {/* 30-second answer */}
           <div className="bg-gradient-to-br from-gold-500/10 to-gold-500/5 border border-gold-500/30 rounded-lg p-6 mb-12">
             <h2 className="text-lg font-bold text-gold-400 mb-3">
               The 30-second answer
@@ -303,13 +315,6 @@ export default function FinancingPillarGuide() {
             </p>
           </div>
 
-          {/*
-            Placed here rather than with the other link blocks. Those sit at
-            lines 1290 and 1420 -- past 5,600 words. This is the first point at
-            which a reader knows what a placement is, which is when they are
-            most likely to want to see one.
-          */}
-          <FinancingCTA />
 
           {/* TOC */}
           <div className="bg-slate-800 border border-slate-700 rounded-lg p-6 mb-12">
