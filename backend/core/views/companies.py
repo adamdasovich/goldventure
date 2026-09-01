@@ -99,6 +99,7 @@ import requests
 from django.conf import settings
 from datetime import datetime, timedelta
 from django.core.cache import cache
+from ..query_guard import GuardedListParamsMixin
 
 
 
@@ -107,8 +108,13 @@ from django.core.cache import cache
 # COMPANY VIEWSET
 # ============================================================================
 
-class CompanyViewSet(viewsets.ModelViewSet):
+class CompanyViewSet(GuardedListParamsMixin, viewsets.ModelViewSet):
     """API endpoint for companies"""
+    # Verified against the view (commodity, limit, ticker, page, search) and
+    # its callers. Warn-only for now: the logs will show anything real that
+    # is missing here before this is switched to enforcing.
+    ALLOWED_LIST_PARAMS = frozenset({'commodity', 'limit', 'ticker'})
+    STRICT_LIST_PARAMS = False
     queryset = Company.objects.all()
     permission_classes = [IsAuthenticatedOrReadOnly]  # Allow reads, require auth for writes
     pagination_class = FlexiblePagePagination

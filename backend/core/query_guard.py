@@ -83,3 +83,44 @@ def guard_query_params(*allowed, strict=True):
         return wrapper
 
     return decorator
+
+
+class GuardedListParamsMixin:
+    """ViewSet counterpart to guard_query_params.
+
+    Most list endpoints here are ViewSets, where a decorator on a function is
+    not available. Mix this in ahead of the ViewSet base and declare:
+
+        class ThingViewSet(GuardedListParamsMixin, viewsets.ModelViewSet):
+            ALLOWED_LIST_PARAMS = frozenset({'commodity', 'ticker'})
+            STRICT_LIST_PARAMS = False   # log first, enforce once verified
+
+    Only `list` is guarded. Detail routes take their argument from the URL, so
+    a stray query parameter there cannot be mistaken for a filter that worked.
+
+    Work the allow-list out from the view code AND from filterset_fields /
+    search_fields / ordering_fields, which the DRF filter backends consume
+    without the view ever calling query_params.get. Missing those is how a
+    working parameter gets mistaken for a silently-ignored one.
+    """
+
+    ALLOWED_LIST_PARAMS: frozenset = frozenset()
+    # Default False on purpose: a wrong allow-list 400s a page that works, and
+    # the logs tell you what callers really send before you commit to enforcing.
+    STRICT_LIST_PARAMS: bool = False
+
+    def list(self, request, *args, **kwargs):
+        allowed = set(self.ALLOWED_LIST_PARAMS)
+        # Anything the filter backends are configured to honour is legitimate.
+        for attr in ("filterset_fields", "search_fields", "ordering_fields"):
+            allowed.update(getattr(self, attr, None) or [])
+
+        unknown = unknown_params(request, allowed)
+        if unknown:
+            if self.STRICT_LIST_PARAMS:
+                return rejection_response(unknown, allowed)
+            logger.warning(
+                "Ignored query parameter(s) on %s: %s (allowed: %s)",
+                request.path, ", ".join(unknown), ", ".join(sorted(allowed)),
+            )
+        return super().list(request, *args, **kwargs)
