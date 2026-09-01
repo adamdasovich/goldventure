@@ -99,7 +99,7 @@ const faqSchema = {
       name: "What is a private placement in mining?",
       acceptedAnswer: {
         "@type": "Answer",
-        text: "A private placement is the sale of new shares (and sometimes warrants) to a specific group of investors outside a public offering. In Canada, private placements rely on prospectus exemptions — most commonly the Accredited Investor exemption, the Offering Memorandum exemption, or (for very small raises) the Family/Friends/Business Associates exemption. Private placements are faster and cheaper than public offerings: a junior can announce, price, and close a placement in 2-4 weeks. The trade-off for investors is a hold period (4 months in Canada under National Instrument 45-102) before the shares can be resold on the public market.",
+        text: "A private placement is the sale of new shares (and sometimes warrants) to a specific group of investors outside a public offering. In Canada, private placements rely on prospectus exemptions — most commonly the Accredited Investor exemption, the Offering Memorandum exemption, or (for very small raises) the Family/Friends/Business Associates exemption. A Minimum Amount Investment exemption also exists, allowing anyone to subscribe without qualifying as accredited provided they invest at least $150,000 in a single transaction. Private placements are faster and cheaper than public offerings: a junior can announce, price, and close a placement in 2-4 weeks. The trade-off for investors is a hold period (4 months in Canada under National Instrument 45-102) before the shares can be resold on the public market.",
       },
     },
     {
@@ -489,7 +489,11 @@ export default function FinancingPillarGuide() {
                   Investors subscribe through subscription agreements citing a
                   specific prospectus exemption (most commonly Accredited
                   Investor, Offering Memorandum, or Family/Friends/Business
-                  Associates).
+                  Associates). There is also a Minimum Amount Investment
+                  exemption, which lets anyone subscribe without qualifying as
+                  accredited provided they invest at least $150,000 in a single
+                  transaction — the one route into a placement that turns on
+                  cheque size rather than on who you are.
                 </li>
                 <li>
                   Funds are deposited in trust. The placement closes when
