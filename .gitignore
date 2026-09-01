@@ -62,3 +62,11 @@ backend/scratch/
 backend/chromadb_data/
 *.bak
 .env*.bak*
+
+# Playwright output. frontend/.gitignore already covers frontend/test-results,
+# but its rules are anchored with a leading slash and so do not reach a run that
+# lands at the repo root — which is where an interrupted mobile-suite run puts
+# .last-run.json. Ignored here too so a stray run cannot leave the tree dirty.
+/test-results/
+/playwright-report/
+/playwright/.cache/
