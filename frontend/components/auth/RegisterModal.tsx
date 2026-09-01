@@ -11,11 +11,26 @@ interface RegisterModalProps {
   onSwitchToLogin: () => void;
 }
 
+/**
+ * Who is signing up — NOT which plan they are on.
+ *
+ * This writes `user_type`, which shows as a badge in the company forums and is
+ * what the Financial Hub filters on. It has nothing to do with billing: every
+ * registration gets the same thing regardless of what is picked here, so the
+ * options must not read as plan names or someone choosing "Company" will expect
+ * editing rights they have not been approved for.
+ *
+ * Three, matching the audiences the platform serves. "Student" was dropped on
+ * 2026-09-01: it drove nothing and was the one option that did not describe a
+ * customer. The model keeps its full list — `company` is written by the access
+ * request approval, `admin` gates forum moderation, and existing `student` and
+ * `analyst` rows still have to render their badge — so this is the offered set,
+ * not the allowed set.
+ */
 const USER_TYPE_OPTIONS = [
   { value: "investor", label: "Investor" },
   { value: "mining_company", label: "Mining Company" },
   { value: "prospector", label: "Prospector" },
-  { value: "student", label: "Student" },
 ];
 
 // Single password rule, matching the backend's MinimumLengthValidator in
