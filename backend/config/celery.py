@@ -67,8 +67,11 @@ _SCRUB_VIA_RESOLVER = (
 #     and gpu_worker.py, which are standalone processes -- not Celery children,
 #     and gpu_orchestrator has its own env file. Removing them here cannot
 #     affect them.
-#   WS_SECRET_ACCESS_KEY is a typo'd duplicate of AWS_SECRET_ACCESS_KEY in
-#     .env, holding the same live credential, read by no code anywhere.
+#   WS_SECRET_ACCESS_KEY was a typo'd duplicate of AWS_SECRET_ACCESS_KEY in
+#     .env -- the same live credential under a junk name, read by no code
+#     anywhere. Deleted from .env on 2026-09-01. The entry stays here so the
+#     typo cannot silently reappear; scrubbing a name that is absent is a
+#     no-op.
 _SCRUB_NO_READER_HERE = (
     'DO_API_TOKEN',
     'DO_SSH_KEY_ID',
