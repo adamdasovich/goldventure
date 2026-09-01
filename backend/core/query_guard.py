@@ -25,6 +25,7 @@ Work out the allow-list from ALL of these, not just the first:
 import logging
 
 from rest_framework import status
+from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 
 logger = logging.getLogger(__name__)
@@ -95,13 +96,25 @@ class GuardedListParamsMixin:
             ALLOWED_LIST_PARAMS = frozenset({'commodity', 'ticker'})
             STRICT_LIST_PARAMS = False   # log first, enforce once verified
 
-    Only `list` is guarded. Detail routes take their argument from the URL, so
-    a stray query parameter there cannot be mistaken for a filter that worked.
+    Hooks initial(), not list(). Overriding list() looked correct and was inert
+    on any ViewSet that defines its own list(): the subclass sits ahead of the
+    mixin in the MRO, so its list() wins and the guard never runs.
+    StoreCartViewSet and StoreShippingRateViewSet both did, and declared an
+    allow-list while being entirely unguarded. initial() is called by DRF's
+    dispatch for every request and is not overridden anywhere here.
+
+    super().initial() runs first on purpose, so authentication, permissions and
+    throttling are applied before the parameter check — a caller who may not see
+    the endpoint at all should get 401/403, not a 400 describing its parameters.
+
+    Only the list action is guarded. Detail routes take their argument from the
+    URL, so a stray query parameter there cannot be mistaken for a filter.
 
     Work the allow-list out from the view code AND from filterset_fields /
     search_fields / ordering_fields, which the DRF filter backends consume
     without the view ever calling query_params.get. Missing those is how a
-    working parameter gets mistaken for a silently-ignored one.
+    working parameter gets mistaken for a silently-ignored one: /glossary/
+    honours ?category= entirely through filterset_fields.
     """
 
     ALLOWED_LIST_PARAMS: frozenset = frozenset()
@@ -109,18 +122,41 @@ class GuardedListParamsMixin:
     # the logs tell you what callers really send before you commit to enforcing.
     STRICT_LIST_PARAMS: bool = False
 
-    def list(self, request, *args, **kwargs):
+    def _guard_allowed_params(self):
         allowed = set(self.ALLOWED_LIST_PARAMS)
         # Anything the filter backends are configured to honour is legitimate.
         for attr in ("filterset_fields", "search_fields", "ordering_fields"):
             allowed.update(getattr(self, attr, None) or [])
+        return allowed
 
+    def initial(self, request, *args, **kwargs):
+        super().initial(request, *args, **kwargs)
+
+        if getattr(self, "action", None) != "list":
+            return
+
+        allowed = self._guard_allowed_params()
         unknown = unknown_params(request, allowed)
-        if unknown:
-            if self.STRICT_LIST_PARAMS:
-                return rejection_response(unknown, allowed)
-            logger.warning(
-                "Ignored query parameter(s) on %s: %s (allowed: %s)",
-                request.path, ", ".join(unknown), ", ".join(sorted(allowed)),
-            )
-        return super().list(request, *args, **kwargs)
+        if not unknown:
+            return
+
+        if self.STRICT_LIST_PARAMS:
+            # ValidationError rather than returning a Response: initial() has no
+            # return path into the response cycle, and DRF renders this as a 400
+            # with the same shape the decorator produces.
+            raise ValidationError({
+                "error": "unknown_query_parameter",
+                "detail": (
+                    "Unrecognised query parameter(s): "
+                    + ", ".join(unknown)
+                    + ". This endpoint would otherwise ignore them and return "
+                    "an unfiltered result, which reads as a filtered one."
+                ),
+                "unknown": unknown,
+                "supported": sorted(set(allowed) | DRF_PARAMS),
+            })
+
+        logger.warning(
+            "Ignored query parameter(s) on %s: %s (allowed: %s)",
+            request.path, ", ".join(unknown), ", ".join(sorted(allowed)),
+        )
