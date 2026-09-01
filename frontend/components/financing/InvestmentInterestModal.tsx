@@ -174,6 +174,23 @@ export function InvestmentInterestModal({
                     </p>
                   </div>
                 </label>
+                {/*
+                  Outside the <label> on purpose. A link inside a label toggles
+                  the checkbox as well as following the href, so anyone
+                  clicking through to find out what the term meant would have
+                  ticked the accreditation box on the way. Opens in a new tab
+                  because this modal holds a part-filled form.
+                */}
+                <a
+                  href="/glossary/accredited-investor"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-3 inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-slate-600 px-3 py-2 text-sm font-medium text-slate-300 transition-colors hover:border-gold-500/60 hover:text-gold-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold-400"
+                >
+                  What is an accredited investor?
+                  <span aria-hidden="true">↗</span>
+                  <span className="sr-only">(opens in a new tab)</span>
+                </a>
               </div>
 
               {/* Shares and Investment Amount */}
