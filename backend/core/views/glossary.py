@@ -85,6 +85,7 @@ from rest_framework.permissions import IsAuthenticated, AllowAny, IsAuthenticate
 from rest_framework.response import Response
 from rest_framework.pagination import PageNumberPagination
 from django.db.models import Count, Q
+from ..query_guard import GuardedListParamsMixin
 
 
 
@@ -94,11 +95,15 @@ from django.db.models import Count, Q
 # GLOSSARY VIEWSET
 # ============================================================================
 
-class GlossaryTermViewSet(viewsets.ReadOnlyModelViewSet):
+class GlossaryTermViewSet(GuardedListParamsMixin, viewsets.ReadOnlyModelViewSet):
     """
     ViewSet for mining glossary terms
     Provides read-only access to glossary (superuser can edit via admin)
     """
+    # Warn-only: unknown params are logged, not rejected. Flip to True
+    # once a week of logs shows nothing real is missing from this list.
+    ALLOWED_LIST_PARAMS = frozenset({'letter', 'term'})
+    STRICT_LIST_PARAMS = False
     queryset = GlossaryTerm.objects.all()
     serializer_class = GlossaryTermSerializer
     permission_classes = [permissions.AllowAny]  # Public access for SEO
@@ -154,13 +159,17 @@ class GlossaryTermViewSet(viewsets.ReadOnlyModelViewSet):
 
 
 
-class GlossaryTermSubmissionViewSet(viewsets.ModelViewSet):
+class GlossaryTermSubmissionViewSet(GuardedListParamsMixin, viewsets.ModelViewSet):
     """
     ViewSet for user-submitted glossary terms
     - POST: Authenticated users can submit new terms
     - GET: Superusers can view pending submissions
     - PUT/PATCH: Superusers can approve or reject submissions
     """
+    # Warn-only: unknown params are logged, not rejected. Flip to True
+    # once a week of logs shows nothing real is missing from this list.
+    ALLOWED_LIST_PARAMS = frozenset()
+    STRICT_LIST_PARAMS = False
     queryset = GlossaryTermSubmission.objects.all()
     filterset_fields = ['status', 'submitted_by', 'category']
     search_fields = ['term', 'definition']

@@ -85,6 +85,7 @@ from rest_framework.permissions import IsAuthenticated, AllowAny, IsAuthenticate
 from rest_framework.response import Response
 from rest_framework.pagination import PageNumberPagination
 from django.db.models import Count, Q
+from ..query_guard import GuardedListParamsMixin
 
 
 
@@ -94,8 +95,12 @@ from django.db.models import Count, Q
 # PROJECT VIEWSET
 # ============================================================================
 
-class ProjectViewSet(viewsets.ModelViewSet):
+class ProjectViewSet(GuardedListParamsMixin, viewsets.ModelViewSet):
     """API endpoint for projects"""
+    # Warn-only: unknown params are logged, not rejected. Flip to True
+    # once a week of logs shows nothing real is missing from this list.
+    ALLOWED_LIST_PARAMS = frozenset({'commodity', 'company'})
+    STRICT_LIST_PARAMS = False
     queryset = Project.objects.all()
 
     WRITE_ACTIONS = ('create', 'update', 'partial_update', 'destroy')

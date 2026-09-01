@@ -85,6 +85,7 @@ from rest_framework.permissions import IsAuthenticated, AllowAny, IsAuthenticate
 from rest_framework.response import Response
 from rest_framework.pagination import PageNumberPagination
 from django.db.models import Count, Q
+from ..query_guard import GuardedListParamsMixin
 
 
 
@@ -94,13 +95,17 @@ from django.db.models import Count, Q
 # STORE MODULE API
 # ============================================================================
 
-class StoreCategoryViewSet(viewsets.ReadOnlyModelViewSet):
+class StoreCategoryViewSet(GuardedListParamsMixin, viewsets.ReadOnlyModelViewSet):
     """
     API for store categories.
 
     GET /api/store/categories/           - List all active categories
     GET /api/store/categories/{slug}/    - Get category by slug
     """
+    # Warn-only: unknown params are logged, not rejected. Flip to True
+    # once a week of logs shows nothing real is missing from this list.
+    ALLOWED_LIST_PARAMS = frozenset()
+    STRICT_LIST_PARAMS = False
     queryset = StoreCategory.objects.filter(is_active=True)
     serializer_class = StoreCategorySerializer
     permission_classes = [AllowAny]
@@ -109,7 +114,7 @@ class StoreCategoryViewSet(viewsets.ReadOnlyModelViewSet):
 
 
 
-class StoreProductViewSet(viewsets.ReadOnlyModelViewSet):
+class StoreProductViewSet(GuardedListParamsMixin, viewsets.ReadOnlyModelViewSet):
     """
     API for store products.
 
@@ -118,6 +123,10 @@ class StoreProductViewSet(viewsets.ReadOnlyModelViewSet):
     GET /api/store/products/featured/   - Get featured products
     GET /api/store/products/by-category/{category_slug}/ - Get products by category
     """
+    # Warn-only: unknown params are logged, not rejected. Flip to True
+    # once a week of logs shows nothing real is missing from this list.
+    ALLOWED_LIST_PARAMS = frozenset({'badge', 'category', 'max_price', 'min_price', 'sort', 'type'})
+    STRICT_LIST_PARAMS = False
     queryset = StoreProduct.objects.filter(is_active=True).select_related(
         'category'
     ).prefetch_related('images', 'variants')
@@ -242,7 +251,7 @@ class StoreProductViewSet(viewsets.ReadOnlyModelViewSet):
 
 
 
-class StoreCartViewSet(viewsets.ViewSet):
+class StoreCartViewSet(GuardedListParamsMixin, viewsets.ViewSet):
     """
     API for shopping cart management.
     Supports both authenticated users and guest carts (via session).
@@ -253,6 +262,10 @@ class StoreCartViewSet(viewsets.ViewSet):
     DELETE /api/store/cart/items/{id}/ - Remove item from cart
     POST /api/store/cart/clear/     - Clear entire cart
     """
+    # Warn-only: unknown params are logged, not rejected. Flip to True
+    # once a week of logs shows nothing real is missing from this list.
+    ALLOWED_LIST_PARAMS = frozenset()
+    STRICT_LIST_PARAMS = False
     permission_classes = [AllowAny]
 
     def get_or_create_cart(self, request):
@@ -364,13 +377,17 @@ class StoreCartViewSet(viewsets.ViewSet):
 
 
 
-class StoreOrderViewSet(viewsets.ReadOnlyModelViewSet):
+class StoreOrderViewSet(GuardedListParamsMixin, viewsets.ReadOnlyModelViewSet):
     """
     API for viewing user orders.
 
     GET /api/store/orders/          - List user's orders
     GET /api/store/orders/{id}/     - Get order details
     """
+    # Warn-only: unknown params are logged, not rejected. Flip to True
+    # once a week of logs shows nothing real is missing from this list.
+    ALLOWED_LIST_PARAMS = frozenset()
+    STRICT_LIST_PARAMS = False
     serializer_class = StoreOrderSerializer
     permission_classes = [IsAuthenticated]
 
@@ -382,12 +399,16 @@ class StoreOrderViewSet(viewsets.ReadOnlyModelViewSet):
 
 
 
-class StoreShippingRateViewSet(viewsets.ViewSet):
+class StoreShippingRateViewSet(GuardedListParamsMixin, viewsets.ViewSet):
     """
     API for shipping rates.
 
     GET /api/store/shipping-rates/  - Get available shipping rates
     """
+    # Warn-only: unknown params are logged, not rejected. Flip to True
+    # once a week of logs shows nothing real is missing from this list.
+    ALLOWED_LIST_PARAMS = frozenset({'country'})
+    STRICT_LIST_PARAMS = False
     permission_classes = [AllowAny]
 
     def list(self, request):

@@ -86,6 +86,7 @@ from rest_framework.permissions import IsAuthenticated, AllowAny, IsAuthenticate
 from rest_framework.response import Response
 from rest_framework.pagination import PageNumberPagination
 from django.db.models import Count, Q
+from ..query_guard import GuardedListParamsMixin
 
 
 
@@ -122,7 +123,7 @@ def _require_company_management(user, company, verb):
 
     raise PermissionDenied(f"You can only {verb} your own company.")
 
-class CompanyResourceViewSet(viewsets.ModelViewSet):
+class CompanyResourceViewSet(GuardedListParamsMixin, viewsets.ModelViewSet):
     """
     ViewSet for Company Resources (documents, images, videos)
 
@@ -135,6 +136,10 @@ class CompanyResourceViewSet(viewsets.ModelViewSet):
     - POST /api/company-portal/resources/upload/ - Upload file and create resource
     - GET /api/company-portal/resources/choices/ - Get dropdown choices
     """
+    # Warn-only: unknown params are logged, not rejected. Flip to True
+    # once a week of logs shows nothing real is missing from this list.
+    ALLOWED_LIST_PARAMS = frozenset({'category', 'company', 'project', 'type'})
+    STRICT_LIST_PARAMS = False
     serializer_class = CompanyResourceSerializer
 
     def get_permissions(self):
@@ -318,7 +323,7 @@ class CompanyResourceViewSet(viewsets.ModelViewSet):
 
 
 
-class SpeakingEventViewSet(viewsets.ModelViewSet):
+class SpeakingEventViewSet(GuardedListParamsMixin, viewsets.ModelViewSet):
     """
     ViewSet for Speaking Events
 
@@ -331,6 +336,10 @@ class SpeakingEventViewSet(viewsets.ModelViewSet):
     - GET /api/company-portal/events/choices/ - Get dropdown choices
     - GET /api/company-portal/events/upcoming/ - Get upcoming events across all companies
     """
+    # Warn-only: unknown params are logged, not rejected. Flip to True
+    # once a week of logs shows nothing real is missing from this list.
+    ALLOWED_LIST_PARAMS = frozenset({'company', 'featured', 'from', 'status', 'to', 'type'})
+    STRICT_LIST_PARAMS = False
     serializer_class = SpeakingEventSerializer
 
     def get_permissions(self):
@@ -438,7 +447,7 @@ class SpeakingEventViewSet(viewsets.ModelViewSet):
 
 
 
-class CompanyAccessRequestViewSet(viewsets.ModelViewSet):
+class CompanyAccessRequestViewSet(GuardedListParamsMixin, viewsets.ModelViewSet):
     """
     ViewSet for Company Access Requests
 
@@ -452,6 +461,10 @@ class CompanyAccessRequestViewSet(viewsets.ModelViewSet):
     - POST /api/company-portal/access-requests/{id}/review/ - Admin: approve/reject request
     - GET /api/company-portal/access-requests/pending/ - Admin: list all pending requests
     """
+    # Warn-only: unknown params are logged, not rejected. Flip to True
+    # once a week of logs shows nothing real is missing from this list.
+    ALLOWED_LIST_PARAMS = frozenset()
+    STRICT_LIST_PARAMS = False
     permission_classes = [IsAuthenticated]
 
     def get_serializer_class(self):

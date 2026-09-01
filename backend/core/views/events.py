@@ -25,13 +25,14 @@ from ..serializers import (
     SpeakerEventListSerializer, SpeakerEventDetailSerializer,
     SpeakerEventCreateSerializer, EventQuestionSerializer, EventReactionSerializer,
 )
+from ..query_guard import GuardedListParamsMixin
 
 
 # ============================================================================
 # GUEST SPEAKER EVENT VIEWSETS
 # ============================================================================
 
-class SpeakerEventViewSet(viewsets.ModelViewSet):
+class SpeakerEventViewSet(GuardedListParamsMixin, viewsets.ModelViewSet):
     """
     ViewSet for managing speaker events
 
@@ -47,6 +48,10 @@ class SpeakerEventViewSet(viewsets.ModelViewSet):
     - POST /api/events/{id}/end/ - End event
     - GET /api/events/upcoming/ - Get upcoming events
     """
+    # Warn-only: unknown params are logged, not rejected. Flip to True
+    # once a week of logs shows nothing real is missing from this list.
+    ALLOWED_LIST_PARAMS = frozenset({'company', 'status'})
+    STRICT_LIST_PARAMS = False
 
     def get_permissions(self):
         """Allow read for anyone, require auth for write operations"""
@@ -262,7 +267,7 @@ class SpeakerEventViewSet(viewsets.ModelViewSet):
 
 
 
-class EventQuestionViewSet(viewsets.ModelViewSet):
+class EventQuestionViewSet(GuardedListParamsMixin, viewsets.ModelViewSet):
     """
     ViewSet for managing event questions
 
@@ -272,6 +277,10 @@ class EventQuestionViewSet(viewsets.ModelViewSet):
     - PATCH /api/event-questions/{id}/ - Update question (moderate/answer)
     - POST /api/event-questions/{id}/upvote/ - Upvote a question
     """
+    # Warn-only: unknown params are logged, not rejected. Flip to True
+    # once a week of logs shows nothing real is missing from this list.
+    ALLOWED_LIST_PARAMS = frozenset({'event', 'status'})
+    STRICT_LIST_PARAMS = False
     serializer_class = EventQuestionSerializer
 
     def get_permissions(self):
@@ -331,7 +340,7 @@ class EventQuestionViewSet(viewsets.ModelViewSet):
 
 
 
-class EventReactionViewSet(viewsets.ModelViewSet):
+class EventReactionViewSet(GuardedListParamsMixin, viewsets.ModelViewSet):
     """
     ViewSet for managing event reactions
 
@@ -339,6 +348,10 @@ class EventReactionViewSet(viewsets.ModelViewSet):
     - POST /api/event-reactions/ - Send a reaction
     - GET /api/event-reactions/?event={event_id} - Get reactions for an event
     """
+    # Warn-only: unknown params are logged, not rejected. Flip to True
+    # once a week of logs shows nothing real is missing from this list.
+    ALLOWED_LIST_PARAMS = frozenset({'event'})
+    STRICT_LIST_PARAMS = False
     serializer_class = EventReactionSerializer
 
     def get_permissions(self):

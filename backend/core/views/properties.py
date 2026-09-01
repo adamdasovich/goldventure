@@ -88,6 +88,7 @@ from rest_framework.permissions import IsAuthenticated, AllowAny, IsAuthenticate
 from rest_framework.response import Response
 from rest_framework.pagination import PageNumberPagination
 from django.db.models import Count, Q
+from ..query_guard import GuardedListParamsMixin
 
 
 
@@ -97,7 +98,7 @@ from django.db.models import Count, Q
 # PROSPECTOR PROPERTY EXCHANGE
 # ============================================================================
 
-class ProspectorProfileViewSet(viewsets.ModelViewSet):
+class ProspectorProfileViewSet(GuardedListParamsMixin, viewsets.ModelViewSet):
     """
     ViewSet for Prospector Profiles
 
@@ -108,6 +109,10 @@ class ProspectorProfileViewSet(viewsets.ModelViewSet):
     - PUT /api/properties/prospectors/{id}/ - Update profile (owner only)
     - GET /api/properties/prospectors/me/ - Get current user's profile
     """
+    # Warn-only: unknown params are logged, not rejected. Flip to True
+    # once a week of logs shows nothing real is missing from this list.
+    ALLOWED_LIST_PARAMS = frozenset({'verified'})
+    STRICT_LIST_PARAMS = False
     serializer_class = ProspectorProfileSerializer
     lookup_field = 'id'
 
@@ -231,7 +236,7 @@ class ProspectorProfileViewSet(viewsets.ModelViewSet):
 
 
 
-class PropertyListingViewSet(viewsets.ModelViewSet):
+class PropertyListingViewSet(GuardedListParamsMixin, viewsets.ModelViewSet):
     """
     ViewSet for Property Listings
 
@@ -245,6 +250,10 @@ class PropertyListingViewSet(viewsets.ModelViewSet):
     - GET /api/properties/listings/choices/ - Get all dropdown choices
     - POST /api/properties/listings/{slug}/view/ - Record a view
     """
+    # Warn-only: unknown params are logged, not rejected. Flip to True
+    # once a week of logs shows nothing real is missing from this list.
+    ALLOWED_LIST_PARAMS = frozenset({'country', 'has_43_101', 'max_price', 'max_size', 'min_price', 'min_size', 'mineral', 'my_listings', 'open_to_offers', 'property_type', 'prospector', 'province', 'sort', 'stage'})
+    STRICT_LIST_PARAMS = False
     lookup_field = 'slug'
 
     def get_permissions(self):
@@ -488,7 +497,7 @@ class PropertyListingViewSet(viewsets.ModelViewSet):
 
 
 
-class PropertyMediaViewSet(viewsets.ModelViewSet):
+class PropertyMediaViewSet(GuardedListParamsMixin, viewsets.ModelViewSet):
     """
     ViewSet for Property Media (images, documents, videos)
 
@@ -498,6 +507,10 @@ class PropertyMediaViewSet(viewsets.ModelViewSet):
     - DELETE /api/properties/media/{id}/ - Delete media
     - PATCH /api/properties/media/{id}/ - Update media (e.g., set as primary)
     """
+    # Warn-only: unknown params are logged, not rejected. Flip to True
+    # once a week of logs shows nothing real is missing from this list.
+    ALLOWED_LIST_PARAMS = frozenset()
+    STRICT_LIST_PARAMS = False
     serializer_class = PropertyMediaSerializer
     permission_classes = [IsAuthenticated]
 
@@ -604,7 +617,7 @@ class PropertyMediaViewSet(viewsets.ModelViewSet):
 
 
 
-class PropertyInquiryViewSet(viewsets.ModelViewSet):
+class PropertyInquiryViewSet(GuardedListParamsMixin, viewsets.ModelViewSet):
     """
     ViewSet for Property Inquiries
 
@@ -614,6 +627,10 @@ class PropertyInquiryViewSet(viewsets.ModelViewSet):
     - GET /api/properties/inquiries/{id}/ - Get inquiry details
     - PATCH /api/properties/inquiries/{id}/ - Update inquiry status (owner only)
     """
+    # Warn-only: unknown params are logged, not rejected. Flip to True
+    # once a week of logs shows nothing real is missing from this list.
+    ALLOWED_LIST_PARAMS = frozenset()
+    STRICT_LIST_PARAMS = False
     serializer_class = PropertyInquirySerializer
     permission_classes = [IsAuthenticated]
 
@@ -860,7 +877,7 @@ class PropertyInquiryViewSet(viewsets.ModelViewSet):
 
 
 
-class PropertyWatchlistViewSet(viewsets.ModelViewSet):
+class PropertyWatchlistViewSet(GuardedListParamsMixin, viewsets.ModelViewSet):
     """
     ViewSet for Property Watchlist
 
@@ -870,6 +887,10 @@ class PropertyWatchlistViewSet(viewsets.ModelViewSet):
     - DELETE /api/properties/watchlist/{id}/ - Remove from watchlist
     - POST /api/properties/watchlist/toggle/ - Toggle watchlist status for a listing
     """
+    # Warn-only: unknown params are logged, not rejected. Flip to True
+    # once a week of logs shows nothing real is missing from this list.
+    ALLOWED_LIST_PARAMS = frozenset()
+    STRICT_LIST_PARAMS = False
     permission_classes = [IsAuthenticated]
 
     def get_serializer_class(self):
@@ -949,7 +970,7 @@ class PropertyWatchlistViewSet(viewsets.ModelViewSet):
 
 
 
-class SavedPropertySearchViewSet(viewsets.ModelViewSet):
+class SavedPropertySearchViewSet(GuardedListParamsMixin, viewsets.ModelViewSet):
     """
     ViewSet for Saved Property Searches
 
@@ -959,6 +980,10 @@ class SavedPropertySearchViewSet(viewsets.ModelViewSet):
     - DELETE /api/properties/saved-searches/{id}/ - Delete saved search
     - PATCH /api/properties/saved-searches/{id}/ - Update alert settings
     """
+    # Warn-only: unknown params are logged, not rejected. Flip to True
+    # once a week of logs shows nothing real is missing from this list.
+    ALLOWED_LIST_PARAMS = frozenset()
+    STRICT_LIST_PARAMS = False
     serializer_class = SavedPropertySearchSerializer
     permission_classes = [IsAuthenticated]
 
