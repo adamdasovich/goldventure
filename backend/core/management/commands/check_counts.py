@@ -29,6 +29,7 @@ tells visitors is no longer true.
 
 import json
 
+from django.core.cache import cache
 from django.core.management.base import BaseCommand
 from django.test import Client
 
@@ -51,6 +52,15 @@ class Command(BaseCommand):
         # default, which prod's ALLOWED_HOSTS rejects with a 400 before any view
         # runs — every assertion then fails for the wrong reason.
         client = Client(SERVER_NAME=options["host"])
+
+        # /api/platform-stats/ caches for 10 minutes. The scrapers add news
+        # releases continuously, so a cached payload is routinely a few rows
+        # behind the database and this command reported a mismatch that was
+        # only cache age — 17,912 against 17,914 on the first run after the
+        # scraper ticked. An assertion that cries wolf gets ignored, which is
+        # worse than not having it, so drop the key and compare what the
+        # endpoint actually computes.
+        cache.delete("platform_stats_v2")
         checks = []
 
         def check(label, actual, expected, note=""):
