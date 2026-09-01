@@ -22,7 +22,12 @@ app.config_from_object('django.conf:settings', namespace='CELERY')
 app.autodiscover_tasks()
 
 
-logger = logging.getLogger(__name__)
+# Named under the 'celery' logger rather than __name__: settings.LOGGING declares
+# handlers for 'core', 'celery', 'mcp_servers' and 'django.request' only, so a
+# 'config.celery' logger finds none and falls back to logging.lastResort, which
+# discards INFO outright. That would silently swallow the warning below -- the
+# one signal that a future .env change has left a secret exposed.
+logger = logging.getLogger('celery.secret_scrub')
 
 # --------------------------------------------------------------------------
 # Secret scrubbing -- see scrub_secrets_from_environ() below for the why.
