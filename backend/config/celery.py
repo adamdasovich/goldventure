@@ -139,11 +139,25 @@ def scrub_secrets_from_environ(**_kwargs):
             del os.environ[name]
             scrubbed.append(name)
 
+    # The worker runs at Celery's default WARNING loglevel, so the INFO line is
+    # normally discarded -- that is fine, it is a success message. The two
+    # warnings are the ones that must survive, and WARNING does reach the log.
     if scrubbed:
         logger.info(
             'Scrubbed %d secret(s) from the worker environment so browser '
             'subprocesses cannot inherit them: %s',
             len(scrubbed), ', '.join(sorted(scrubbed))
+        )
+    elif not skipped:
+        # Nothing removed AND nothing deliberately kept: the scrub has become a
+        # no-op. That happens if .env is renamed out from under these lists, or
+        # if this ever runs before settings is populated. Silence here would
+        # look identical to working correctly, so say so loudly.
+        logger.warning(
+            'Secret scrub removed nothing -- browser subprocesses may be '
+            'inheriting credentials. Expected one of: %s',
+            ', '.join(sorted(_SCRUB_VIA_SETTINGS + tuple(n for n, _ in _SCRUB_VIA_RESOLVER)
+                             + _SCRUB_NO_READER_HERE))
         )
     if skipped:
         logger.warning(
