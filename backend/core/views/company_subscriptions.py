@@ -39,6 +39,23 @@ def _money(cents):
     return f"${cents // 100:,}"
 
 
+def company_path(company):
+    """Canonical path to a company page: /companies/{id}-{slug}.
+
+    The id prefix is not optional. /companies/<slug> alone is a 404, and every
+    redirect in this module was built from the slug — so on 2026-09-01 the first
+    real company checkout returned the representative to a 404 page. The
+    subscription still activated, because the webhook does that, but the
+    confirm-checkout handler lives on the page they never reached, and the
+    banner announcing their new access never appeared.
+
+    /companies/{id} on its own would also work (it 308s to the canonical form),
+    but sending people straight to the canonical URL keeps it out of the address
+    bar history and survives a slug rename either way.
+    """
+    return f"/companies/{company.id}-{company.slug}"
+
+
 def _subscription_payload(company):
     """What the caller needs to render the state of one company's plan.
 
@@ -208,11 +225,9 @@ def company_create_checkout(request):
         return Response({'error': 'Invalid base_url'}, status=status.HTTP_400_BAD_REQUEST)
 
     base_url = base_url.rstrip('/')
-    success_url = (
-        f"{base_url}/companies/{company.slug}"
-        f"?company_subscription=success&session_id={{CHECKOUT_SESSION_ID}}"
-    )
-    cancel_url = f"{base_url}/companies/{company.slug}?company_subscription=canceled"
+    page = f"{base_url}{company_path(company)}"
+    success_url = f"{page}?company_subscription=success&session_id={{CHECKOUT_SESSION_ID}}"
+    cancel_url = f"{page}?company_subscription=canceled"
 
     try:
         session = CompanyStripeService.create_checkout_session(
@@ -299,7 +314,8 @@ def company_billing_portal(request):
         return Response({'error': 'No billing account found.'}, status=status.HTTP_404_NOT_FOUND)
 
     return_url = request.data.get(
-        'return_url', f'https://juniorminingintelligence.com/companies/{company.slug}'
+        'return_url',
+        f'https://juniorminingintelligence.com{company_path(company)}',
     )
     ok, reason = validate_checkout_redirect(return_url)
     if not ok:
