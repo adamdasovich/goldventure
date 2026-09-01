@@ -11,14 +11,23 @@ import asyncio
 import logging
 import anthropic
 from typing import Dict, List, Optional
+from django.conf import settings
+
 from core.api_utils import extract_url_slug
 
 logger = logging.getLogger(__name__)
 
 
 def get_claude_client():
-    """Get Anthropic client with API key from environment."""
-    api_key = os.environ.get('ANTHROPIC_API_KEY')
+    """
+    Get an Anthropic client.
+
+    Reads settings first, os.environ only as a fallback. config/celery.py
+    removes ANTHROPIC_API_KEY from a worker's environment so that the Chromium
+    processes those workers spawn cannot inherit it, and this function runs
+    inside exactly those workers during onboarding.
+    """
+    api_key = getattr(settings, 'ANTHROPIC_API_KEY', '') or os.environ.get('ANTHROPIC_API_KEY')
     if not api_key:
         return None
     return anthropic.Anthropic(api_key=api_key)

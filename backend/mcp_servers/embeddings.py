@@ -26,6 +26,26 @@ from chromadb.api.types import EmbeddingFunction, Documents, Embeddings
 # .__init__ and embed_query.
 from importlib.util import find_spec
 
+
+def _voyage_api_key() -> str:
+    """
+    Resolve the Voyage key from Django settings, falling back to os.environ.
+
+    config/celery.py removes VOYAGE_API_KEY from a worker's environment so the
+    Chromium processes those workers spawn cannot inherit it, which makes
+    os.getenv alone insufficient inside Celery. This module is also imported by
+    standalone MCP tooling with no Django configured, so the import is guarded
+    and the environment remains the fallback.
+    """
+    try:
+        from django.conf import settings
+        key = getattr(settings, 'VOYAGE_API_KEY', '')
+        if key:
+            return key
+    except Exception:
+        pass
+    return os.getenv('VOYAGE_API_KEY', '')
+
 VOYAGE_AVAILABLE = find_spec('voyageai') is not None
 
 
@@ -51,7 +71,7 @@ class VoyageEmbeddingFunction(EmbeddingFunction[Documents]):
         if not VOYAGE_AVAILABLE:
             raise ImportError("voyageai package not installed. Run: pip install voyageai")
 
-        self.api_key = api_key or os.getenv('VOYAGE_API_KEY', '')
+        self.api_key = api_key or _voyage_api_key()
         if not self.api_key:
             raise ValueError("Voyage AI API key not provided. Set VOYAGE_API_KEY environment variable.")
 
@@ -98,7 +118,7 @@ def get_embedding_function() -> Optional[EmbeddingFunction]:
         None to use ChromaDB's default (all-MiniLM-L6-v2)
     """
     # Check for Voyage AI configuration
-    api_key = os.getenv('VOYAGE_API_KEY', '')
+    api_key = _voyage_api_key()
 
     if api_key and VOYAGE_AVAILABLE:
         try:
@@ -127,7 +147,7 @@ def embed_query(query: str) -> Optional[List[float]]:
     Returns:
         Embedding vector, or None if embedding fails
     """
-    api_key = os.getenv('VOYAGE_API_KEY', '')
+    api_key = _voyage_api_key()
 
     if not api_key or not VOYAGE_AVAILABLE:
         return None  # Let ChromaDB handle it
