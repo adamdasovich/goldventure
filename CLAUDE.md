@@ -113,6 +113,24 @@ restarts**. A failed deploy costs a restart rather than an outage.
 > on `/` proves nothing. Run the asset loop above, or load the page in a real
 > browser and check for console errors.
 
+> **NOTE (local builds only):** deleting a route makes the next **local**
+> `next build` fail with a type error naming the route you just removed:
+>
+> ```
+> Type error: Type 'Route' does not satisfy the constraint 'LayoutRoutes'.
+>     Type '"/financial-hub/private-placements-guide"' is not assignable to type 'LayoutRoutes'.
+> ```
+>
+> Next's typed-routes definitions live in the dist directory and are not
+> regenerated from scratch, so they still name the deleted route. `rm -rf .next`
+> and rebuild — `.next/cache` alone is not enough here, the types sit outside
+> it. Hit on 2026-08-31 removing `/financial-hub/private-placements-guide`.
+>
+> `deploy.sh` is immune: it does `rm -rf "$BUILD_DIR"` before every build, so
+> the server always generates these types fresh. This only bites the working
+> copy, where `.next` persists between builds — which is the argument for
+> building locally before deploying a route deletion, not against it.
+
 > **NOTE:** The `grep -v` filters an unsuppressable build warning
 > (`[baseline-browser-mapping] The data in this module is over two months old`).
 > It comes from `next/dist/compiled/browserslist/index.js` — Next 16.0.10's
