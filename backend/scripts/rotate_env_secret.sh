@@ -22,6 +22,9 @@ FILES="/var/www/goldventure/backend/.env"
 GENERATE=0; PREFIX=""; MINLEN=16; RESTART=1
 UNITS="gunicorn celery-worker celery-scrape celery-interactive celery-beat daphne"
 VENV=/var/www/goldventure/backend/venv/bin/python
+# Deliberately outside /var/www/goldventure: a backup of an env file is a full
+# copy of every live secret and must never sit in a git working tree.
+BACKUP_DIR=/root/.secret-rotation-backups
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -96,7 +99,12 @@ echo
 echo "=== writing ==="
 for f in $FILES; do
   grep -qE "^${VAR}=" "$f" || { echo "  $f: no $VAR line, skipping"; continue; }
-  b="${f}.rotbak.$$"; cp -p "$f" "$b"; chmod 600 "$b"; BACKUP[$f]="$b"
+  # Backups go OUTSIDE the repo. Written next to the env file they came from,
+  # they are a full copy of every live secret sitting in a git working tree --
+  # and `.env*.bak*` did not match `.env.rotbak.<pid>`, so three of them were
+  # one `git add -A` from being committed on 2026-09-02.
+  mkdir -p "$BACKUP_DIR" && chmod 700 "$BACKUP_DIR"
+  b="$BACKUP_DIR/$(basename "$f").rotbak.$$"; cp -p "$f" "$b"; chmod 600 "$b"; BACKUP[$f]="$b"
   VAR_NAME="$VAR" NEW_VALUE="$NEW" $VENV - "$f" <<'PY'
 import os, sys, tempfile
 path = sys.argv[1]; var = os.environ['VAR_NAME']; new = os.environ['NEW_VALUE']

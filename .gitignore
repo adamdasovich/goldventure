@@ -62,6 +62,15 @@ backend/scratch/
 backend/chromadb_data/
 *.bak
 .env*.bak*
+# Rotation backups hold a full copy of every live secret. The rotation
+# script now writes them outside the repo, but `.env*.bak*` did NOT match
+# `.env.rotbak.<pid>` (no dot before 'bak') and three such files sat
+# untracked in backend/ on 2026-09-02, one `git add -A` from being
+# committed. Keep both defences.
+*.rotbak.*
+.env.rotbak*
+.env.dbrot*
+.env.preclean*
 
 # Playwright output. frontend/.gitignore already covers frontend/test-results,
 # but its rules are anchored with a leading slash and so do not reach a run that
