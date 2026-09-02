@@ -2066,6 +2066,126 @@ def process_company_news_for_rag_task(self, company_id: int, limit: int = 20):
             }
 
 
+@shared_task(bind=True, time_limit=3600, soft_time_limit=3540, on_failure=log_task_failure)
+def embed_recent_news_for_rag_task(self, days: int = 7, max_companies: int = 40,
+                                   limit_per_company: int = 10, dry_run: bool = False):
+    """
+    Embed recently published news that has no vectors yet.
+
+    Nothing was keeping the news_chunks collection current. The only writer,
+    process_company_news_for_rag_task, is called from the onboard_company
+    command alone, and it returns early if the company has ANY chunk at all —
+    so the 84 companies that were embedded once at onboarding never gained
+    another vector, and the other 312 never gained a first one. Coverage sat
+    at 8% of NewsRelease with nothing added since 2026-01-29.
+
+    This runs item-wise instead: it looks only at companies whose recent news
+    is missing chunks, and leans on _process_company_news, which already skips
+    individual items that have them.
+
+    Deliberately bounded. Neither NewsRelease.full_text nor CompanyNews.content
+    is ever populated by the scrapers, so embedding an item means fetching its
+    article — roughly 9 seconds each. A day's new releases is about 20 items,
+    a couple of minutes; the full historical backlog is 30,000 items and some
+    38 hours of crawling, which belongs in a supervised command, not a beat
+    schedule. `max_companies` is the ceiling that keeps a quiet day cheap and
+    a surprise flood from turning into an all-night crawl.
+
+    Args:
+        days: how far back to consider news
+        max_companies: most companies to touch in one run
+        limit_per_company: most news items to look at per company
+        dry_run: report what would be processed, embed nothing
+    """
+    from datetime import timedelta
+
+    from .models import Company, CompanyNews, NewsChunk, NewsRelease
+    from core.chromadb_isolated import process_company_news_isolated
+
+    cutoff = timezone.localtime().date() - timedelta(days=days)
+
+    embedded_nr = NewsChunk.objects.filter(
+        news_release__isnull=False).values('news_release_id')
+    embedded_cn = NewsChunk.objects.filter(
+        company_news__isnull=False).values('company_news_id')
+
+    # Companies with recent news that has no vectors.
+    pending = set(
+        NewsRelease.objects
+        .filter(release_date__gte=cutoff)
+        .exclude(id__in=embedded_nr)
+        .values_list('company_id', flat=True)
+    ) | set(
+        CompanyNews.objects
+        .filter(publication_date__gte=cutoff)
+        .exclude(id__in=embedded_cn)
+        .values_list('company_id', flat=True)
+    )
+
+    company_ids = sorted(pending)[:max_companies]
+    logger.info(
+        "[NEWS RAG] %d companies have unembedded news since %s; processing %d "
+        "(cap %d)%s",
+        len(pending), cutoff, len(company_ids), max_companies,
+        " [DRY RUN]" if dry_run else "",
+    )
+
+    if dry_run:
+        names = list(
+            Company.objects.filter(id__in=company_ids)
+            .values_list('name', flat=True)[:20]
+        )
+        return {
+            'status': 'dry_run',
+            'companies_pending': len(pending),
+            'would_process': len(company_ids),
+            'sample': names,
+        }
+
+    processed = chunks = failed = 0
+    for company_id in company_ids:
+        company = Company.objects.filter(id=company_id).first()
+        if not company:
+            continue
+        try:
+            result = process_company_news_isolated(
+                company_name=company.name,
+                company_id=company.id,
+                limit=limit_per_company,
+                timeout=180,
+            )
+        except Exception as exc:
+            failed += 1
+            logger.warning("[NEWS RAG] %s raised: %s", company.name, exc)
+            continue
+
+        if result.get('success'):
+            inner = result.get('result', {})
+            processed += inner.get('news_items_processed', 0)
+            chunks += inner.get('chunks_created', 0)
+        else:
+            # A SIGSEGV in the Chroma binding is why this runs in a subprocess
+            # at all; one bad company must not end the run.
+            failed += 1
+            logger.warning(
+                "[NEWS RAG] %s failed: %s", company.name,
+                result.get('error', 'unknown'),
+            )
+
+    logger.info(
+        "[NEWS RAG] done — %d companies, %d items embedded, %d chunks, %d failed",
+        len(company_ids), processed, chunks, failed,
+    )
+    return {
+        'status': 'success',
+        'companies_pending': len(pending),
+        'companies_processed': len(company_ids),
+        'news_items_embedded': processed,
+        'chunks_created': chunks,
+        'failed': failed,
+    }
+
+
 @shared_task(bind=True, time_limit=600, soft_time_limit=580, on_failure=log_task_failure)
 def store_company_profile_in_rag_task(self, company_id: int):
     """

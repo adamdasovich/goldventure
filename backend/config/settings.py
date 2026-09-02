@@ -443,6 +443,7 @@ CELERY_TASK_ROUTES = {
     'core.tasks.reconcile_chroma_index_task':           {'queue': 'scrape'},
     'core.tasks.backfill_document_dates_task':          {'queue': 'scrape'},
     'core.tasks.process_company_news_for_rag_task':     {'queue': 'scrape'},
+    'core.tasks.embed_recent_news_for_rag_task':        {'queue': 'scrape'},
     'core.tasks.store_company_profile_in_rag_task':     {'queue': 'scrape'},
 
     # --- user-triggered, someone is watching a spinner ------------------------
@@ -551,6 +552,16 @@ CELERY_BEAT_SCHEDULE = {
     # Date documents the GPU worker ingested with document_date NULL. Runs ten
     # minutes before the Chroma reconcile so a document is dated before its
     # chunks are indexed, and is a no-op when nothing is undated.
+    # Embed news published in the last week that has no vectors yet. Runs
+    # at 3 AM ET, clear of the 7 AM scrape, because embedding an item means
+    # fetching its article - neither scraper stores the body. Bounded to 40
+    # companies a run; a normal day brings about 20 new releases in total.
+    'embed-recent-news-daily': {
+        'task': 'core.tasks.embed_recent_news_for_rag_task',
+        'schedule': crontab(hour=8, minute=0),  # 3 AM ET
+        'kwargs': {'days': 7, 'max_companies': 40, 'limit_per_company': 10},
+    },
+
     'backfill-document-dates-hourly': {
         'task': 'core.tasks.backfill_document_dates_task',
         'schedule': crontab(minute=10),
