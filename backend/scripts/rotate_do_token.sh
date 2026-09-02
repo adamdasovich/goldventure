@@ -55,6 +55,32 @@ if [ "$code" != "200" ]; then
 fi
 echo "  token is valid and can read droplets"
 
+# The token lives in two files and they are written one after the other. Under
+# `set -e` a failure on the SECOND leaves the first already rewritten, the files
+# in disagreement, and the agreement check below never reached -- which is
+# precisely the drift this script exists to prevent. Back both up and restore
+# them unless we reach the end.
+BACKUP_DIR=/root/.secret-rotation-backups   # outside the repo: a full secret copy
+mkdir -p "$BACKUP_DIR"; chmod 700 "$BACKUP_DIR"
+BAK_ENV="$BACKUP_DIR/$(basename "$ENV_FILE").dorot.$$"
+BAK_ORCH="$BACKUP_DIR/$(basename "$ORCH_FILE").dorot.$$"
+cp -p "$ENV_FILE" "$BAK_ENV"; cp -p "$ORCH_FILE" "$BAK_ORCH"
+chmod 600 "$BAK_ENV" "$BAK_ORCH"
+SUCCESS=0
+finish() {
+    if [ "$SUCCESS" != "1" ]; then
+        echo "  rolling back both files" >&2
+        cp -p "$BAK_ENV" "$ENV_FILE" 2>/dev/null || true
+        cp -p "$BAK_ORCH" "$ORCH_FILE" 2>/dev/null || true
+        systemctl restart gpu-orchestrator >/dev/null 2>&1 || true
+        systemctl reload gunicorn >/dev/null 2>&1 || true
+        systemctl restart celery-worker celery-scrape celery-interactive celery-beat >/dev/null 2>&1 || true
+        echo "  restored the previous token and restarted" >&2
+    fi
+    shred -u "$BAK_ENV" "$BAK_ORCH" 2>/dev/null || rm -f "$BAK_ENV" "$BAK_ORCH"
+}
+trap finish EXIT
+
 # Write via a 600 temp file in the same directory so the replace is atomic and
 # the secret is never briefly world-readable.
 update() {
@@ -99,3 +125,7 @@ unset NEW_TOKEN
 echo
 echo "Rotation complete. Remaining manual step:"
 echo "  Revoke the OLD token at https://cloud.digitalocean.com/account/api/tokens"
+
+# Everything passed: tell the EXIT trap not to roll back, and let it shred the
+# backups on the way out.
+SUCCESS=1
