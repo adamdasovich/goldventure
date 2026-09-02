@@ -14,6 +14,16 @@
 # leave the box half-rotated.
 #
 #   bash scripts/rotate_do_token.sh
+#
+# rotate_env_secret.sh in this directory does the same job generically, for
+# any variable in any set of env files, with prefix/length guards and an
+# automatic rollback. Either works for the DO token; this one stays because
+# its two-file behaviour is hard-coded and cannot be got wrong:
+#
+#   bash scripts/rotate_env_secret.sh DO_API_TOKEN \
+#     --files /var/www/goldventure/backend/.env,/var/www/goldventure/backend/gpu_orchestrator.env \
+#     --prefix dop_v1_ --min-len 60 \
+#     --restart "gunicorn celery-worker celery-scrape celery-interactive celery-beat daphne gpu-orchestrator"
 
 set -euo pipefail
 
