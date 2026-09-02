@@ -144,6 +144,93 @@ class MiningDataServer(BaseMCPServer):
             handler=self._get_total_resources
         )
 
+        # Tool 6: semantic company discovery over the company_profiles vectors
+        self.register_tool(
+            name="mining_find_companies_by_description",
+            description=(
+                "Find companies by what they DO, in plain language, when you "
+                "do not have a name or ticker - 'who is exploring lithium "
+                "brine in Argentina?', 'juniors with copper-gold porphyry "
+                "projects in Chile'. Searches an embedding of each company's "
+                "description, tagline and project list, so it matches meaning "
+                "rather than keywords. Use mining_get_company_details once "
+                "you know which company you want."
+            ),
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": (
+                            "What the company does, e.g. 'lithium brine "
+                            "exploration in the Argentine puna'."
+                        ),
+                    },
+                    "max_results": {
+                        "type": "integer",
+                        "description": "How many companies to return (default 5, max 20).",
+                        "default": 5,
+                    },
+                },
+                "required": ["query"],
+            },
+            handler=self._find_companies_by_description,
+        )
+
+    def _find_companies_by_description(self, query: str, max_results: int = 5) -> Dict:
+        """
+        Semantic search over the company_profiles collection.
+
+        Those vectors were written for a year and never read - nothing in the
+        codebase opened the collection except the writer. This is the reader.
+        """
+        query = (query or "").strip()
+        if not query:
+            return {"error": "query is required"}
+        max_results = max(1, min(int(max_results or 5), 20))
+
+        try:
+            import os
+
+            import chromadb
+            from chromadb.config import Settings as ChromaSettings
+
+            from mcp_servers.embeddings import get_embedding_function
+
+            client = chromadb.HttpClient(
+                host=os.environ.get("CHROMA_HOST", "localhost"),
+                port=int(os.environ.get("CHROMA_PORT", 8002)),
+                settings=ChromaSettings(anonymized_telemetry=False),
+            )
+            collection = client.get_collection(
+                "company_profiles", embedding_function=get_embedding_function()
+            )
+            results = collection.query(query_texts=[query], n_results=max_results)
+        except Exception as exc:  # noqa: BLE001
+            return {"error": f"Company profile search unavailable: {exc}"}
+
+        docs = (results.get("documents") or [[]])[0]
+        metas = (results.get("metadatas") or [[]])[0]
+        dists = (results.get("distances") or [[]])[0]
+        if not docs:
+            return {"found": False, "query": query,
+                    "message": "No company profiles matched."}
+
+        matches = []
+        for rank, (doc, meta, dist) in enumerate(zip(docs, metas, dists), 1):
+            meta = meta or {}
+            matches.append({
+                "rank": rank,
+                "relevance_score": round(1 - dist, 3),
+                "company": meta.get("company_name"),
+                "company_id": meta.get("company_id"),
+                "ticker": meta.get("ticker") or None,
+                "exchange": (meta.get("exchange") or "").upper() or None,
+                "profile": (doc or "")[:600],
+            })
+        return {"found": True, "query": query,
+                "total_results": len(matches), "results": matches}
+
     def _list_companies(self, active_only: bool = True) -> Dict:
         """List all companies with summary info"""
 

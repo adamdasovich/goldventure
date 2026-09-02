@@ -96,6 +96,12 @@ class ToolRegistry:
             "Get detailed project information including resources and economics",
             ["project", "details", "resources", "economics", "location"])
 
+        # Semantic company discovery. The company_profiles collection was
+        # written for a year with no reader anywhere in the codebase.
+        self._register_metadata("mining_find_companies_by_description", ToolCategory.MINING,
+            "Find companies by what they do, described in plain language, when you have no name or ticker",
+            ["who is exploring", "companies working on", "find companies", "which companies", "semantic", "describe", "similar companies", "screener"])
+
         self._register_metadata("mining_get_total_resources", ToolCategory.MINING,
             "Calculate total gold/silver/copper resources across projects",
             ["resources", "total", "gold", "silver", "copper", "ounces", "aggregate"])
