@@ -178,8 +178,7 @@ class MiningDataServer(BaseMCPServer):
         try:
             # Try to find by name or ticker
             company = Company.objects.filter(
-                Q(name__icontains=company_name) |
-                Q(ticker_symbol__iexact=company_name)
+                Company.identity_q(company_name)
             ).first()
 
             if not company:
@@ -192,8 +191,7 @@ class MiningDataServer(BaseMCPServer):
 
         except Company.MultipleObjectsReturned:
             matches = Company.objects.filter(
-                Q(name__icontains=company_name) |
-                Q(ticker_symbol__iexact=company_name)
+                Company.identity_q(company_name)
             ).values_list('name', 'ticker_symbol')
             return {
                 'error': f"Multiple companies match '{company_name}'. Please be more specific.",
@@ -268,8 +266,7 @@ class MiningDataServer(BaseMCPServer):
         # Apply filters
         if company_name:
             projects = projects.filter(
-                Q(company__name__icontains=company_name) |
-                Q(company__ticker_symbol__iexact=company_name)
+                Company.identity_q(company_name, 'company__')
             )
         if stage:
             projects = projects.filter(project_stage=stage)
@@ -409,8 +406,7 @@ class MiningDataServer(BaseMCPServer):
         # Filter by company if specified
         if company_name:
             resources_qs = resources_qs.filter(
-                Q(project__company__name__icontains=company_name) |
-                Q(project__company__ticker_symbol__iexact=company_name)
+                Company.identity_q(company_name, 'project__company__')
             )
 
         # Filter by category

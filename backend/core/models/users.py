@@ -92,6 +92,16 @@ class Company(models.Model):
         help_text="URL-friendly slug derived from name; used in /companies/{id}-{slug}",
     )
     legal_name = models.CharField(max_length=200, blank=True)
+    former_names = models.TextField(
+        blank=True,
+        default='',
+        help_text=(
+            "Previous names, one per line, most recent first. Appended "
+            "automatically by save() whenever `name` changes. Plain text "
+            "rather than a JSON list so it substring-matches the same way "
+            "`name` does — see Company.name_q()."
+        ),
+    )
     ticker_symbol = models.CharField(max_length=10, blank=True)
     exchange = models.CharField(max_length=20, choices=EXCHANGE_CHOICES, blank=True)
     status = models.CharField(max_length=20, choices=COMPANY_STATUS)
@@ -213,13 +223,93 @@ class Company(models.Model):
     def __str__(self):
         return f"{self.name} ({self.ticker_symbol})" if self.ticker_symbol else self.name
 
+    @classmethod
+    def from_db(cls, db, field_names, values):
+        # Stash the name as loaded so save() can tell a rename from a no-op.
+        # Skipped when name was deferred (.only()/.defer()) — reading it here
+        # would fire a second query per row.
+        instance = super().from_db(db, field_names, values)
+        if 'name' in field_names:
+            instance._loaded_name = instance.name
+        return instance
+
+    @property
+    def former_names_list(self):
+        """`former_names` as a list, most recent first, blanks dropped."""
+        return [n.strip() for n in self.former_names.splitlines() if n.strip()]
+
+    def add_former_name(self, old_name):
+        """
+        Record a previous name. Most recent first, case-insensitively deduped,
+        and never the company's current name. Returns True if it was added.
+        """
+        old_name = (old_name or '').strip()
+        if not old_name or old_name.casefold() == (self.name or '').casefold():
+            return False
+
+        existing = self.former_names_list
+        if any(n.casefold() == old_name.casefold() for n in existing):
+            return False
+
+        self.former_names = '\n'.join([old_name] + existing)
+        return True
+
+    @staticmethod
+    def name_q(term, prefix=''):
+        """
+        Match a company by name, including names it used to trade under.
+
+        Renames are routine in this sector — a TSXV name change arrives with a
+        new ticker and usually a consolidation — and articles, filings and
+        documents keep using the old name long afterwards. Matching `name`
+        alone silently drops all of them on the floor the day we rename.
+
+        `prefix` walks a relation, e.g. name_q(term, 'company__') to filter a
+        queryset of something that points at Company.
+        """
+        return (
+            models.Q(**{f'{prefix}name__icontains': term})
+            | models.Q(**{f'{prefix}former_names__icontains': term})
+        )
+
+    @staticmethod
+    def identity_q(term, prefix=''):
+        """`name_q` plus an exact ticker match — the usual 'find this company
+        from a free-text identifier' filter."""
+        return (
+            Company.name_q(term, prefix)
+            | models.Q(**{f'{prefix}ticker_symbol__iexact': term})
+        )
+
     def save(self, *args, **kwargs):
+        update_fields = kwargs.get('update_fields')
+        # A caller saving only current_price is not renaming anything, so leave
+        # slug and former_names alone. Fields derived from name are only
+        # touched when name itself is being written.
+        touching_name = update_fields is None or 'name' in update_fields
+        also_write = []
+
         # Keep slug in sync with name. Truncated to 220 to leave room in the URL.
-        if self.name:
+        if self.name and touching_name:
             expected = slugify(self.name)[:220]
             if self.slug != expected:
                 self.slug = expected
+                also_write.append('slug')
+
+        # Record the outgoing name on a rename.
+        loaded_name = getattr(self, '_loaded_name', None)
+        if self.pk and touching_name and loaded_name and loaded_name != self.name:
+            if self.add_former_name(loaded_name):
+                also_write.append('former_names')
+
+        # An explicit update_fields would otherwise drop the derived columns —
+        # that is how a slug ends up stranded against a name it no longer
+        # matches.
+        if update_fields is not None and also_write:
+            kwargs['update_fields'] = list(update_fields) + also_write
+
         super().save(*args, **kwargs)
+        self._loaded_name = self.name
 
     def calculate_completeness_score(self):
         """Calculate data completeness score based on filled fields"""

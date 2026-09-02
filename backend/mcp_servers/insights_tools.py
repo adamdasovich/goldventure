@@ -88,7 +88,8 @@ class InsightsToolsServer(BaseMCPServer):
     def _resolve_company(identifier: str):
         """
         Resolve a name or ticker to a single non-deleted Company.
-        Exact ticker match wins; otherwise a partial name match.
+        Exact ticker match wins; otherwise a partial match on the current
+        name, any former name, or the legal name.
         """
         from core.models import Company
 
@@ -100,7 +101,7 @@ class InsightsToolsServer(BaseMCPServer):
         if match:
             return match
         return active.filter(
-            Q(name__icontains=ident) | Q(legal_name__icontains=ident)
+            Company.name_q(ident) | Q(legal_name__icontains=ident)
         ).first()
 
     @staticmethod

@@ -42,7 +42,7 @@ class UserAdmin(BaseUserAdmin):
 class CompanyAdmin(admin.ModelAdmin):
     list_display = ['name', 'ticker_symbol', 'exchange', 'status', 'is_active']
     list_filter = ['status', 'exchange', 'is_active']
-    search_fields = ['name', 'ticker_symbol']
+    search_fields = ['name', 'former_names', 'ticker_symbol']
 
 
 @admin.register(Project)

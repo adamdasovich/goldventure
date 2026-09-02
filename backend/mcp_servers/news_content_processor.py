@@ -480,7 +480,7 @@ class NewsContentProcessor(BaseMCPServer):
         """Process news for a company"""
         try:
             # Find company
-            company = Company.objects.filter(name__icontains=company_name).first()
+            company = Company.objects.filter(Company.name_q(company_name)).first()
             if not company:
                 return {"error": f"Company '{company_name}' not found"}
 
@@ -560,7 +560,7 @@ class NewsContentProcessor(BaseMCPServer):
             # Build filter
             where_filter = None
             if company_name:
-                company = Company.objects.filter(name__icontains=company_name).first()
+                company = Company.objects.filter(Company.name_q(company_name)).first()
                 if company:
                     where_filter = {"company_id": company.id}
 

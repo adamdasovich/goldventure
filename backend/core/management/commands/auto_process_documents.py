@@ -187,7 +187,7 @@ class Command(BaseCommand):
                 raise CommandError(f'Company with ID {options["company_id"]} not found')
 
         elif options['company_name']:
-            companies = Company.objects.filter(name__icontains=options['company_name'])
+            companies = Company.objects.filter(Company.name_q(options['company_name']))
             if not companies.exists():
                 raise CommandError(f'No companies found matching "{options["company_name"]}"')
             return list(companies)

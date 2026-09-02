@@ -236,7 +236,7 @@ def process_general_document(document_url: str, document_type: str,
     try:
         # Find company
         company = Company.objects.filter(
-            Q(name__icontains=company_name) | Q(ticker_symbol__iexact=company_name)
+            Company.identity_q(company_name)
         ).first() if company_name else None
 
         if not company:

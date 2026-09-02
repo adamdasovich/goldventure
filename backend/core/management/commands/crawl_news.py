@@ -62,7 +62,7 @@ class Command(BaseCommand):
             companies = await sync_to_async(list)(Company.objects.filter(website__isnull=False))
         elif company_name:
             companies = await sync_to_async(list)(
-                Company.objects.filter(name__icontains=company_name, website__isnull=False)
+                Company.objects.filter(Company.name_q(company_name), website__isnull=False)
             )
         else:
             self.stdout.write(self.style.ERROR('Error: Must specify --all or --company'))

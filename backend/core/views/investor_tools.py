@@ -279,7 +279,7 @@ def peer_comparison(request):
             target = Company.objects.filter(id=int(company_id), is_active=True).first()
         if not target:
             target = Company.objects.filter(
-                Q(name__icontains=company_id) | Q(ticker_symbol__iexact=company_id),
+                Company.identity_q(company_id),
                 is_active=True,
             ).first()
         # Fuzzy fallback: try each word (stripped of punctuation) for partial match
@@ -290,7 +290,7 @@ def peer_comparison(request):
             if words:
                 q = Q(is_active=True)
                 for w in words:
-                    q &= Q(name__icontains=w)
+                    q &= Company.name_q(w)
                 target = Company.objects.filter(q).first()
         if not target:
             return Response({'error': f'Company not found: {company_id}'}, status=404)
@@ -647,7 +647,7 @@ def drill_scanner(request):
     q_filter &= keyword_q
 
     if company_search:
-        q_filter &= Q(company__name__icontains=company_search) | Q(company__ticker_symbol__iexact=company_search)
+        q_filter &= Company.identity_q(company_search, 'company__')
 
     if commodity:
         commodity_companies = Project.objects.filter(

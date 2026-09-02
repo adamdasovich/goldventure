@@ -495,7 +495,7 @@ class HybridDocumentProcessor(BaseMCPServer):
         try:
             # Find company
             company = Company.objects.filter(
-                Q(name__icontains=company_name) | Q(ticker_symbol__iexact=company_name)
+                Company.identity_q(company_name)
             ).first()
 
             if not company:
@@ -907,8 +907,7 @@ Structure:
 
             if company_name:
                 queryset = queryset.filter(
-                    Q(company__name__icontains=company_name) |
-                    Q(company__ticker_symbol__iexact=company_name)
+                    Company.identity_q(company_name, 'company__')
                 )
 
             if document_type:
@@ -958,7 +957,7 @@ Structure:
         try:
             # Find company
             company = Company.objects.filter(
-                Q(name__icontains=company_name) | Q(ticker_symbol__iexact=company_name)
+                Company.identity_q(company_name)
             ).first()
 
             if not company:

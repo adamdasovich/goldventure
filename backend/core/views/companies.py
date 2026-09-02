@@ -147,7 +147,7 @@ class CompanyViewSet(GuardedListParamsMixin, viewsets.ModelViewSet):
         search = self.request.query_params.get('search')
         if search:
             queryset = queryset.filter(
-                Q(name__icontains=search) |
+                Company.name_q(search) |
                 Q(ticker_symbol__icontains=search)
             )
 

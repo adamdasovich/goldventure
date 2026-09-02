@@ -116,7 +116,7 @@ def closed_financings_list(request):
     - Currently: All authenticated users can access
     - Future: Set CLOSED_FINANCINGS_REQUIRES_SUBSCRIPTION = True to restrict to paying users
     """
-    from core.models import Financing
+    from core.models import Company, Financing
     from django.db.models import Q
 
     # ========== ACCESS CONTROL ==========
@@ -141,7 +141,7 @@ def closed_financings_list(request):
     # Apply filters
     company_filter = request.query_params.get('company')
     if company_filter:
-        queryset = queryset.filter(company__name__icontains=company_filter)
+        queryset = queryset.filter(Company.name_q(company_filter, 'company__'))
 
     financing_type_filter = request.query_params.get('financing_type')
     if financing_type_filter:

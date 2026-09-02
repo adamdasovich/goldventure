@@ -159,7 +159,7 @@ class NewsReleaseServer:
 
         try:
             # Find company
-            company = Company.objects.filter(name__icontains=company_name).first()
+            company = Company.objects.filter(Company.name_q(company_name)).first()
             if not company:
                 return {
                     "error": f"Company '{company_name}' not found",
@@ -211,7 +211,7 @@ class NewsReleaseServer:
 
         try:
             # Find company
-            company = Company.objects.filter(name__icontains=company_name).first()
+            company = Company.objects.filter(Company.name_q(company_name)).first()
             if not company:
                 return {
                     "error": f"Company '{company_name}' not found"
@@ -266,7 +266,7 @@ class NewsReleaseServer:
             end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
 
             # Find company
-            company = Company.objects.filter(name__icontains=company_name).first()
+            company = Company.objects.filter(Company.name_q(company_name)).first()
             if not company:
                 return {
                     "error": f"Company '{company_name}' not found"
