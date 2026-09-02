@@ -60,11 +60,17 @@ echo "  token is valid and can read droplets"
 update() {
     local file="$1" tmp
     tmp=$(mktemp "$(dirname "$file")/.rotate.XXXXXX")
+    # That temp file is a full copy of the env file -- every secret in it --
+    # sitting in a git working tree until the mv. Under `set -e` a failed awk
+    # exits the script without cleaning up, so remove it on any return.
+    trap 'rm -f "${tmp:-}"' RETURN
     chmod 600 "$tmp"
-    NEW_TOKEN="$NEW_TOKEN" awk '
+    if ! NEW_TOKEN="$NEW_TOKEN" awk '
         /^DO_API_TOKEN=/ { print "DO_API_TOKEN=" ENVIRON["NEW_TOKEN"]; next }
         { print }
-    ' "$file" > "$tmp"
+    ' "$file" > "$tmp"; then
+        rm -f "$tmp"; echo "  rewrite failed for $file" >&2; return 1
+    fi
     chown --reference="$file" "$tmp" 2>/dev/null || true
     chmod --reference="$file" "$tmp" 2>/dev/null || true
     mv "$tmp" "$file"

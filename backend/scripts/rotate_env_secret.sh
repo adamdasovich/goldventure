@@ -115,9 +115,22 @@ for i, l in enumerate(lines):
         hits += 1; lines[i] = '%s=%s\n' % (var, new)
 if hits != 1:
     sys.exit('expected exactly 1 %s line, found %d' % (var, hits))
-fd, tmp = tempfile.mkstemp(dir=os.path.dirname(path))
-with os.fdopen(fd, 'w', encoding='utf-8') as fh: fh.writelines(lines)
-os.chmod(tmp, 0o600); os.replace(tmp, path)
+# The temp file must live in the target directory for os.replace to be
+# atomic, which puts a full copy of every secret in the env file inside a
+# git working tree until the rename. Prefixed so .gitignore can name it, and
+# removed on any failure so it cannot survive a crash between the two.
+fd, tmp = tempfile.mkstemp(prefix='.envrot.', dir=os.path.dirname(path))
+try:
+    with os.fdopen(fd, 'w', encoding='utf-8') as fh:
+        fh.writelines(lines)
+    os.chmod(tmp, 0o600)
+    os.replace(tmp, path)
+except BaseException:
+    try:
+        os.unlink(tmp)
+    except OSError:
+        pass
+    raise
 PY
   if [ $? -ne 0 ]; then red "  rewrite failed for $f -- restoring"; restore_all; cleanup_backups; exit 1; fi
   d=$(diff "$b" "$f" | grep -cE '^[<>]'); dv=$(diff "$b" "$f" | grep -E '^[<>]' | grep -cE "^[<>] ${VAR}=")

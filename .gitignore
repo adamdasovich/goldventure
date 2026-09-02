@@ -71,6 +71,11 @@ backend/chromadb_data/
 .env.rotbak*
 .env.dbrot*
 .env.preclean*
+# Atomic-write temp files from the rotation scripts. They must live beside the
+# env file for os.replace/mv to be atomic, so they land in the repo; both
+# scripts remove them on failure, and these patterns are the second defence.
+.envrot.*
+.rotate.*
 
 # Playwright output. frontend/.gitignore already covers frontend/test-results,
 # but its rules are anchored with a leading slash and so do not reach a run that

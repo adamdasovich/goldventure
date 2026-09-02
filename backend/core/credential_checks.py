@@ -132,6 +132,12 @@ def check_stripe_webhooks():
 
     if problems:
         return CheckResult('stripe_webhooks', FAIL, '; '.join(problems))
+    if checked == 0:
+        # Reporting 'ok' here would be a vacuous truth: nothing was verified.
+        # Stripe is configured but no signing secret is, so webhook-driven
+        # subscription and order updates are not wired up at all.
+        return CheckResult('stripe_webhooks', SKIP,
+                           'stripe is configured but no webhook secret is set -- nothing verified')
     return CheckResult('stripe_webhooks', OK,
                        '%d configured secret(s) each have an enabled endpoint' % checked)
 
@@ -289,6 +295,14 @@ def check_names():
 
 
 def run_checks(only=None):
+    # A bare string would iterate as characters, and `name not in only` would
+    # then match substrings -- only='stripe_webhooks' would silently also run
+    # 'stripe'. Normalise before comparing.
+    if isinstance(only, str):
+        only = {only}
+    elif only is not None:
+        only = set(only)
+
     results = []
     for fn in CHECKS:
         name = fn.__name__.replace('check_', '')
@@ -326,7 +340,13 @@ def alert_recipient():
     """
     for name in ('CREDENTIAL_ALERT_EMAIL', 'ADMIN_EMAIL', 'EDITOR_NOTIFICATION_EMAIL'):
         value = (getattr(settings, name, '') or '').strip()
-        if value and not value.lower().endswith(('@example.com', '@example.org')):
+        if not value:
+            continue
+        # Accept a display-name form too -- 'Ops <ops@example.com>' must still
+        # be recognised as the placeholder, and endswith() on the raw string
+        # would miss it because of the trailing '>'.
+        addr = value.rsplit('<', 1)[-1].rstrip('>').strip().lower()
+        if not addr.endswith(('@example.com', '@example.org', '@example.net')):
             return value
     return ''
 
