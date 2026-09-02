@@ -16,9 +16,10 @@ check_counts does.
 """
 import json
 
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
 
-from core.credential_checks import FAIL, format_report, run_checks, send_alert
+from core.credential_checks import (FAIL, check_names, format_report, run_checks,
+                                    send_alert)
 
 
 class Command(BaseCommand):
@@ -41,6 +42,13 @@ class Command(BaseCommand):
         only = None
         if options.get('only'):
             only = {n.strip() for n in options['only'].split(',') if n.strip()}
+            # Without this, a typo runs nothing and the command exits 0 saying
+            # "all 0 checks passed" -- which would silently pass a deploy gate.
+            unknown = sorted(only - set(check_names()))
+            if unknown:
+                raise CommandError(
+                    'unknown check(s): %s. Valid names: %s'
+                    % (', '.join(unknown), ', '.join(check_names())))
 
         results = run_checks(only=only)
         failed = [r for r in results if r.failed]

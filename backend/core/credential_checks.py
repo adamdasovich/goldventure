@@ -39,6 +39,15 @@ from django.conf import settings
 logger = logging.getLogger('celery.credential_checks')
 
 OK, FAIL, SKIP = 'ok', 'FAIL', 'skipped'
+# Applies to the urllib calls (SendGrid, DigitalOcean) and is passed explicitly
+# to the Anthropic and boto3 clients, whose own defaults retry with backoff.
+#
+# Stripe is deliberately NOT bounded here: its timeout lives on
+# stripe.default_http_client, which is process-global, and narrowing it would
+# also narrow real payment calls made by the same worker. Its built-in default
+# is already finite, so the exposure is a slow check, not a hung one. Voyage is
+# left alone for the same reason -- VoyageEmbeddingFunction builds its own
+# client, and reaching past it would stop this from testing the real code path.
 TIMEOUT = 20
 
 
@@ -133,7 +142,10 @@ def check_anthropic():
         return CheckResult('anthropic', SKIP, 'not configured')
     try:
         import anthropic
-        client = anthropic.Anthropic(api_key=key)
+        # Bound explicitly: an unbounded client can stall this weekly task
+        # against the 280s soft limit during a provider incident.
+        client = anthropic.Anthropic(api_key=key, timeout=float(TIMEOUT),
+                                     max_retries=0)
         # max_tokens=1 keeps this to a fraction of a cent per week.
         client.messages.create(model='claude-haiku-4-5', max_tokens=1,
                                messages=[{'role': 'user', 'content': 'hi'}])
@@ -188,9 +200,14 @@ def check_aws():
         return CheckResult('aws', SKIP, 'not configured')
     try:
         import boto3
+        from botocore.config import Config
         region = getattr(settings, 'AWS_S3_REGION_NAME', '') or 'us-east-1'
+        # botocore retries 3x with backoff by default, so an unreachable
+        # endpoint could hold this check for minutes.
+        cfg = Config(connect_timeout=TIMEOUT, read_timeout=TIMEOUT,
+                     retries={'max_attempts': 1})
         who = boto3.client('sts', aws_access_key_id=kid, aws_secret_access_key=sec,
-                           region_name=region).get_caller_identity()
+                           region_name=region, config=cfg).get_caller_identity()
         return CheckResult('aws', OK, who['Arn'].split('/')[-1])
     except Exception as e:
         return CheckResult('aws', FAIL, '%s: %s' % (type(e).__name__, str(e)[:160]))
@@ -264,6 +281,11 @@ CHECKS = (
     check_aws,
     check_digitalocean,
 )
+
+
+def check_names():
+    """The names accepted by run_checks(only=...) and `--only`."""
+    return tuple(fn.__name__.replace('check_', '') for fn in CHECKS)
 
 
 def run_checks(only=None):
