@@ -145,9 +145,15 @@ class FinancingViewSet(viewsets.ModelViewSet):
         queryset = Financing.objects.select_related('company').all()
         params = self.request.query_params
 
-        company_id = params.get('company')
-        if company_id:
-            queryset = queryset.filter(company_id=company_id)
+        # `company` is an id. A non-numeric one used to reach the ORM and die
+        # in int() as a 500 — ?company=Portofino was a server error on a public
+        # endpoint. list() rejects it with a 400; here it is simply ignored,
+        # because get_queryset also serves the detail routes, where raising
+        # would turn a valid /financings/{id}/ into an error over a stray
+        # query string.
+        company_id = (params.get('company') or '').strip()
+        if company_id.isdigit():
+            queryset = queryset.filter(company_id=int(company_id))
 
         # "status" is the friendly spelling; "is_closed" mirrors the column.
         status_param = (params.get('status') or '').strip().lower()
@@ -185,6 +191,12 @@ class FinancingViewSet(viewsets.ModelViewSet):
             )
 
         bad = {}
+        company_param = (request.query_params.get('company') or '').strip()
+        if company_param and not company_param.isdigit():
+            bad['company'] = (
+                "expected a numeric company id. To look a company up by name "
+                "or ticker, call /api/companies/?search=<term> first."
+            )
         status_param = (request.query_params.get('status') or '').strip().lower()
         if status_param and status_param not in ('open', 'closed'):
             bad['status'] = "expected 'open' or 'closed'"
