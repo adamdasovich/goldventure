@@ -162,6 +162,131 @@ except Exception as e:
         }
 
 
+
+def process_news_companies_isolated(company_specs: list, timeout: int = 900) -> Dict:
+    """
+    Process several companies' news inside ONE subprocess.
+
+    process_company_news_isolated spawns a fresh interpreter per company, and
+    that interpreter imports voyageai -> transformers -> torch before it can
+    embed anything: about 16 seconds, every time. Over a 329-company backfill
+    that overhead alone was ~1.5 hours, roughly a third of the run.
+
+    Batching amortises it. The SIGSEGV protection that motivated the
+    subprocess is kept almost intact, because the child prints a result line
+    per company as it finishes: if the Chroma binding aborts the interpreter,
+    everything completed before that point has already been reported, and only
+    the company in flight is lost.
+
+    Args:
+        company_specs: [{'id': int, 'limit': int}, ...]
+        timeout: seconds for the whole batch
+
+    Returns:
+        {'success': bool, 'results': {company_id: {...}}, 'crash': bool, ...}
+    """
+    # SECURITY: validate before anything reaches the subprocess. Ids and limits
+    # are passed as JSON in the environment and re-read there; the company name
+    # is still looked up from the database inside the child, never passed in.
+    clean = []
+    for spec in company_specs or []:
+        cid, limit = spec.get('id'), spec.get('limit', 25)
+        if not isinstance(cid, int) or cid <= 0:
+            return {'success': False, 'error': f'Invalid company id: {cid!r}'}
+        if not isinstance(limit, int) or limit <= 0 or limit > 1000:
+            return {'success': False, 'error': f'Invalid limit for {cid}: {limit!r}'}
+        clean.append({'id': cid, 'limit': limit})
+    if not clean:
+        return {'success': True, 'results': {}}
+
+    subprocess_code = '''
+import os
+import sys
+import json
+
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
+
+import django
+django.setup()
+
+from mcp_servers.news_content_processor import NewsContentProcessor
+from core.models import Company
+
+specs = json.loads(os.environ['CHROMA_BATCH'])
+
+for spec in specs:
+    company_id, limit = spec['id'], spec['limit']
+    try:
+        company = Company.objects.get(id=company_id)
+        processor = NewsContentProcessor(company_id=company_id)
+        result = processor._process_company_news(company.name, limit=limit)
+        payload = {"id": company_id, "name": company.name,
+                   "success": True, "result": result}
+    except Exception as e:
+        payload = {"id": company_id, "success": False,
+                   "error": str(e), "error_type": type(e).__name__}
+    # One line per company, flushed immediately: a later SIGSEGV cannot
+    # retract what has already been written.
+    print("CHROMADB_ITEM:" + json.dumps(payload), flush=True)
+
+print("CHROMADB_RESULT:" + json.dumps({"success": True, "completed": len(specs)}))
+'''
+
+    def _collect(stdout):
+        out = {}
+        for line in (stdout or '').splitlines():
+            if line.startswith('CHROMADB_ITEM:'):
+                try:
+                    item = json.loads(line[len('CHROMADB_ITEM:'):])
+                    out[item['id']] = item
+                except json.JSONDecodeError:
+                    continue
+        return out
+
+    try:
+        completed = subprocess.run(
+            [sys.executable, '-c', subprocess_code],
+            cwd=str(BACKEND_DIR),
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            env={
+                **os.environ,
+                'DJANGO_SETTINGS_MODULE': 'config.settings',
+                'CHROMA_BATCH': json.dumps(clean),
+            },
+        )
+    except subprocess.TimeoutExpired as exc:
+        # Partial output is still worth keeping: the companies that finished
+        # before the clock ran out are done, and re-running skips them.
+        partial = _collect(
+            exc.stdout.decode() if isinstance(exc.stdout, bytes) else exc.stdout
+        )
+        logger.warning("News batch timed out after %ss; %d of %d companies "
+                       "completed first", timeout, len(partial), len(clean))
+        return {'success': False, 'timeout': True, 'results': partial,
+                'error': f'Batch timeout after {timeout}s'}
+    except Exception as exc:                                   # noqa: BLE001
+        logger.error("News batch subprocess failed: %s", exc)
+        return {'success': False, 'results': {}, 'error': str(exc)}
+
+    results = _collect(completed.stdout)
+
+    if completed.returncode != 0:
+        logger.error(
+            "News batch subprocess exited %s (%s); %d of %d companies "
+            "completed first",
+            completed.returncode,
+            'SIGSEGV' if completed.returncode == -11 else 'error',
+            len(results), len(clean),
+        )
+        return {'success': False, 'crash': True, 'results': results,
+                'exit_code': completed.returncode,
+                'stderr': (completed.stderr or '')[:500]}
+
+    return {'success': True, 'results': results, 'completed': len(results)}
+
+
 def store_company_profile_isolated(company_id: int, timeout: int = 60) -> Dict:
     """
     Store company profile in ChromaDB using an isolated subprocess.
