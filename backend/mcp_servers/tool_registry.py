@@ -268,6 +268,32 @@ class ToolRegistry:
             ["news", "context", "citations", "answer", "question", "quote",
              "evidence", "what happened"])
 
+        # Industry-wide context: metals prices and trade press. Neither
+        # MetalPrice nor NewsArticle had any tool reading it, so the assistant
+        # could not say what gold was doing or what the sector press was
+        # reporting.
+        self._register_metadata("industry_get_metal_prices", ToolCategory.MARKET,
+            "Current spot prices for gold, silver, copper, lithium, uranium "
+            "and the other tracked metals",
+            ["gold price", "silver", "copper", "lithium", "uranium", "metal",
+             "spot", "commodity", "bullion", "price of gold"])
+
+        self._register_metadata("industry_metal_price_history", ToolCategory.MARKET,
+            "Daily price history for one metal over a window",
+            ["metal", "history", "trend", "gold", "copper", "chart",
+             "over time", "moved"])
+
+        self._register_metadata("industry_latest_news", ToolCategory.NEWS,
+            "Recent mining-industry news from trade press (not company "
+            "releases)",
+            ["industry news", "sector", "trade press", "mining.com",
+             "northern miner", "what is happening", "headlines"])
+
+        self._register_metadata("industry_search_news", ToolCategory.NEWS,
+            "Search industry trade-press articles by keyword",
+            ["industry", "search", "sector news", "article", "coverage",
+             "keyword", "trade press"])
+
         # Glossary tools
         self._register_metadata("glossary_search", ToolCategory.GLOSSARY,
             "Search for mining industry glossary term definitions",
@@ -311,6 +337,8 @@ class ToolRegistry:
         """Which server owns a tool. The one place that decides."""
         if name in cls.EXPLICIT_SERVERS:
             return cls.EXPLICIT_SERVERS[name]
+        if name.startswith("industry_"):
+            return "industry"
         if name.startswith("insights_"):
             return "insights"
         if name.startswith("reports_"):
@@ -453,6 +481,9 @@ class ToolRegistry:
             elif server_type == "glossary":
                 from mcp_servers.glossary_server import GlossaryServer
                 self._server_instances[cache_key] = GlossaryServer(company_id, user)
+            elif server_type == "industry":
+                from mcp_servers.industry_data import IndustryDataServer
+                self._server_instances[cache_key] = IndustryDataServer(company_id, user)
             elif server_type == "news_content":
                 from mcp_servers.news_content_processor import NewsContentProcessor
                 self._server_instances[cache_key] = NewsContentProcessor(company_id, user)

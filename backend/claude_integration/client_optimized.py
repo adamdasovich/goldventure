@@ -90,6 +90,9 @@ class OptimizedClaudeClient:
             elif server_type == "glossary":
                 from mcp_servers.glossary_server import GlossaryServer
                 self._servers[server_type] = GlossaryServer(self.company_id, self.user)
+            elif server_type == "industry":
+                from mcp_servers.industry_data import IndustryDataServer
+                self._servers[server_type] = IndustryDataServer(self.company_id, self.user)
             elif server_type == "news_content":
                 from mcp_servers.news_content_processor import NewsContentProcessor
                 self._servers[server_type] = NewsContentProcessor(self.company_id, self.user)
