@@ -171,13 +171,21 @@ fi
 
 trap - ERR INT TERM
 cleanup
-# The numbers the site publishes must still match the database. Four count bugs
-# shipped in one week and every one was a plausible wrong figure with no error:
-# ?status=open returning all 297 financings when 21 were open, the homepage
-# counting 1.9k scraped articles instead of 17.9k company releases, "500+
-# companies" against a database of 396, and a company list that would have kept
-# serving soft-deleted rows. None broke a page, so none of the checks above
-# would have caught them.
+# The numbers the API publishes must still match the database. Four count bugs
+# shipped in one week and every one was a plausible wrong figure with no error.
+# check_counts covers three of them: ?status=open returning all 297 financings
+# when 21 were open, the homepage counting 1.9k scraped articles instead of
+# 17.9k company releases, and a company list that would have kept serving
+# soft-deleted rows. None broke a page, so none of the checks above catch them.
+#
+# It does NOT cover the fourth — "500+ companies" hardcoded in page copy against
+# a database of 396. check_counts drives the API through Django's test client and
+# never reads the frontend, so no assertion here can see a number typed into a
+# component. That is deliberate rather than pending: several pages carry a
+# legitimate "500+" about the TSXV market as a whole, so a check that scanned
+# rendered copy for company-count claims would fire on true statements. It would
+# cry wolf, and a check nobody trusts is worse than no check. Hardcoded copy
+# stays a review problem.
 #
 # Deliberately NOT part of the rollback: a count mismatch means the copy is
 # wrong, not that the build is broken. Rolling back would restore an older build

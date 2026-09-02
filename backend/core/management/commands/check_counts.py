@@ -15,6 +15,13 @@ shape — a plausible wrong number, no error, nobody notices:
   * CompanyViewSet filtered is_active but not is_deleted, so a soft-deleted
     company would have stayed in the directory, the API and the sitemap.
 
+Three of those four are checked here. The "500+ companies" one is NOT, and
+cannot be: this drives the API through Django's test client and never reads the
+frontend, so it cannot see a number typed into a component. That is a decision,
+not a gap waiting to be filled -- several pages carry a legitimate "500+" about
+the TSXV market as a whole, so scanning rendered copy for company-count claims
+would fire on true statements, and a check that cries wolf gets ignored.
+
 None of these threw. Tests that assert behaviour would not have caught them
 either, because the code did exactly what it said — it just said the wrong
 thing. What catches this class is comparing the published number against the
