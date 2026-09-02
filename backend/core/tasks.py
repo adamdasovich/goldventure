@@ -2708,7 +2708,8 @@ def check_credentials_task(self, notify=True):
         results = [retried.get(r.name, r) for r in results]
         failed = [r for r in results if r.failed]
 
-    subject, body = format_report(results)
+    # send_alert() builds its own subject; only the body is logged here.
+    _, body = format_report(results)
 
     if failed:
         logger.error('Credential checks: %d FAILING\n%s', len(failed), body)

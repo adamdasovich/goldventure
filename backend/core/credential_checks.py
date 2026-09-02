@@ -381,7 +381,13 @@ def send_alert(results):
             subject=subject,
             plain_text_content=body,
         )
-        SendGridAPIClient(key).send(message)
+        client = SendGridAPIClient(key)
+        # python_http_client defaults to timeout=None -- genuinely unbounded.
+        # This is the alert path itself: if it hangs, the task dies at its 280s
+        # soft limit and the warning about failing credentials never leaves the
+        # box, which is the one moment it matters.
+        client.client.timeout = TIMEOUT
+        client.send(message)
         logger.warning('Credential check alert sent to %s: %s', to, subject)
         return True
     except Exception as e:
