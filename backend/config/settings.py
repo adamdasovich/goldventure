@@ -472,7 +472,11 @@ CELERY_BEAT_SCHEDULE = {
     # every configured Stripe webhook secret still has an enabled endpoint --
     # the store endpoint was found unregistered on 2026-09-01, which meant a
     # customer could be charged and no order was ever created.
-    # Monday 12:15 UTC = 7:15 AM ET.
+    # Mondays at 12:15 UTC. Stated in UTC deliberately: crontab() here is UTC,
+    # so the wall-clock ET time shifts with daylight saving -- 08:15 EDT in
+    # summer, 07:15 EST in winter. (The older entries below label fixed UTC
+    # hours with fixed ET times, which is why two of them disagree about what
+    # 13:00 UTC is.)
     'check-credentials-weekly': {
         'task': 'core.tasks.check_credentials_task',
         'schedule': crontab(day_of_week=1, hour=12, minute=15),

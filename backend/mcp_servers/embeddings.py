@@ -27,6 +27,9 @@ from chromadb.api.types import EmbeddingFunction, Documents, Embeddings
 from importlib.util import find_spec
 
 
+VOYAGE_AVAILABLE = find_spec('voyageai') is not None
+
+
 def _voyage_api_key() -> str:
     """
     Resolve the Voyage key from Django settings, falling back to os.environ.
@@ -46,8 +49,6 @@ def _voyage_api_key() -> str:
         pass
     return os.getenv('VOYAGE_API_KEY', '')
 
-VOYAGE_AVAILABLE = find_spec('voyageai') is not None
-
 
 class VoyageEmbeddingFunction(EmbeddingFunction[Documents]):
     """
@@ -62,7 +63,9 @@ class VoyageEmbeddingFunction(EmbeddingFunction[Documents]):
         Initialize the Voyage AI embedding function.
 
         Args:
-            api_key: Voyage AI API key. If not provided, uses VOYAGE_API_KEY env var.
+            api_key: Voyage AI API key. If not provided, resolved by
+                     _voyage_api_key(): Django settings first, then the
+                     VOYAGE_API_KEY environment variable.
             model: Voyage AI model to use. Options:
                    - voyage-2 (recommended, best balance)
                    - voyage-large-2 (higher quality, slower)
