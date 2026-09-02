@@ -281,6 +281,37 @@ class Company(models.Model):
             | models.Q(**{f'{prefix}ticker_symbol__iexact': term})
         )
 
+    @classmethod
+    def find_by_exact_name(cls, name, queryset=None):
+        """
+        Find the company that goes, or used to go, by exactly this name.
+
+        For duplicate detection on create — where `name_q`'s substring match
+        is far too loose ("Gold Corp." would collide with half the table).
+        A company re-encountered under its pre-rename name is the same
+        company, not a new one.
+
+        Two steps because `former_names` is newline-separated text: the
+        `icontains` narrows to a handful of candidates in the database, then
+        the exact per-line comparison happens in Python. That avoids building
+        a regex out of a company name, where a stray '.' or '(' would either
+        match too much or blow up.
+        """
+        name = (name or '').strip()
+        if not name:
+            return None
+
+        qs = cls.objects if queryset is None else queryset
+        match = qs.filter(name__iexact=name).first()
+        if match:
+            return match
+
+        folded = name.casefold()
+        for candidate in qs.filter(former_names__icontains=name):
+            if any(n.casefold() == folded for n in candidate.former_names_list):
+                return candidate
+        return None
+
     def save(self, *args, **kwargs):
         update_fields = kwargs.get('update_fields')
         # A caller saving only current_price is not renaming anything, so leave

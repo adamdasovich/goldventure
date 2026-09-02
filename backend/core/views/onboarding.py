@@ -679,7 +679,7 @@ def _create_or_update_company(data: dict, source_url: str, update_existing: bool
     if company_data.get('ticker_symbol'):
         existing = Company.objects.filter(ticker_symbol__iexact=company_data['ticker_symbol']).first()
     if not existing:
-        existing = Company.objects.filter(name__iexact=company_data['name']).first()
+        existing = Company.find_by_exact_name(company_data['name'])
     if existing and not update_existing:
         return existing
 

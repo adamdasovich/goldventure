@@ -659,9 +659,7 @@ class Command(BaseCommand):
             ).first()
 
         if not existing_company:
-            existing_company = Company.objects.filter(
-                name__iexact=company_data['name']
-            ).first()
+            existing_company = Company.find_by_exact_name(company_data['name'])
 
         if existing_company and not update_existing:
             self.stdout.write(self.style.WARNING(
