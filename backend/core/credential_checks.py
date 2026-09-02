@@ -292,7 +292,7 @@ def format_report(results):
         body += ('\n\nThese fail silently in normal operation -- nothing errors and no '
                  'user reports it, which is why this check exists. Rotate or '
                  're-register the affected credential with '
-                 '/root/rotate_env_secret.sh.')
+                 'backend/scripts/rotate_env_secret.sh.')
     return subject, body
 
 
