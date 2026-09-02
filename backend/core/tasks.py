@@ -2669,6 +2669,10 @@ def notify_editor_question_task(self, thread_id: int, message_id: int):
     return {'sent': True}
 
 
+# Seconds to wait before re-testing a failed credential check. Well inside the
+# task's 280s soft limit even if every check fails and is retried.
+CREDENTIAL_RECHECK_DELAY = 20
+
 @shared_task(bind=True, time_limit=300, soft_time_limit=280, on_failure=log_task_failure)
 def check_credentials_task(self, notify=True):
     """
@@ -2684,11 +2688,27 @@ def check_credentials_task(self, notify=True):
 
     See core/credential_checks.py for what each check does and why.
     """
+    import time
     from core.credential_checks import run_checks, send_alert, format_report
 
     results = run_checks()
-    subject, body = format_report(results)
     failed = [r for r in results if r.failed]
+
+    if failed:
+        # Re-test ONLY what failed, once, after a pause. A weekly alert that
+        # cries wolf over a transient DNS hiccup or a provider's 30-second blip
+        # gets ignored, and an ignored alert is worse than no alert at all. A
+        # credential that is genuinely dead fails both times; a network blip
+        # does not. The names in `only` match CheckResult.name for every check.
+        time.sleep(CREDENTIAL_RECHECK_DELAY)
+        retried = {r.name: r for r in run_checks(only={r.name for r in failed})}
+        recovered = sorted(n for n, r in retried.items() if not r.failed)
+        if recovered:
+            logger.warning('Credential checks recovered on retry, treating as transient: %s', ', '.join(recovered))
+        results = [retried.get(r.name, r) for r in results]
+        failed = [r for r in results if r.failed]
+
+    subject, body = format_report(results)
 
     if failed:
         logger.error('Credential checks: %d FAILING\n%s', len(failed), body)
