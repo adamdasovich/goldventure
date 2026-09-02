@@ -18,7 +18,7 @@ import json
 
 from django.core.management.base import BaseCommand, CommandError
 
-from core.credential_checks import (FAIL, check_names, format_report, run_checks,
+from core.credential_checks import (SKIP, check_names, format_report, run_checks,
                                     send_alert)
 
 
@@ -64,7 +64,7 @@ class Command(BaseCommand):
             width = max([len(r.name) for r in results] + [10])
             for r in results:
                 style = self.style.ERROR if r.failed else (
-                    self.style.SUCCESS if r.status != 'skipped' else self.style.WARNING)
+                    self.style.SUCCESS if r.status != SKIP else self.style.WARNING)
                 self.stdout.write(style('  %-8s' % r.status) + ' %-*s %s' % (width, r.name, r.detail))
             self.stdout.write('')
             if failed:

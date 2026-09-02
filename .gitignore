@@ -75,7 +75,10 @@ backend/chromadb_data/
 # env file for os.replace/mv to be atomic, so they land in the repo; both
 # scripts remove them on failure, and these patterns are the second defence.
 .envrot.*
-.rotate.*
+# mktemp's XXXXXX is exactly six characters. Matching that precisely rather
+# than '.rotate.*', which would also silently hide a file someone genuinely
+# meant to commit, e.g. docs/.rotate.md.
+.rotate.??????
 
 # Playwright output. frontend/.gitignore already covers frontend/test-results,
 # but its rules are anchored with a leading slash and so do not reach a run that
