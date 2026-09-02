@@ -6,12 +6,45 @@ Stores chunks in both PostgreSQL (NewsChunk) and ChromaDB for embedding-based re
 Uses Voyage AI for fast embeddings when available, falls back to local model.
 """
 
+import re
 import logging
 import asyncio
 import os
 import requests
 
 logger = logging.getLogger(__name__)
+
+# Site furniture that survives tag-level stripping: cookie notices, share
+# bars and newsletter forms usually sit in plain divs whose class or id
+# says what they are. Matched as substrings against class + id.
+_CHROME_CLASS_HINTS = (
+    'cookie', 'consent', 'gdpr', 'newsletter', 'subscribe', 'social-share',
+    'share-buttons', 'sharedaddy', 'breadcrumb', 'sidebar', 'site-footer',
+    'site-header', 'menu-toggle', 'skip-link', 'back-to-top',
+    'related-posts',
+)
+
+# Lines that are chrome wherever they appear. Anchored to the whole line,
+# so a release that merely mentions a privacy policy in a sentence is left
+# alone -- an earlier unanchored version matched a loan agreement and a
+# resource estimate.
+_BOILERPLATE_LINE = re.compile(
+    r'^(?:'
+    r'we use cookies.*|.*cookie policy.*|accept (?:all )?cookies.*|'
+    r'subscribe to our newsletter.*|sign up for (?:our |the )?newsletter.*|'
+    r'follow us on.*|share this.*|share on .*|'
+    r'skip to (?:main )?content|javascript is disabled.*|'
+    r'.*all rights reserved.*|site by.*|powered by.*|'
+    r'ok|okay|accept|got it|i agree|close|next|previous|prev|back|home|menu'
+    r')$',
+    re.IGNORECASE,
+)
+
+
+def _is_boilerplate_line(line):
+    """True when a line is site chrome rather than release text."""
+    return bool(_BOILERPLATE_LINE.match(line.strip()))
+
 from typing import Dict, List, Optional
 from datetime import datetime
 from bs4 import BeautifulSoup
@@ -309,6 +342,16 @@ class NewsContentProcessor(BaseMCPServer):
             for tag in soup(['script', 'style', 'nav', 'footer', 'header', 'aside']):
                 tag.decompose()
 
+            # Tag names alone miss the furniture most sites put in plain
+            # divs. Their class or id almost always says what they are.
+            for element in (soup.find_all(attrs={'class': True})
+                            + soup.find_all(attrs={'id': True})):
+                token = ' '.join(
+                    (element.get('class') or []) + [element.get('id') or '']
+                ).lower()
+                if any(h in token for h in _CHROME_CLASS_HINTS):
+                    element.decompose()
+
             # Try to find main content area
             content = None
             for selector in ['article', 'main', '.content', '.post-content', '.entry-content', '#content']:
@@ -324,7 +367,11 @@ class NewsContentProcessor(BaseMCPServer):
             text = content.get_text(separator='\n', strip=True)
 
             # Clean up excessive whitespace
-            lines = [line.strip() for line in text.split('\n') if line.strip()]
+            lines = [
+                line.strip()
+                for line in text.split(chr(10))
+                if line.strip() and not _is_boilerplate_line(line)
+            ]
             text = '\n'.join(lines)
 
             return text if len(text) > 100 else None
