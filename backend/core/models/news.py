@@ -30,8 +30,11 @@ GENERIC_URL_SEGMENTS = frozenset({
     'default', 'home',
 })
 
+# `v` is here for YouTube: /watch?v=<id>. Without it every embedded video
+# collapses to the identity "watch" — 30 of them across the live tables — and
+# two videos posted by one company on one day would match each other.
 _URL_ID_PARAM = re.compile(
-    r'\b(?:id|content_id|news_id|article|post|release|p)=([\w-]+)', re.I
+    r'\b(?:id|content_id|news_id|article|post|release|p|v)=([\w-]+)', re.I
 )
 
 
@@ -66,6 +69,13 @@ def news_url_identity(url):
     # A section name, or a bare year archive index, identifies nothing.
     if last in GENERIC_URL_SEGMENTS or re.fullmatch(r'(19|20)\d{2}', last):
         return f'?{id_part}' if id_part else ''
+
+    # A purely numeric last segment is too weak on its own — /news/page/2 and
+    # /2026/02/19126 both appear in the live data — so it carries its parent
+    # for context: "page/2", "02/19126", "english/2903". Strictly more
+    # specific, which can only ever cost a merge, never cause a wrong one.
+    if last.isdigit() and len(segments) >= 2:
+        last = f'{segments[-2]}/{last}'
 
     return f'{last}?{id_part}' if id_part else last
 
