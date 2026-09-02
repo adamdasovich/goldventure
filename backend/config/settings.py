@@ -555,11 +555,14 @@ CELERY_BEAT_SCHEDULE = {
     # Embed news published in the last week that has no vectors yet. Runs
     # at 3 AM ET, clear of the 7 AM scrape, because embedding an item means
     # fetching its article - neither scraper stores the body. Bounded to 40
-    # companies a run; a normal day brings about 20 new releases in total.
+    # companies a run: process_company_news_isolated allows each 180s, so 15
+    # is the most that fits inside this task's own 3540s soft limit. A
+    # normal day brings ~20 new releases across ~15 companies, so that is
+    # also roughly steady state; a backlog drains over several nights.
     'embed-recent-news-daily': {
         'task': 'core.tasks.embed_recent_news_for_rag_task',
         'schedule': crontab(hour=8, minute=0),  # 3 AM ET
-        'kwargs': {'days': 7, 'max_companies': 40, 'limit_per_company': 10},
+        'kwargs': {'days': 7, 'max_companies': 15, 'limit_per_company': 10},
     },
 
     'backfill-document-dates-hourly': {
