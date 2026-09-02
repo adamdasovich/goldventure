@@ -1,3 +1,6 @@
+import re
+from urllib.parse import urlparse
+
 from django.db import models
 from django.core.validators import MinValueValidator, MaxValueValidator
 from django.utils import timezone
@@ -6,13 +9,151 @@ from .users import User, Company
 from .mining import Project, Financing
 
 
+# Filenames and path segments that name the template or the section, not the
+# release. A URL whose identity comes down to one of these identifies nothing,
+# so it must never be used to match two rows together.
+#
+# website_crawler.py keeps its own copies (GENERIC_PAGE_FILENAMES,
+# LISTING_PATH_SEGMENTS) for a different job — deciding whether a URL is an
+# article at all. These are deliberately separate: importing the crawler here
+# would pull crawl4ai into every model import.
+GENERIC_URL_FILENAMES = frozenset({
+    'default.aspx', 'default.asp', 'default.htm', 'default.html',
+    'index.aspx', 'index.php', 'index.htm', 'index.html',
+    'news.aspx', 'news.php', 'news.htm', 'news.html',
+})
+
+GENERIC_URL_SEGMENTS = frozenset({
+    'news', 'news-releases', 'newsreleases', 'press-releases', 'press-release',
+    'press', 'media', 'releases', 'announcements', 'updates', 'latest-news',
+    'company-news', 'investors', 'investor-relations', 'en', 'fr', 'index',
+    'default', 'home',
+})
+
+_URL_ID_PARAM = re.compile(
+    r'\b(?:id|content_id|news_id|article|post|release|p)=([\w-]+)', re.I
+)
+
+
+def news_url_identity(url):
+    """
+    The part of a news URL that identifies the release rather than the host
+    serving it: the last meaningful path segment, plus any identifying query
+    parameter.
+
+    Returns '' when the URL comes down to nothing but a section or template
+    name — never a value that could match two unrelated releases. Callers must
+    treat '' as "cannot match on this".
+    """
+    if not url:
+        return ''
+
+    parsed = urlparse(url.strip().lower())
+    segments = [s for s in parsed.path.split('/') if s]
+
+    # Q4-style platforms end real article URLs with default.aspx.
+    while segments and segments[-1] in GENERIC_URL_FILENAMES:
+        segments.pop()
+
+    id_match = _URL_ID_PARAM.search(parsed.query or '')
+    id_part = id_match.group(1) if id_match else ''
+
+    if not segments:
+        # Nothing but a template name; only a query id can identify it.
+        return f'?{id_part}' if id_part else ''
+
+    last = segments[-1]
+    # A section name, or a bare year archive index, identifies nothing.
+    if last in GENERIC_URL_SEGMENTS or re.fullmatch(r'(19|20)\d{2}', last):
+        return f'?{id_part}' if id_part else ''
+
+    return f'{last}?{id_part}' if id_part else last
+
+
+class ScrapedNewsMixin:
+    """
+    Match scraped news on what identifies the release, not on the URL alone.
+
+    Keying on URL breaks the day a company moves domains: every release in the
+    archive reappears under a new host and is stored a second time. Portofino
+    Resources renaming to LatAm Lithium duplicated 44 of its 57 releases that
+    way, and nothing about it looked like an error — the scrape reported
+    "43 created" and the count simply doubled.
+
+    Subclasses declare which fields carry the URL and the publication date.
+    """
+
+    URL_FIELD = 'url'
+    DATE_FIELD = 'release_date'
+
+    @classmethod
+    def match_scraped(cls, company, url, published_on):
+        """
+        Find the stored row for a scraped item, or None.
+
+        Exact URL first — the overwhelmingly common case, and unchanged from
+        the behaviour this replaces. Only if that misses do we look for the
+        same company's item on the same date with the same URL identity.
+        Requiring company, date and identity together keeps this from ever
+        merging two distinct releases: annual repeats like "AGM Results" share
+        a title, but never a date.
+        """
+        existing = cls.objects.filter(
+            company=company, **{cls.URL_FIELD: url}
+        ).first()
+        if existing is not None:
+            return existing
+
+        identity = news_url_identity(url)
+        if not identity or not published_on:
+            return None
+
+        candidates = cls.objects.filter(
+            company=company, **{cls.DATE_FIELD: published_on}
+        )
+        for candidate in candidates:
+            if news_url_identity(getattr(candidate, cls.URL_FIELD)) == identity:
+                return candidate
+        return None
+
+    @classmethod
+    def upsert_from_scrape(cls, company, url, defaults, update_existing=True):
+        """
+        Create or update the row for one scraped item. Returns (obj, created),
+        like update_or_create.
+
+        The stored URL is always moved onto the one just scraped, even when
+        `update_existing` is False: a row still pointing at the old host is a
+        link that dies when the redirect does. Everything else is left alone in
+        that case, so callers wanting get_or_create semantics keep them.
+        """
+        existing = cls.match_scraped(company, url, defaults.get(cls.DATE_FIELD))
+
+        if existing is not None:
+            changed = []
+            if update_existing:
+                for field, value in defaults.items():
+                    setattr(existing, field, value)
+                changed = list(defaults)
+            if getattr(existing, cls.URL_FIELD) != url:
+                setattr(existing, cls.URL_FIELD, url)
+                changed.append(cls.URL_FIELD)
+            if changed:
+                existing.save(update_fields=changed + ['updated_at'])
+            return existing, False
+
+        # Nothing matched. update_or_create rather than create, so two workers
+        # racing on the same URL cannot both insert.
+        return cls.objects.update_or_create(
+            company=company, **{cls.URL_FIELD: url}, defaults=defaults
+        )
 
 
 # ============================================================================
 # COMMUNICATIONS & DOCUMENTS
 # ============================================================================
 
-class NewsRelease(models.Model):
+class NewsRelease(ScrapedNewsMixin, models.Model):
     """Press releases and news"""
     RELEASE_TYPES = [
         ('drill_results', 'Drill Results'),
@@ -908,10 +1049,14 @@ class CompanyDocument(models.Model):
 
 
 
-class CompanyNews(models.Model):
+class CompanyNews(ScrapedNewsMixin, models.Model):
     """
     News releases and press releases scraped from company websites.
     """
+    # This model names its URL and date columns differently to NewsRelease.
+    URL_FIELD = "source_url"
+    DATE_FIELD = "publication_date"
+
     NEWS_TYPE_CHOICES = [
         ('general', 'General News'),
         ('drill_results', 'Drill Results'),

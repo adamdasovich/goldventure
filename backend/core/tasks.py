@@ -566,7 +566,7 @@ def scrape_company_news_task(self, company_id):
 
             # Create or update news release (using URL as unique identifier)
             # SECURITY: Use update_or_create to prevent TOCTOU race condition
-            obj, created = NewsRelease.objects.update_or_create(
+            obj, created = NewsRelease.upsert_from_scrape(
                 company=company,
                 url=url,
                 defaults={
@@ -581,9 +581,9 @@ def scrape_company_news_task(self, company_id):
 
             # Also create/update CompanyNews record (used by frontend API)
             from core.models import CompanyNews
-            news_record, _ = CompanyNews.objects.update_or_create(
+            news_record, _ = CompanyNews.upsert_from_scrape(
                 company=company,
-                source_url=url,
+                url=url,
                 defaults={
                     "title": title,
                     "publication_date": release_date,
@@ -1092,7 +1092,7 @@ def scrape_single_company_news_task(self, company_id: int):
 
             # Create or update news release
             # SECURITY: Use update_or_create to prevent TOCTOU race condition
-            obj, created = NewsRelease.objects.update_or_create(
+            obj, created = NewsRelease.upsert_from_scrape(
                 company=company,
                 url=url,
                 defaults={

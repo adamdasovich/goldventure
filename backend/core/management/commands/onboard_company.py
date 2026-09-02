@@ -850,9 +850,9 @@ class Command(BaseCommand):
                 material_news_count += 1
 
             # Create or update the news record with classification data
-            news_record, created = CompanyNews.objects.update_or_create(
+            news_record, created = CompanyNews.upsert_from_scrape(
                 company=company,
-                source_url=source_url,
+                url=source_url,
                 defaults={
                     'title': news_title,
                     'publication_date': pub_date,

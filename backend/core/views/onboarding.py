@@ -873,8 +873,8 @@ def _save_news(company, news_items: list, user) -> list:
         is_pdf = '.pdf' in news_url.lower()
         classification = _classify_news(news_title)
 
-        news_record, _ = CompanyNews.objects.update_or_create(
-            company=company, source_url=news_url,
+        news_record, _ = CompanyNews.upsert_from_scrape(
+            company=company, url=news_url,
             defaults={
                 'title': news_title, 'publication_date': pub_date, 'is_pdf': is_pdf,
                 'news_type': classification['news_type'], 'is_material': classification['is_material'],
@@ -921,9 +921,11 @@ def _create_financing_flag(company, news_url, news_title, pub_date):
     if not detected:
         return
 
-    news_release, _ = NewsRelease.objects.get_or_create(
+    news_release, _ = NewsRelease.upsert_from_scrape(
         company=company, url=news_url,
-        defaults={'title': news_title, 'release_date': pub_date, 'is_material': True}
+        defaults={'title': news_title, 'release_date': pub_date, 'is_material': True},
+        # get_or_create semantics: an existing release keeps its own fields.
+        update_existing=False,
     )
     NewsReleaseFlag.objects.get_or_create(
         news_release=news_release,
