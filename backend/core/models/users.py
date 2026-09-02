@@ -241,18 +241,26 @@ class Company(models.Model):
     def add_former_name(self, old_name):
         """
         Record a previous name. Most recent first, case-insensitively deduped,
-        and never the company's current name. Returns True if it was added.
+        and never the company's current name.
+
+        Also prunes the current name out of the existing list: renaming A -> B
+        and later back to A must not leave the company listed as formerly
+        itself. Returns True if `former_names` changed at all, which includes
+        a prune with no addition.
         """
         old_name = (old_name or '').strip()
-        if not old_name or old_name.casefold() == (self.name or '').casefold():
-            return False
+        current = (self.name or '').strip().casefold()
 
-        existing = self.former_names_list
-        if any(n.casefold() == old_name.casefold() for n in existing):
-            return False
+        existing = [n for n in self.former_names_list if n.casefold() != current]
 
-        self.former_names = '\n'.join([old_name] + existing)
-        return True
+        if (old_name and old_name.casefold() != current
+                and not any(n.casefold() == old_name.casefold() for n in existing)):
+            existing.insert(0, old_name)
+
+        new_value = '\n'.join(existing)
+        changed = new_value != self.former_names
+        self.former_names = new_value
+        return changed
 
     @staticmethod
     def name_q(term, prefix=''):
@@ -266,7 +274,15 @@ class Company(models.Model):
 
         `prefix` walks a relation, e.g. name_q(term, 'company__') to filter a
         queryset of something that points at Company.
+
+        A blank term matches nothing. `icontains=''` matches every row, and
+        several callers — the AI assistant's company tools among them — pass a
+        caller-supplied string straight through without checking it, so an
+        empty one would quietly return an arbitrary company as the answer.
         """
+        term = (term or '').strip()
+        if not term:
+            return models.Q(pk__in=[])
         return (
             models.Q(**{f'{prefix}name__icontains': term})
             | models.Q(**{f'{prefix}former_names__icontains': term})
@@ -275,7 +291,11 @@ class Company(models.Model):
     @staticmethod
     def identity_q(term, prefix=''):
         """`name_q` plus an exact ticker match — the usual 'find this company
-        from a free-text identifier' filter."""
+        from a free-text identifier' filter. Blank matches nothing: an empty
+        ticker would otherwise match every company that has no ticker."""
+        term = (term or '').strip()
+        if not term:
+            return models.Q(pk__in=[])
         return (
             Company.name_q(term, prefix)
             | models.Q(**{f'{prefix}ticker_symbol__iexact': term})
@@ -327,9 +347,15 @@ class Company(models.Model):
                 self.slug = expected
                 also_write.append('slug')
 
-        # Record the outgoing name on a rename.
+        # Record the outgoing name on a rename. Compared stripped, so that
+        # re-saving a name that picked up stray whitespace is not filed as a
+        # rename to itself.
         loaded_name = getattr(self, '_loaded_name', None)
-        if self.pk and touching_name and loaded_name and loaded_name != self.name:
+        renamed = (
+            loaded_name is not None
+            and loaded_name.strip() != (self.name or '').strip()
+        )
+        if self.pk and touching_name and renamed:
             if self.add_former_name(loaded_name):
                 also_write.append('former_names')
 
