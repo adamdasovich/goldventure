@@ -276,6 +276,11 @@ FINANCING_NOTIFICATION_EMAIL = os.getenv('FINANCING_NOTIFICATION_EMAIL', 'notifi
 # Where "Ask the Editor" questions are emailed. Falls back to ADMIN_EMAIL so a
 # question is never silently dropped just because the specific var is unset.
 EDITOR_NOTIFICATION_EMAIL = os.getenv('EDITOR_NOTIFICATION_EMAIL', ADMIN_EMAIL)
+# Where credential-liveness failures are emailed (core/credential_checks.py).
+# NOTE: ADMIN_EMAIL still defaults to the placeholder admin@example.com and has
+# never been set in production, so alert_recipient() deliberately skips
+# @example.com addresses rather than posting failures into a black hole.
+CREDENTIAL_ALERT_EMAIL = os.getenv('CREDENTIAL_ALERT_EMAIL', EDITOR_NOTIFICATION_EMAIL)
 
 # ============================================================================
 # DJANGO CHANNELS & WEBSOCKET CONFIGURATION
@@ -458,6 +463,21 @@ CELERY_TASK_ROUTES = {
 from celery.schedules import crontab
 
 CELERY_BEAT_SCHEDULE = {
+    # Verify every external credential still works, and email if one does not.
+    # These all fail SILENTLY: an expired DigitalOcean token stops GPU document
+    # processing with nothing but 401s in a log, a dead Anthropic key drops paid
+    # subscribers to the templated briefing because _generate_ai_briefing()
+    # swallows every exception, and a revoked SendGrid key still satisfies
+    # is_configured(), which only inspects the 'SG.' prefix. It also confirms
+    # every configured Stripe webhook secret still has an enabled endpoint --
+    # the store endpoint was found unregistered on 2026-09-01, which meant a
+    # customer could be charged and no order was ever created.
+    # Monday 12:15 UTC = 7:15 AM ET.
+    'check-credentials-weekly': {
+        'task': 'core.tasks.check_credentials_task',
+        'schedule': crontab(day_of_week=1, hour=12, minute=15),
+    },
+
     # Warn early-access comp-grant holders before their access lapses. Comp
     # grants have no Stripe subscription, so nothing else would tell them.
     # 13:00 UTC = 9 AM ET.

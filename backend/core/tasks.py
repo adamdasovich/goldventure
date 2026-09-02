@@ -2667,3 +2667,39 @@ def notify_editor_question_task(self, thread_id: int, message_id: int):
         )
 
     return {'sent': True}
+
+
+@shared_task(bind=True, time_limit=300, soft_time_limit=280, on_failure=log_task_failure)
+def check_credentials_task(self, notify=True):
+    """
+    Weekly liveness check of every external credential, emailing on failure.
+
+    These credentials all fail silently -- an expired DigitalOcean token stops
+    GPU document processing with nothing but 401s in a log, a dead Anthropic key
+    drops paying subscribers to the templated briefing because
+    _generate_ai_briefing() swallows every exception, and a revoked SendGrid key
+    still passes is_configured(), which only inspects the 'SG.' prefix. Without
+    this, the first sign of a dead credential is a user noticing something is
+    missing, or nobody noticing at all.
+
+    See core/credential_checks.py for what each check does and why.
+    """
+    from core.credential_checks import run_checks, send_alert, format_report
+
+    results = run_checks()
+    subject, body = format_report(results)
+    failed = [r for r in results if r.failed]
+
+    if failed:
+        logger.error('Credential checks: %d FAILING\n%s', len(failed), body)
+        if notify:
+            send_alert(results)
+    else:
+        logger.info('Credential checks: all clear\n%s', body)
+
+    return {
+        'checked': len(results),
+        'failed': len(failed),
+        'failures': [{'name': r.name, 'detail': r.detail} for r in failed],
+        'results': {r.name: r.status for r in results},
+    }
