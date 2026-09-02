@@ -252,6 +252,22 @@ class ToolRegistry:
             "Search news by keyword across ALL companies - find PEA, NI 43-101, drill results, financings industry-wide",
             ["news", "search", "all", "companies", "keyword", "PEA", "NI 43-101", "feasibility", "drill", "resource", "financing", "cross-company"])
 
+        # Semantic search over news release CONTENT. The tools above search
+        # news by keyword in Postgres; these two query the news_chunks vector
+        # collection, which held 21,000+ embeddings that no registered tool
+        # could reach.
+        self._register_metadata("search_news_content", ToolCategory.NEWS,
+            "Semantic search across the full text of news releases — finds "
+            "releases by meaning, not just keyword",
+            ["news", "semantic", "search", "content", "meaning", "vector",
+             "what did they say", "announcement", "release", "topic"])
+
+        self._register_metadata("get_news_context", ToolCategory.NEWS,
+            "Get formatted news-release context with citations for answering "
+            "a question",
+            ["news", "context", "citations", "answer", "question", "quote",
+             "evidence", "what happened"])
+
         # Glossary tools
         self._register_metadata("glossary_search", ToolCategory.GLOSSARY,
             "Search for mining industry glossary term definitions",
@@ -274,25 +290,46 @@ class ToolRegistry:
             description=description,
             keywords=keywords
         )
-        # Map tool to server type based on prefix
+        self._tool_servers[name] = self.server_for(name)
+
+    # Tools whose name does not imply their server. Consulted before any
+    # prefix rule, because prefix guessing got these wrong: every one of them
+    # starts with "search_" or "get_", so the document_search branch claimed
+    # them and search_news_releases / search_news_all_companies resolved to a
+    # server that has no such tool — they returned "Unknown tool" to Claude.
+    EXPLICIT_SERVERS = {
+        "search_news_releases": "news_release",
+        "search_news_all_companies": "news_release",
+        "search_news_content": "news_content",
+        "get_news_context": "news_content",
+        "search_documents": "document_search",
+        "get_document_context": "document_search",
+    }
+
+    @classmethod
+    def server_for(cls, name: str) -> Optional[str]:
+        """Which server owns a tool. The one place that decides."""
+        if name in cls.EXPLICIT_SERVERS:
+            return cls.EXPLICIT_SERVERS[name]
         if name.startswith("insights_"):
-            self._tool_servers[name] = "insights"
-        elif name.startswith("reports_"):
-            self._tool_servers[name] = "ni43101_reports"
-        elif name.startswith("mining_"):
-            self._tool_servers[name] = "mining"
-        elif name.startswith("financial_"):
-            self._tool_servers[name] = "financial"
-        elif name.startswith("alphavantage_"):
-            self._tool_servers[name] = "alpha_vantage"
-        elif name.startswith("document_"):
-            self._tool_servers[name] = "document_processor"
-        elif name.startswith("search_") or name.startswith("get_document_"):
-            self._tool_servers[name] = "document_search"
-        elif name.startswith("glossary_"):
-            self._tool_servers[name] = "glossary"
-        elif "news" in name:
-            self._tool_servers[name] = "news_release"
+            return "insights"
+        if name.startswith("reports_"):
+            return "ni43101_reports"
+        if name.startswith("mining_"):
+            return "mining"
+        if name.startswith("financial_"):
+            return "financial"
+        if name.startswith("alphavantage_"):
+            return "alpha_vantage"
+        if name.startswith("document_"):
+            return "document_processor"
+        if name.startswith("glossary_"):
+            return "glossary"
+        if "news" in name:
+            return "news_release"
+        if name.startswith("search_") or name.startswith("get_document_"):
+            return "document_search"
+        return None
 
     def search_tools(self, query: str = None,
                     category: ToolCategory = None,
@@ -416,6 +453,9 @@ class ToolRegistry:
             elif server_type == "glossary":
                 from mcp_servers.glossary_server import GlossaryServer
                 self._server_instances[cache_key] = GlossaryServer(company_id, user)
+            elif server_type == "news_content":
+                from mcp_servers.news_content_processor import NewsContentProcessor
+                self._server_instances[cache_key] = NewsContentProcessor(company_id, user)
 
         return self._server_instances.get(cache_key)
 

@@ -36,6 +36,21 @@ class DocumentSearchServer(BaseMCPServer):
         """Register tools with the MCP server (required by base class)"""
         pass  # Tools are returned dynamically via get_tools()
 
+    def get_tool_definitions(self) -> List[Dict]:
+        """
+        Same list as get_tools(), under the name every other server uses.
+
+        This server is the only one that declares its tools in get_tools()
+        rather than through register_tool(), so the base class's
+        _tools dict — and therefore get_tool_definitions() — was empty.
+        ToolRegistry.get_tool_schema() asks servers for
+        get_tool_definitions(), so it got nothing back and returned None for
+        search_documents and get_document_context: the optimized client could
+        list them during discovery but never load a schema to call them, which
+        left semantic document search unreachable on the default chat path.
+        """
+        return self.get_tools()
+
     def get_tools(self) -> List[Dict]:
         """Define available tools for document search"""
         return [

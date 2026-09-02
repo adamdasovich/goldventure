@@ -90,6 +90,9 @@ class OptimizedClaudeClient:
             elif server_type == "glossary":
                 from mcp_servers.glossary_server import GlossaryServer
                 self._servers[server_type] = GlossaryServer(self.company_id, self.user)
+            elif server_type == "news_content":
+                from mcp_servers.news_content_processor import NewsContentProcessor
+                self._servers[server_type] = NewsContentProcessor(self.company_id, self.user)
 
         return self._servers.get(server_type)
 
@@ -197,26 +200,13 @@ class OptimizedClaudeClient:
 
     def _execute_tool(self, tool_name: str, parameters: Dict) -> Any:
         """Execute a tool on the appropriate server."""
-        # Determine server type from tool name
-        server_type = None
-        if tool_name.startswith("insights_"):
-            server_type = "insights"
-        elif tool_name.startswith("reports_"):
-            server_type = "ni43101_reports"
-        elif tool_name.startswith("mining_"):
-            server_type = "mining"
-        elif tool_name.startswith("financial_"):
-            server_type = "financial"
-        elif tool_name.startswith("alphavantage_"):
-            server_type = "alpha_vantage"
-        elif tool_name.startswith("document_"):
-            server_type = "document_processor"
-        elif tool_name.startswith("search_") or tool_name.startswith("get_document_"):
-            server_type = "document_search"
-        elif "news" in tool_name:
-            server_type = "news_release"
-        elif tool_name.startswith("glossary_"):
-            server_type = "glossary"
+        # One source of truth, shared with the registry. This used to be a
+        # second copy of the prefix rules, and the two drifted: both sent
+        # search_news_releases to document_search because "search_" was tested
+        # before "news", and Claude got "Unknown tool" back.
+        from mcp_servers.tool_registry import ToolRegistry
+
+        server_type = ToolRegistry.server_for(tool_name)
 
         if not server_type:
             return {"error": f"Unknown tool: {tool_name}"}
