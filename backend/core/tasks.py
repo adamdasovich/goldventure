@@ -2122,7 +2122,15 @@ def embed_recent_news_for_rag_task(self, days: int = 7, max_companies: int = 40,
         .values_list('company_id', flat=True)
     )
 
-    company_ids = sorted(pending)[:max_companies]
+    # Shuffled, not sorted. With pending above the cap, a stable order means
+    # the same low-id companies claim the slots every night — a company whose
+    # links are dead re-fails daily while high-id companies never get a first
+    # attempt until its items age out of the window. Random order spreads the
+    # cap fairly across nights.
+    import random
+    pending_list = list(pending)
+    random.shuffle(pending_list)
+    company_ids = pending_list[:max_companies]
     logger.info(
         "[NEWS RAG] %d companies have unembedded news since %s; processing %d "
         "(cap %d)%s",

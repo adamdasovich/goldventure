@@ -17,12 +17,42 @@ logger = logging.getLogger(__name__)
 # Site furniture that survives tag-level stripping: cookie notices, share
 # bars and newsletter forms usually sit in plain divs whose class or id
 # says what they are. Matched as substrings against class + id.
-_CHROME_CLASS_HINTS = (
-    'cookie', 'consent', 'gdpr', 'newsletter', 'subscribe', 'social-share',
-    'share-buttons', 'sharedaddy', 'breadcrumb', 'sidebar', 'site-footer',
-    'site-header', 'menu-toggle', 'skip-link', 'back-to-top',
-    'related-posts',
-)
+# Site furniture identified by class/id. Two tiers, matched per class name:
+#
+# * a SEGMENT hint matches when it equals one hyphen/underscore-separated
+#   segment of the name — "cookie" hits "cookie-notice" but not a name that
+#   merely contains the letters;
+# * an EXACT hint must equal the whole class name — "share" widgets stay
+#   here because mining releases legitimately carry classes like
+#   "share-structure-table".
+#
+# This replaces a substring match that destroyed real articles: 'sidebar' in
+# "content-sidebar-wrap" — the wrapper Genesis-family WordPress themes put
+# around the WHOLE page, sidebar and article alike — decomposed the article.
+# 'sidebar' is gone entirely; true sidebars live in <aside>, which the tag
+# pass already removes, and stray menu links fall to the line filter.
+_CHROME_SEGMENT_HINTS = frozenset({
+    'cookie', 'cookies', 'consent', 'gdpr', 'newsletter',
+    'breadcrumb', 'breadcrumbs', 'sharedaddy', 'addthis', 'addtoany',
+})
+_CHROME_EXACT_HINTS = frozenset({
+    'social-share', 'share-buttons', 'share-this', 'social-links',
+    'social-icons', 'site-footer', 'site-header', 'colophon',
+    'menu-toggle', 'skip-link', 'back-to-top', 'related-posts',
+    'subscribe-form', 'newsletter-signup',
+})
+_NAME_SEGMENTS = re.compile(r'[^a-z0-9]+')
+
+
+def _is_chrome_name(name):
+    """True when one class or id names site furniture."""
+    name = (name or '').lower()
+    if not name:
+        return False
+    if name in _CHROME_EXACT_HINTS:
+        return True
+    return any(seg in _CHROME_SEGMENT_HINTS
+               for seg in _NAME_SEGMENTS.split(name) if seg)
 
 # Lines that are chrome wherever they appear. Anchored to the whole line,
 # so a release that merely mentions a privacy policy in a sentence is left
@@ -378,10 +408,8 @@ class NewsContentProcessor(BaseMCPServer):
             # divs. Their class or id almost always says what they are.
             for element in (soup.find_all(attrs={'class': True})
                             + soup.find_all(attrs={'id': True})):
-                token = ' '.join(
-                    (element.get('class') or []) + [element.get('id') or '']
-                ).lower()
-                if any(h in token for h in _CHROME_CLASS_HINTS):
+                names = (element.get('class') or []) + [element.get('id')]
+                if any(_is_chrome_name(n) for n in names):
                     element.decompose()
 
             # Try to find main content area

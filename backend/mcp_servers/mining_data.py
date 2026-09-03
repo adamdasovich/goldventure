@@ -221,7 +221,7 @@ class MiningDataServer(BaseMCPServer):
             meta = meta or {}
             matches.append({
                 "rank": rank,
-                "relevance_score": round(1 - dist, 3),
+                "relevance_score": max(0.0, round(1 - dist, 3)),
                 "company": meta.get("company_name"),
                 "company_id": meta.get("company_id"),
                 "ticker": meta.get("ticker") or None,

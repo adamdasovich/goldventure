@@ -92,7 +92,9 @@ class Command(BaseCommand):
 
         for start in range(0, len(order), batch_size):
             batch = order[start:start + batch_size]
-            specs = [{'id': cid, 'limit': n} for cid, n in batch]
+            # The subprocess validator rejects limit > 1000, and one bad
+            # spec fails its whole batch of ten companies.
+            specs = [{'id': cid, 'limit': min(n, 1000)} for cid, n in batch]
             # One interpreter for the whole batch, so the ~16s of importing
             # torch is paid once instead of per company.
             budget = (SUBPROCESS_STARTUP
