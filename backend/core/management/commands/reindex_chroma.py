@@ -269,7 +269,10 @@ class Command(BaseCommand):
                 documents.append(chunk.text)
                 metadatas.append({
                     'chunk_index': chunk.chunk_index,
-                    'company_id': chunk.company_id,
+                    # Chroma rejects None metadata values, and industry
+                    # article chunks have no company. 0 is matched by no
+                    # real company filter.
+                    'company_id': chunk.company_id or 0,
                     # `company` (the name) must stay: RAGManager.search_news
                     # filters with where={"company": <name>}, so dropping it
                     # silently breaks every company-scoped news search.

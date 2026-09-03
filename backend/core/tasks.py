@@ -2066,6 +2066,94 @@ def process_company_news_for_rag_task(self, company_id: int, limit: int = 20):
             }
 
 
+
+def embed_industry_articles(limit=300):
+    """
+    Embed industry news headlines (NewsArticle) into news_chunks.
+
+    These are trade-press articles from outside publishers, so their bodies
+    are not fetched — the headline is embedded, with source, url and date in
+    the metadata. That is enough for semantic "what is happening in the
+    sector" retrieval, costs no crawling of third-party sites, and closes the
+    last scraped dataset with no vectors: 1,961 articles, zero embedded.
+
+    Postgres rows are written first; if the ChromaDB add then fails, the
+    hourly reconcile_chroma_index_task re-embeds exactly the chunks Postgres
+    has and Chroma lacks, so nothing is lost either way.
+    """
+    from .models import NewsArticle, NewsChunk
+
+    pending = list(
+        NewsArticle.objects.filter(is_visible=True)
+        .exclude(id__in=NewsChunk.objects.filter(news_article__isnull=False)
+                 .values('news_article_id'))
+        .select_related('source')
+        .order_by('-published_at')[:limit]
+    )
+    if not pending:
+        return {'embedded': 0, 'skipped': 0}
+
+    rows, ids, docs, metas = [], [], [], []
+    skipped = 0
+    for a in pending:
+        text = (a.title or '').strip()
+        if len(text) < 15:
+            skipped += 1
+            continue
+        chroma_id = f"news_article_{a.id}_chunk_0"
+        rows.append(NewsChunk(
+            company=None, news_article=a, content_type='news_article',
+            chunk_index=0, text=text, token_count=max(1, len(text) // 4),
+            chroma_id=chroma_id, source_title=text[:500],
+            source_url=a.url or '',
+            source_date=a.published_at.date() if a.published_at else None,
+        ))
+        ids.append(chroma_id)
+        docs.append(text)
+        metas.append({
+            'chunk_index': 0,
+            'company_id': 0,          # Chroma rejects None; 0 matches no company
+            'company': '',
+            'source_id': a.id,
+            'content_type': 'news_article',
+            'title': text[:100],
+            'url': a.url or '',
+            'date': str(a.published_at.date()) if a.published_at else '',
+        })
+
+    NewsChunk.objects.bulk_create(rows, ignore_conflicts=True)
+
+    try:
+        import chromadb
+        from chromadb.config import Settings as ChromaSettings
+
+        from mcp_servers.embeddings import get_embedding_function
+
+        client = chromadb.HttpClient(
+            host=os.environ.get('CHROMA_HOST', 'localhost'),
+            port=int(os.environ.get('CHROMA_PORT', 8002)),
+            settings=ChromaSettings(anonymized_telemetry=False),
+        )
+        collection = client.get_or_create_collection(
+            name='news_chunks', metadata={'hnsw:space': 'cosine'},
+            embedding_function=get_embedding_function(),
+        )
+        for start in range(0, len(ids), 200):
+            collection.add(ids=ids[start:start + 200],
+                           documents=docs[start:start + 200],
+                           metadatas=metas[start:start + 200])
+    except Exception:
+        logger.exception(
+            "Industry-article embed: Postgres rows written but the ChromaDB "
+            "add failed for %d article(s); reconcile_chroma_index_task will "
+            "repair them.", len(ids))
+
+    logger.info("[NEWS RAG] industry articles embedded: %d (skipped %d)",
+                len(rows), skipped)
+    return {'embedded': len(rows), 'skipped': skipped}
+
+
+
 @shared_task(bind=True, time_limit=3600, soft_time_limit=3540, on_failure=log_task_failure)
 def embed_recent_news_for_rag_task(self, days: int = 7, max_companies: int = 40,
                                    limit_per_company: int = 10, dry_run: bool = False):
@@ -2180,6 +2268,9 @@ def embed_recent_news_for_rag_task(self, days: int = 7, max_companies: int = 40,
                 result.get('error', 'unknown'),
             )
 
+    # Industry headlines ride along: no fetching, a handful a day.
+    industry = embed_industry_articles(limit=300)
+
     logger.info(
         "[NEWS RAG] done — %d companies, %d items embedded, %d chunks, %d failed",
         len(company_ids), processed, chunks, failed,
@@ -2191,6 +2282,7 @@ def embed_recent_news_for_rag_task(self, days: int = 7, max_companies: int = 40,
         'news_items_embedded': processed,
         'chunks_created': chunks,
         'failed': failed,
+        'industry_articles': industry,
     }
 
 

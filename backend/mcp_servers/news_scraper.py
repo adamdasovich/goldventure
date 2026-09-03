@@ -18,6 +18,26 @@ from core.security_utils import is_safe_url
 
 logger = logging.getLogger(__name__)
 
+
+def _looks_like_tag_list(text):
+    """
+    True when a "summary" is actually the article's category list.
+
+    The card scrapers fall back to the first <p> in an article card, and on
+    several sources that paragraph is the category links — get_text() joins
+    them comma-separated with no following space ("Analysis,Financing,News").
+    1,905 of 1,961 stored summaries were this. A real excerpt is prose: it
+    has spaces after its commas, or no commas and real length.
+    """
+    text = (text or '').strip()
+    if not text or ', ' in text or len(text) > 150:
+        return False
+    parts = [p.strip() for p in text.split(',')]
+    if len(parts) < 2:
+        return False
+    return all(p and len(p) <= 30 and not p.endswith('.') for p in parts)
+
+
 # Fix Windows console encoding for Unicode characters
 if sys.platform == 'win32':
     sys.stdout.reconfigure(encoding='utf-8', errors='replace')
@@ -529,6 +549,13 @@ async def run_scrape_job(job_id: int = None):
 
     @sync_to_async
     def create_article(title, url, source, published_at, summary, image_url):
+        # A category list scraped into the summary slot goes to `tags`,
+        # where the model has a field for exactly that; summary stays empty
+        # rather than holding "Analysis,Financing,News" as if it were prose.
+        tags = []
+        if summary and _looks_like_tag_list(summary):
+            tags = [t.strip() for t in summary.split(',') if t.strip()]
+            summary = ''
         NewsArticle.objects.create(
             title=title[:500],
             url=url,
@@ -536,6 +563,7 @@ async def run_scrape_job(job_id: int = None):
             published_at=published_at,
             summary=summary[:1000] if summary else '',
             image_url=image_url[:500] if image_url else '',
+            tags=tags,
         )
 
     @sync_to_async

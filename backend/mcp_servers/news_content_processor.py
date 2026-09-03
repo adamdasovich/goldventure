@@ -515,6 +515,17 @@ class NewsContentProcessor(BaseMCPServer):
         text = self._sanitize_text(text)
         title = self._sanitize_text(title)
 
+        # Persist the body to its source row. Until 2026-09-03 the fetch
+        # was thrown away after chunking: ~9,000 items were fetched for
+        # embedding while NewsRelease.full_text and CompanyNews.content
+        # stayed empty on every row of both tables — so a re-embed meant a
+        # re-fetch, and a rotted URL lost text we had already held.
+        # A queryset update, so no save() side effects and no race.
+        if content_type == 'news_release':
+            NewsRelease.objects.filter(id=source_id).update(full_text=text)
+        elif content_type == 'company_news':
+            CompanyNews.objects.filter(id=source_id).update(content=text)
+
         # Prepend title for context
         full_text = f"Title: {title}\n\n{text}"
 
