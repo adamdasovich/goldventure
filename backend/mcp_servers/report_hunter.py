@@ -422,11 +422,24 @@ def score_candidate(candidate: Dict, target: HuntTarget) -> Dict:
     an opaque number.
     """
     haystack = f"{candidate.get('text', '')} {candidate.get('url', '')}".lower()
+    # Separator-normalized view of the same text. URLs join words with hyphens
+    # and underscores, so a literal comparison misses what is plainly there:
+    # the project 'loki flake' did not match
+    # '...for-the-Loki-Flake-Graphite-Deposit.pdf' and that candidate was scored
+    # "does not mention project 'loki flake'". Since a project match now gates
+    # auto-queueing, the miss silently suppressed correct documents wherever the
+    # link text was generic — and "Technical Report (PDF)" is very common link
+    # text. Patterns are tried against both views and either may match.
+    haystack_norm = re.sub(r'[^a-z0-9]+', ' ', haystack)
+
+    def _hit(pattern) -> bool:
+        return bool(pattern.search(haystack) or pattern.search(haystack_norm))
+
     score = 0
     reasons = []
 
     # The document must look like a technical report at all.
-    if _DOC_TEXT_HINT.search(haystack):
+    if _hit(_DOC_TEXT_HINT):
         score += 20
         reasons.append('reads as a technical document (+20)')
 
@@ -440,14 +453,15 @@ def score_candidate(candidate: Dict, target: HuntTarget) -> Dict:
     # company with several technical reports there is then nothing to tell them
     # apart — the score alone would happily queue the wrong one.
     project_matched = False
-    if target.project and target.project in haystack:
+    if target.project and (target.project in haystack
+                           or target.project in haystack_norm):
         score += 40
         project_matched = True
         reasons.append(f"project '{target.project}' matches (+40)")
     elif target.project:
         # Partial match on the distinctive first token.
         first = target.project.split()[0]
-        if len(first) >= 5 and first in haystack:
+        if len(first) >= 5 and (first in haystack or first in haystack_norm):
             score += 15
             reasons.append(f"partial project match on '{first}' (+15)")
         else:
@@ -460,11 +474,19 @@ def score_candidate(candidate: Dict, target: HuntTarget) -> Dict:
             score -= 25
             reasons.append(f"does not mention project '{target.project}' (-25)")
 
-    # Right kind of report.
+    # Right kind of report. Recorded as well as scored, because a type mismatch
+    # means this is a different report from the one announced, and that must
+    # block auto-queueing rather than merely cost points: a PEA announcement
+    # queued last year's mineral resource estimate for the same project on
+    # project and size alone.
+    type_matched = False
     type_pattern = _TYPE_MATCH_PATTERNS.get(target.report_type)
-    if type_pattern and type_pattern.search(haystack):
+    if type_pattern and _hit(type_pattern):
         score += 25
+        type_matched = True
         reasons.append(f'report type {target.report_type} matches (+25)')
+    else:
+        reasons.append(f'report type {target.report_type} not confirmed')
 
     # Right vintage. The report cannot predate the release that announced it,
     # allowing one year of slack for effective-date vs filing-date drift.
@@ -487,7 +509,7 @@ def score_candidate(candidate: Dict, target: HuntTarget) -> Dict:
             reasons.append('linked from the announcement itself (+25)')
 
     # Wrong kind of document.
-    if _NEGATIVE_HINT.search(haystack):
+    if _hit(_NEGATIVE_HINT):
         score -= 35
         reasons.append('reads as a presentation/financial/news document (-35)')
 
@@ -512,6 +534,7 @@ def score_candidate(candidate: Dict, target: HuntTarget) -> Dict:
     candidate['score'] = score
     candidate['score_reasons'] = reasons
     candidate['project_matched'] = project_matched
+    candidate['type_matched'] = type_matched
     return candidate
 
 
@@ -529,6 +552,7 @@ def is_auto_queueable(candidate: Dict) -> bool:
     return (
         candidate.get('score', 0) >= AUTO_QUEUE_THRESHOLD
         and bool(candidate.get('project_matched'))
+        and bool(candidate.get('type_matched'))
     )
 
 
