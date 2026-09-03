@@ -141,7 +141,30 @@ REPORT_KEYWORDS = [
     'mre',
     'technical report',
     'scoping study',
+    # Reserve disclosures. A reserve statement is always backed by a technical
+    # report, and 'resource estimate' above does not catch them.
+    'mineral reserve',
+    'reserve estimate',
+    'maiden resource',
+    # Non-Canadian equivalents: JORC for ASX-listed issuers, S-K 1300 for SEC
+    # filers. No historical matches for S-K 1300 in the news table yet, but US
+    # filers are moving to it and the term costs nothing to watch for.
+    'jorc',
+    's-k 1300',
+    'sk-1300',
+    # Catches 'Positive Economic Assessment' etc. where 'preliminary' is absent.
+    'economic assessment',
 ]
+
+# Deliberately NOT in the list above: 'metallurgical'. It matches 119 titles in
+# the news table, 115 of which no other keyword catches — and they are things
+# like "POSITIVE METALLURGICAL TEST RESULTS", "Metallurgical Test Work
+# Programme" and an acquisition of a metallurgical facility. Met results are a
+# precursor to a technical report, not a technical report, so the keyword would
+# have more than doubled a review queue that already stands at 218 pending and
+# made it less likely the real reports get worked. 'technical report summary'
+# is also absent, but only because 'technical report' already matches it — the
+# word-boundary regex below stops at the space, not at the end of the phrase.
 
 
 import re as _re
@@ -183,7 +206,7 @@ def _maybe_flag_report(news_release_obj, company, title, url, release_date, is_n
         return
 
     if cutoff_days is None:
-        cutoff_days = NEWS_FLAG_DAYS_ONBOARDING if is_new_company else NEWS_FLAG_DAYS_DAILY
+        cutoff_days = REPORT_FLAG_DAYS_ONBOARDING if is_new_company else REPORT_FLAG_DAYS_DAILY
     cutoff_date = datetime.now().date() - timedelta(days=cutoff_days)
     if release_date < cutoff_date:
         logger.info(f"  [SKIP report] Old news (not flagging): {title[:50]}... (date: {release_date})")
@@ -216,6 +239,21 @@ NEWS_SCRAPE_MONTHS_ONBOARDING = 48  # Months to look back for new companies
 NEWS_SCRAPE_MONTHS_DAILY = 3  # Months to look back for daily scrapes
 NEWS_FLAG_DAYS_ONBOARDING = 90  # Days to flag financing news for new companies
 NEWS_FLAG_DAYS_DAILY = 7  # Days to flag financing news for existing companies
+
+# Technical-report flag windows, kept separate from the financing ones above.
+# A financing decays — a placement announced eight months ago is not news, and
+# the 7-day daily cutoff is right for it. A technical report does not: a 2023
+# NI 43-101 is still the current technical report for its project and still the
+# document the mining assistant needs to answer questions about it. Reusing the
+# financing cutoffs is why 410 of the 632 keyword-matching releases in the news
+# table carry no flag.
+#
+# These only ever apply to newly-created NewsRelease rows — _maybe_flag_report()
+# is called inside `if created:` at both scrape sites — so a wider window means
+# an older release found for the first time still gets flagged. It does not
+# re-flag anything already in the table.
+REPORT_FLAG_DAYS_ONBOARDING = 1460  # 48 months, matching NEWS_SCRAPE_MONTHS_ONBOARDING
+REPORT_FLAG_DAYS_DAILY = 365  # Existing companies: a year of technical history
 NEWS_SIMILARITY_THRESHOLD = 0.85  # Threshold for detecting duplicate news
 
 
