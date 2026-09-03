@@ -348,6 +348,55 @@ class NewsContentProcessor(BaseMCPServer):
         else:
             return {"error": f"Unknown tool: {tool_name}"}
 
+    # Bounds for PDF news releases. These are announcements — a few pages — not
+    # technical reports, so anything past these limits is not a news release and
+    # is not worth the CPU. The ceiling also keeps a mislabelled 300-page
+    # NI 43-101 from being parsed here instead of on the GPU.
+    MAX_PDF_BYTES = 25 * 1024 * 1024
+    MAX_PDF_PAGES = 40
+
+    @classmethod
+    def _extract_pdf_text(cls, data: bytes, url: str) -> Optional[str]:
+        """
+        Pull the text layer out of a news-release PDF.
+
+        Text extraction, not OCR: pdfplumber reads the layer that digitally
+        generated PDFs already carry, which is what an issuer's news release is.
+        A scanned PDF has no such layer and yields nothing, which is the same
+        outcome as before — no regression, just no gain.
+
+        This is emphatically not the "never process documents on CPU" case in
+        CLAUDE.md. That warning is about running Docling with OCR over
+        300-page technical reports; this is a page-count-bounded text read of a
+        two-page announcement and costs milliseconds.
+        """
+        if not data or len(data) > cls.MAX_PDF_BYTES:
+            return None
+        try:
+            import io
+
+            import pdfplumber
+
+            parts = []
+            with pdfplumber.open(io.BytesIO(data)) as pdf:
+                for page in pdf.pages[:cls.MAX_PDF_PAGES]:
+                    try:
+                        parts.append(page.extract_text() or '')
+                    except Exception:
+                        continue
+            text = '\n'.join(p for p in parts if p)
+        except Exception as e:
+            logger.warning(f"PDF text extraction failed for {url}: {e}")
+            return None
+
+        lines = [
+            line.strip()
+            for line in text.split('\n')
+            if line.strip() and not _is_boilerplate_line(line)
+        ]
+        text = '\n'.join(lines)
+        return text if len(text) > 100 else None
+
     def _fetch_content_from_url(self, url: str) -> Optional[str]:
         """Fetch and extract text content from a URL"""
         try:
@@ -355,10 +404,6 @@ class NewsContentProcessor(BaseMCPServer):
             is_safe, reason = is_safe_url(url, resolve_dns=True)
             if not is_safe:
                 return None  # Silently skip unsafe URLs
-
-            # Skip PDF URLs for now - they need special processing
-            if url.lower().endswith('.pdf'):
-                return None
 
             headers = {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -389,13 +434,24 @@ class NewsContentProcessor(BaseMCPServer):
 
             response.raise_for_status()
 
-            # Check Content-Type to avoid processing binary files
+            # PDFs are read here rather than refused. This used to return None
+            # on the URL suffix, the Content-Type and the %PDF signature, which
+            # is why PDF news releases were routed to the GPU Docling pipeline
+            # instead — 2,532 GPU jobs and 15,163 chunks that filled the
+            # technical-document collection with news and diluted NI 43-101
+            # retrieval. Reading the text layer here keeps that content in
+            # news_chunks, where the rest of the news lives, at no GPU cost.
             content_type = response.headers.get('Content-Type', '').lower()
-            if 'pdf' in content_type or 'application/octet-stream' in content_type:
-                return None
+            looks_pdf = (
+                'pdf' in content_type
+                or url.lower().split('?')[0].endswith('.pdf')
+                or response.content[:5] == b'%PDF-'
+            )
+            if looks_pdf:
+                return self._extract_pdf_text(response.content, url)
 
-            # Check if response starts with PDF signature
-            if response.text.strip().startswith('%PDF'):
+            # Other binary payloads still have no text to extract.
+            if 'application/octet-stream' in content_type:
                 return None
 
             soup = BeautifulSoup(response.text, 'html.parser')

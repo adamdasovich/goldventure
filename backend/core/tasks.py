@@ -630,21 +630,25 @@ def scrape_company_news_task(self, company_id):
                 }
             )
 
-            # Create document processing job for PDF news releases (for vector DB)
-            if url and '.pdf' in url.lower():
-                from core.models import DocumentProcessingJob
-                # Use get_or_create to avoid race condition (TOCTOU vulnerability)
-                job, job_created = DocumentProcessingJob.objects.get_or_create(
-                    url=url,
-                    defaults={
-                        'document_type': 'news_release',
-                        'company_name': company.name,
-                        'status': 'pending'
-                    }
-                )
-                if job_created:
-                    news_record.processing_job = job
-                    news_record.save(update_fields=['processing_job'])
+            # PDF news releases are NOT queued to the GPU any more.
+            #
+            # This used to create a DocumentProcessingJob(document_type=
+            # 'news_release') for any news URL ending in .pdf, because
+            # NewsContentProcessor._fetch_content_from_url() refused PDFs
+            # outright — so Docling on a GPU droplet was the only way to read
+            # one. That produced 2,532 GPU jobs and left 15,163 news chunks in
+            # document_chunks: 30% of the technical-document collection was news
+            # releases, diluting NI 43-101 and PEA retrieval and costing
+            # ~$1.57/hr of droplet time for content the news pipeline already
+            # covers for free.
+            #
+            # The news processor now reads a PDF's text layer directly, so this
+            # content reaches news_chunks through embed_recent_news_for_rag_task
+            # like every other news item. A news release is a few pages of
+            # digitally generated text; it never needed a GPU.
+            #
+            # Technical reports are unaffected — they are queued deliberately by
+            # the report hunter and the flag-review page, not from here.
 
             if created:
                 created_count += 1

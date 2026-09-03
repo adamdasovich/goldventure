@@ -892,17 +892,11 @@ def _save_news(company, news_items: list, user) -> list:
             if pub_date >= cutoff:
                 _create_financing_flag(company, news_url, news_title, pub_date)
 
-        # Create processing job for PDF news
-        if is_pdf and news_url and not news_record.is_processed:
-            if not DocumentProcessingJob.objects.filter(url=news_url).exists():
-                job = DocumentProcessingJob.objects.create(
-                    url=news_url, document_type='news_release', company_name=company.name,
-                    project_name='', status='pending', created_by=user,
-                )
-                news_record.processing_job = job
-                news_record.save(update_fields=['processing_job'])
-                jobs.append({'id': job.id, 'type': 'news_release', 'url': news_url,
-                            'is_material': classification['is_material']})
+        # PDF news releases are no longer queued to the GPU. The news
+        # processor reads a PDF's text layer directly now, so this content
+        # reaches news_chunks via embed_recent_news_for_rag_task instead of
+        # costing GPU droplet time and diluting the technical-document
+        # collection. See the same change in core/tasks.py.
 
     return jobs
 

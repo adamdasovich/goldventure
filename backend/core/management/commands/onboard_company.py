@@ -867,23 +867,11 @@ class Command(BaseCommand):
                 }
             )
 
-            # Create DocumentProcessingJob for PDF news releases (material news prioritized)
-            # Only create jobs for PDFs that haven't been processed yet
-            if is_pdf and source_url and not news_record.is_processed:
-                # Check if a job already exists for this URL
-                existing_job = DocumentProcessingJob.objects.filter(url=source_url).first()
-                if not existing_job:
-                    job = DocumentProcessingJob.objects.create(
-                        url=source_url,
-                        document_type='news_release',
-                        company_name=company.name,
-                        project_name='',  # News may not be project-specific
-                        status='pending',
-                    )
-                    # Link the news record to the processing job
-                    news_record.processing_job = job
-                    news_record.save(update_fields=['processing_job'])
-                    processing_jobs_created += 1
+            # PDF news releases are no longer queued to the GPU. The news
+            # processor reads a PDF's text layer directly now, so this content
+            # reaches news_chunks via embed_recent_news_for_rag_task instead of
+            # costing GPU droplet time and diluting the technical-document
+            # collection. See the same change in core/tasks.py.
 
             saved_news_count += 1
 
