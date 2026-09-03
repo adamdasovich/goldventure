@@ -34,6 +34,24 @@ interface QueueJob {
   document: { id: number; title: string; document_type: string } | null;
 }
 
+const SOURCE_TABS: { value: string; label: string; hint: string }[] = [
+  {
+    value: "technical",
+    label: "Technical reports",
+    hint: "NI 43-101, PEA and technical report jobs, however they were queued.",
+  },
+  {
+    value: "flags",
+    label: "From report flags",
+    hint: "Only jobs still linked to a technical-report flag. A flag reopened after review clears that link, so its job drops out of this view even though the document is still queued.",
+  },
+  {
+    value: "all",
+    label: "All documents",
+    hint: "The whole processing table, including every news-release PDF and corporate presentation the platform has processed.",
+  },
+];
+
 const STATUS_TABS: { value: string; label: string }[] = [
   { value: "pending", label: "Pending" },
   { value: "processing", label: "Processing" },
@@ -76,6 +94,7 @@ export default function DocumentQueuePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState("pending");
+  const [source, setSource] = useState("technical");
   const [cancelTarget, setCancelTarget] = useState<QueueJob | null>(null);
   const [cancelReason, setCancelReason] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -91,17 +110,20 @@ export default function DocumentQueuePage() {
   useEffect(() => {
     fetchJobs();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [statusFilter]);
+  }, [statusFilter, source]);
 
   const fetchJobs = async () => {
     try {
       setLoading(true);
       setError(null);
       const [jobsRes, countsRes] = await Promise.all([
-        fetch(`${apiBase}/document-queue/?status=${statusFilter}`, {
+        fetch(
+          `${apiBase}/document-queue/?status=${statusFilter}&source=${source}`,
+          { headers: authHeader() },
+        ),
+        fetch(`${apiBase}/document-queue/counts/?source=${source}`, {
           headers: authHeader(),
         }),
-        fetch(`${apiBase}/document-queue/counts/`, { headers: authHeader() }),
       ]);
       if (!jobsRes.ok) throw new Error("Failed to load the document queue");
       setJobs(await jobsRes.json());
@@ -166,6 +188,27 @@ export default function DocumentQueuePage() {
           &mdash; only pending jobs can be stopped.
         </p>
       </div>
+
+      <div className="mb-4 flex gap-2 flex-wrap">
+        {SOURCE_TABS.map((tab) => (
+          <button
+            key={tab.value}
+            onClick={() => setSource(tab.value)}
+            title={tab.hint}
+            className={`px-3 py-1.5 rounded-lg text-sm transition-colors border ${
+              source === tab.value
+                ? "bg-slate-700 text-slate-100 border-slate-500"
+                : "bg-slate-900 text-slate-400 border-slate-700 hover:bg-slate-800"
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      <p className="text-xs text-slate-500 mb-4 max-w-3xl">
+        {SOURCE_TABS.find((t) => t.value === source)?.hint}
+      </p>
 
       <div className="mb-6 flex gap-2 flex-wrap">
         {STATUS_TABS.map((tab) => (

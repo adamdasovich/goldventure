@@ -28,6 +28,34 @@ logger = logging.getLogger(__name__)
 # the row would not call it back.
 CANCELLABLE_STATUSES = {'pending'}
 
+# Job types that are technical reports. The queue defaults to these because the
+# table also holds every news-release PDF and corporate presentation the
+# platform has ever processed — 2,449 and 506 completed rows respectively — and
+# those swamp the handful of technical reports this review exists for.
+TECHNICAL_JOB_TYPES = ['ni43101', 'pea', 'technical_report']
+
+SOURCE_CHOICES = ('technical', 'flags', 'all')
+
+
+def apply_source(qs, source):
+    """
+    Narrow a job queryset to what the reviewer means by "the queue".
+
+    'technical' (default) — NI 43-101 / PEA / technical report jobs, whatever
+        queued them. Stable regardless of how a job got here.
+    'flags' — only jobs still linked to a technical-report flag. Narrower, and
+        deliberately not the default: a flag reopened after review clears its
+        processing_job link, so its job drops out of this view even though the
+        document is still queued and still valid.
+    'all' — the entire processing table, including news releases and
+        presentations.
+    """
+    if source == 'flags':
+        return qs.filter(source_report_flags__isnull=False).distinct()
+    if source == 'all':
+        return qs
+    return qs.filter(document_type__in=TECHNICAL_JOB_TYPES)
+
 
 class DocumentQueueViewSet(viewsets.ViewSet):
     """Superuser-only queue management for DocumentProcessingJob."""
@@ -103,6 +131,11 @@ class DocumentQueueViewSet(viewsets.ViewSet):
             'document', 'created_by'
         ).prefetch_related('source_report_flags__news_release')
 
+        source = request.query_params.get('source', 'technical')
+        if source not in SOURCE_CHOICES:
+            source = 'technical'
+        qs = apply_source(qs, source)
+
         status_filter = request.query_params.get('status', 'pending')
         if status_filter and status_filter != 'all':
             qs = qs.filter(status=status_filter)
@@ -129,9 +162,16 @@ class DocumentQueueViewSet(viewsets.ViewSet):
 
         from core.models import DocumentProcessingJob
 
-        rows = DocumentProcessingJob.objects.values('status').annotate(n=Count('id'))
+        source = request.query_params.get('source', 'technical')
+        if source not in SOURCE_CHOICES:
+            source = 'technical'
+
+        rows = apply_source(
+            DocumentProcessingJob.objects.all(), source
+        ).values('status').annotate(n=Count('id'))
         counts = {r['status']: r['n'] for r in rows}
         counts['total'] = sum(counts.values())
+        counts['source'] = source
         return Response(counts)
 
     @action(detail=True, methods=['post'], url_path='cancel')
