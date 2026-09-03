@@ -41,9 +41,41 @@ _BOILERPLATE_LINE = re.compile(
 )
 
 
+# Navigation rendered as markdown: a bullet or line that is nothing but a
+# link, a bare URL, or a share widget's query string. Real release text
+# always has prose around its links, so 'link and nothing else' is a
+# reliable tell.
+_LINK_ONLY_LINE = re.compile(
+    r'^(?:[-*+]\s*)?\[[^\]]*\]\([^)]*\)[\s.*_-]*$'
+)
+_BARE_URL_LINE = re.compile(r'^(?:[-*+]\s*)?https?://\S+$', re.IGNORECASE)
+_SHARE_QUERY = re.compile(
+    r'(?:tw_document_href|u=https?%3A|share\?|sharer\.php|'
+    r'utm_source=share|/intent/tweet)',
+    re.IGNORECASE,
+)
+_CHROME_HEADING = re.compile(
+    r'^#{1,6}\s*(?:subscribe|follow|share|newsletter|menu|navigation|'
+    r'quick links|connect with us)\b.*$',
+    re.IGNORECASE,
+)
+
+
 def _is_boilerplate_line(line):
     """True when a line is site chrome rather than release text."""
-    return bool(_BOILERPLATE_LINE.match(line.strip()))
+    stripped = line.strip()
+    if not stripped:
+        return True
+    if _BOILERPLATE_LINE.match(stripped):
+        return True
+    if _CHROME_HEADING.match(stripped):
+        return True
+    if _SHARE_QUERY.search(stripped):
+        return True
+    if _BARE_URL_LINE.match(stripped):
+        return True
+    # A markdown link with no prose around it is a menu entry.
+    return bool(_LINK_ONLY_LINE.match(stripped))
 
 from typing import Dict, List, Optional
 from datetime import datetime
