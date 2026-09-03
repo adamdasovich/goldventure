@@ -530,13 +530,24 @@ CELERY_BEAT_SCHEDULE = {
     # discovers becomes a DocumentProcessingJob that boots a GPU droplet at
     # ~$1.57/hr. Bulk backfill over the whole company list is a supervised batch
     # run, not something to let a weekly cron drift into.
-    'auto-discover-documents-weekly': {
-        'task': 'core.tasks.auto_discover_and_process_documents_task',
-        'schedule': crontab(day_of_week=1, hour=2, minute=0),  # Every Monday at 2 AM
-        'kwargs': {
-            'limit': 25,  # Companies per week. 2 AM start leaves 5h before the 7 AM news batch.
-        }
-    },
+    # DISABLED 2026-09-03, to be revisited the week of 2026-09-07.
+    #
+    # The document-type fixes earlier today mean this task can queue technical
+    # reports for the first time, and nobody has ever seen its discovery volume:
+    # the old filters discarded the output before it was logged, and the log
+    # line claimed nothing was dropped. An unattended 2 AM run would have been
+    # the first measurement, with each discovered document booting a GPU droplet
+    # at ~$1.57/hr. It also shares the `scrape` queue with the report hunter,
+    # which is now clearing its own backlog — two unmeasured GPU producers in
+    # the same window. Re-enable after a supervised dry run establishes the
+    # per-company document count.
+    # 'auto-discover-documents-weekly': {
+    #     'task': 'core.tasks.auto_discover_and_process_documents_task',
+    #     'schedule': crontab(day_of_week=1, hour=2, minute=0),  # Every Monday at 2 AM
+    #     'kwargs': {
+    #         'limit': 25,  # Companies per week. 2 AM leaves 5h before the 7 AM news batch.
+    #     }
+    # },
 
     # Hunt for the technical report each pending NewsReportFlag refers to.
     # A flag marks a news release whose title mentions a report; the report is a

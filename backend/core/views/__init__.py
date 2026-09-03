@@ -136,6 +136,9 @@ from .news_flags import (  # noqa: F401
 from .news_report_flags import (  # noqa: F401
     NewsReportFlagViewSet,
 )
+from .document_queue import (  # noqa: F401
+    DocumentQueueViewSet,
+)
 from .closed_financings import (  # noqa: F401
     closed_financings_list,
     create_closed_financing,

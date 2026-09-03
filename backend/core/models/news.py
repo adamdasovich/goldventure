@@ -373,6 +373,11 @@ class DocumentProcessingJob(models.Model):
         ('processing', 'Processing'),
         ('completed', 'Completed'),
         ('failed', 'Failed'),
+        # Rejected by a superuser from the document queue before the GPU picked
+        # it up. Distinct from 'failed', which means processing was attempted.
+        # Both the orchestrator and the worker select strictly on
+        # status='pending', so a cancelled job is never claimed.
+        ('cancelled', 'Cancelled'),
     ]
 
     DOCUMENT_TYPE_CHOICES = [

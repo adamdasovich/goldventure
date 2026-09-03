@@ -830,6 +830,25 @@ export default function DashboardPage() {
                   </Button>
                   <Button
                     variant="secondary"
+                    onClick={() => router.push("/admin/document-queue")}
+                  >
+                    <svg
+                      className="w-4 h-4 mr-2 inline"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M4 6h16M4 10h16M4 14h10M4 18h10m4-2l3 3m0 0l3-3m-3 3V9"
+                      />
+                    </svg>
+                    Document Processing Queue
+                  </Button>
+                  <Button
+                    variant="secondary"
                     onClick={() =>
                       window.open(
                         `${ADMIN_BASE_URL}/admin/core/documentprocessingjob/`,

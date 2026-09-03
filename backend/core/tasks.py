@@ -2915,6 +2915,7 @@ def hunt_technical_reports_task(self, flag_ids=None, max_companies=None, dry_run
         HUNT_BACKOFF_DAYS,
         MAX_HUNT_ATTEMPTS,
         build_target,
+        is_auto_queueable,
         gather_company_candidates,
         rank_candidates,
     )
@@ -3045,7 +3046,7 @@ def hunt_technical_reports_task(self, flag_ids=None, max_companies=None, dry_run
             ]
 
             top = safe_ranked[0] if safe_ranked else None
-            if top and top['score'] >= AUTO_QUEUE_THRESHOLD:
+            if top and is_auto_queueable(top):
                 doc_type = 'pea' if target.report_type == 'pea' else 'ni43101'
                 try:
                     job, _created = DocumentProcessingJob.objects.get_or_create(

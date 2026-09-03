@@ -432,8 +432,17 @@ def score_candidate(candidate: Dict, target: HuntTarget) -> Dict:
 
     # Right project. The strongest signal available: a company publishes one
     # technical report per project, so the project name usually disambiguates.
+    #
+    # 'project_matched' gates auto-queueing, separately from the score. A full
+    # match is the only thing that counts: a partial match on the first token,
+    # or a flag with no project identified at all, leaves the decision to a
+    # human. Roughly a third of huntable flags resolve no project, and for a
+    # company with several technical reports there is then nothing to tell them
+    # apart — the score alone would happily queue the wrong one.
+    project_matched = False
     if target.project and target.project in haystack:
         score += 40
+        project_matched = True
         reasons.append(f"project '{target.project}' matches (+40)")
     elif target.project:
         # Partial match on the distinctive first token.
@@ -502,7 +511,25 @@ def score_candidate(candidate: Dict, target: HuntTarget) -> Dict:
     candidate = dict(candidate)
     candidate['score'] = score
     candidate['score_reasons'] = reasons
+    candidate['project_matched'] = project_matched
     return candidate
+
+
+def is_auto_queueable(candidate: Dict) -> bool:
+    """
+    Whether a candidate may go to the GPU without a human looking at it.
+
+    Two independent conditions, deliberately: a high score AND a confirmed
+    project match. Score alone was not enough — a document can reach the
+    threshold on report type, file size and being linked from the announcement
+    while belonging to a different project entirely, and the resulting chunks
+    would answer questions in the mining assistant as though they described the
+    project the release was about.
+    """
+    return (
+        candidate.get('score', 0) >= AUTO_QUEUE_THRESHOLD
+        and bool(candidate.get('project_matched'))
+    )
 
 
 def head_size_mb(url: str, timeout: int = 12) -> Optional[float]:
