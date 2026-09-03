@@ -40,6 +40,31 @@ METAL_ALIASES = {
 METAL_NAMES = dict(MetalPrice.METAL_CHOICES)
 
 
+def _as_text(value):
+    """A stripped string from whatever the model sent, including numbers."""
+    if value is None:
+        return ""
+    return str(value).strip()
+
+
+def _as_int(value, default, low, high):
+    """
+    A bounded int from whatever the model sent.
+
+    Tool inputs come from an LLM, and a schema saying "integer" does not stop
+    it emitting "thirty" or "all". An unhandled cast here took down the whole
+    chat turn, because nothing between the tool and the API response catches
+    a raising tool.
+    """
+    if value is None or value == "":
+        value = default
+    try:
+        parsed = int(float(str(value).strip()))
+    except (TypeError, ValueError):
+        parsed = default
+    return max(low, min(parsed, high))
+
+
 class IndustryDataServer:
     """MCP server for metals prices and industry-wide news."""
 
@@ -173,7 +198,7 @@ class IndustryDataServer:
     @staticmethod
     def _resolve_metal(raw):
         """A metal code from whatever the caller typed, or None."""
-        key = (raw or "").strip().lower()
+        key = _as_text(raw).lower()
         return METAL_ALIASES.get(key)
 
     @staticmethod
@@ -193,7 +218,7 @@ class IndustryDataServer:
         }
 
     def _get_metal_prices(self, parameters: Dict) -> Dict:
-        raw = parameters.get("metal")
+        raw = _as_text(parameters.get("metal"))
         codes = list(METAL_NAMES)
         if raw:
             code = self._resolve_metal(raw)
@@ -217,13 +242,13 @@ class IndustryDataServer:
         return {"found": True, "count": len(prices), "prices": prices}
 
     def _metal_price_history(self, parameters: Dict) -> Dict:
-        code = self._resolve_metal(parameters.get("metal"))
+        code = self._resolve_metal(_as_text(parameters.get("metal")))
         if not code:
             return {
                 "error": f"Unknown metal: {parameters.get('metal')!r}",
                 "known_metals": sorted(set(METAL_ALIASES)),
             }
-        days = max(1, min(int(parameters.get("days", 30) or 30), 365))
+        days = _as_int(parameters.get("days"), 30, 1, 365)
         since = timezone.now() - timedelta(days=days)
 
         rows = list(
@@ -265,8 +290,8 @@ class IndustryDataServer:
         }
 
     def _latest_news(self, parameters: Dict) -> Dict:
-        days = max(1, min(int(parameters.get("days_back", 7) or 7), 365))
-        limit = max(1, min(int(parameters.get("limit", 20) or 20), 50))
+        days = _as_int(parameters.get("days_back"), 7, 1, 365)
+        limit = _as_int(parameters.get("limit"), 20, 1, 50)
         since = timezone.now() - timedelta(days=days)
 
         qs = (NewsArticle.objects
@@ -281,11 +306,11 @@ class IndustryDataServer:
         }
 
     def _search_news(self, parameters: Dict) -> Dict:
-        keyword = (parameters.get("keyword") or "").strip()
+        keyword = _as_text(parameters.get("keyword"))
         if not keyword:
             return {"error": "keyword is required"}
-        days = max(1, min(int(parameters.get("days_back", 90) or 90), 3650))
-        limit = max(1, min(int(parameters.get("limit", 20) or 20), 50))
+        days = _as_int(parameters.get("days_back"), 90, 1, 3650)
+        limit = _as_int(parameters.get("limit"), 20, 1, 50)
         since = timezone.now() - timedelta(days=days)
 
         qs = (NewsArticle.objects

@@ -17,6 +17,7 @@ Expected improvements:
 """
 
 import anthropic
+import logging
 from datetime import datetime
 from django.conf import settings
 from django.core.cache import cache
@@ -26,6 +27,8 @@ import json
 
 from mcp_servers.tool_registry import get_registry, ToolCategory, DetailLevel
 from mcp_servers.data_filter import DataFilter, FilterConfig, TokenEstimator
+
+logger = logging.getLogger(__name__)
 
 
 class OptimizedClaudeClient:
@@ -183,8 +186,22 @@ class OptimizedClaudeClient:
         if cached_result is not None:
             return {"_cached": True, **cached_result}
 
-        # Route to appropriate server
-        result = self._execute_tool(tool_name, parameters)
+        # Route to appropriate server.
+        #
+        # A tool that raises must not take the conversation with it. Nothing
+        # between here and the API response catches it: chat() runs the tool
+        # inline, so the exception escapes to the view, which turns any
+        # exception into a generic 500 and the user loses the whole turn.
+        # Handed back as a result instead, the model can see what went wrong
+        # and try something else.
+        try:
+            result = self._execute_tool(tool_name, parameters)
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("Tool %s failed", tool_name)
+            return {
+                "error": f"{tool_name} failed: {type(exc).__name__}: {exc}",
+                "tool": tool_name,
+            }
 
         # Filter result if too large
         if TokenEstimator.should_filter(result, max_tokens=3000):
