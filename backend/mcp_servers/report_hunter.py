@@ -338,7 +338,9 @@ _DOC_TEXT_HINT = re.compile(
 _NEGATIVE_HINT = re.compile(
     r'presentation|fact\s*sheet|factsheet|corporate\s+deck|financial\s+statement|'
     r'annual\s+report|interim|md&a|mda|proxy|circular|aif|news\s+release|'
-    r'press\s+release|subscribe|privacy|terms',
+    r'press\s+release|subscribe|privacy|terms|'
+    # Investor-relations news-release filenames: ABA_NR-2026-11_..., NR_2026_04.
+    r'(?<![a-z0-9])nr[\s-]\d{2,4}[\s-]\d+',
     re.IGNORECASE,
 )
 
@@ -509,7 +511,8 @@ def score_candidate(candidate: Dict, target: HuntTarget) -> Dict:
             reasons.append('linked from the announcement itself (+25)')
 
     # Wrong kind of document.
-    if _hit(_NEGATIVE_HINT):
+    is_negative = _hit(_NEGATIVE_HINT)
+    if is_negative:
         score -= 35
         reasons.append('reads as a presentation/financial/news document (-35)')
 
@@ -535,6 +538,7 @@ def score_candidate(candidate: Dict, target: HuntTarget) -> Dict:
     candidate['score_reasons'] = reasons
     candidate['project_matched'] = project_matched
     candidate['type_matched'] = type_matched
+    candidate['is_negative'] = is_negative
     return candidate
 
 
@@ -553,6 +557,15 @@ def is_auto_queueable(candidate: Dict) -> bool:
         candidate.get('score', 0) >= AUTO_QUEUE_THRESHOLD
         and bool(candidate.get('project_matched'))
         and bool(candidate.get('type_matched'))
+        # A document that reads as a news release, presentation or financial
+        # statement is never the technical report, whatever it scores. This has
+        # to disqualify rather than deduct: once separators are normalized, a
+        # release's own PDF filename
+        # ('ABA_NR-2026-11_ABA-Announces-Positive-Preliminary-Economic-
+        # Assessment-for-the-Loki-Flake-Graphite-Deposit.pdf') contains the
+        # project and the report type, so it matched both gates and still
+        # cleared the threshold at 90 despite the -35.
+        and not candidate.get('is_negative')
     )
 
 
