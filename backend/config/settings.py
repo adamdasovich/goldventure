@@ -512,14 +512,28 @@ CELERY_BEAT_SCHEDULE = {
         'schedule': crontab(hour=22, minute=30, day_of_week='mon-fri'),  # 5:30 PM ET, Mon-Fri
     },
 
-    # RECOMMENDED SCHEDULE ARCHITECTURE: Auto-discover and process documents
-    # Conservative approach: 10 companies per week, focused on high-priority document types
+    # Auto-discover and process documents.
+    #
+    # No document_types kwarg. It used to read
+    # ['ni43101', 'news_release', 'presentation'] and was applied ahead of the
+    # task's own priority filter, so the two contradicted each other: this list
+    # dropped 'pea' outright, while the priority filter dropped 'news_release'
+    # anyway. The priority filter is the more specific of the two — it keeps the
+    # most recent of each technical-report subtype and the most recent
+    # presentation, and skips news releases (handled by the news scrapers) and
+    # financial statements — so it is left to do the filtering alone.
+    #
+    # limit is deliberately modest. This entry is for ongoing maintenance, not
+    # for catching up: each company is a depth-2 browser crawl plus a technical-
+    # documents sweep on the `scrape` queue at concurrency 2, and everything it
+    # discovers becomes a DocumentProcessingJob that boots a GPU droplet at
+    # ~$1.57/hr. Bulk backfill over the whole company list is a supervised batch
+    # run, not something to let a weekly cron drift into.
     'auto-discover-documents-weekly': {
         'task': 'core.tasks.auto_discover_and_process_documents_task',
         'schedule': crontab(day_of_week=1, hour=2, minute=0),  # Every Monday at 2 AM
         'kwargs': {
-            'limit': 10,  # Process 10 companies per week
-            'document_types': ['ni43101', 'news_release', 'presentation']  # High-priority types
+            'limit': 25,  # Companies per week. 2 AM start leaves 5h before the 7 AM news batch.
         }
     },
 
