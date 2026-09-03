@@ -19,23 +19,45 @@ from core.security_utils import is_safe_url
 logger = logging.getLogger(__name__)
 
 
+_TRAILING_DATE = re.compile(
+    r'\s*(?:January|February|March|April|May|June|July|August|September|'
+    r'October|November|December)\s+\d{1,2},\s*\d{4}$'
+)
+
+
 def _looks_like_tag_list(text):
     """
     True when a "summary" is actually the article's category list.
 
     The card scrapers fall back to the first <p> in an article card, and on
-    several sources that paragraph is the category links — get_text() joins
-    them comma-separated with no following space ("Analysis,Financing,News").
-    1,905 of 1,961 stored summaries were this. A real excerpt is prose: it
-    has spaces after its commas, or no commas and real length.
+    several sources that paragraph is the category links plus the card's
+    date, all run together: "Financing,News,PoliticsApril 24, 2026". The
+    date's own comma-space is why a naive prose test misses these — so the
+    trailing date is stripped first, and having had one is itself strong
+    evidence of card furniture (the date belongs in published_at, which is
+    stored separately). A real excerpt is prose: spaces after its commas,
+    sentence length, no glued date.
     """
     text = (text or '').strip()
-    if not text or ', ' in text or len(text) > 150:
+    if not text or len(text) > 150:
         return False
-    parts = [p.strip() for p in text.split(',')]
-    if len(parts) < 2:
+    stripped = _TRAILING_DATE.sub('', text).strip().rstrip(',')
+    had_date = stripped != text.rstrip(',')
+    if not stripped:
+        return bool(had_date)
+    if ', ' in stripped:
         return False
-    return all(p and len(p) <= 30 and not p.endswith('.') for p in parts)
+    parts = [p.strip() for p in stripped.split(',')]
+    if len(parts) < (1 if had_date else 2):
+        return False
+    # Category labels are Title-Cased ("Regulatory Issues", "Editors' Picks");
+    # prose that happens to end in a date is not ("The mine closed in").
+    def _label(part):
+        return (part and len(part) <= 30 and not part.endswith('.')
+                and all(w[0].isupper() or not w[0].isalpha()
+                        for w in part.split()))
+    return all(_label(p) for p in parts)
+
 
 
 # Fix Windows console encoding for Unicode characters
