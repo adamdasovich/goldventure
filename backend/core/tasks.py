@@ -1761,9 +1761,19 @@ _RETRYABLE_JOB_ERROR = _re.compile(
     r'|ConnectionPool|Connection\s*(?:refused|reset|error|aborted)'
     r'|NameResolution|SSL|Max\s+retries\s+exceeded'
     r'|\b5\d\d\b'                       # 500, 502, 503, 504
+    r'|\b429\b|Too\s+Many\s+Requests'   # rate limited: retry later, slowly
     r'|stuck\s+in\s+processing',        # worker crash or restart mid-job
     _re.IGNORECASE,
 )
+
+# Rate limiting is retryable, but on a different clock. 41 jobs failed 429
+# against a single host within minutes because a bulk requeue had the worker
+# downloading from it back to back. 429 matched neither the terminal pattern
+# (\b40[0-9]\b stops at 409) nor the retryable one, so those jobs were being
+# dropped silently — and retrying them on the ordinary half-hour backoff would
+# just reproduce the burst that caused them.
+_RATE_LIMITED_ERROR = _re.compile(r'\b429\b|Too\s+Many\s+Requests', _re.IGNORECASE)
+RATE_LIMIT_BACKOFF_HOURS = 6
 
 MAX_JOB_RETRIES = 2
 
@@ -1796,6 +1806,7 @@ def requeue_transient_document_failures(now):
     lost.
     """
     from datetime import timedelta
+    from urllib.parse import urlparse
 
     from .models import DocumentProcessingJob
 
@@ -1805,6 +1816,7 @@ def requeue_transient_document_failures(now):
     ).exclude(error_message='').order_by('-completed_at')
 
     requeued = 0
+    hosts_this_run = set()
     for job in candidates.iterator(chunk_size=200):
         if requeued >= MAX_REQUEUES_PER_RUN:
             break
@@ -1812,10 +1824,22 @@ def requeue_transient_document_failures(now):
             continue
 
         # Back off from the last attempt rather than retrying immediately.
-        wait = timedelta(minutes=RETRY_BACKOFF_MINUTES * (job.retry_count + 1))
+        if _RATE_LIMITED_ERROR.search(job.error_message or ''):
+            wait = timedelta(hours=RATE_LIMIT_BACKOFF_HOURS * (job.retry_count + 1))
+        else:
+            wait = timedelta(minutes=RETRY_BACKOFF_MINUTES * (job.retry_count + 1))
         last_attempt = job.completed_at or job.started_at or job.created_at
         if last_attempt and now - last_attempt < wait:
             continue
+
+        # At most one job per host per run. The 429 burst came from requeuing
+        # many documents that all live on the same site, so spacing them across
+        # runs stops a retry recreating the condition it is recovering from.
+        host = (urlparse(job.url or '').hostname or '').lower()
+        if host and host in hosts_this_run:
+            continue
+        if host:
+            hosts_this_run.add(host)
 
         previous = (job.error_message or '')[:200]
         job.status = 'pending'
