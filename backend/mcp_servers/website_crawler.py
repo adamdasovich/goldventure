@@ -1388,6 +1388,74 @@ class MiningDocumentCrawler:
         return score
 
 
+# Canonical document_type vocabulary.
+#
+# Two crawlers feed crawl_company_website() and they used to disagree:
+# discover_documents() emits 'ni43101', while crawl_technical_documents()
+# emitted 'ni_43_101', 'feasibility_study', 'resource_estimate' and
+# 'technical_report'. Nothing downstream understood the second set —
+# DocumentProcessingJob.DOCUMENT_TYPE_CHOICES, the orchestrator's
+# HEAVY_JOB_TYPES and the worker's SUPPORTED_JOB_TYPES all list only the
+# first — so every document the deep technical crawler found was discarded
+# before a job could be created. That is why 312 of 396 companies have no
+# technical document on file.
+#
+# The canonical set is DocumentProcessingJob.DOCUMENT_TYPE_CHOICES, because
+# that is the contract for creating a job. Report subtypes collapse onto
+# 'ni43101': it is the generic docling technical-report pipeline, and
+# tasks.py gates _process_ni43101_hybrid() and the discovery notification on
+# exactly that value. This is the same mapping the flag-review endpoint in
+# views/news_report_flags.py already applies to pfs/dfs/mre.
+#
+# Keep this in step with DocumentProcessingJob.DOCUMENT_TYPE_CHOICES. Adding a
+# genuinely new job type also means adding it to HEAVY_JOB_TYPES
+# (gpu_orchestrator.py) AND SUPPORTED_JOB_TYPES (gpu_worker.py) — the
+# orchestrator boots a GPU droplet from the first list and the worker picks
+# work off the second, so a type in one but not the other spins up a droplet
+# that finds nothing to do and bills until the 5-minute idle timeout.
+CANONICAL_DOCUMENT_TYPES = {
+    'ni43101',
+    'pea',
+    'news_release',
+    'financial_statement',
+    'presentation',
+    'fact_sheet',
+    'other',
+}
+
+_DOCUMENT_TYPE_ALIASES = {
+    'ni_43_101': 'ni43101',
+    'ni-43-101': 'ni43101',
+    'technical_report': 'ni43101',
+    'feasibility_study': 'ni43101',
+    'prefeasibility_study': 'ni43101',
+    'resource_estimate': 'ni43101',
+    'mineral_resource_estimate': 'ni43101',
+    'financial_stmt': 'financial_statement',
+    'factsheet': 'fact_sheet',
+}
+
+
+def canonicalize_document_type(doc_type: str) -> str:
+    """
+    Map a crawler-emitted document_type onto the canonical job vocabulary.
+
+    Unknown types fall back to 'other' rather than passing through, so a job is
+    never created with a value DocumentProcessingJob's choices reject.
+    """
+    if not doc_type:
+        return 'other'
+    normalized = doc_type.strip().lower()
+    normalized = _DOCUMENT_TYPE_ALIASES.get(normalized, normalized)
+    if normalized not in CANONICAL_DOCUMENT_TYPES:
+        logger.warning(
+            f"[DOC-TYPE] Unrecognized document_type {doc_type!r} -> 'other'. "
+            "Add an alias in _DOCUMENT_TYPE_ALIASES if this should be processed."
+        )
+        return 'other'
+    return normalized
+
+
 async def crawl_technical_documents(url: str) -> List[Dict]:
     """
     Crawl common technical document page patterns to find NI 43-101 reports, PEAs, etc.
@@ -1491,26 +1559,33 @@ async def crawl_technical_documents(url: str) -> List[Dict]:
                     if len(title) > 200:
                         title = title[:200] + '...'
 
-                    # Determine document type
+                    # Determine document subtype, then map it onto the canonical
+                    # job vocabulary. The subtype is kept alongside because the
+                    # caller dedupes on it: a company can publish an NI 43-101,
+                    # a feasibility study and an MRE, and collapsing all three to
+                    # 'ni43101' before deduplication would keep only one of them.
                     combined_lower = (title + ' ' + pdf_url).lower()
-                    doc_type = 'technical_report'
+                    doc_subtype = 'technical_report'
 
                     if any(kw in combined_lower for kw in ['ni 43-101', 'ni43-101', '43-101']):
-                        doc_type = 'ni_43_101'
+                        doc_subtype = 'ni_43_101'
                     elif any(kw in combined_lower for kw in ['pea', 'preliminary economic']):
-                        doc_type = 'pea'
+                        doc_subtype = 'pea'
                     elif any(kw in combined_lower for kw in ['feasibility', 'prefeasibility', 'pre-feasibility']):
-                        doc_type = 'feasibility_study'
+                        doc_subtype = 'feasibility_study'
                     elif any(kw in combined_lower for kw in ['resource estimate', 'mineral resource']):
-                        doc_type = 'resource_estimate'
+                        doc_subtype = 'resource_estimate'
+
+                    doc_type = canonicalize_document_type(doc_subtype)
 
                     technical_docs.append({
                         'url': pdf_url,
                         'title': title if title else 'Technical Document',
                         'document_type': doc_type,
+                        'document_subtype': doc_subtype,
                         'source': 'technical_documents_page'
                     })
-                    logger.info(f"[TECH-DOCS] Found: {title[:60]}... ({doc_type})")
+                    logger.info(f"[TECH-DOCS] Found: {title[:60]}... ({doc_subtype} -> {doc_type})")
 
             except Exception as e:
                 continue
@@ -1546,6 +1621,16 @@ async def crawl_company_website(url: str, max_depth: int = 2) -> List[Dict]:
                     seen_urls.add(url_norm)
     except Exception as e:
         logger.warning(f"[CRAWL] Technical documents crawl error: {e}")
+
+    # Single choke point: every document leaving this function carries a
+    # document_type that DocumentProcessingJob will accept, whichever crawler
+    # produced it. Callers create jobs straight from these dicts.
+    for doc in documents:
+        raw_type = doc.get('document_type')
+        canonical = canonicalize_document_type(raw_type)
+        if canonical != raw_type:
+            doc.setdefault('document_subtype', raw_type)
+            doc['document_type'] = canonical
 
     return documents
 

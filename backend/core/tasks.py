@@ -921,11 +921,18 @@ def auto_discover_and_process_documents_task(self, company_ids=None, document_ty
 
                 # IMPORTANT: Filter to only important recent documents
                 # Keep: most recent NI 43-101, most recent PEA, recent presentations, recent financials
+                discovered_count = len(documents)
                 filtered_docs = []
                 seen_types = set()
 
-                # Important document types - keep only the most recent of each
-                priority_types = ['ni_43_101', 'pea', 'feasibility_study', 'resource_estimate']
+                # Technical report types, in the canonical job vocabulary that
+                # crawl_company_website() now guarantees. This list previously
+                # read ['ni_43_101', 'pea', 'feasibility_study', 'resource_estimate'],
+                # which no crawler emitted after canonicalization and which the
+                # main crawler never emitted at all — so 'ni43101' documents
+                # matched no branch below, fell off the end of the loop and were
+                # dropped without ever being queued.
+                priority_types = ['ni43101', 'pea']
 
                 # Sort by date (newest first) if dates available
                 documents.sort(key=lambda x: x.get('date') or '0000-00-00', reverse=True)
@@ -933,12 +940,17 @@ def auto_discover_and_process_documents_task(self, company_ids=None, document_ty
                 for doc in documents:
                     doc_type = doc.get('document_type', 'other')
 
-                    # For priority types, only keep the most recent one
+                    # For technical reports, keep the most recent of each
+                    # distinct subtype. Deduplicating on document_type alone
+                    # would keep one technical document per company, when a
+                    # company can publish an NI 43-101, a feasibility study and
+                    # an MRE that all canonicalize to 'ni43101'.
                     if doc_type in priority_types:
-                        if doc_type not in seen_types:
+                        dedupe_key = doc.get('document_subtype') or doc_type
+                        if dedupe_key not in seen_types:
                             filtered_docs.append(doc)
-                            seen_types.add(doc_type)
-                            logger.info(f"    [KEEP] {doc_type}: {doc.get('title', 'No title')[:50]}")
+                            seen_types.add(dedupe_key)
+                            logger.info(f"    [KEEP] {dedupe_key} ({doc_type}): {doc.get('title', 'No title')[:50]}")
 
                     # For presentations, keep most recent only
                     elif doc_type == 'presentation':
@@ -951,8 +963,18 @@ def auto_discover_and_process_documents_task(self, company_ids=None, document_ty
                     elif doc_type in ['financial_statement', 'news_release', 'other']:
                         continue
 
+                    # Never drop silently. An unrecognized type reaching this
+                    # branch means the crawler vocabulary and this filter have
+                    # drifted apart again, which is the failure that hid the
+                    # 'ni43101' drop for as long as it did.
+                    else:
+                        logger.warning(
+                            f"    [DROP] Unhandled document_type {doc_type!r} for "
+                            f"{company.name}: {doc.get('title', 'No title')[:50]}"
+                        )
+
                 documents = filtered_docs
-                logger.info(f"  Filtered to {len(documents)} important documents (from {len(documents)} discovered)")
+                logger.info(f"  Filtered to {len(documents)} important documents (from {discovered_count} discovered)")
                 total_discovered += len(documents)
                 
                 # Create processing jobs (skip existing)
