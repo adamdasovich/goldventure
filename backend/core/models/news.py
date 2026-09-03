@@ -400,6 +400,12 @@ class DocumentProcessingJob(models.Model):
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
     progress_message = models.TextField(blank=True, help_text="Current processing step")
     error_message = models.TextField(blank=True)
+    # Bounded automatic retries for transient failures only — timeouts, 5xx,
+    # connection errors and worker crashes. A 403, 404, unsupported media type
+    # or Docling pipeline failure is a property of the document or the host and
+    # will fail identically on a retry, so those stay terminal rather than
+    # burning GPU minutes to reconfirm it. See cleanup_stuck_jobs_task.
+    retry_count = models.PositiveIntegerField(default=0)
 
     # Results
     document = models.ForeignKey(Document, on_delete=models.SET_NULL, null=True, blank=True,

@@ -1731,6 +1731,111 @@ def scrape_and_save_company_task(self, job_id: int, update_existing: bool = Fals
         }
 
 
+# ---------------------------------------------------------------------------
+# Bounded retry for transient document-processing failures
+# ---------------------------------------------------------------------------
+
+# Checked FIRST. These describe the document or the host, not a bad moment, and
+# will fail identically on a retry — so retrying only spends GPU minutes to
+# reconfirm the same error. Measured against the 151 historical failures: 52
+# were 403s (all but a handful from one host, which needs a User-Agent change
+# rather than a retry), 48 were Docling pipeline failures on specific PDFs, 22
+# were 404s, and the remainder were unsupported media types or company names
+# that could not be resolved.
+_TERMINAL_JOB_ERROR = _re.compile(
+    r'\b40[0-9]\b'                      # 403, 404, 415 and friends
+    r'|Docling|StandardPdfPipeline'     # the PDF itself will not convert
+    r'|Unsupported\s+Media'
+    r'|No\s+content\s+extracted'
+    r"|Company\s+'.*'\s+not\s+found",
+    _re.IGNORECASE,
+)
+
+# Worth another attempt: the failure was in the moment, not in the document.
+_RETRYABLE_JOB_ERROR = _re.compile(
+    r'timed?\s*out|timeout'
+    r'|ConnectionPool|Connection\s*(?:refused|reset|error|aborted)'
+    r'|NameResolution|SSL|Max\s+retries\s+exceeded'
+    r'|\b5\d\d\b'                       # 500, 502, 503, 504
+    r'|stuck\s+in\s+processing',        # worker crash or restart mid-job
+    _re.IGNORECASE,
+)
+
+MAX_JOB_RETRIES = 2
+
+# Requeued per cleanup run. The task runs every 15 minutes, and every requeued
+# job can wake a GPU droplet, so this keeps a backlog from arriving all at once.
+MAX_REQUEUES_PER_RUN = 5
+
+# Minimum wait before retrying, multiplied by the attempt already made. A host
+# that just timed out is unlikely to be healthy sixty seconds later.
+RETRY_BACKOFF_MINUTES = 30
+
+
+def _is_retryable_job_error(message: str) -> bool:
+    """Transient failures only; terminal patterns win when both appear."""
+    if not message:
+        return False
+    if _TERMINAL_JOB_ERROR.search(message):
+        return False
+    return bool(_RETRYABLE_JOB_ERROR.search(message))
+
+
+def requeue_transient_document_failures(now):
+    """
+    Return failed DocumentProcessingJob rows to 'pending' when the failure looks
+    transient and the job has retries left.
+
+    Called from cleanup_stuck_jobs_task, which already runs every 15 minutes.
+    Nothing else re-queued these: 151 jobs had failed permanently with no path
+    back, 22 of them technical reports that were correctly identified and then
+    lost.
+    """
+    from datetime import timedelta
+
+    from .models import DocumentProcessingJob
+
+    candidates = DocumentProcessingJob.objects.filter(
+        status='failed',
+        retry_count__lt=MAX_JOB_RETRIES,
+    ).exclude(error_message='').order_by('-completed_at')
+
+    requeued = 0
+    for job in candidates.iterator(chunk_size=200):
+        if requeued >= MAX_REQUEUES_PER_RUN:
+            break
+        if not _is_retryable_job_error(job.error_message):
+            continue
+
+        # Back off from the last attempt rather than retrying immediately.
+        wait = timedelta(minutes=RETRY_BACKOFF_MINUTES * (job.retry_count + 1))
+        last_attempt = job.completed_at or job.started_at or job.created_at
+        if last_attempt and now - last_attempt < wait:
+            continue
+
+        previous = (job.error_message or '')[:200]
+        job.status = 'pending'
+        job.retry_count += 1
+        job.error_message = ''
+        job.progress_message = (
+            f'Retry {job.retry_count}/{MAX_JOB_RETRIES} after a transient '
+            f'failure: {previous}'
+        )
+        job.started_at = None
+        job.completed_at = None
+        job.save(update_fields=[
+            'status', 'retry_count', 'error_message', 'progress_message',
+            'started_at', 'completed_at',
+        ])
+        requeued += 1
+        logger.info(
+            f'[CLEANUP] Requeued DocumentProcessingJob {job.id} '
+            f'(attempt {job.retry_count}/{MAX_JOB_RETRIES}): {previous[:80]}'
+        )
+
+    return requeued
+
+
 @shared_task(bind=True, time_limit=300, soft_time_limit=280, on_failure=log_task_failure)
 def cleanup_stuck_jobs_task(self):
     """
@@ -1827,14 +1932,19 @@ def cleanup_stuck_jobs_task(self):
         job.save()
         processing_fixed += 1
 
+    # Give transient document failures another attempt. Nothing else did this,
+    # so a timeout or a worker crash meant the document was lost for good.
+    documents_requeued = requeue_transient_document_failures(now)
+
     total_fixed = scraping_fixed + processing_fixed
-    logger.info(f"[CLEANUP] Fixed {total_fixed} stuck jobs (ScrapingJobs: {scraping_fixed}, DocumentProcessingJobs: {processing_fixed}), Retried: {scraping_retried}")
+    logger.info(f"[CLEANUP] Fixed {total_fixed} stuck jobs (ScrapingJobs: {scraping_fixed}, DocumentProcessingJobs: {processing_fixed}), Retried: {scraping_retried}, Documents requeued: {documents_requeued}")
 
     return {
         'status': 'success',
         'scraping_jobs_fixed': scraping_fixed,
         'scraping_jobs_retried': scraping_retried,
         'processing_jobs_fixed': processing_fixed,
+        'documents_requeued': documents_requeued,
         'total_fixed': total_fixed
     }
 
