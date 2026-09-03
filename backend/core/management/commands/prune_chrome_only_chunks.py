@@ -193,6 +193,28 @@ class Command(BaseCommand):
                     .exclude(id=chunk.id))
 
     @staticmethod
+    def _collection():
+        """The news_chunks collection, or None if ChromaDB is unreachable."""
+        try:
+            import os
+
+            import chromadb
+            from chromadb.config import Settings as ChromaSettings
+
+            from mcp_servers.embeddings import get_embedding_function
+
+            client = chromadb.HttpClient(
+                host=os.environ.get('CHROMA_HOST', 'localhost'),
+                port=int(os.environ.get('CHROMA_PORT', 8002)),
+                settings=ChromaSettings(anonymized_telemetry=False),
+            )
+            client.heartbeat()
+            return client.get_collection(
+                'news_chunks', embedding_function=get_embedding_function())
+        except Exception:                                    # noqa: BLE001
+            return None
+
+    @staticmethod
     def _coverage(cleaned, siblings):
         """Share of the chunk's own words that siblings already contain."""
         mine = set(WORD.findall(cleaned.lower()))
