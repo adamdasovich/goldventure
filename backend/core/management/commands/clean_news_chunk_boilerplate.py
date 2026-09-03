@@ -131,21 +131,34 @@ class Command(BaseCommand):
         updated = failed = 0
         for start in range(0, len(planned), batch_size):
             batch = planned[start:start + batch_size]
-            ids = [c.chroma_id for c, _ in batch if c.chroma_id]
-            docs = [k for c, k in batch if c.chroma_id]
+            # Only chunks that actually have a vector. Updating Postgres for
+            # a chunk with no chroma_id would leave cleaned text behind a
+            # stale embedding — the two stores must move together.
+            embeddable = [(c, k) for c, k in batch if c.chroma_id]
+            skipped_here = len(batch) - len(embeddable)
+            if skipped_here:
+                failed += skipped_here
+                self.stderr.write(
+                    f"  {skipped_here} chunk(s) in this batch have no chroma_id; "
+                    f"left untouched")
+            if not embeddable:
+                continue
             try:
                 # Re-embeds from the cleaned text; the id is unchanged, so the
                 # vector is replaced rather than duplicated.
-                collection.update(ids=ids, documents=docs)
+                collection.update(
+                    ids=[c.chroma_id for c, _ in embeddable],
+                    documents=[k for _, k in embeddable],
+                )
             except Exception as exc:                        # noqa: BLE001
-                failed += len(batch)
+                failed += len(embeddable)
                 self.stderr.write(f"  batch failed, Postgres left untouched: {exc}")
                 continue
 
-            for chunk, kept in batch:
+            for chunk, kept in embeddable:
                 chunk.text = kept
-            NewsChunk.objects.bulk_update([c for c, _ in batch], ['text'])
-            updated += len(batch)
+            NewsChunk.objects.bulk_update([c for c, _ in embeddable], ['text'])
+            updated += len(embeddable)
             self.stdout.write(
                 f"  {updated}/{len(planned)} cleaned "
                 f"({time.time() - started:.0f}s)"

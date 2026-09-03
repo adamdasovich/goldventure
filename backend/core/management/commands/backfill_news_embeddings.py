@@ -80,7 +80,7 @@ class Command(BaseCommand):
         )
         if dry_run:
             for cid, n in order[-12:]:
-                self.stdout.write(f"    {names.get(cid, cid)[:44]:46s} {n}")
+                self.stdout.write(f"    {str(names.get(cid, cid))[:44]:46s} {n}")
             self.stdout.write("Nothing embedded. Drop --dry-run to run.")
             return
 
