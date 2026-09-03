@@ -3,6 +3,7 @@ Background Tasks for Document Processing and News Scraping
 Processes document queue jobs sequentially
 """
 
+import os
 import logging
 import traceback
 from celery import shared_task
