@@ -327,7 +327,11 @@ _DOWNLOAD_HREF = re.compile(
 
 _DOC_TEXT_HINT = re.compile(
     r'ni\s*43-?101|43-101|technical\s+report|feasibility|preliminary\s+economic|'
-    r'resource\s+estimate|mineral\s+reserve|scoping\s+study|\bpea\b|\bpfs\b|\bdfs\b',
+    r'resource\s+estimate|mineral\s+reserve|scoping\s+study|'
+    # 'mre' included: companies label reports "CLARENCE STREAM - MRE 2026", and
+    # this pattern also gates whether a non-.pdf download link counts as a
+    # document at all, so omitting it dropped those links entirely.
+    r'(?<![a-z0-9])(?:pea|pfs|dfs|mre)(?![a-z0-9])',
     re.IGNORECASE,
 )
 
@@ -338,7 +342,10 @@ _NEGATIVE_HINT = re.compile(
     re.IGNORECASE,
 )
 
-_YEAR = re.compile(r'(19|20)\d{2}')
+# Bounded on both sides: an unbounded (19|20)\d{2} pulled '2080' out of the
+# filename '72080004-0-estrades-pea.pdf' and scored that document as newer
+# than the release announcing it.
+_YEAR = re.compile(r'(?<!\d)(19|20)\d{2}(?!\d)')
 
 
 def normalize_url(url: str) -> str:
@@ -434,6 +441,15 @@ def score_candidate(candidate: Dict, target: HuntTarget) -> Dict:
         if len(first) >= 5 and first in haystack:
             score += 15
             reasons.append(f"partial project match on '{first}' (+15)")
+        else:
+            # We know which project this report covers and this document is not
+            # it. Without this penalty a different project's report scores on
+            # type, size and being linked from the announcement alone: Galway's
+            # "ESTRADES - MRE 2024" reached 90 against a Clarence Stream flag,
+            # over the auto-queue threshold, which would have put the wrong
+            # project's report into the vector store unreviewed.
+            score -= 25
+            reasons.append(f"does not mention project '{target.project}' (-25)")
 
     # Right kind of report.
     type_pattern = _TYPE_MATCH_PATTERNS.get(target.report_type)
