@@ -9,9 +9,10 @@ particular way ever got one. Nothing read the collection either, until
 
 Unlike the news backfill, this is cheap: a profile is assembled from fields
 the database already holds (description, tagline, ticker, projects), so there
-is no article to fetch. The whole platform is minutes, not hours.
+is no article to fetch. Batched, the whole platform takes a few
+minutes; one subprocess per company made it 109.
 
-Idempotent: store_company_profile_isolated deletes a company's existing
+Idempotent: the writer deletes a company's existing
 vector before writing the new one, so re-running refreshes rather than
 duplicates. Worth re-running after a batch of renames or description edits.
 
@@ -35,6 +36,8 @@ class Command(BaseCommand):
                             help='Skip companies that already have a vector.')
         parser.add_argument('--limit', type=int, default=None,
                             help='Stop after this many companies.')
+        parser.add_argument('--batch-size', type=int, default=25,
+                            help='Companies per subprocess (default 25).')
         parser.add_argument('--dry-run', action='store_true',
                             help='Report the work without writing anything.')
 
@@ -65,38 +68,43 @@ class Command(BaseCommand):
             self.stdout.write("Nothing written. Drop --dry-run to run.")
             return
 
-        from core.chromadb_isolated import store_company_profile_isolated
+        from core.chromadb_isolated import store_company_profiles_isolated
 
+        batch_size = options['batch_size']
         started = time.time()
-        written = skipped = failed = 0
-        for idx, (cid, name) in enumerate(companies, 1):
-            try:
-                result = store_company_profile_isolated(cid, timeout=120)
-            except Exception as exc:                       # noqa: BLE001
-                failed += 1
-                self.stdout.write(self.style.WARNING(
-                    f"  [{idx}/{len(companies)}] {name[:40]:42s} RAISED {exc}"))
-                continue
+        written = skipped = failed = done = 0
 
-            inner = result.get('result') or {}
-            if result.get('success') and inner.get('status') == 'success':
-                written += 1
-                note = f"{inner.get('chars_stored', 0):5d} chars"
-            elif inner.get('status') == 'skipped':
-                # No description, tagline or projects — nothing to embed.
-                skipped += 1
-                note = "skipped (no profile data)"
-            else:
-                failed += 1
-                note = self.style.WARNING(
-                    f"FAILED {str(result.get('error') or inner.get('message'))[:44]}")
+        for start in range(0, len(companies), batch_size):
+            batch = companies[start:start + batch_size]
+            # One interpreter for the batch. Per company it was ~16s of
+            # importing torch for work that touches no network at all.
+            result = store_company_profiles_isolated(
+                [cid for cid, _ in batch], timeout=120 + len(batch) * 10)
+            per = result.get('results', {})
 
-            if idx % 25 == 0 or idx == len(companies) or 'FAILED' in str(note):
-                rate = idx / (time.time() - started)
-                self.stdout.write(
-                    f"  [{idx}/{len(companies)}] {name[:40]:42s} {note}  "
-                    f"(~{(len(companies) - idx) / rate / 60:.1f} min left)"
-                )
+            for cid, name in batch:
+                done += 1
+                item = per.get(cid) or per.get(str(cid))
+                inner = (item or {}).get('result') or {}
+                if item is None:
+                    failed += 1
+                    note = self.style.WARNING("no result (batch cut short)")
+                elif item.get('success') and inner.get('status') == 'success':
+                    written += 1
+                    note = f"{inner.get('chars_stored', 0):5d} chars"
+                elif inner.get('status') == 'skipped':
+                    skipped += 1
+                    note = "skipped (no profile data)"
+                else:
+                    failed += 1
+                    note = self.style.WARNING(
+                        f"FAILED {str(item.get('error'))[:44]}")
+                if done % 50 == 0 or done == len(companies) or 'FAILED' in str(note):
+                    rate = done / (time.time() - started)
+                    self.stdout.write(
+                        f"  [{done}/{len(companies)}] {name[:40]:42s} {note}  "
+                        f"(~{(len(companies) - done) / rate / 60:.1f} min left)"
+                    )
 
         self.stdout.write(self.style.SUCCESS(
             f"\nDone in {(time.time() - started) / 60:.1f} min — "

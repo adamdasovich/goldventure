@@ -478,6 +478,165 @@ except Exception as e:
         }
 
 
+def store_company_profiles_isolated(company_ids, timeout=900):
+    """
+    Write profile vectors for several companies inside ONE subprocess.
+
+    store_company_profile_isolated spawns a fresh interpreter per company,
+    and that interpreter imports voyageai -> transformers -> torch before it
+    can embed anything. Backfilling all 396 companies that way took 109
+    minutes, essentially all of it spent importing torch 396 times, for work
+    that touches no network at all -- a profile is assembled from columns the
+    database already holds.
+
+    Same shape as process_news_companies_isolated: one result line per
+    company, flushed as it completes, so a SIGSEGV in the Chroma binding
+    costs only the company in flight.
+
+    Args:
+        company_ids: iterable of Company ids
+        timeout: seconds for the whole batch
+
+    Returns:
+        {'success': bool, 'results': {company_id: {...}}, ...}
+    """
+    clean = []
+    for cid in company_ids or []:
+        if not isinstance(cid, int) or cid <= 0:
+            return {'success': False, 'error': f'Invalid company id: {cid!r}'}
+        clean.append(cid)
+    if not clean:
+        return {'success': True, 'results': {}}
+
+    subprocess_code = """
+import os
+import sys
+import json
+
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
+
+import django
+django.setup()
+
+import chromadb
+from chromadb.config import Settings as ChromaSettings
+from mcp_servers.embeddings import get_embedding_function
+from core.models import Company
+
+client = chromadb.HttpClient(
+    host=os.environ.get('CHROMA_HOST', 'localhost'),
+    port=int(os.environ.get('CHROMA_PORT', 8002)),
+    settings=ChromaSettings(anonymized_telemetry=False),
+)
+client.heartbeat()
+collection = client.get_or_create_collection(
+    name='company_profiles',
+    metadata={'hnsw:space': 'cosine'},
+    embedding_function=get_embedding_function(),
+)
+
+for company_id in json.loads(os.environ['CHROMA_COMPANY_IDS']):
+    try:
+        company = Company.objects.get(id=company_id)
+        parts = []
+        if company.description:
+            parts.append('Company Overview: ' + company.name + chr(10) + company.description)
+        if company.tagline:
+            parts.append('Tagline: ' + company.tagline)
+        if company.ticker_symbol and company.exchange:
+            parts.append('Stock: ' + company.ticker_symbol + ' on ' + company.exchange.upper())
+        project_texts = []
+        for project in company.projects.all():
+            t = 'Project: ' + project.name
+            if project.description:
+                t += chr(10) + project.description
+            if project.country:
+                t += chr(10) + 'Location: ' + project.country
+            if project.primary_commodity:
+                t += chr(10) + 'Commodity: ' + project.primary_commodity
+            project_texts.append(t)
+        if project_texts:
+            parts.append('Projects:' + chr(10) + (chr(10) + chr(10)).join(project_texts))
+
+        if not parts:
+            payload = {'id': company_id, 'success': True,
+                       'result': {'status': 'skipped',
+                                  'message': 'No profile data to store'}}
+        else:
+            full_profile = (chr(10) + chr(10)).join(parts)
+            doc_id = 'company_' + str(company.id) + '_profile'
+            try:
+                collection.delete(ids=[doc_id])
+            except Exception:
+                pass
+            collection.add(
+                ids=[doc_id],
+                documents=[full_profile],
+                metadatas=[{
+                    'company_id': company.id,
+                    'company_name': company.name,
+                    'ticker': company.ticker_symbol or '',
+                    'exchange': company.exchange or '',
+                    'type': 'company_profile',
+                }],
+            )
+            payload = {'id': company_id, 'success': True,
+                       'result': {'status': 'success', 'company': company.name,
+                                  'chars_stored': len(full_profile)}}
+    except Exception as e:
+        payload = {'id': company_id, 'success': False,
+                   'error': str(e), 'error_type': type(e).__name__}
+
+    print('CHROMADB_ITEM:' + json.dumps(payload), flush=True)
+
+print('CHROMADB_RESULT:' + json.dumps({'success': True, 'completed': True}))
+"""
+
+    def _collect(stdout):
+        out = {}
+        for line in (stdout or '').splitlines():
+            if line.startswith('CHROMADB_ITEM:'):
+                try:
+                    item = json.loads(line[len('CHROMADB_ITEM:'):])
+                    out[item['id']] = item
+                except json.JSONDecodeError:
+                    continue
+        return out
+
+    try:
+        completed = subprocess.run(
+            [sys.executable, '-c', subprocess_code],
+            cwd=str(BACKEND_DIR),
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            env={
+                **os.environ,
+                'DJANGO_SETTINGS_MODULE': 'config.settings',
+                'CHROMA_COMPANY_IDS': json.dumps(clean),
+            },
+        )
+    except subprocess.TimeoutExpired as exc:
+        partial = _collect(
+            exc.stdout.decode() if isinstance(exc.stdout, bytes) else exc.stdout
+        )
+        logger.warning('Company profile batch timed out after %ss; %d of %d done',
+                       timeout, len(partial), len(clean))
+        return {'success': False, 'timeout': True, 'results': partial}
+    except Exception as exc:  # noqa: BLE001
+        logger.error('Company profile batch failed: %s', exc)
+        return {'success': False, 'results': {}, 'error': str(exc)}
+
+    results = _collect(completed.stdout)
+    if completed.returncode != 0:
+        logger.error('Company profile batch exited %s; %d of %d done first',
+                     completed.returncode, len(results), len(clean))
+        return {'success': False, 'crash': True, 'results': results,
+                'stderr': (completed.stderr or '')[:500]}
+
+    return {'success': True, 'results': results, 'completed': len(results)}
+
+
 def process_news_batch_isolated(companies: list, limit_per_company: int = 20, timeout_per_company: int = 120) -> Dict:
     """
     Process news for multiple companies, each in an isolated subprocess.
