@@ -74,6 +74,18 @@ class NewsReportFlagViewSet(viewsets.ReadOnlyModelViewSet):
                 'review_notes': flag.review_notes,
                 'report_url': flag.report_url,
                 'report_type': flag.report_type,
+                # Automated hunt for the actual report document. The flag points
+                # at the announcement; these are the candidates found on the
+                # company's site, ranked, so review is a click rather than a
+                # manual search. See mcp_servers/report_hunter.py.
+                'document_category': flag.document_category,
+                'project_name': flag.project_name,
+                'hunt_status': flag.hunt_status,
+                'hunt_attempts': flag.hunt_attempts,
+                'last_hunt_at': flag.last_hunt_at,
+                'next_hunt_at': flag.next_hunt_at,
+                'expected_filing_by': flag.expected_filing_by,
+                'candidates': flag.candidates or [],
                 'processing_job': {
                     'id': job.id,
                     'status': job.status,

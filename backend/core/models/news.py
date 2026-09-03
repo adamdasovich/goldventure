@@ -746,11 +746,57 @@ class NewsReportFlag(models.Model):
 
     review_notes = models.TextField(blank=True)
 
+    # ---- Automated report hunt -------------------------------------------
+    # The flag records a news release whose title mentions a technical report.
+    # The report itself is a separate document on the company's website, so
+    # these fields track the search for it. See mcp_servers/report_hunter.py.
+
+    HUNT_STATUS_CHOICES = [
+        ('pending', 'Not yet searched'),
+        ('found', 'Candidates found, awaiting review'),
+        ('auto_queued', 'High-confidence candidate queued for processing'),
+        ('not_found', 'Searched, nothing found yet'),
+        ('exhausted', 'Filing window closed without finding a report'),
+        ('not_expected', 'Release does not imply a filed report'),
+    ]
+
+    DOCUMENT_CATEGORY_CHOICES = [
+        ('filed', 'Report filed — exists now'),
+        ('results', 'Results announced — report due within 45 days'),
+        ('forward', 'Forward-looking — no report to find'),
+        ('unknown', 'Unclassified'),
+    ]
+
+    document_category = models.CharField(
+        max_length=20, choices=DOCUMENT_CATEGORY_CHOICES, blank=True, default='',
+        help_text="What the release title implies about whether a report exists"
+    )
+    project_name = models.CharField(
+        max_length=200, blank=True, default='',
+        help_text="Project the release refers to, matched against the company's Project rows"
+    )
+    hunt_status = models.CharField(
+        max_length=20, choices=HUNT_STATUS_CHOICES, default='pending', db_index=True
+    )
+    hunt_attempts = models.PositiveIntegerField(default=0)
+    last_hunt_at = models.DateTimeField(null=True, blank=True)
+    # Indexed because the scheduled hunt selects on it every run.
+    next_hunt_at = models.DateTimeField(null=True, blank=True, db_index=True)
+    # release_date + 45 days per NI 43-101 s.4.2, plus grace. Past this with
+    # nothing found, the hunt stops rather than crawling the site forever.
+    expected_filing_by = models.DateField(null=True, blank=True)
+    candidates = models.JSONField(
+        default=list, blank=True,
+        help_text="Ranked candidate documents: url, text, score, score_reasons"
+    )
+
     class Meta:
         db_table = 'news_report_flags'
         ordering = ['-flagged_at']
         indexes = [
             models.Index(fields=['status', '-flagged_at']),
+            # The scheduled hunt filters on exactly this pair.
+            models.Index(fields=['status', 'next_hunt_at'], name='nrf_status_next_hunt_idx'),
         ]
 
     def __str__(self):

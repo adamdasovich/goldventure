@@ -445,6 +445,7 @@ CELERY_TASK_ROUTES = {
     'core.tasks.scrape_single_company_news_task':       {'queue': 'scrape'},
     'core.tasks.scrape_mining_news_task':               {'queue': 'scrape'},
     'core.tasks.auto_discover_and_process_documents_task': {'queue': 'scrape'},
+    'core.tasks.hunt_technical_reports_task':           {'queue': 'scrape'},
     'core.tasks.reconcile_chroma_index_task':           {'queue': 'scrape'},
     'core.tasks.backfill_document_dates_task':          {'queue': 'scrape'},
     'core.tasks.process_company_news_for_rag_task':     {'queue': 'scrape'},
@@ -534,6 +535,24 @@ CELERY_BEAT_SCHEDULE = {
         'schedule': crontab(day_of_week=1, hour=2, minute=0),  # Every Monday at 2 AM
         'kwargs': {
             'limit': 25,  # Companies per week. 2 AM start leaves 5h before the 7 AM news batch.
+        }
+    },
+
+    # Hunt for the technical report each pending NewsReportFlag refers to.
+    # A flag marks a news release whose title mentions a report; the report is a
+    # separate document on the company's site, so this searches for it and either
+    # auto-queues a high-confidence match or leaves a ranked shortlist to review.
+    #
+    # Daily rather than weekly because NI 43-101 s.4.2 gives issuers 45 days from
+    # announcing results to file, so a report can appear on any given day. The
+    # per-flag backoff in the task (1, 3, 7, 14, 21, 30 days) stops a daily
+    # schedule from re-crawling the same site every night. 4 AM ET is clear of
+    # both the 2 AM Monday discovery run and the 7 AM news batch on this queue.
+    'hunt-technical-reports-daily': {
+        'task': 'core.tasks.hunt_technical_reports_task',
+        'schedule': crontab(hour=9, minute=0),  # 4 AM ET
+        'kwargs': {
+            'max_companies': 40,  # Ceiling on sites crawled per run
         }
     },
 

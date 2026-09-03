@@ -2885,3 +2885,212 @@ def check_credentials_task(self, notify=True):
         'failures': [{'name': r.name, 'detail': r.detail} for r in failed],
         'results': {r.name: r.status for r in results},
     }
+
+
+@shared_task(bind=True, time_limit=3600, soft_time_limit=3480, on_failure=log_task_failure)
+def hunt_technical_reports_task(self, flag_ids=None, max_companies=None, dry_run=False):
+    """
+    Find the technical report each pending NewsReportFlag refers to.
+
+    A flag marks a news release whose title mentions a report; the report itself
+    is a separate document on the company's website. This task derives what to
+    look for, searches the release page and then the company's technical and
+    project pages, ranks candidates, and either queues the best one to the GPU
+    or leaves a ranked shortlist for review.
+
+    Work is batched by company: 218 pending flags belong to 113 companies, so
+    per-flag crawling would fetch the same sites twice over. Flags whose title
+    implies no document (drill results, corporate actions, forward-looking
+    statements) are filtered out before any browser starts.
+    """
+    from datetime import timedelta
+
+    from core.models import NewsReportFlag, DocumentProcessingJob, Project
+    from core.security_utils import is_safe_url
+    from mcp_servers.report_hunter import (
+        AUTO_QUEUE_THRESHOLD,
+        FILING_GRACE_DAYS,
+        FILING_WINDOW_DAYS,
+        HUNTABLE_CATEGORIES,
+        HUNT_BACKOFF_DAYS,
+        MAX_HUNT_ATTEMPTS,
+        build_target,
+        gather_company_candidates,
+        rank_candidates,
+    )
+
+    now = timezone.now()
+    today = now.date()
+
+    HUNT_STATE_FIELDS = [
+        'document_category', 'project_name', 'hunt_status',
+        'next_hunt_at', 'expected_filing_by',
+    ]
+
+    qs = NewsReportFlag.objects.filter(status='pending').select_related(
+        'news_release__company'
+    )
+    if flag_ids:
+        qs = qs.filter(id__in=flag_ids)
+    else:
+        # Never searched, or the backoff has elapsed.
+        qs = qs.filter(
+            Q(next_hunt_at__isnull=True) | Q(next_hunt_at__lte=now)
+        ).exclude(hunt_status__in=['auto_queued', 'exhausted', 'not_expected'])
+
+    stats = {
+        'considered': 0, 'skipped_no_document': 0, 'companies_crawled': 0,
+        'flags_hunted': 0, 'candidates_found': 0, 'auto_queued': 0,
+        'awaiting_review': 0, 'not_found': 0, 'exhausted': 0,
+    }
+
+    # Triage first, so a company whose flags all lack a document never gets
+    # crawled at all.
+    by_company = {}
+    for flag in qs:
+        stats['considered'] += 1
+        company = flag.news_release.company
+        project_names = list(
+            Project.objects.filter(company=company).values_list('name', flat=True)[:40]
+        )
+        target = build_target(flag, project_names)
+
+        flag.document_category = target.category
+        flag.project_name = target.project
+
+        if flag.news_release.release_date:
+            flag.expected_filing_by = (
+                flag.news_release.release_date
+                + timedelta(days=FILING_WINDOW_DAYS + FILING_GRACE_DAYS)
+            )
+
+        if target.category not in HUNTABLE_CATEGORIES:
+            flag.hunt_status = 'not_expected'
+            flag.next_hunt_at = None
+            stats['skipped_no_document'] += 1
+            if not dry_run:
+                flag.save(update_fields=HUNT_STATE_FIELDS)
+            continue
+
+        # Give up once the filing window plus grace has passed with nothing
+        # found. Continuing to crawl costs browser time for a report that was
+        # either never filed or is not on the site.
+        window_closed = (
+            flag.expected_filing_by
+            and today > flag.expected_filing_by
+            and flag.hunt_attempts > 0
+        )
+        if window_closed or flag.hunt_attempts >= MAX_HUNT_ATTEMPTS:
+            flag.hunt_status = 'exhausted'
+            flag.next_hunt_at = None
+            stats['exhausted'] += 1
+            if not dry_run:
+                flag.save(update_fields=HUNT_STATE_FIELDS)
+            continue
+
+        by_company.setdefault(company.id, {'company': company, 'items': []})
+        by_company[company.id]['items'].append((flag, target))
+
+    if max_companies:
+        by_company = dict(list(by_company.items())[:max_companies])
+
+    logger.info(
+        f"[HUNT] {stats['considered']} flag(s) considered, "
+        f"{stats['skipped_no_document']} skipped as no-document, "
+        f"{stats['exhausted']} exhausted, "
+        f"{len(by_company)} company site(s) to crawl"
+    )
+
+    if dry_run:
+        logger.info("[HUNT] Dry run - no crawling, no writes.")
+        stats['companies_to_crawl'] = len(by_company)
+        return stats
+
+    valid_report_types = {c[0] for c in NewsReportFlag.REPORT_TYPE_CHOICES}
+
+    for entry in by_company.values():
+        company = entry['company']
+        targets = [t for _flag, t in entry['items']]
+        try:
+            per_flag = asyncio.run(
+                gather_company_candidates(company.website or '', targets)
+            )
+            stats['companies_crawled'] += 1
+        except Exception as e:
+            logger.warning(f"[HUNT] Crawl failed for {company.name}: {e}")
+            per_flag = {t.flag_id: [] for t in targets}
+
+        for flag, target in entry['items']:
+            stats['flags_hunted'] += 1
+            ranked = rank_candidates(per_flag.get(flag.id, []), target)
+
+            # Only keep candidates that pass the SSRF gate: a reviewer can
+            # submit one with a single click, and the worker then fetches it.
+            safe_ranked = []
+            for cand in ranked:
+                ok, _reason = is_safe_url(cand['url'])
+                if ok:
+                    safe_ranked.append(cand)
+
+            flag.candidates = safe_ranked
+            flag.hunt_attempts += 1
+            flag.last_hunt_at = now
+            stats['candidates_found'] += len(safe_ranked)
+
+            backoff_days = HUNT_BACKOFF_DAYS[
+                min(flag.hunt_attempts, len(HUNT_BACKOFF_DAYS) - 1)
+            ]
+            save_fields = HUNT_STATE_FIELDS + [
+                'candidates', 'hunt_attempts', 'last_hunt_at',
+            ]
+
+            top = safe_ranked[0] if safe_ranked else None
+            if top and top['score'] >= AUTO_QUEUE_THRESHOLD:
+                doc_type = 'pea' if target.report_type == 'pea' else 'ni43101'
+                try:
+                    job, _created = DocumentProcessingJob.objects.get_or_create(
+                        url=top['url'],
+                        defaults={
+                            'document_type': doc_type,
+                            'company_name': company.name,
+                            'status': 'pending',
+                        },
+                    )
+                    reasons = '; '.join(top.get('score_reasons', []))
+                    flag.hunt_status = 'auto_queued'
+                    flag.next_hunt_at = None
+                    # mark_as_processed saves the row, so the hunt fields are
+                    # written first and the review fields ride along with it.
+                    flag.save(update_fields=save_fields)
+                    flag.mark_as_processed(
+                        reviewer=None,
+                        job=job,
+                        report_url=top['url'],
+                        report_type=(target.report_type
+                                     if target.report_type in valid_report_types else 'other'),
+                        notes=f"Auto-queued by report hunter (score {top['score']}): {reasons}",
+                    )
+                    stats['auto_queued'] += 1
+                    logger.info(
+                        f"[HUNT] AUTO-QUEUED {company.name} "
+                        f"score={top['score']} {top['url'][:90]}"
+                    )
+                    continue
+                except Exception as e:
+                    logger.error(f"[HUNT] Could not queue job for flag {flag.id}: {e}")
+                    flag.hunt_status = 'found'
+                    flag.next_hunt_at = now + timedelta(days=backoff_days)
+                    stats['awaiting_review'] += 1
+            elif safe_ranked:
+                flag.hunt_status = 'found'
+                flag.next_hunt_at = now + timedelta(days=backoff_days)
+                stats['awaiting_review'] += 1
+            else:
+                flag.hunt_status = 'not_found'
+                flag.next_hunt_at = now + timedelta(days=backoff_days)
+                stats['not_found'] += 1
+
+            flag.save(update_fields=save_fields)
+
+    logger.info(f"[HUNT] Complete: {stats}")
+    return stats
