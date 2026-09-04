@@ -231,6 +231,35 @@ _PROJECT_SUFFIX = re.compile(
 )
 
 
+# Normalized names that identify nothing on their own.
+#
+# The suffix stripper reduces "Silver Project" to "silver", "Gold Property" to
+# "gold" and "North Deposit" to "north". Those then match their own word in any
+# release title and in most candidate filenames — and project_matched gates
+# auto-queueing, so a spurious match can send an unrelated document to the GPU
+# without review. Three real projects normalize this way today ('Silver
+# Project', and two 'Victory' variants which are distinctive enough to keep).
+_GENERIC_PROJECT_NAMES = {
+    # commodities
+    'gold', 'silver', 'copper', 'zinc', 'lead', 'nickel', 'lithium', 'uranium',
+    'cobalt', 'graphite', 'antimony', 'molybdenum', 'moly', 'platinum',
+    'palladium', 'iron', 'tin', 'tungsten', 'potash', 'phosphate', 'coal',
+    'diamond', 'diamonds', 'rare earth', 'rare earths', 'precious metals',
+    'base metals', 'critical minerals', 'polymetallic',
+    # generic mining nouns left behind when a suffix does not strip cleanly
+    'project', 'projects', 'property', 'properties', 'mine', 'mines',
+    'deposit', 'deposits', 'claims', 'concession', 'target', 'targets',
+    'district', 'land package', 'portfolio',
+    # bare directions and positions
+    'north', 'south', 'east', 'west', 'central', 'main', 'upper', 'lower',
+}
+
+
+def _collapse(text: str) -> str:
+    """Punctuation to single spaces, for separator-insensitive comparison."""
+    return re.sub(r'\s+', ' ', re.sub(r'[^a-z0-9]+', ' ', (text or '').lower())).strip()
+
+
 def normalize_project_name(name: str) -> str:
     """Reduce a stored Project.name to the distinctive part used for matching."""
     if not name:
@@ -259,8 +288,11 @@ def match_project(title: str, project_names: List[str], company_name: str = '') 
     if not title:
         return ''
     title_lower = title.lower()
-    company_lower = re.sub(r'[^\w\s]', ' ', (company_name or '').lower())
-    company_lower = re.sub(r'\s+', ' ', company_lower).strip()
+    # Separator-insensitive view, so a project stored as "Loki Flake" still
+    # matches a title writing it "Loki-Flake". Scoring already compares this
+    # way; matching did not, which made the two inconsistent.
+    title_collapsed = _collapse(title)
+    company_collapsed = _collapse(company_name)
 
     best = ''
     for raw in project_names:
@@ -268,9 +300,18 @@ def match_project(title: str, project_names: List[str], company_name: str = '') 
         # One-word names below 4 characters match too much to be useful.
         if len(normalized) < 4:
             continue
-        if company_lower and normalized in company_lower:
+        # A commodity or generic noun is not an identifier. See
+        # _GENERIC_PROJECT_NAMES.
+        if normalized in _GENERIC_PROJECT_NAMES:
             continue
-        if re.search(r'(?<![a-z0-9])' + re.escape(normalized) + r'(?![a-z0-9])', title_lower):
+        # A project whose name is inside the company's name identifies nothing.
+        if company_collapsed and _collapse(normalized) in company_collapsed:
+            continue
+        pattern = r'(?<![a-z0-9])' + re.escape(normalized) + r'(?![a-z0-9])'
+        collapsed_pattern = (r'(?<![a-z0-9])'
+                             + re.escape(_collapse(normalized)) + r'(?![a-z0-9])')
+        if (re.search(pattern, title_lower)
+                or re.search(collapsed_pattern, title_collapsed)):
             if len(normalized) > len(best):
                 best = normalized
     return best
@@ -337,8 +378,12 @@ _DOC_TEXT_HINT = re.compile(
 
 _NEGATIVE_HINT = re.compile(
     r'presentation|fact\s*sheet|factsheet|corporate\s+deck|financial\s+statement|'
-    r'annual\s+report|interim|md&a|mda|proxy|circular|aif|news\s+release|'
-    r'press\s+release|subscribe|privacy|terms|'
+    # Short tokens need boundaries: bare 'aif' matched inside "Waif" and
+    # "Kaifeng", and 'mda' inside any word containing it, disqualifying
+    # legitimate technical reports from auto-queue.
+    r'annual\s+report|(?<![a-z])interim(?![a-z])|md&a|(?<![a-z])mda(?![a-z])|'
+    r'(?<![a-z])proxy(?![a-z])|circular|(?<![a-z])aif(?![a-z])|news\s+release|'
+    r'press\s+release|subscribe|privacy|(?<![a-z])terms(?![a-z])|'
     # Investor-relations news-release filenames: ABA_NR-2026-11_..., NR_2026_04.
     r'(?<![a-z0-9])nr[\s-]\d{2,4}[\s-]\d+',
     re.IGNORECASE,
@@ -409,7 +454,10 @@ def extract_candidates(html: str, base_url: str) -> List[Dict]:
 _TYPE_MATCH_PATTERNS = {
     'pea': re.compile(r'preliminary\s+economic|(?<![a-z0-9])pea(?![a-z0-9])', re.I),
     'pfs': re.compile(r'pre-?feasibility|(?<![a-z0-9])pfs(?![a-z0-9])', re.I),
-    'dfs': re.compile(r'feasibility|(?<![a-z0-9])dfs(?![a-z0-9])', re.I),
+    # (?<!pre)(?<!pre-) so a prefeasibility study does not satisfy a definitive
+    # feasibility target: bare 'feasibility' matched inside 'prefeasibility',
+    # which let a PFS document auto-queue against a DFS announcement.
+    'dfs': re.compile(r'(?<!pre)(?<!pre-)feasibility|(?<![a-z0-9])dfs(?![a-z0-9])', re.I),
     'mre': re.compile(r'resource\s+estimate|mineral\s+reserve|(?<![a-z0-9])mre(?![a-z0-9])', re.I),
     'ni43101': re.compile(r'ni\s*43-?101|43-101|technical\s+report', re.I),
 }
@@ -546,12 +594,14 @@ def is_auto_queueable(candidate: Dict) -> bool:
     """
     Whether a candidate may go to the GPU without a human looking at it.
 
-    Two independent conditions, deliberately: a high score AND a confirmed
-    project match. Score alone was not enough — a document can reach the
-    threshold on report type, file size and being linked from the announcement
-    while belonging to a different project entirely, and the resulting chunks
-    would answer questions in the mining assistant as though they described the
-    project the release was about.
+    Four conditions, all required. Score alone was not enough — a document can
+    reach the threshold on report type, file size and being linked from the
+    announcement while belonging to a different project entirely, and the
+    resulting chunks would answer questions in the mining assistant as though
+    they described the project the release was about. The report type must
+    match too, or a PEA announcement queues that project's older resource
+    estimate. And a news release, presentation or financial statement is never
+    the report, whatever it scores.
     """
     return (
         candidate.get('score', 0) >= AUTO_QUEUE_THRESHOLD
@@ -569,15 +619,46 @@ def is_auto_queueable(candidate: Dict) -> bool:
     )
 
 
+def is_safe_candidate_url(url: str) -> bool:
+    """
+    SSRF gate for any URL scraped off a page before we make a request to it.
+
+    These URLs come from third-party HTML, so they are attacker-influenced in
+    the ordinary sense: a compromised or hostile investor-relations page can
+    link anywhere, including cloud metadata endpoints and internal services.
+    Django's checker is imported lazily so this module stays importable outside
+    a configured Django process.
+    """
+    try:
+        from core.security_utils import is_safe_url
+    except Exception:  # pragma: no cover - only outside Django
+        logger.warning('[HUNT] SSRF checker unavailable; refusing %s', url[:80])
+        return False
+    try:
+        ok, _reason = is_safe_url(url)
+        return bool(ok)
+    except Exception:
+        return False
+
+
 def head_size_mb(url: str, timeout: int = 12) -> Optional[float]:
     """
     Content-Length via HEAD, used to separate full reports from summaries.
 
     Cheap relative to a browser fetch, but still a network round trip, so the
     caller only runs it on candidates that already scored well.
+
+    The URL is SSRF-checked first and redirects are NOT followed. This is a
+    request to an address taken from a scraped page, and it previously ran
+    unchecked with allow_redirects=True — so a link (or a redirect from one)
+    could point at an internal host and we would dial it. Size only nudges the
+    score, so refusing to chase redirects costs a little accuracy and removes
+    the whole class of problem.
     """
+    if not is_safe_candidate_url(url):
+        return None
     try:
-        resp = requests.head(url, timeout=timeout, allow_redirects=True,
+        resp = requests.head(url, timeout=timeout, allow_redirects=False,
                              headers={'User-Agent': 'Mozilla/5.0 (compatible; GoldVentureBot/1.0)'})
         if resp.status_code >= 400:
             return None
@@ -732,7 +813,7 @@ async def gather_company_candidates(website: str, targets: List[HuntTarget]) -> 
             if html:
                 shared.extend(extract_candidates(html, page_url))
 
-        if shared:
+        if shared and targets:
             logger.info(f"[HUNT] {targets[0].company_name}: {len(shared)} candidate(s) "
                         f"across {len(seen_pages)} site page(s)")
         for target in targets:
@@ -753,6 +834,12 @@ def rank_candidates(raw: List[Dict], target: HuntTarget, top_n: int = 5) -> List
     for cand in raw:
         key = normalize_url(cand.get('url', ''))
         if not key or key in seen:
+            continue
+        # SSRF-gate before a candidate can occupy a slot, be fetched for its
+        # size, be shown to a reviewer as a one-click submit, or be queued.
+        # The caller checks again before storing; this keeps unsafe URLs out of
+        # the ranking altogether rather than relying on that single point.
+        if not is_safe_candidate_url(cand.get('url', '')):
             continue
         seen.add(key)
         deduped.append(cand)

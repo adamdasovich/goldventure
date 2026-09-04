@@ -3086,12 +3086,24 @@ def hunt_technical_reports_task(self, flag_ids=None, max_companies=None, dry_run
     # Triage first, so a company whose flags all lack a document never gets
     # crawled at all.
     by_company = {}
-    for flag in qs:
+    # Project names for every company involved, in one query rather than one
+    # per flag. Flags cluster heavily by company — 218 of them across 113
+    # companies — so the per-flag lookup repeated the same query about twice
+    # over for no benefit.
+    flags = list(qs)
+    projects_by_company = {}
+    company_ids = {f.news_release.company_id for f in flags}
+    if company_ids:
+        for cid, pname in Project.objects.filter(
+                company_id__in=company_ids).values_list('company_id', 'name'):
+            names = projects_by_company.setdefault(cid, [])
+            if len(names) < 40:  # same per-company cap as before
+                names.append(pname)
+
+    for flag in flags:
         stats['considered'] += 1
         company = flag.news_release.company
-        project_names = list(
-            Project.objects.filter(company=company).values_list('name', flat=True)[:40]
-        )
+        project_names = projects_by_company.get(company.id, [])
         target = build_target(flag, project_names)
 
         flag.document_category = target.category
@@ -3147,6 +3159,16 @@ def hunt_technical_reports_task(self, flag_ids=None, max_companies=None, dry_run
 
     valid_report_types = {c[0] for c in NewsReportFlag.REPORT_TYPE_CHOICES}
 
+    # Documents a superuser already rejected from the queue. Cancelling a job
+    # returns its flag to review, so without this the next hunt would rank the
+    # same top candidate, auto-queue it again, and the reviewer would cancel it
+    # again — an endless loop that spends GPU time on every pass. A rejected URL
+    # can still be picked by hand; it just never auto-queues.
+    rejected_urls = set(
+        DocumentProcessingJob.objects.filter(status='cancelled')
+        .values_list('url', flat=True)
+    )
+
     for entry in by_company.values():
         company = entry['company']
         targets = [t for _flag, t in entry['items']]
@@ -3184,7 +3206,7 @@ def hunt_technical_reports_task(self, flag_ids=None, max_companies=None, dry_run
             ]
 
             top = safe_ranked[0] if safe_ranked else None
-            if top and is_auto_queueable(top):
+            if top and is_auto_queueable(top) and top['url'] not in rejected_urls:
                 doc_type = 'pea' if target.report_type == 'pea' else 'ni43101'
                 try:
                     job, _created = DocumentProcessingJob.objects.get_or_create(

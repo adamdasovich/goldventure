@@ -414,7 +414,8 @@ class NewsContentProcessor(BaseMCPServer):
             }
 
             # Disable automatic redirects to validate each redirect
-            response = requests.get(url, headers=headers, timeout=15, allow_redirects=False)
+            response = requests.get(url, headers=headers, timeout=15,
+                                    allow_redirects=False, stream=True)
 
             # Handle redirects manually with validation
             redirect_count = 0
@@ -429,7 +430,8 @@ class NewsContentProcessor(BaseMCPServer):
                 if not is_safe:
                     return None  # Block unsafe redirects
 
-                response = requests.get(redirect_url, headers=headers, timeout=15, allow_redirects=False)
+                response = requests.get(redirect_url, headers=headers, timeout=15,
+                                        allow_redirects=False, stream=True)
                 redirect_count += 1
 
             response.raise_for_status()
@@ -442,13 +444,25 @@ class NewsContentProcessor(BaseMCPServer):
             # retrieval. Reading the text layer here keeps that content in
             # news_chunks, where the rest of the news lives, at no GPU cost.
             content_type = response.headers.get('Content-Type', '').lower()
+            # Decided from headers and the URL, never by reading the body:
+            # response.content would pull the whole payload into memory before
+            # any size check, so a very large PDF could exhaust the scrape
+            # worker (MemoryMax 2400M) before _extract_pdf_text got to reject
+            # it. With stream=True the body is only read below, under a cap.
             looks_pdf = (
                 'pdf' in content_type
                 or url.lower().split('?')[0].endswith('.pdf')
-                or response.content[:5] == b'%PDF-'
             )
             if looks_pdf:
-                return self._extract_pdf_text(response.content, url)
+                declared = response.headers.get('Content-Length')
+                if declared and declared.isdigit() and int(declared) > self.MAX_PDF_BYTES:
+                    return None
+                data = bytearray()
+                for piece in response.iter_content(chunk_size=65536):
+                    data.extend(piece)
+                    if len(data) > self.MAX_PDF_BYTES:
+                        return None  # bigger than any news release
+                return self._extract_pdf_text(bytes(data), url)
 
             # Other binary payloads still have no text to extract.
             if 'application/octet-stream' in content_type:

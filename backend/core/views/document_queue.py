@@ -16,6 +16,7 @@ keep a job from ever being claimed.
 
 import logging
 
+from django.db import transaction
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
@@ -74,7 +75,9 @@ class DocumentQueueViewSet(viewsets.ViewSet):
         # originating flag's review notes. Showing that is the difference
         # between "cancel this?" and "cancel this, it scored 72 on a partial
         # project match".
-        source = job.source_report_flags.first()
+        # next(iter(...)) reads the prefetch_related cache; .first() would
+        # issue a fresh LIMIT 1 query for every row in the listing.
+        source = next(iter(job.source_report_flags.all()), None)
         source_info = None
         if source:
             news = source.news_release
@@ -206,33 +209,48 @@ class DocumentQueueViewSet(viewsets.ViewSet):
 
         reason = (request.data.get('reason') or '').strip()
 
-        try:
-            job.status = 'cancelled'
-            job.error_message = (
-                f"Cancelled by {request.user.username}"
-                + (f": {reason}" if reason else '')
-            )
-            job.save(update_fields=['status', 'error_message'])
+        note = (f"Cancelled by {request.user.username}"
+                + (f": {reason}" if reason else ''))
 
-            released = []
-            for flag in job.source_report_flags.all():
-                flag.status = 'pending'
-                flag.hunt_status = 'found' if flag.candidates else 'not_found'
-                flag.processing_job = None
-                flag.report_url = ''
-                flag.report_type = ''
-                flag.reviewed_by = None
-                flag.reviewed_at = None
-                flag.review_notes = (
-                    f"Auto-queued document rejected by {request.user.username}"
-                    + (f": {reason}" if reason else '')
-                    + ". Returned to review with candidates intact."
-                )
-                flag.save(update_fields=[
-                    'status', 'hunt_status', 'processing_job', 'report_url',
-                    'report_type', 'reviewed_by', 'reviewed_at', 'review_notes',
-                ])
-                released.append(flag.id)
+        try:
+            with transaction.atomic():
+                # Conditional update, not read-then-save. The GPU worker claims
+                # jobs with "WHERE status='pending' ... FOR UPDATE SKIP LOCKED",
+                # so between the check above and a plain save() the worker can
+                # claim this job — leaving the row marked cancelled while the
+                # document is actually being processed, and releasing the flag
+                # underneath it. Updating only if the row is still pending makes
+                # the two mutually exclusive.
+                claimed = DocumentProcessingJob.objects.filter(
+                    pk=job.pk, status='pending',
+                ).update(status='cancelled', error_message=note)
+                if not claimed:
+                    job.refresh_from_db()
+                    return Response(
+                        {'error': f"Job is no longer pending (now '{job.status}') "
+                                  "— the worker claimed it first."},
+                        status=status.HTTP_409_CONFLICT,
+                    )
+
+                released = []
+                for flag in job.source_report_flags.all():
+                    flag.status = 'pending'
+                    flag.hunt_status = 'found' if flag.candidates else 'not_found'
+                    flag.processing_job = None
+                    flag.report_url = ''
+                    flag.report_type = ''
+                    flag.reviewed_by = None
+                    flag.reviewed_at = None
+                    flag.review_notes = (
+                        f"Auto-queued document rejected by {request.user.username}"
+                        + (f": {reason}" if reason else '')
+                        + ". Returned to review with candidates intact."
+                    )
+                    flag.save(update_fields=[
+                        'status', 'hunt_status', 'processing_job', 'report_url',
+                        'report_type', 'reviewed_by', 'reviewed_at', 'review_notes',
+                    ])
+                    released.append(flag.id)
 
             logger.info(
                 f"[QUEUE] Job {job.id} cancelled by {request.user.username}; "
