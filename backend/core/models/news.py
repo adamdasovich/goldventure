@@ -346,7 +346,12 @@ class NewsChunk(models.Model):
 
     # Source metadata for search results
     source_title = models.CharField(max_length=500)
-    source_url = models.URLField(blank=True)
+    # 500, not Django's 200 default, for the same reason Document.file_url was
+    # widened: SEDAR and investor-relations PDF links routinely run past 200
+    # characters. Migrating news chunks off document_chunks failed on three
+    # documents with "value too long for type character varying(200)" because
+    # Document.file_url holds 500 and this field truncated it.
+    source_url = models.URLField(max_length=500, blank=True)
     source_date = models.DateField(null=True, blank=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
