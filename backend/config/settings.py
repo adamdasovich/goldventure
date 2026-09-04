@@ -559,21 +559,23 @@ CELERY_BEAT_SCHEDULE = {
     # per-flag backoff in the task (1, 3, 7, 14, 21, 30 days) stops a daily
     # schedule from re-crawling the same site every night. 4 AM ET is clear of
     # both the 2 AM Monday discovery run and the 7 AM news batch on this queue.
-    # DISABLED 2026-09-03 at the user's request, to be discussed 2026-09-04.
-    #
-    # The hunt works — a supervised run found the right document for every flag
-    # it hunted — but it has only ever been observed under supervision, and an
-    # unattended 4 AM run would auto-queue GPU work against ~160 flags whose
-    # patterns nobody has looked at yet. It is also sharing a queue with a
-    # ChromaDB rebuild and a news-chunk migration tonight. Re-enable after the
-    # next supervised batch.
-    # 'hunt-technical-reports-daily': {
-    #     'task': 'core.tasks.hunt_technical_reports_task',
-    #     'schedule': crontab(hour=9, minute=0),  # 4 AM ET
-    #     'kwargs': {
-    #         'max_companies': 40,  # Ceiling on sites crawled per run
-    #     }
-    # },
+    # Re-enabled 2026-09-04 after three supervised batches. The last one — ten
+    # companies, six auto-queues — produced zero wrong documents with the full
+    # gate set live: score, project match, report-type match, negative-document
+    # disqualifier, rejected-URL and failed-job guards, and a confirmed
+    # Content-Length of at least MIN_AUTO_QUEUE_SIZE_MB. The earlier batches'
+    # failure mode was never "found nothing"; it was announcement PDFs wearing
+    # report-shaped names, and the size gate closes that structurally.
+    # Everything below the auto-queue bar lands in /admin/news-flags-reports as
+    # ranked candidates; everything queued shows its score and reasoning in
+    # /admin/document-queue and is cancellable while pending.
+    'hunt-technical-reports-daily': {
+        'task': 'core.tasks.hunt_technical_reports_task',
+        'schedule': crontab(hour=9, minute=0),  # 4 AM ET
+        'kwargs': {
+            'max_companies': 40,  # Ceiling on sites crawled per run
+        }
+    },
 
     # Scrape mining industry news 3 times daily (8 AM, 1 PM, 6 PM ET / 13:00, 18:00, 23:00 UTC)
     'scrape-mining-news-morning': {
