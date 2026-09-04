@@ -968,6 +968,7 @@ def auto_discover_and_process_documents_task(self, company_ids=None, document_ty
         # Track statistics
         total_discovered = 0
         total_jobs_created = 0
+        total_gated = 0
         companies_processed = 0
         
         logger.info(f"Auto-discovery task: Processing {len(companies)} companies")
