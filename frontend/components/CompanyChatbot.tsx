@@ -20,6 +20,9 @@ export default function CompanyChatbot({
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
+  // What the assistant is doing right now ("Searching technical reports"),
+  // shown in the typing bubble until answer text starts arriving.
+  const [streamStatus, setStreamStatus] = useState<string | null>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
 
   // Scroll the chat's own message container, NOT the window. scrollIntoView()
@@ -48,34 +51,59 @@ export default function CompanyChatbot({
     setMessages(newMessages);
     setIsLoading(true);
 
+    const conversation = messages;
+    let streamedText = "";
+    const applyAssistant = (content: string) =>
+      setMessages([...newMessages, { role: "assistant", content }]);
+
     try {
-      // Call company-specific chat API
+      if (accessToken) {
+        try {
+          await claudeAPI.companyChatStream(
+            companyId,
+            { message: userMessage, conversation_history: conversation },
+            accessToken,
+            {
+              onStatus: (status) => setStreamStatus(status),
+              onText: (delta) => {
+                streamedText += delta;
+                setStreamStatus(null);
+                applyAssistant(streamedText);
+              },
+            },
+          );
+          if (streamedText) return;
+          // An empty stream is a failure in disguise — fall through to the
+          // blocking JSON endpoint below.
+        } catch (error) {
+          if (streamedText) {
+            // Died mid-answer; keep what streamed rather than replacing it
+            // with a generic apology.
+            console.error("Chat stream error:", error);
+            return;
+          }
+          // Stream never produced anything — fall through to the JSON call.
+        }
+      }
+
+      // Anonymous visitor, or the stream failed before any text arrived.
       const response = await claudeAPI.companyChat(
         companyId,
         {
           message: userMessage,
-          conversation_history: messages,
+          conversation_history: conversation,
         },
         accessToken || undefined,
       );
-
-      // Add assistant response
-      setMessages([
-        ...newMessages,
-        { role: "assistant", content: response.message },
-      ]);
+      applyAssistant(response.message);
     } catch (error) {
       console.error("Chat error:", error);
-      setMessages([
-        ...newMessages,
-        {
-          role: "assistant",
-          content:
-            "Sorry, I encountered an error processing your request. Please try again.",
-        },
-      ]);
+      applyAssistant(
+        "Sorry, I encountered an error processing your request. Please try again.",
+      );
     } finally {
       setIsLoading(false);
+      setStreamStatus(null);
     }
   };
 
@@ -209,26 +237,34 @@ export default function CompanyChatbot({
               </div>
             ))}
 
-            {isLoading && (
-              <div className="flex justify-start">
-                <div className="bg-slate-800 text-slate-100 rounded-lg px-4 py-2">
-                  <div className="flex gap-1">
-                    <div
-                      className="w-2 h-2 bg-slate-400 rounded-full animate-bounce"
-                      style={{ animationDelay: "0ms" }}
-                    ></div>
-                    <div
-                      className="w-2 h-2 bg-slate-400 rounded-full animate-bounce"
-                      style={{ animationDelay: "150ms" }}
-                    ></div>
-                    <div
-                      className="w-2 h-2 bg-slate-400 rounded-full animate-bounce"
-                      style={{ animationDelay: "300ms" }}
-                    ></div>
+            {/* Typing bubble: hidden once the streamed answer starts
+                rendering as a real assistant message above. */}
+            {isLoading &&
+              messages[messages.length - 1]?.role !== "assistant" && (
+                <div className="flex justify-start">
+                  <div className="bg-slate-800 text-slate-100 rounded-lg px-4 py-2">
+                    <div className="flex items-center gap-1">
+                      <div
+                        className="w-2 h-2 bg-slate-400 rounded-full animate-bounce"
+                        style={{ animationDelay: "0ms" }}
+                      ></div>
+                      <div
+                        className="w-2 h-2 bg-slate-400 rounded-full animate-bounce"
+                        style={{ animationDelay: "150ms" }}
+                      ></div>
+                      <div
+                        className="w-2 h-2 bg-slate-400 rounded-full animate-bounce"
+                        style={{ animationDelay: "300ms" }}
+                      ></div>
+                      {streamStatus && (
+                        <span className="text-xs text-slate-400 pl-1">
+                          {streamStatus}…
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
-              </div>
-            )}
+              )}
           </div>
 
           {/* Input Form */}

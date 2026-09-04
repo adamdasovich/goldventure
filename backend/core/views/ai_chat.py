@@ -256,6 +256,69 @@ def claude_chat(request):
 
 
 
+def _company_system_prompt(company) -> str:
+    """Company-specific system prompt shared by company_chat and its stream."""
+    today = datetime.now().strftime('%B %d, %Y')
+    return f"""You are a helpful AI assistant for {company.name} ({company.ticker_symbol}).
+
+Today's date is {today}. All dates in the database are real and current — do NOT treat any dates as test data or futuristic.
+
+You have access to tools for company data including projects, resources, financials, news, and documents.
+If you need a tool that isn't loaded, use search_available_tools to find it.
+
+Company context:
+- Name: {company.name}
+- Ticker: {company.ticker_symbol} ({company.exchange.upper() if company.exchange else 'N/A'})
+- CEO: {company.ceo_name if company.ceo_name else 'N/A'}
+- HQ: {company.headquarters_city}, {company.headquarters_country}
+
+Be concise but thorough. Cite data sources and dates when relevant."""
+
+
+def _sse_chat_response(client, usage, message, conversation_history,
+                       system_prompt, user_id, log_tag):
+    """
+    Shared body of the streaming chat views: run the client's chat_stream
+    generator and frame its events as SSE, recording usage on completion.
+    """
+    def event_stream():
+        try:
+            for event in client.chat_stream(
+                message=message,
+                conversation_history=conversation_history,
+                system_prompt=system_prompt,
+            ):
+                if event.get('type') == 'done':
+                    tokens_used = event.get('usage', {}).get('total_tokens') or 1000
+                    usage.record_usage(tokens_used)
+                    event['usage_remaining'] = {
+                        'messages_today': usage.messages_today,
+                        'message_limit': usage.daily_message_limit,
+                        'tokens_today': usage.tokens_today,
+                        'token_limit': usage.daily_token_limit,
+                    }
+                yield f"data: {json.dumps(event)}\n\n"
+        except anthropic.APIStatusError as e:
+            logger.error(f"{log_tag} API error for user {user_id}: {e.status_code} {str(e)}")
+            if e.status_code == 529:
+                msg = 'The AI service is temporarily busy. Please try again in a moment.'
+            elif e.status_code == 429:
+                msg = 'AI rate limit reached. Please wait a minute and try again.'
+            else:
+                msg = 'An error occurred processing your request. Please try again.'
+            yield f"data: {json.dumps({'type': 'error', 'error': msg})}\n\n"
+        except Exception as e:
+            logger.error(f"{log_tag} error for user {user_id}: {str(e)}")
+            yield f"data: {json.dumps({'type': 'error', 'error': 'An error occurred processing your request. Please try again.'})}\n\n"
+
+    response = StreamingHttpResponse(event_stream(), content_type='text/event-stream')
+    response['Cache-Control'] = 'no-cache'
+    # Tells nginx not to buffer this response; without it the whole point of
+    # streaming is lost — chunks pile up in the proxy until the request ends.
+    response['X-Accel-Buffering'] = 'no'
+    return response
+
+
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def claude_chat_stream(request):
@@ -299,45 +362,66 @@ def claude_chat_stream(request):
             status=status.HTTP_429_TOO_MANY_REQUESTS
         )
 
-    user_id = request.user.id
+    return _sse_chat_response(
+        client=OptimizedClaudeClient(),
+        usage=usage,
+        message=message,
+        conversation_history=conversation_history,
+        system_prompt=system_prompt,
+        user_id=request.user.id,
+        log_tag='claude_chat_stream',
+    )
 
-    def event_stream():
-        try:
-            client = OptimizedClaudeClient()
-            for event in client.chat_stream(
-                message=message,
-                conversation_history=conversation_history,
-                system_prompt=system_prompt,
-            ):
-                if event.get('type') == 'done':
-                    tokens_used = event.get('usage', {}).get('total_tokens') or 1000
-                    usage.record_usage(tokens_used)
-                    event['usage_remaining'] = {
-                        'messages_today': usage.messages_today,
-                        'message_limit': usage.daily_message_limit,
-                        'tokens_today': usage.tokens_today,
-                        'token_limit': usage.daily_token_limit,
-                    }
-                yield f"data: {json.dumps(event)}\n\n"
-        except anthropic.APIStatusError as e:
-            logger.error(f"claude_chat_stream API error for user {user_id}: {e.status_code} {str(e)}")
-            if e.status_code == 529:
-                msg = 'The AI service is temporarily busy. Please try again in a moment.'
-            elif e.status_code == 429:
-                msg = 'AI rate limit reached. Please wait a minute and try again.'
-            else:
-                msg = 'An error occurred processing your request. Please try again.'
-            yield f"data: {json.dumps({'type': 'error', 'error': msg})}\n\n"
-        except Exception as e:
-            logger.error(f"claude_chat_stream error for user {user_id}: {str(e)}")
-            yield f"data: {json.dumps({'type': 'error', 'error': 'An error occurred processing your request. Please try again.'})}\n\n"
 
-    response = StreamingHttpResponse(event_stream(), content_type='text/event-stream')
-    response['Cache-Control'] = 'no-cache'
-    # Tells nginx not to buffer this response; without it the whole point of
-    # streaming is lost — chunks pile up in the proxy until the request ends.
-    response['X-Accel-Buffering'] = 'no'
-    return response
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def company_chat_stream(request, company_id):
+    """
+    Streaming variant of company_chat, same wire format as claude_chat_stream.
+
+    POST /api/companies/{company_id}/chat/stream/
+    """
+    message = request.data.get('message')
+    conversation_history = request.data.get('conversation_history', [])
+
+    if not message:
+        return Response(
+            {'error': 'message is required'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    is_safe, matched_pattern = check_prompt_injection(message)
+    if not is_safe:
+        return Response(
+            {'error': 'Message contains disallowed content patterns.'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    usage = get_or_create_ai_usage(request.user)
+    can_send, limit_error = usage.can_send_message()
+    if not can_send:
+        return Response(
+            {'error': limit_error, 'limit_reached': True},
+            status=status.HTTP_429_TOO_MANY_REQUESTS
+        )
+
+    try:
+        company = Company.objects.get(pk=company_id)
+    except Company.DoesNotExist:
+        return Response(
+            {'error': 'Company not found'},
+            status=status.HTTP_404_NOT_FOUND
+        )
+
+    return _sse_chat_response(
+        client=OptimizedClaudeClient(company_id=company_id, user=request.user),
+        usage=usage,
+        message=message,
+        conversation_history=conversation_history,
+        system_prompt=_company_system_prompt(company),
+        user_id=request.user.id,
+        log_tag=f'company_chat_stream[{company_id}]',
+    )
 
 
 @api_view(['POST'])
@@ -386,23 +470,7 @@ def company_chat(request, company_id):
     try:
         # Get company for context
         company = Company.objects.get(pk=company_id)
-
-        # Create company-specific system prompt
-        today = datetime.now().strftime('%B %d, %Y')
-        system_prompt = f"""You are a helpful AI assistant for {company.name} ({company.ticker_symbol}).
-
-Today's date is {today}. All dates in the database are real and current — do NOT treat any dates as test data or futuristic.
-
-You have access to tools for company data including projects, resources, financials, news, and documents.
-If you need a tool that isn't loaded, use search_available_tools to find it.
-
-Company context:
-- Name: {company.name}
-- Ticker: {company.ticker_symbol} ({company.exchange.upper() if company.exchange else 'N/A'})
-- CEO: {company.ceo_name if company.ceo_name else 'N/A'}
-- HQ: {company.headquarters_city}, {company.headquarters_country}
-
-Be concise but thorough. Cite data sources and dates when relevant."""
+        system_prompt = _company_system_prompt(company)
 
         # Initialize Claude client with company context
         user = request.user if request.user.is_authenticated else None

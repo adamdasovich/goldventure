@@ -116,6 +116,7 @@ urlpatterns = [
     path('claude/chat/stream/', views.claude_chat_stream, name='claude_chat_stream'),
     path('claude/tools/', views.available_tools, name='available_tools'),
     path('companies/<int:company_id>/chat/', views.company_chat, name='company_chat'),
+    path('companies/<int:company_id>/chat/stream/', views.company_chat_stream, name='company_chat_stream'),
 
     # News Scraping endpoints
     path('companies/<int:company_id>/scrape-news/', views.scrape_company_news, name='scrape_company_news'),

@@ -20,6 +20,7 @@ from .ai_chat import (  # noqa: F401
     claude_chat,
     claude_chat_stream,
     company_chat,
+    company_chat_stream,
     available_tools,
 )
 from .company_news import (  # noqa: F401
