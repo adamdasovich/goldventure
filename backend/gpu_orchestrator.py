@@ -168,7 +168,17 @@ class GPUOrchestrator:
     # Configuration
     DO_API_URL = "https://api.digitalocean.com/v2"
     GPU_REGION = "tor1"  # TOR1 has L40S and RTX 6000 Ada
-    GPU_SIZE = "gpu-6000adax1-48gb"  # RTX 6000 Ada at $1.57/hr (available in TOR1)
+    # Sizes to try in order. DigitalOcean GPU capacity comes and goes — on
+    # 2026-09-04 the 6000 Ada showed regions=[] (sold out everywhere, not just
+    # TOR1) and eleven jobs sat pending while the orchestrator failed the same
+    # create once a minute. The RTX 4000 Ada is the fallback: 20GB VRAM holds
+    # Docling's layout/table/OCR models comfortably, and at $0.76/hr the slower
+    # card costs about the same per document. Both NVIDIA/CUDA — the AMD MI
+    # sizes that are often available would not run the worker's torch stack.
+    GPU_SIZES = [
+        "gpu-6000adax1-48gb",   # RTX 6000 Ada, $1.57/hr — preferred
+        "gpu-4000adax1-20gb",   # RTX 4000 Ada, $0.76/hr — capacity fallback
+    ]
     GPU_IMAGE = "gpu-h100x1-base"  # GPU-optimized base image with CUDA drivers
 
     # Timing
@@ -279,29 +289,45 @@ class GPUOrchestrator:
         # User data script to set up the GPU worker
         user_data = self._get_cloud_init_script()
 
-        droplet_config = {
-            "name": f"{self.DROPLET_NAME_PREFIX}{datetime.now().strftime('%Y%m%d%H%M%S')}",
-            "region": self.GPU_REGION,
-            "size": self.GPU_SIZE,
-            "image": self.GPU_IMAGE,
-            "ssh_keys": [self.ssh_key_id] if self.ssh_key_id else [],
-            "user_data": user_data,
-            "monitoring": True
-        }
+        # Walk the size list. A 422 from the droplets endpoint means DO has no
+        # capacity for that size ("Size is not available in this region"), so
+        # the next size gets its chance in the same poll cycle rather than a
+        # minute later. Any other error aborts — retrying a 401 or a quota
+        # error against more sizes only makes noise.
+        for size in self.GPU_SIZES:
+            droplet_config = {
+                "name": f"{self.DROPLET_NAME_PREFIX}{datetime.now().strftime('%Y%m%d%H%M%S')}",
+                "region": self.GPU_REGION,
+                "size": size,
+                "image": self.GPU_IMAGE,
+                "ssh_keys": [self.ssh_key_id] if self.ssh_key_id else [],
+                "user_data": user_data,
+                "monitoring": True
+            }
 
-        try:
-            response = self._api_request('POST', 'droplets', droplet_config)
-            droplet = response.get('droplet', {})
-            self.gpu_droplet_id = str(droplet.get('id'))
-            self.gpu_created_at = datetime.now()
-            self._save_state()
+            try:
+                response = self._api_request('POST', 'droplets', droplet_config)
+                droplet = response.get('droplet', {})
+                self.gpu_droplet_id = str(droplet.get('id'))
+                self.gpu_created_at = datetime.now()
+                self._save_state()
 
-            logger.info(f"GPU droplet created: ID={self.gpu_droplet_id}")
-            return True
+                logger.info(f"GPU droplet created: ID={self.gpu_droplet_id} size={size}")
+                return True
 
-        except Exception as e:
-            logger.error(f"Failed to create GPU droplet: {e}")
-            return False
+            except requests.exceptions.HTTPError as e:
+                status = getattr(getattr(e, 'response', None), 'status_code', None)
+                if status == 422:
+                    logger.warning(f"Size {size} has no capacity (422); trying next size")
+                    continue
+                logger.error(f"Failed to create GPU droplet ({size}): {e}")
+                return False
+            except Exception as e:
+                logger.error(f"Failed to create GPU droplet ({size}): {e}")
+                return False
+
+        logger.error(f"No GPU capacity in any configured size: {self.GPU_SIZES}")
+        return False
 
     def wait_for_droplet_ready(self) -> bool:
         """Wait for GPU droplet to be active and get its IP"""
