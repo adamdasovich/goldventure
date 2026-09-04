@@ -536,34 +536,11 @@ CELERY_BEAT_SCHEDULE = {
     # discovers becomes a DocumentProcessingJob that boots a GPU droplet at
     # ~$1.57/hr. Bulk backfill over the whole company list is a supervised batch
     # run, not something to let a weekly cron drift into.
-    # STILL DISABLED — but its three blocking flaws are fixed as of 2026-09-04:
-    # rotation (least-recently-visited via Company.last_discovered_at, stamped
-    # even on failed crawls), the CPU tail-call (process_document_queue() no
-    # longer runs Docling on this worker; jobs wait for the GPU orchestrator),
-    # and the missing gate (check_discovered_document(): announcement-shaped
-    # documents refused, confirmed Content-Length >= the report floor required).
-    # A dry_run kwarg exists for a supervised pass. Re-enabling is a product
-    # decision, not a code one.
-    #
-    # Original note, kept for history:
-    # DISABLED 2026-09-03, to be revisited the week of 2026-09-07.
-    #
-    # The document-type fixes earlier today mean this task can queue technical
-    # reports for the first time, and nobody has ever seen its discovery volume:
-    # the old filters discarded the output before it was logged, and the log
-    # line claimed nothing was dropped. An unattended 2 AM run would have been
-    # the first measurement, with each discovered document booting a GPU droplet
-    # at ~$1.57/hr. It also shares the `scrape` queue with the report hunter,
-    # which is now clearing its own backlog — two unmeasured GPU producers in
-    # the same window. Re-enable after a supervised dry run establishes the
-    # per-company document count.
-    # 'auto-discover-documents-weekly': {
-    #     'task': 'core.tasks.auto_discover_and_process_documents_task',
-    #     'schedule': crontab(day_of_week=1, hour=2, minute=0),  # Every Monday at 2 AM
-    #     'kwargs': {
-    #         'limit': 25,  # Companies per week. 2 AM leaves 5h before the 7 AM news batch.
-    #     }
-    # },
+    # Weekly discovery was replaced by 'auto-discover-documents-daily' below
+    # (2026-09-04): same machinery, small daily bites chained behind the
+    # nightly hunter instead of one large weekly run. See that entry for the
+    # reasoning; the three flaws that kept the weekly version disabled
+    # (no rotation, CPU-side processing, no gates) are all fixed in the task.
 
     # Hunt for the technical report each pending NewsReportFlag refers to.
     # A flag marks a news release whose title mentions a report; the report is a
@@ -590,6 +567,26 @@ CELERY_BEAT_SCHEDULE = {
         'schedule': crontab(hour=4, minute=0),  # 4 AM ET
         'kwargs': {
             'max_companies': 40,  # Ceiling on sites crawled per run
+        }
+    },
+
+    # Site-wide document discovery, a small daily bite chained 30 minutes
+    # behind the hunter. Deliberately daily-and-small rather than weekly-and-
+    # large: rotation (Company.last_discovered_at, least-recently-visited
+    # first) makes cadence a pure throughput knob, and 7 companies/night is
+    # ~15-20 minutes of one scrape worker, covers the full roster about every
+    # 8 weeks, and queues its gated finds while the GPU droplet is often still
+    # warm from the hunter's jobs — so discovery rides the same spin-up
+    # instead of paying for its own. Every document must pass
+    # check_discovered_document() (not announcement-shaped, confirmed
+    # Content-Length >= the report floor) before a job is created; refusals
+    # are logged with reasons. Jobs wait for the GPU orchestrator — this task
+    # does no processing itself.
+    'auto-discover-documents-daily': {
+        'task': 'core.tasks.auto_discover_and_process_documents_task',
+        'schedule': crontab(hour=4, minute=30),  # 4:30 AM ET, after the hunter
+        'kwargs': {
+            'limit': 7,
         }
     },
 
