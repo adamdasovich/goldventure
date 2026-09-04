@@ -60,6 +60,15 @@ HUNT_BACKOFF_DAYS = [1, 3, 7, 14, 21, 30]
 # Score at or above which the top candidate is queued to the GPU without review.
 AUTO_QUEUE_THRESHOLD = 70
 
+# Auto-queue also requires a CONFIRMED size at or above this. Filenames lie —
+# in one supervised batch four announcement PDFs auto-queued as technical
+# reports, each named after the report it announced ('2026-Carangas-Updated-
+# PEA-FILED.pdf' is the filing announcement) — but size does not: those four
+# were all under 2MB while the real reports in the same batch ran 10-30MB.
+# A genuine report smaller than this, or one whose size cannot be read (HEAD
+# refused, redirect), goes to human review rather than being lost.
+MIN_AUTO_QUEUE_SIZE_MB = 2.5
+
 # --------------------------------------------------------------------------
 # Triage
 # --------------------------------------------------------------------------
@@ -387,8 +396,14 @@ _NEGATIVE_HINT = re.compile(
     r'annual\s+report|(?<![a-z])interim(?![a-z])|md&a|(?<![a-z])mda(?![a-z])|'
     r'(?<![a-z])proxy(?![a-z])|circular|(?<![a-z])aif(?![a-z])|news\s+release|'
     r'press\s+release|subscribe|privacy|(?<![a-z])terms(?![a-z])|'
-    # Investor-relations news-release filenames: ABA_NR-2026-11_..., NR_2026_04.
-    r'(?<![a-z0-9])nr[\s-]\d{2,4}[\s-]\d+',
+    # 'nr' as a standalone token. This codebase's own news scraper treats nr-,
+    # _nr_ and _nr. in URLs as news-release markers, and the narrower
+    # nr[\s-]\d{2,4}[\s-]\d+ form missed Newcore's
+    # '2026_06_24_-_ncau_nr_-_enchi_pre-feasibility_study.pdf', which then
+    # auto-queued as the PFS technical report. Real report filenames from the
+    # same batch (True-North-PEA-2026, CorralCopper_NI43101, enchi-...-
+    # technicalreport) contain no standalone nr token.
+    r'(?<![a-z0-9])nr(?![a-z0-9])',
     re.IGNORECASE,
 )
 
@@ -610,6 +625,7 @@ def is_auto_queueable(candidate: Dict) -> bool:
     estimate. And a news release, presentation or financial statement is never
     the report, whatever it scores.
     """
+    size_mb = candidate.get('size_mb')
     return (
         candidate.get('score', 0) >= AUTO_QUEUE_THRESHOLD
         and bool(candidate.get('project_matched'))
@@ -623,6 +639,10 @@ def is_auto_queueable(candidate: Dict) -> bool:
         # project and the report type, so it matched both gates and still
         # cleared the threshold at 90 despite the -35.
         and not candidate.get('is_negative')
+        # And it must be report-sized, confirmed. The pattern gates above are
+        # an arms race against naming conventions — this one is structural.
+        and size_mb is not None
+        and size_mb >= MIN_AUTO_QUEUE_SIZE_MB
     )
 
 
