@@ -175,6 +175,10 @@ SIMPLE_JWT = {
     'UPDATE_LAST_LOGIN': True,  # Track login times
     'ALGORITHM': 'HS256',
     'AUTH_HEADER_TYPES': ('Bearer',),
+    # Pinned to its own secret so rotating SECRET_KEY doesn't invalidate every
+    # active session (the 2026-09-02 rotation logged out all users mid-session).
+    # Falls back to SECRET_KEY when unset so dev environments need no extra var.
+    'SIGNING_KEY': os.getenv('JWT_SIGNING_KEY', SECRET_KEY),
 }
 
 # CORS Settings

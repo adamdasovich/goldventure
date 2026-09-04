@@ -44,6 +44,17 @@ import { applyTierGate } from "@/lib/tierGate";
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api";
 
+/** Error thrown by apiFetch, carrying the HTTP status so callers can react to
+ *  auth failures (401) without string-matching backend error text. */
+export class ApiError extends Error {
+  status: number;
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+  }
+}
+
 // Generic fetch wrapper with error handling
 async function apiFetch<T>(
   endpoint: string,
@@ -103,7 +114,10 @@ async function apiFetch<T>(
     };
     const defaultMessage =
       statusMessages[response.status] || `API Error: ${response.status}`;
-    throw new Error(error.error || error.detail || defaultMessage);
+    throw new ApiError(
+      error.error || error.detail || defaultMessage,
+      response.status,
+    );
   }
 
   // Handle 204 No Content responses (e.g., DELETE operations)
