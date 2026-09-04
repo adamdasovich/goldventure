@@ -31,6 +31,15 @@ from mcp_servers.data_filter import DataFilter, FilterConfig, TokenEstimator
 logger = logging.getLogger(__name__)
 
 
+def _drain(gen):
+    """Exhaust a generator, discarding its yields; return its return value."""
+    try:
+        while True:
+            next(gen)
+    except StopIteration as stop:
+        return stop.value
+
+
 class OptimizedClaudeClient:
     """
     Token-efficient Claude client with progressive tool discovery.
@@ -323,37 +332,12 @@ class OptimizedClaudeClient:
         tools_loaded_dynamically = []
 
         # Handle tool calling loop
+        rounds = 0
         while response.stop_reason == "tool_use":
-            tool_results = []
-
-            for content_block in response.content:
-                if content_block.type == "tool_use":
-                    tool_name = content_block.name
-                    tool_input = content_block.input
-
-                    # Execute tool
-                    result = self._route_tool_call(tool_name, tool_input)
-
-                    # Track tool call
-                    all_tool_calls.append({
-                        'tool': tool_name,
-                        'input': tool_input,
-                        'result_tokens': TokenEstimator.estimate_tokens(result),
-                        'cached': result.get('_cached', False) if isinstance(result, dict) else False
-                    })
-
-                    # If load_tool was called, add the new tool to available tools
-                    if tool_name == "load_tool" and result.get("success"):
-                        new_tool = result.get("tool")
-                        if new_tool and new_tool not in tools:
-                            tools.append(new_tool)
-                            tools_loaded_dynamically.append(new_tool.get("name"))
-
-                    tool_results.append({
-                        "type": "tool_result",
-                        "tool_use_id": content_block.id,
-                        "content": str(result)
-                    })
+            rounds += 1
+            tool_results = _drain(self._run_tool_round(
+                response, tools, all_tool_calls, tools_loaded_dynamically
+            ))
 
             # Continue conversation
             messages.extend([
@@ -367,7 +351,8 @@ class OptimizedClaudeClient:
                 system=system_prompt,
                 tools=tools,
                 messages=messages,
-                extra_body={"cache_control": {"type": "ephemeral"}}
+                extra_body={"cache_control": {"type": "ephemeral"}},
+                **self._round_cap_kwargs(rounds),
             )
 
         # Extract final response
@@ -394,6 +379,61 @@ class OptimizedClaudeClient:
                 {"role": "assistant", "content": response.content}
             ]
         }
+
+    # A model stuck retrying a failing tool (or endlessly browsing the tool
+    # registry) would otherwise loop forever, pinning a gunicorn worker and
+    # burning tokens. At the cap, the next request forbids tool use, which
+    # forces a text answer from whatever the model has gathered.
+    MAX_TOOL_ROUNDS = 15
+
+    def _round_cap_kwargs(self, rounds: int) -> Dict:
+        if rounds >= self.MAX_TOOL_ROUNDS:
+            return {"tool_choice": {"type": "none"}}
+        return {}
+
+    def _run_tool_round(self, response, tools: List[Dict],
+                        all_tool_calls: List[Dict],
+                        tools_loaded_dynamically: List[str]):
+        """
+        Execute every tool_use block in `response`. Shared by chat() and
+        chat_stream() so the two paths cannot drift.
+
+        Generator: yields a status event dict before each tool executes
+        (chat_stream forwards these to the client; chat() discards them via
+        _drain) and returns the tool_results list for the follow-up message.
+        """
+        tool_results = []
+        for content_block in response.content:
+            if content_block.type != "tool_use":
+                continue
+            tool_name = content_block.name
+            yield {
+                "type": "status",
+                "tool": tool_name,
+                "text": self._status_label(tool_name),
+            }
+
+            result = self._route_tool_call(tool_name, content_block.input)
+            all_tool_calls.append({
+                'tool': tool_name,
+                'input': content_block.input,
+                'result_tokens': TokenEstimator.estimate_tokens(result),
+                'cached': result.get('_cached', False) if isinstance(result, dict) else False
+            })
+
+            # If load_tool was called, add the new tool to available tools
+            if tool_name == "load_tool" and isinstance(result, dict) and result.get("success"):
+                new_tool = result.get("tool")
+                if new_tool and new_tool not in tools:
+                    tools.append(new_tool)
+                    tools_loaded_dynamically.append(new_tool.get("name"))
+
+            tool_results.append({
+                "type": "tool_result",
+                "tool_use_id": content_block.id,
+                "content": str(result)
+            })
+        return tool_results
 
     # Friendly labels for the streaming status line. Fallback is the tool name
     # with underscores spaced out, so unknown tools still read acceptably.
@@ -446,6 +486,7 @@ class OptimizedClaudeClient:
         total_input_tokens = 0
         total_output_tokens = 0
         emitted_any_text = False
+        rounds = 0
 
         while True:
             emitted_this_round = False
@@ -456,6 +497,7 @@ class OptimizedClaudeClient:
                 tools=tools,
                 messages=messages,
                 extra_body={"cache_control": {"type": "ephemeral"}},
+                **self._round_cap_kwargs(rounds),
             ) as stream:
                 for delta in stream.text_stream:
                     if not delta:
@@ -475,32 +517,10 @@ class OptimizedClaudeClient:
             if response.stop_reason != "tool_use":
                 break
 
-            tool_results = []
-            for content_block in response.content:
-                if content_block.type != "tool_use":
-                    continue
-                tool_name = content_block.name
-                yield {"type": "status", "text": self._status_label(tool_name)}
-
-                result = self._route_tool_call(tool_name, content_block.input)
-                all_tool_calls.append({
-                    'tool': tool_name,
-                    'input': content_block.input,
-                    'result_tokens': TokenEstimator.estimate_tokens(result),
-                    'cached': result.get('_cached', False) if isinstance(result, dict) else False
-                })
-
-                if tool_name == "load_tool" and isinstance(result, dict) and result.get("success"):
-                    new_tool = result.get("tool")
-                    if new_tool and new_tool not in tools:
-                        tools.append(new_tool)
-                        tools_loaded_dynamically.append(new_tool.get("name"))
-
-                tool_results.append({
-                    "type": "tool_result",
-                    "tool_use_id": content_block.id,
-                    "content": str(result)
-                })
+            rounds += 1
+            tool_results = yield from self._run_tool_round(
+                response, tools, all_tool_calls, tools_loaded_dynamically
+            )
 
             messages.extend([
                 {"role": "assistant", "content": response.content},

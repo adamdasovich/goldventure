@@ -343,39 +343,11 @@ class NI43101ReportsServer(BaseMCPServer):
     # Tool 1: Vector database query
     # ------------------------------------------------------------------ #
 
-    def _vector_search(self, params: Dict) -> Dict:
-        """Semantic search over the ChromaDB document_chunks collection."""
-        query = (params.get("query") or "").strip()
-        if not query:
-            return {"error": "query is required"}
-
-        company_name = params.get("company_name")
-        document_type = params.get("document_type")
-        date_from = self._parse_date(params.get("date_from"), "date_from")
-        date_to = self._parse_date(params.get("date_to"), "date_to")
-        max_results = max(1, min(int(params.get("max_results", 5)), 20))
-
-        # Over-fetch so post-filtering still leaves enough — but only when a
-        # type/date filter is actually set. search_documents already fetches 4x
-        # internally, so this multiplier compounds straight into the MMR and
-        # cross-encoder candidate counts: a blanket ×4 here made one tool call
-        # cost ~30s warm (measured 2026-09-04); ×2 covers access-control drops.
-        has_post_filter = bool(document_type or date_from or date_to)
-        fetch_n = max_results * (4 if has_post_filter else 2)
-        raw_results = self.rag_manager.search_documents(
-            query=query,
-            n_results=fetch_n,
-            filter_company=company_name,
-        )
-
-        if not raw_results:
-            return {
-                "found": False,
-                "query": query,
-                "message": f"No NI 43-101 report content found for: {query}",
-                "results": [],
-            }
-
+    def _format_visible_results(
+        self, raw_results: List[Dict], max_results: int,
+        document_type, date_from, date_to,
+    ) -> List[Dict]:
+        """Apply access control + type/date post-filters and format hits."""
         # Resolve access control + extra metadata in one batched DB query.
         doc_ids = {
             r.get("metadata", {}).get("document_id")
@@ -424,6 +396,54 @@ class NI43101ReportsServer(BaseMCPServer):
                 },
             })
             if len(formatted) >= max_results:
+                break
+        return formatted
+
+    def _vector_search(self, params: Dict) -> Dict:
+        """Semantic search over the ChromaDB document_chunks collection."""
+        query = (params.get("query") or "").strip()
+        if not query:
+            return {"error": "query is required"}
+
+        company_name = params.get("company_name")
+        document_type = params.get("document_type")
+        date_from = self._parse_date(params.get("date_from"), "date_from")
+        date_to = self._parse_date(params.get("date_to"), "date_to")
+        max_results = max(1, min(int(params.get("max_results", 5)), 20))
+
+        # Over-fetch so post-filtering (type / date / access control) still
+        # leaves enough. search_documents already fetches 4x internally, so
+        # this multiplier compounds straight into the MMR and cross-encoder
+        # candidate counts: a blanket ×4 here made one tool call cost ~30s
+        # warm (measured 2026-09-04). Start cheap (×2, or ×4 when a type/date
+        # filter guarantees drops); if the post-filters leave the result set
+        # underfilled AND the pipeline returned a full page (i.e. widening
+        # could actually surface more), retry once with heavier headroom.
+        has_post_filter = bool(document_type or date_from or date_to)
+        multipliers = [4, 8] if has_post_filter else [2, 6]
+
+        formatted: List[Dict] = []
+        for multiplier in multipliers:
+            fetch_n = max_results * multiplier
+            raw_results = self.rag_manager.search_documents(
+                query=query,
+                n_results=fetch_n,
+                filter_company=company_name,
+            )
+
+            if not raw_results:
+                return {
+                    "found": False,
+                    "query": query,
+                    "message": f"No NI 43-101 report content found for: {query}",
+                    "results": [],
+                }
+
+            formatted = self._format_visible_results(
+                raw_results, max_results, document_type, date_from, date_to
+            )
+            if len(formatted) >= max_results or len(raw_results) < fetch_n:
+                # Filled, or the corpus is exhausted — widening can't help.
                 break
 
         return {

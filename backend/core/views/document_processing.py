@@ -241,8 +241,8 @@ def document_processing_summary(request):
         }
 
         try:
-            from mcp_servers.rag_utils import RAGManager
-            rag = RAGManager()
+            from mcp_servers.rag_utils import get_rag_manager
+            rag = get_rag_manager()
             chroma_stats['document_chunks_collection'] = rag.collection.count()
             chroma_stats['news_chunks_collection'] = rag.news_collection.count()
         except Exception as e:

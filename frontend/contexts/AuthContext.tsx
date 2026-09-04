@@ -66,13 +66,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const refreshIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  const isRefreshingRef = useRef(false);
+  const refreshPromiseRef = useRef<Promise<string | null> | null>(null);
 
   // Refresh the access token using the refresh token
   const refreshAccessToken = useCallback(async (): Promise<string | null> => {
-    // Prevent multiple simultaneous refresh requests
-    if (isRefreshingRef.current) {
-      return accessToken;
+    // Concurrent callers share the in-flight refresh. The old guard returned
+    // the CURRENT token instead — which is exactly the token the caller is
+    // holding because it just 401ed, so a chat send racing the 50-minute
+    // interval refresh would retry with the dead token and show "session
+    // expired" to a validly logged-in user.
+    if (refreshPromiseRef.current) {
+      return refreshPromiseRef.current;
     }
 
     const refreshToken = localStorage.getItem("refreshToken");
@@ -80,45 +84,49 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return null;
     }
 
-    isRefreshingRef.current = true;
-
-    try {
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api"}/auth/token/refresh/`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
+    const doRefresh = async (): Promise<string | null> => {
+      try {
+        const response = await fetch(
+          `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api"}/auth/token/refresh/`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ refresh: refreshToken }),
           },
-          body: JSON.stringify({ refresh: refreshToken }),
-        },
-      );
+        );
 
-      if (!response.ok) {
-        // Refresh token is invalid, log out
-        throw new Error("Refresh token expired");
+        if (!response.ok) {
+          // Refresh token is invalid, log out
+          throw new Error("Refresh token expired");
+        }
+
+        const data = await response.json();
+        const newAccessToken = data.access;
+
+        setAccessToken(newAccessToken);
+        localStorage.setItem("accessToken", newAccessToken);
+
+        // If a new refresh token was returned (token rotation), store it
+        if (data.refresh) {
+          localStorage.setItem("refreshToken", data.refresh);
+        }
+
+        return newAccessToken;
+      } catch {
+        // Refresh failed, log out the user
+        logout();
+        return null;
       }
+    };
 
-      const data = await response.json();
-      const newAccessToken = data.access;
-
-      setAccessToken(newAccessToken);
-      localStorage.setItem("accessToken", newAccessToken);
-
-      // If a new refresh token was returned (token rotation), store it
-      if (data.refresh) {
-        localStorage.setItem("refreshToken", data.refresh);
-      }
-
-      return newAccessToken;
-    } catch {
-      // Refresh failed, log out the user
-      logout();
-      return null;
-    } finally {
-      isRefreshingRef.current = false;
-    }
-  }, [accessToken]);
+    const promise = doRefresh().finally(() => {
+      refreshPromiseRef.current = null;
+    });
+    refreshPromiseRef.current = promise;
+    return promise;
+  }, []);
 
   // Set up automatic token refresh
   const setupTokenRefresh = useCallback(() => {

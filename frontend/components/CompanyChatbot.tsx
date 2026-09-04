@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { claudeAPI, type ChatMessage } from "@/lib/api";
+import { type ChatMessage } from "@/lib/api";
+import { sendChatMessage } from "@/lib/chatStream";
 import { useAuth } from "@/contexts/AuthContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
@@ -15,7 +16,7 @@ export default function CompanyChatbot({
   companyId,
   companyName,
 }: CompanyChatbotProps) {
-  const { accessToken } = useAuth();
+  const { accessToken, refreshAccessToken } = useAuth();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -31,8 +32,17 @@ export default function CompanyChatbot({
   useEffect(() => {
     const container = messagesContainerRef.current;
     if (container) {
-      container.scrollTo({ top: container.scrollHeight, behavior: "smooth" });
+      // "auto" while streaming: each smooth scroll cancels the previous
+      // animation, so per-chunk updates would leave the view churning
+      // mid-animation for the whole answer.
+      container.scrollTo({
+        top: container.scrollHeight,
+        behavior: isLoading ? "auto" : "smooth",
+      });
     }
+    // isLoading is deliberately not a dependency — it only selects the
+    // behavior of scrolls triggered by message changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [messages]);
 
   // Core send logic - usable both from the input form and from a one-click
@@ -51,56 +61,34 @@ export default function CompanyChatbot({
     setMessages(newMessages);
     setIsLoading(true);
 
-    const conversation = messages;
-    let streamedText = "";
     const applyAssistant = (content: string) =>
       setMessages([...newMessages, { role: "assistant", content }]);
 
     try {
-      if (accessToken) {
-        try {
-          await claudeAPI.companyChatStream(
-            companyId,
-            { message: userMessage, conversation_history: conversation },
-            accessToken,
-            {
-              onStatus: (status) => setStreamStatus(status),
-              onText: (delta) => {
-                streamedText += delta;
-                setStreamStatus(null);
-                applyAssistant(streamedText);
-              },
-            },
-          );
-          if (streamedText) return;
-          // An empty stream is a failure in disguise — fall through to the
-          // blocking JSON endpoint below.
-        } catch (error) {
-          if (streamedText) {
-            // Died mid-answer; keep what streamed rather than replacing it
-            // with a generic apology.
-            console.error("Chat stream error:", error);
-            return;
-          }
-          // Stream never produced anything — fall through to the JSON call.
-        }
-      }
-
-      // Anonymous visitor, or the stream failed before any text arrived.
-      const response = await claudeAPI.companyChat(
+      const outcome = await sendChatMessage({
+        message: userMessage,
+        history: messages,
+        accessToken,
+        refreshAccessToken,
         companyId,
-        {
-          message: userMessage,
-          conversation_history: conversation,
-        },
-        accessToken || undefined,
-      );
-      applyAssistant(response.message);
-    } catch (error) {
-      console.error("Chat error:", error);
-      applyAssistant(
-        "Sorry, I encountered an error processing your request. Please try again.",
-      );
+        onStatus: setStreamStatus,
+        onText: applyAssistant,
+      });
+
+      if (outcome.kind === "answer") {
+        applyAssistant(outcome.text);
+      } else if (outcome.kind === "session-expired") {
+        // refreshAccessToken() has already logged the user out (and is
+        // redirecting); leave a readable trace in case that's interrupted.
+        applyAssistant("Your session has expired — please sign in again.");
+      } else {
+        // A truncated answer must not read as a complete one.
+        applyAssistant(
+          outcome.partialText
+            ? `${outcome.partialText}\n\n[Response interrupted: ${outcome.message}]`
+            : "Sorry, I encountered an error processing your request. Please try again.",
+        );
+      }
     } finally {
       setIsLoading(false);
       setStreamStatus(null);

@@ -1685,8 +1685,8 @@ def due_diligence(request):
         return Response(cached)
 
     try:
-        from mcp_servers.rag_utils import RAGManager
-        results = RAGManager().search_documents(
+        from mcp_servers.rag_utils import get_rag_manager
+        results = get_rag_manager().search_documents(
             query=question, n_results=max_sections, filter_company=company.name,
         )
     except Exception as e:

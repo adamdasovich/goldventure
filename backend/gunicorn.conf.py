@@ -30,17 +30,23 @@ def post_worker_init(worker):
     """
 
     def warm():
+        # The two warmups are independent — a stopped chromadb.service must
+        # not also skip the cross-encoder load (and vice versa). Warmup is
+        # best-effort either way: a failure must not kill the worker, and the
+        # lazy path still works.
         try:
             from mcp_servers.rag_utils import get_rag_manager
-            from mcp_servers.retrieval_enhancements import rerank_results
-
             get_rag_manager()
+        except Exception:
+            logger.exception("RAGManager warmup failed (worker pid %s)", worker.pid)
+
+        try:
+            from mcp_servers.retrieval_enhancements import rerank_results
             # First cross-encoder predict pays one-time allocation cost too.
             rerank_results("warmup", [{"text": "warmup"}], top_k=1)
-            logger.info("RAG warmup complete (worker pid %s)", worker.pid)
         except Exception:
-            # Warmup is best-effort: a stopped chromadb.service or missing
-            # model must not kill the worker — the lazy path still works.
-            logger.exception("RAG warmup failed (worker pid %s)", worker.pid)
+            logger.exception("Cross-encoder warmup failed (worker pid %s)", worker.pid)
+
+        logger.info("RAG warmup complete (worker pid %s)", worker.pid)
 
     threading.Thread(target=warm, name="rag-warmup", daemon=True).start()

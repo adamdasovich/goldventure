@@ -45,13 +45,18 @@ const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api";
 
 /** Error thrown by apiFetch, carrying the HTTP status so callers can react to
- *  auth failures (401) without string-matching backend error text. */
+ *  auth failures (401) without string-matching backend error text.
+ *  `limitReached` is true only for the backend's daily-quota rejection (its
+ *  429 body carries limit_reached: true) — a provider-side 429 relayed
+ *  mid-stream does not set it, so the two are distinguishable. */
 export class ApiError extends Error {
   status: number;
-  constructor(message: string, status: number) {
+  limitReached: boolean;
+  constructor(message: string, status: number, limitReached = false) {
     super(message);
     this.name = "ApiError";
     this.status = status;
+    this.limitReached = limitReached;
   }
 }
 
@@ -117,6 +122,7 @@ async function apiFetch<T>(
     throw new ApiError(
       error.error || error.detail || defaultMessage,
       response.status,
+      error.limit_reached === true,
     );
   }
 
@@ -328,6 +334,7 @@ async function streamChat(
     throw new ApiError(
       error.error || error.detail || `API Error: ${response.status}`,
       response.status,
+      error.limit_reached === true,
     );
   }
 
@@ -342,17 +349,21 @@ async function streamChat(
     buffer += decoder.decode(value, { stream: true });
 
     // SSE frames are separated by a blank line; the tail may be partial.
-    const frames = buffer.split("\n\n");
+    // The spec allows CRLF framing (and an intermediary may reframe), so
+    // split on either. Multiple data: lines per frame concatenate.
+    const frames = buffer.split(/\r?\n\r?\n/);
     buffer = frames.pop() ?? "";
 
     for (const frame of frames) {
-      const dataLine = frame
-        .split("\n")
-        .find((line) => line.startsWith("data: "));
-      if (!dataLine) continue;
+      const data = frame
+        .split(/\r?\n/)
+        .filter((line) => line.startsWith("data:"))
+        .map((line) => line.slice(5).replace(/^ /, ""))
+        .join("\n");
+      if (!data) continue;
       let event: any;
       try {
-        event = JSON.parse(dataLine.slice(6));
+        event = JSON.parse(data);
       } catch {
         continue;
       }
@@ -361,7 +372,12 @@ async function streamChat(
       } else if (event.type === "status" && typeof event.text === "string") {
         callbacks.onStatus?.(event.text);
       } else if (event.type === "error") {
-        throw new ApiError(event.error || "Streaming failed", 500);
+        // The server relays the upstream HTTP status as `code` (429 provider
+        // rate limit, 529 overloaded, 500 otherwise).
+        throw new ApiError(
+          event.error || "Streaming failed",
+          typeof event.code === "number" ? event.code : 500,
+        );
       } else if (event.type === "done") {
         doneEvent = event;
       }

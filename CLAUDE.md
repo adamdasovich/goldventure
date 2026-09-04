@@ -36,6 +36,12 @@ systemctl restart celery-worker celery-scrape celery-interactive celery-beat
 systemctl reload gunicorn
 ```
 
+> **NOTE:** `backend/gunicorn.conf.py` (auto-discovered via the unit's
+> WorkingDirectory; holds the RAG-warmup `post_worker_init` hook) is only
+> re-read by a full `systemctl restart gunicorn` — HUP reload keeps the config
+> gunicorn parsed at startup. Code changes: reload. `gunicorn.conf.py`
+> changes: restart.
+
 ### Frontend (Next.js — pm2)
 
 The Next.js app runs under **pm2** as process `goldventure-frontend` (`next start`).
@@ -63,7 +69,7 @@ pull` to `/var/www/goldventure/ecosystem.config.js`. It must point `script` at
 wrapper, npm being a shell script that owns no listening socket.
 
 > **Editing that file is not picked up by a deploy.** `deploy.sh` runs
-> `pm2 reload goldventure-frontend`, which reloads the *running* process using
+> `pm2 reload goldventure-frontend`, which reloads the _running_ process using
 > the config pm2 already has in memory. After changing `ecosystem.config.js`,
 > apply it explicitly:
 >

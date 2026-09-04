@@ -6,8 +6,7 @@ import { Card, CardHeader, CardTitle, CardContent } from "./ui/Card";
 import { Input } from "./ui/Input";
 import { Button } from "./ui/Button";
 import { Badge } from "./ui/Badge";
-import { claudeAPI, ApiError } from "@/lib/api";
-import type { ChatStreamResult } from "@/lib/api";
+import { sendChatMessage } from "@/lib/chatStream";
 import { useAuth } from "@/contexts/AuthContext";
 import { LoginModal, RegisterModal } from "@/components/auth";
 import {
@@ -134,84 +133,50 @@ export default function ChatInterface({
     ];
     setMessages(newMessages);
 
-    const conversation = messages;
-    let streamedText = "";
-
     const applyAssistant = (content: string) =>
       setMessages([...newMessages, { role: "assistant", content }]);
 
-    const runStream = async (token: string): Promise<ChatStreamResult> => {
-      streamedText = "";
-      const result = await claudeAPI.chatStream(
-        { message: msg, conversation_history: conversation },
-        token,
-        {
-          onStatus: (status) => setStreamStatus(status),
-          onText: (delta) => {
-            streamedText += delta;
-            setStreamStatus(null);
-            applyAssistant(streamedText);
-            scrollToBottom();
-          },
-        },
-      );
-      if (!streamedText) {
-        // A stream that ends without any text is a failure in disguise;
-        // throwing routes it into the JSON fallback below.
-        throw new Error("Empty response");
-      }
-      return result;
-    };
-
     try {
-      try {
-        await runStream(accessToken);
-      } catch (error) {
-        // A 401 means the stored token went stale under us (expired between
-        // refreshes, or invalidated server-side). Refresh once and retry
-        // before surfacing anything — the raw SimpleJWT text ("Given token
-        // not valid for any token type") means nothing to a visitor.
-        if (error instanceof ApiError && error.status === 401) {
-          const newToken = await refreshAccessToken();
-          if (!newToken) {
-            // refreshAccessToken() has already logged the user out (and is
-            // redirecting), but leave a readable trace in case the
-            // navigation is interrupted.
-            applyAssistant("Your session has expired — please sign in again.");
-            setNeedsAccount(true);
-            return;
-          }
-          await runStream(newToken);
-        } else if (!streamedText) {
-          // Stream never produced anything (proxy trouble, config) — fall
-          // back to the blocking JSON endpoint rather than failing outright.
-          const response = await claudeAPI.chat(
-            { message: msg, conversation_history: conversation },
-            accessToken,
-          );
-          applyAssistant(response.message);
-        } else {
-          // Died mid-answer; keep what streamed and surface the error below.
-          throw error;
+      const outcome = await sendChatMessage({
+        message: msg,
+        history: messages,
+        accessToken,
+        refreshAccessToken,
+        onStatus: setStreamStatus,
+        onText: (fullText) => {
+          applyAssistant(fullText);
+          // After React commits the new text, not before — a synchronous
+          // scroll would measure the previous height every time.
+          requestAnimationFrame(scrollToBottom);
+        },
+      });
+
+      if (outcome.kind === "answer") {
+        applyAssistant(outcome.text);
+        const remaining = outcome.usageRemaining;
+        if (
+          remaining &&
+          remaining.message_limit > 0 &&
+          remaining.messages_today >= remaining.message_limit
+        ) {
+          setLimitReached(true);
         }
-      }
-    } catch (error: any) {
-      if (error instanceof ApiError && error.status === 401) {
+      } else if (outcome.kind === "session-expired") {
+        // refreshAccessToken() has already logged the user out (and is
+        // redirecting), but leave a readable trace in case the navigation
+        // is interrupted.
         applyAssistant("Your session has expired — please sign in again.");
         setNeedsAccount(true);
-        return;
+      } else {
+        if (outcome.limitReached) {
+          setLimitReached(true);
+        }
+        applyAssistant(
+          outcome.partialText
+            ? `${outcome.partialText}\n\n[Response interrupted: ${outcome.message}]`
+            : `Error: ${outcome.message}`,
+        );
       }
-      const errMsg =
-        error instanceof Error ? error.message : "Failed to get response";
-      // Check if it's a rate limit error
-      if (errMsg.includes("limit") || errMsg.includes("429")) {
-        setLimitReached(true);
-      }
-      applyAssistant(
-        streamedText
-          ? `${streamedText}\n\n[Response interrupted: ${errMsg}]`
-          : `Error: ${errMsg}`,
-      );
     } finally {
       setIsLoading(false);
       setStreamStatus(null);
@@ -380,9 +345,7 @@ export default function ChatInterface({
               {needsAccount && (
                 <div className="rounded-xl border border-gold-500/40 bg-slate-900/70 p-5 animate-slide-in-up">
                   <p className="text-white font-semibold mb-1">
-                    {offer.free_trial_enabled
-                      ? `Create a free account to get your answer`
-                      : "Create a free account to get your answer"}
+                    Create a free account to get your answer
                   </p>
                   <p className="text-slate-300 text-sm leading-relaxed mb-4">
                     {offer.free_trial_enabled

@@ -6,32 +6,41 @@ and semantic relevance thresholding for improved retrieval quality.
 
 import logging
 import math
+import threading
+
 import numpy as np
 from typing import List, Dict
 
 logger = logging.getLogger(__name__)
 
-# Lazy-loaded globals to avoid import-time model loading
+# Lazy-loaded globals to avoid import-time model loading. The lock matters
+# since gunicorn's boot warmup thread (backend/gunicorn.conf.py) can race a
+# real request into this function; without it both would load a full torch
+# model concurrently.
 _cross_encoder = None
 _cross_encoder_load_failed = False
+_cross_encoder_lock = threading.Lock()
 
 
 def _get_cross_encoder():
-    """Lazy-load cross-encoder model on first use."""
+    """Lazy-load cross-encoder model on first use (thread-safe)."""
     global _cross_encoder, _cross_encoder_load_failed
-    if _cross_encoder_load_failed:
-        return None
     if _cross_encoder is not None:
         return _cross_encoder
-    try:
-        from sentence_transformers import CrossEncoder
-        _cross_encoder = CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2')
-        logger.info("Cross-encoder model loaded: cross-encoder/ms-marco-MiniLM-L-6-v2")
-        return _cross_encoder
-    except Exception as e:
-        _cross_encoder_load_failed = True
-        logger.warning(f"Failed to load cross-encoder model: {e}. Re-ranking disabled.")
+    if _cross_encoder_load_failed:
         return None
+    with _cross_encoder_lock:
+        if _cross_encoder is not None or _cross_encoder_load_failed:
+            return _cross_encoder
+        try:
+            from sentence_transformers import CrossEncoder
+            _cross_encoder = CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2')
+            logger.info("Cross-encoder model loaded: cross-encoder/ms-marco-MiniLM-L-6-v2")
+            return _cross_encoder
+        except Exception as e:
+            _cross_encoder_load_failed = True
+            logger.warning(f"Failed to load cross-encoder model: {e}. Re-ranking disabled.")
+            return None
 
 
 def rerank_results(query: str, results: List[Dict], top_k: int = 5) -> List[Dict]:

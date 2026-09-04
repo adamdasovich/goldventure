@@ -174,33 +174,12 @@ def claude_chat(request):
     Rate limited: 50 messages/day, 100k tokens/day per user (configurable).
     """
 
-    message = request.data.get('message')
-    conversation_history = request.data.get('conversation_history', [])
+    message, conversation_history, usage, error_response = _validate_chat_request(request)
+    if error_response is not None:
+        return error_response
+
     system_prompt = request.data.get('system_prompt')
     use_optimized = request.data.get('optimized', True)  # Default to optimized
-
-    if not message:
-        return Response(
-            {'error': 'message is required'},
-            status=status.HTTP_400_BAD_REQUEST
-        )
-
-    # Check for prompt injection
-    is_safe, matched_pattern = check_prompt_injection(message)
-    if not is_safe:
-        return Response(
-            {'error': 'Message contains disallowed content patterns.'},
-            status=status.HTTP_400_BAD_REQUEST
-        )
-
-    # Check user AI usage limits
-    usage = get_or_create_ai_usage(request.user)
-    can_send, limit_error = usage.can_send_message()
-    if not can_send:
-        return Response(
-            {'error': limit_error, 'limit_reached': True},
-            status=status.HTTP_429_TOO_MANY_REQUESTS
-        )
 
     try:
         # Initialize Claude client (optimized or standard)
@@ -216,17 +195,13 @@ def claude_chat(request):
             system_prompt=system_prompt
         )
 
-        # Record usage (estimate tokens if not provided)
-        tokens_used = result.get('tokens_used', 0) or result.get('usage', {}).get('total_tokens', 1000)
-        usage.record_usage(tokens_used)
+        # Record usage at the same flat per-message rate as the streaming
+        # path (chat()'s usage dict has no 'total_tokens' key, so the old
+        # .get('total_tokens', 1000) fallback always recorded this anyway).
+        usage.record_usage(TOKENS_RECORDED_PER_MESSAGE)
 
         # Add usage info to response
-        result['usage_remaining'] = {
-            'messages_today': usage.messages_today,
-            'message_limit': usage.daily_message_limit,
-            'tokens_today': usage.tokens_today,
-            'token_limit': usage.daily_token_limit,
-        }
+        result['usage_remaining'] = _usage_remaining(usage)
 
         return Response(result)
 
@@ -256,6 +231,62 @@ def claude_chat(request):
 
 
 
+def _validate_chat_request(request):
+    """
+    Shared preamble of the four chat views: extract the message, run the
+    injection check, and enforce the daily usage gate.
+
+    Returns (message, conversation_history, usage, error_response) — exactly
+    one of usage/error_response is None.
+    """
+    message = request.data.get('message')
+    conversation_history = request.data.get('conversation_history', [])
+
+    if not message:
+        return None, None, None, Response(
+            {'error': 'message is required'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    is_safe, _ = check_prompt_injection(message)
+    if not is_safe:
+        return None, None, None, Response(
+            {'error': 'Message contains disallowed content patterns.'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    usage = get_or_create_ai_usage(request.user)
+    can_send, limit_error = usage.can_send_message()
+    if not can_send:
+        return None, None, None, Response(
+            {'error': limit_error, 'limit_reached': True},
+            status=status.HTTP_429_TOO_MANY_REQUESTS
+        )
+
+    return message, conversation_history, usage, None
+
+
+def _usage_remaining(usage) -> dict:
+    """The quota snapshot returned to the client after every chat message."""
+    return {
+        'messages_today': usage.messages_today,
+        'message_limit': usage.daily_message_limit,
+        'tokens_today': usage.tokens_today,
+        'token_limit': usage.daily_token_limit,
+    }
+
+
+# What one chat message debits against UserAIUsage.daily_token_limit. The
+# blocking views have always effectively recorded a flat 1000/message (chat()
+# returns usage without a 'total_tokens' key, so their fallback constant is
+# what actually gets recorded), and the 100k daily limit was lived-in against
+# that rate. The streaming path must debit the SAME quantity — recording real
+# multi-round totals (15-50k/question) would lock paying users out after a
+# handful of questions. If real token accounting is ever wanted, change both
+# paths AND retune daily_token_limit together.
+TOKENS_RECORDED_PER_MESSAGE = 1000
+
+
 def _company_system_prompt(company) -> str:
     """Company-specific system prompt shared by company_chat and its stream."""
     today = datetime.now().strftime('%B %d, %Y')
@@ -282,6 +313,27 @@ def _sse_chat_response(client, usage, message, conversation_history,
     generator and frame its events as SSE, recording usage on completion.
     """
     def event_stream():
+        # Metering must not depend on the stream ending cleanly: a client
+        # disconnect closes this generator with GeneratorExit (a BaseException
+        # the except clauses below never see), and a mid-stream API error
+        # jumps to the handlers — in both cases Anthropic tokens were already
+        # spent. The finally records exactly once for any stream that
+        # delivered at least one event, so aborting mid-answer cannot dodge
+        # the daily message limit — while a request that failed before
+        # producing anything stays free, matching the blocking views.
+        recorded = False
+        delivered = False
+
+        def record_once():
+            nonlocal recorded
+            if recorded:
+                return
+            recorded = True
+            try:
+                usage.record_usage(TOKENS_RECORDED_PER_MESSAGE)
+            except Exception:
+                logger.exception(f"{log_tag} failed to record usage for user {user_id}")
+
         try:
             for event in client.chat_stream(
                 message=message,
@@ -289,15 +341,10 @@ def _sse_chat_response(client, usage, message, conversation_history,
                 system_prompt=system_prompt,
             ):
                 if event.get('type') == 'done':
-                    tokens_used = event.get('usage', {}).get('total_tokens') or 1000
-                    usage.record_usage(tokens_used)
-                    event['usage_remaining'] = {
-                        'messages_today': usage.messages_today,
-                        'message_limit': usage.daily_message_limit,
-                        'tokens_today': usage.tokens_today,
-                        'token_limit': usage.daily_token_limit,
-                    }
+                    record_once()
+                    event['usage_remaining'] = _usage_remaining(usage)
                 yield f"data: {json.dumps(event)}\n\n"
+                delivered = True
         except anthropic.APIStatusError as e:
             logger.error(f"{log_tag} API error for user {user_id}: {e.status_code} {str(e)}")
             if e.status_code == 529:
@@ -306,10 +353,15 @@ def _sse_chat_response(client, usage, message, conversation_history,
                 msg = 'AI rate limit reached. Please wait a minute and try again.'
             else:
                 msg = 'An error occurred processing your request. Please try again.'
-            yield f"data: {json.dumps({'type': 'error', 'error': msg})}\n\n"
+            # 'code' mirrors the upstream HTTP status so the client can react
+            # without string-matching the message text.
+            yield f"data: {json.dumps({'type': 'error', 'error': msg, 'code': e.status_code})}\n\n"
         except Exception as e:
             logger.error(f"{log_tag} error for user {user_id}: {str(e)}")
-            yield f"data: {json.dumps({'type': 'error', 'error': 'An error occurred processing your request. Please try again.'})}\n\n"
+            yield f"data: {json.dumps({'type': 'error', 'error': 'An error occurred processing your request. Please try again.', 'code': 500})}\n\n"
+        finally:
+            if delivered:
+                record_once()
 
     response = StreamingHttpResponse(event_stream(), content_type='text/event-stream')
     response['Cache-Control'] = 'no-cache'
@@ -335,32 +387,14 @@ def claude_chat_stream(request):
         {"type": "error", "error": "readable message"}
 
     Same auth, injection check, and rate limiting as claude_chat; usage is
-    recorded when the stream completes.
+    recorded once per delivered stream. Unlike claude_chat, the 'optimized'
+    flag is ignored — only OptimizedClaudeClient implements streaming.
     """
-    message = request.data.get('message')
-    conversation_history = request.data.get('conversation_history', [])
+    message, conversation_history, usage, error_response = _validate_chat_request(request)
+    if error_response is not None:
+        return error_response
+
     system_prompt = request.data.get('system_prompt')
-
-    if not message:
-        return Response(
-            {'error': 'message is required'},
-            status=status.HTTP_400_BAD_REQUEST
-        )
-
-    is_safe, matched_pattern = check_prompt_injection(message)
-    if not is_safe:
-        return Response(
-            {'error': 'Message contains disallowed content patterns.'},
-            status=status.HTTP_400_BAD_REQUEST
-        )
-
-    usage = get_or_create_ai_usage(request.user)
-    can_send, limit_error = usage.can_send_message()
-    if not can_send:
-        return Response(
-            {'error': limit_error, 'limit_reached': True},
-            status=status.HTTP_429_TOO_MANY_REQUESTS
-        )
 
     return _sse_chat_response(
         client=OptimizedClaudeClient(),
@@ -381,29 +415,9 @@ def company_chat_stream(request, company_id):
 
     POST /api/companies/{company_id}/chat/stream/
     """
-    message = request.data.get('message')
-    conversation_history = request.data.get('conversation_history', [])
-
-    if not message:
-        return Response(
-            {'error': 'message is required'},
-            status=status.HTTP_400_BAD_REQUEST
-        )
-
-    is_safe, matched_pattern = check_prompt_injection(message)
-    if not is_safe:
-        return Response(
-            {'error': 'Message contains disallowed content patterns.'},
-            status=status.HTTP_400_BAD_REQUEST
-        )
-
-    usage = get_or_create_ai_usage(request.user)
-    can_send, limit_error = usage.can_send_message()
-    if not can_send:
-        return Response(
-            {'error': limit_error, 'limit_reached': True},
-            status=status.HTTP_429_TOO_MANY_REQUESTS
-        )
+    message, conversation_history, usage, error_response = _validate_chat_request(request)
+    if error_response is not None:
+        return error_response
 
     try:
         company = Company.objects.get(pk=company_id)
@@ -440,32 +454,11 @@ def company_chat(request, company_id):
     Rate limited: 50 messages/day, 100k tokens/day per user (configurable).
     """
 
-    message = request.data.get('message')
-    conversation_history = request.data.get('conversation_history', [])
+    message, conversation_history, usage, error_response = _validate_chat_request(request)
+    if error_response is not None:
+        return error_response
+
     use_optimized = request.data.get('optimized', True)  # Default to optimized
-
-    if not message:
-        return Response(
-            {'error': 'message is required'},
-            status=status.HTTP_400_BAD_REQUEST
-        )
-
-    # Check for prompt injection
-    is_safe, matched_pattern = check_prompt_injection(message)
-    if not is_safe:
-        return Response(
-            {'error': 'Message contains disallowed content patterns.'},
-            status=status.HTTP_400_BAD_REQUEST
-        )
-
-    # Check user AI usage limits
-    usage = get_or_create_ai_usage(request.user)
-    can_send, limit_error = usage.can_send_message()
-    if not can_send:
-        return Response(
-            {'error': limit_error, 'limit_reached': True},
-            status=status.HTTP_429_TOO_MANY_REQUESTS
-        )
 
     try:
         # Get company for context
@@ -486,17 +479,12 @@ def company_chat(request, company_id):
             system_prompt=system_prompt
         )
 
-        # Record usage (estimate tokens if not provided)
-        tokens_used = result.get('tokens_used', 0) or result.get('usage', {}).get('total_tokens', 1000)
-        usage.record_usage(tokens_used)
+        # Record usage at the same flat per-message rate as the streaming
+        # path (see TOKENS_RECORDED_PER_MESSAGE).
+        usage.record_usage(TOKENS_RECORDED_PER_MESSAGE)
 
         # Add usage info to response
-        result['usage_remaining'] = {
-            'messages_today': usage.messages_today,
-            'message_limit': usage.daily_message_limit,
-            'tokens_today': usage.tokens_today,
-            'token_limit': usage.daily_token_limit,
-        }
+        result['usage_remaining'] = _usage_remaining(usage)
 
         return Response(result)
 
