@@ -562,31 +562,24 @@ CELERY_BEAT_SCHEDULE = {
     # Everything below the auto-queue bar lands in /admin/news-flags-reports as
     # ranked candidates; everything queued shows its score and reasoning in
     # /admin/document-queue and is cancellable while pending.
+    # The hunter also chains site-wide discovery (7 companies/night) the moment
+    # it finishes, via chain_discovery_limit — deliberately NOT a separate cron.
+    # A fixed 4:30 start could not guarantee discovery's gated finds share the
+    # hunter's GPU droplet: a quiet hunt finishes early, the droplet
+    # self-destroys after 5 idle minutes, and discovery pays a second hourly-
+    # billed spin-up; a long hunt overlaps the cron and doubles the browser
+    # load on the two-slot scrape queue. Chaining makes the ordering exact
+    # every night. Discovery itself: least-recently-visited rotation via
+    # Company.last_discovered_at (full roster ~every 8 weeks), every document
+    # gated by check_discovered_document() (not announcement-shaped, confirmed
+    # Content-Length >= the report floor), refusals logged with reasons, jobs
+    # left pending for the GPU orchestrator.
     'hunt-technical-reports-daily': {
         'task': 'core.tasks.hunt_technical_reports_task',
         'schedule': crontab(hour=4, minute=0),  # 4 AM ET
         'kwargs': {
             'max_companies': 40,  # Ceiling on sites crawled per run
-        }
-    },
-
-    # Site-wide document discovery, a small daily bite chained 30 minutes
-    # behind the hunter. Deliberately daily-and-small rather than weekly-and-
-    # large: rotation (Company.last_discovered_at, least-recently-visited
-    # first) makes cadence a pure throughput knob, and 7 companies/night is
-    # ~15-20 minutes of one scrape worker, covers the full roster about every
-    # 8 weeks, and queues its gated finds while the GPU droplet is often still
-    # warm from the hunter's jobs — so discovery rides the same spin-up
-    # instead of paying for its own. Every document must pass
-    # check_discovered_document() (not announcement-shaped, confirmed
-    # Content-Length >= the report floor) before a job is created; refusals
-    # are logged with reasons. Jobs wait for the GPU orchestrator — this task
-    # does no processing itself.
-    'auto-discover-documents-daily': {
-        'task': 'core.tasks.auto_discover_and_process_documents_task',
-        'schedule': crontab(hour=4, minute=30),  # 4:30 AM ET, after the hunter
-        'kwargs': {
-            'limit': 7,
+            'chain_discovery_limit': 7,  # Companies for the chained discovery
         }
     },
 

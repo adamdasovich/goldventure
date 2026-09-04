@@ -3094,7 +3094,8 @@ def check_credentials_task(self, notify=True):
 
 
 @shared_task(bind=True, time_limit=3600, soft_time_limit=3480, on_failure=log_task_failure)
-def hunt_technical_reports_task(self, flag_ids=None, max_companies=None, dry_run=False):
+def hunt_technical_reports_task(self, flag_ids=None, max_companies=None, dry_run=False,
+                                chain_discovery_limit=None):
     """
     Find the technical report each pending NewsReportFlag refers to.
 
@@ -3345,4 +3346,21 @@ def hunt_technical_reports_task(self, flag_ids=None, max_companies=None, dry_run
             flag.save(update_fields=save_fields)
 
     logger.info(f"[HUNT] Complete: {stats}")
+
+    # Chain daily discovery behind the hunt rather than co-scheduling it on its
+    # own cron. A fixed 4:30 start could not guarantee the shared droplet: on a
+    # quiet night the hunter's one small job finishes by ~4:15, the droplet
+    # self-destroys after 5 idle minutes, and discovery's jobs at ~4:35 pay a
+    # SECOND spin-up — DigitalOcean bills the droplet by the hour, so that is
+    # up to a full extra billed hour every day it happens. And on a long night
+    # the cron fired while the hunt was still crawling, putting both browser
+    # loads on the two-slot scrape queue at once. Dispatching here means
+    # discovery starts the moment the hunt ends, every time, whatever the hunt
+    # took — its gated finds land while the droplet is still working the
+    # hunt's reports (a large NI 43-101 alone runs ~30 minutes), and a night
+    # where neither finds anything spins no droplet at all.
+    if chain_discovery_limit and not dry_run:
+        auto_discover_and_process_documents_task.delay(limit=chain_discovery_limit)
+        logger.info(f"[HUNT] Chained discovery for {chain_discovery_limit} companies")
+
     return stats
