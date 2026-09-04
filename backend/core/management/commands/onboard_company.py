@@ -794,7 +794,6 @@ class Command(BaseCommand):
         # Save news with classification and document processing
         news_data = data.get('news', [])
         saved_news_count = 0
-        processing_jobs_created = 0
         material_news_count = 0
 
         for news_item in news_data:
@@ -879,10 +878,6 @@ class Command(BaseCommand):
         if material_news_count > 0:
             self.stdout.write(self.style.SUCCESS(
                 f"  Found {material_news_count} material news items (drill results, financings, etc.)"
-            ))
-        if processing_jobs_created > 0:
-            self.stdout.write(self.style.SUCCESS(
-                f"  Created {processing_jobs_created} document processing jobs for PDF news releases"
             ))
 
         # Save projects

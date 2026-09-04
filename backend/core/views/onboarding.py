@@ -645,8 +645,7 @@ def _save_scraped_company_data(data: dict, source_url: str, update_existing: boo
     processing_jobs = _save_documents(company, data.get('documents', []), user)
     data['_processing_jobs_created'] = processing_jobs
     _set_presentation_url(company)
-    news_jobs = _save_news(company, data.get('news', []), user)
-    processing_jobs.extend(news_jobs)
+    _save_news(company, data.get('news', []))
     _save_projects(company, data.get('projects', []))
     return company
 
@@ -825,13 +824,16 @@ def _set_presentation_url(company):
         company.save(update_fields=['presentation'])
 
 
-def _save_news(company, news_items: list, user) -> list:
-    """Save scraped news with classification and financing flags. Returns processing jobs."""
+def _save_news(company, news_items: list) -> None:
+    """Save scraped news with classification and financing flags.
+
+    Creates no processing jobs. PDF news releases used to be queued to the GPU
+    from here; the news processor reads their text layer directly now, so the
+    content reaches news_chunks through embed_recent_news_for_rag_task instead.
+    """
     import re
     from datetime import datetime, timedelta
-    from core.models import CompanyNews, DocumentProcessingJob, NewsRelease, NewsReleaseFlag
-
-    jobs = []
+    from core.models import CompanyNews, NewsRelease, NewsReleaseFlag
 
     # Fallback: use website_crawler if no news from company_scraper
     if not news_items and company and company.website:
@@ -897,8 +899,6 @@ def _save_news(company, news_items: list, user) -> list:
         # reaches news_chunks via embed_recent_news_for_rag_task instead of
         # costing GPU droplet time and diluting the technical-document
         # collection. See the same change in core/tasks.py.
-
-    return jobs
 
 
 def _create_financing_flag(company, news_url, news_title, pub_date):

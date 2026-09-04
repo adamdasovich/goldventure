@@ -147,8 +147,20 @@ export default function DocumentQueuePage() {
           body: JSON.stringify({ reason: cancelReason }),
         },
       );
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to cancel the job");
+      // A non-JSON body (a proxy error page, say) would otherwise surface as
+      // "Unexpected token <", which tells the reviewer nothing.
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        // 409 means the worker claimed the job between the page loading and
+        // this click. Close the dialog and refresh so the reviewer sees the
+        // job's real status instead of a stale Pending they cannot cancel.
+        setCancelTarget(null);
+        setCancelReason("");
+        fetchJobs();
+        throw new Error(
+          data.error || `Failed to cancel the job (${res.status})`,
+        );
+      }
       const released = data.released_flag_ids?.length
         ? ` Flag #${data.released_flag_ids.join(", #")} returned to review.`
         : "";
