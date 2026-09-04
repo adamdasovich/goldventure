@@ -404,7 +404,14 @@ CELERY_RESULT_BACKEND = os.getenv('CELERY_RESULT_BACKEND', 'redis://localhost:63
 CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
-CELERY_TIMEZONE = 'UTC'
+# Beat crontabs below are Eastern wall-clock times, DST-aware. This was 'UTC'
+# until 2026-09-04, with crontabs written as UTC numbers and ET comments — the
+# comments were only true in winter, so every "7 AM ET" task actually ran at
+# 8 AM EDT all summer. Market-anchored schedules (the 4:30 PM stock fetch)
+# especially need ET, because the close is defined in ET year-round.
+# NOTE: changing this again requires deleting the celerybeat-schedule state
+# file before restarting celery-beat, or stale last-run times can misfire.
+CELERY_TIMEZONE = 'America/Toronto'
 CELERY_TASK_TRACK_STARTED = True
 CELERY_TASK_TIME_LIMIT = 30 * 60  # 30 minutes max
 CELERY_RESULT_EXPIRES = 3600  # 1 hour - most task results are consumed immediately
@@ -473,44 +480,43 @@ CELERY_BEAT_SCHEDULE = {
     # every configured Stripe webhook secret still has an enabled endpoint --
     # the store endpoint was found unregistered on 2026-09-01, which meant a
     # customer could be charged and no order was ever created.
-    # Mondays at 12:15 UTC. Stated in UTC deliberately: crontab() here is UTC,
-    # so the wall-clock ET time shifts with daylight saving -- 08:15 EDT in
-    # summer, 07:15 EST in winter. (The older entries below label fixed UTC
-    # hours with fixed ET times, which is why two of them disagree about what
-    # 13:00 UTC is.)
+    # Mondays 07:15 ET (CELERY_TIMEZONE is America/Toronto, so this is a fixed
+    # wall-clock time year-round — the old UTC-pinned 12:15 drifted between
+    # 07:15 EST and 08:15 EDT).
     'check-credentials-weekly': {
         'task': 'core.tasks.check_credentials_task',
-        'schedule': crontab(day_of_week=1, hour=12, minute=15),
+        'schedule': crontab(day_of_week=1, hour=7, minute=15),
     },
 
     # Warn early-access comp-grant holders before their access lapses. Comp
     # grants have no Stripe subscription, so nothing else would tell them.
-    # 13:00 UTC = 9 AM ET.
     'notify-expiring-comp-grants': {
         'task': 'core.tasks.notify_expiring_comp_grants_task',
-        'schedule': crontab(hour=13, minute=30),
+        'schedule': crontab(hour=9, minute=30),  # 9:30 AM ET
     },
 
-    # Scrape Kitco metals prices twice daily (9 AM and 4 PM ET / 14:00 and 21:00 UTC)
+    # Scrape Kitco metals prices twice daily (9 AM and 4 PM ET)
     'scrape-metals-prices-morning': {
         'task': 'core.tasks.scrape_metals_prices_task',
-        'schedule': crontab(hour=14, minute=0),  # 9 AM ET
+        'schedule': crontab(hour=9, minute=0),  # 9 AM ET
     },
     'scrape-metals-prices-afternoon': {
         'task': 'core.tasks.scrape_metals_prices_task',
-        'schedule': crontab(hour=21, minute=0),  # 4 PM ET
+        'schedule': crontab(hour=16, minute=0),  # 4 PM ET
     },
-    # Fetch stock prices daily after market close (4:30 PM ET / 21:30 UTC) on weekdays
+    # Fetch stock prices daily after market close (4:30 PM ET) on weekdays.
+    # The market close is defined in ET year-round, so this schedule must be
+    # too — the old UTC pin ran it at 5:30 PM EDT all summer.
     'fetch-stock-prices-daily': {
         'task': 'core.tasks.fetch_stock_prices_task',
-        'schedule': crontab(hour=21, minute=30, day_of_week='mon-fri'),  # 4:30 PM ET, Mon-Fri
+        'schedule': crontab(hour=16, minute=30, day_of_week='mon-fri'),  # 4:30 PM ET, Mon-Fri
     },
 
     # Fetch base / critical metals prices (copper from Yahoo Finance) after the
-    # COMEX copper close — 5:30 PM ET / 22:30 UTC, weekdays.
+    # COMEX copper close — 5:30 PM ET, weekdays.
     'fetch-base-metals-prices-daily': {
         'task': 'core.tasks.fetch_base_metals_prices_task',
-        'schedule': crontab(hour=22, minute=30, day_of_week='mon-fri'),  # 5:30 PM ET, Mon-Fri
+        'schedule': crontab(hour=17, minute=30, day_of_week='mon-fri'),  # 5:30 PM ET, Mon-Fri
     },
 
     # Auto-discover and process documents.
@@ -581,31 +587,31 @@ CELERY_BEAT_SCHEDULE = {
     # /admin/document-queue and is cancellable while pending.
     'hunt-technical-reports-daily': {
         'task': 'core.tasks.hunt_technical_reports_task',
-        'schedule': crontab(hour=9, minute=0),  # 4 AM ET
+        'schedule': crontab(hour=4, minute=0),  # 4 AM ET
         'kwargs': {
             'max_companies': 40,  # Ceiling on sites crawled per run
         }
     },
 
-    # Scrape mining industry news 3 times daily (8 AM, 1 PM, 6 PM ET / 13:00, 18:00, 23:00 UTC)
+    # Scrape mining industry news 3 times daily (8 AM, 1 PM, 6 PM ET)
     'scrape-mining-news-morning': {
         'task': 'core.tasks.scrape_mining_news_task',
-        'schedule': crontab(hour=13, minute=0),  # 8 AM ET
+        'schedule': crontab(hour=8, minute=0),  # 8 AM ET
     },
     'scrape-mining-news-afternoon': {
         'task': 'core.tasks.scrape_mining_news_task',
-        'schedule': crontab(hour=18, minute=0),  # 1 PM ET
+        'schedule': crontab(hour=13, minute=0),  # 1 PM ET
     },
     'scrape-mining-news-evening': {
         'task': 'core.tasks.scrape_mining_news_task',
-        'schedule': crontab(hour=23, minute=0),  # 6 PM ET
+        'schedule': crontab(hour=18, minute=0),  # 6 PM ET
     },
 
-    # Scrape news releases from ALL company websites daily (7 AM ET / 12:00 UTC)
+    # Scrape news releases from ALL company websites daily (7 AM ET)
     # Runs Monday-Saturday only (no Sunday - markets closed, no news)
     'scrape-all-companies-news-daily': {
         'task': 'core.tasks.scrape_all_companies_news_task',
-        'schedule': crontab(hour=12, minute=0, day_of_week='1-6'),  # 7 AM ET, Mon-Sat
+        'schedule': crontab(hour=7, minute=0, day_of_week='1-6'),  # 7 AM ET, Mon-Sat
     },
 
     # Cleanup stuck jobs every 30 minutes (was 15 - reduced to cut unnecessary DB polls)
@@ -649,7 +655,7 @@ CELERY_BEAT_SCHEDULE = {
     # also roughly steady state; a backlog drains over several nights.
     'embed-recent-news-daily': {
         'task': 'core.tasks.embed_recent_news_for_rag_task',
-        'schedule': crontab(hour=8, minute=0),  # 3 AM ET
+        'schedule': crontab(hour=3, minute=0),  # 3 AM ET
         'kwargs': {'days': 7, 'max_companies': 15, 'limit_per_company': 10},
     },
 
@@ -667,17 +673,17 @@ CELERY_BEAT_SCHEDULE = {
     # Weekly watchlist briefing email to opted-in users (Monday 7 AM ET)
     'send-weekly-briefings': {
         'task': 'core.tasks.send_weekly_briefings_task',
-        'schedule': crontab(hour=12, minute=0, day_of_week=1),  # Mon 7 AM ET
+        'schedule': crontab(hour=7, minute=0, day_of_week=1),  # Mon 7 AM ET
     },
 
-    # Weekly industry report — Friday 5:30 PM ET / 22:30 UTC
-    # Runs after fetch_stock_prices_task (21:30 UTC) so Friday's stock closes
-    # exist. Co-runs with fetch_base_metals_prices_daily at 22:30 — if that
+    # Weekly industry report — Friday 5:30 PM ET
+    # Runs after fetch_stock_prices_task (4:30 PM ET) so Friday's stock closes
+    # exist. Co-runs with fetch_base_metals_prices_daily at 5:30 PM — if that
     # race causes Friday's base-metal row to be missed, the report falls back
     # to Thursday's close for those metals.
     'generate-weekly-industry-report': {
         'task': 'core.tasks.generate_weekly_industry_report_task',
-        'schedule': crontab(hour=22, minute=30, day_of_week=5),  # Fri 5:30 PM ET
+        'schedule': crontab(hour=17, minute=30, day_of_week=5),  # Fri 5:30 PM ET
     },
 }
 
