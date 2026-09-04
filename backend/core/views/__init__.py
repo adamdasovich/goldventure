@@ -18,6 +18,7 @@ from .ai_chat import (  # noqa: F401
     check_prompt_injection,
     get_or_create_ai_usage,
     claude_chat,
+    claude_chat_stream,
     company_chat,
     available_tools,
 )

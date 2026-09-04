@@ -113,6 +113,7 @@ urlpatterns = [
 
     # Claude Chat endpoints
     path('claude/chat/', views.claude_chat, name='claude_chat'),
+    path('claude/chat/stream/', views.claude_chat_stream, name='claude_chat_stream'),
     path('claude/tools/', views.available_tools, name='available_tools'),
     path('companies/<int:company_id>/chat/', views.company_chat, name='company_chat'),
 

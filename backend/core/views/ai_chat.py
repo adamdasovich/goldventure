@@ -2,11 +2,14 @@
 API Views for GoldVenture Platform
 """
 
+import json
 import logging
 import requests
 import re
 import anthropic
 from datetime import datetime
+
+from django.http import StreamingHttpResponse
 
 from rest_framework import viewsets, status, permissions
 
@@ -251,6 +254,90 @@ def claude_chat(request):
         )
 
 
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def claude_chat_stream(request):
+    """
+    Streaming variant of claude_chat: Server-Sent Events over a plain POST.
+
+    POST /api/claude/chat/stream/
+    Body is identical to /api/claude/chat/. The response is
+    text/event-stream, each event a JSON object:
+
+        {"type": "status", "text": "Searching technical reports"}
+        {"type": "text", "text": "answer delta"}
+        {"type": "done", "usage": {...}, "usage_remaining": {...}}
+        {"type": "error", "error": "readable message"}
+
+    Same auth, injection check, and rate limiting as claude_chat; usage is
+    recorded when the stream completes.
+    """
+    message = request.data.get('message')
+    conversation_history = request.data.get('conversation_history', [])
+    system_prompt = request.data.get('system_prompt')
+
+    if not message:
+        return Response(
+            {'error': 'message is required'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    is_safe, matched_pattern = check_prompt_injection(message)
+    if not is_safe:
+        return Response(
+            {'error': 'Message contains disallowed content patterns.'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    usage = get_or_create_ai_usage(request.user)
+    can_send, limit_error = usage.can_send_message()
+    if not can_send:
+        return Response(
+            {'error': limit_error, 'limit_reached': True},
+            status=status.HTTP_429_TOO_MANY_REQUESTS
+        )
+
+    user_id = request.user.id
+
+    def event_stream():
+        try:
+            client = OptimizedClaudeClient()
+            for event in client.chat_stream(
+                message=message,
+                conversation_history=conversation_history,
+                system_prompt=system_prompt,
+            ):
+                if event.get('type') == 'done':
+                    tokens_used = event.get('usage', {}).get('total_tokens') or 1000
+                    usage.record_usage(tokens_used)
+                    event['usage_remaining'] = {
+                        'messages_today': usage.messages_today,
+                        'message_limit': usage.daily_message_limit,
+                        'tokens_today': usage.tokens_today,
+                        'token_limit': usage.daily_token_limit,
+                    }
+                yield f"data: {json.dumps(event)}\n\n"
+        except anthropic.APIStatusError as e:
+            logger.error(f"claude_chat_stream API error for user {user_id}: {e.status_code} {str(e)}")
+            if e.status_code == 529:
+                msg = 'The AI service is temporarily busy. Please try again in a moment.'
+            elif e.status_code == 429:
+                msg = 'AI rate limit reached. Please wait a minute and try again.'
+            else:
+                msg = 'An error occurred processing your request. Please try again.'
+            yield f"data: {json.dumps({'type': 'error', 'error': msg})}\n\n"
+        except Exception as e:
+            logger.error(f"claude_chat_stream error for user {user_id}: {str(e)}")
+            yield f"data: {json.dumps({'type': 'error', 'error': 'An error occurred processing your request. Please try again.'})}\n\n"
+
+    response = StreamingHttpResponse(event_stream(), content_type='text/event-stream')
+    response['Cache-Control'] = 'no-cache'
+    # Tells nginx not to buffer this response; without it the whole point of
+    # streaming is lost — chunks pile up in the proxy until the request ends.
+    response['X-Accel-Buffering'] = 'no'
+    return response
 
 
 @api_view(['POST'])

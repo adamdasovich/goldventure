@@ -395,6 +395,129 @@ class OptimizedClaudeClient:
             ]
         }
 
+    # Friendly labels for the streaming status line. Fallback is the tool name
+    # with underscores spaced out, so unknown tools still read acceptably.
+    _TOOL_STATUS_LABELS = {
+        "search_available_tools": "Finding the right tools",
+        "load_tool": "Loading a tool",
+        "reports_search_technical": "Finding technical reports",
+        "reports_vector_search": "Searching technical reports",
+        "reports_get_content": "Reading report content",
+        "search_documents": "Searching documents",
+        "ask_document_question": "Consulting documents",
+        "insights_project_due_diligence": "Running project due diligence",
+        "insights_economic_rerate": "Re-running project economics",
+        "search_news_releases": "Searching news releases",
+        "get_latest_news_releases": "Fetching latest news",
+        "industry_search_news": "Searching industry news",
+        "mining_get_company_details": "Looking up company details",
+    }
+
+    @classmethod
+    def _status_label(cls, tool_name: str) -> str:
+        return cls._TOOL_STATUS_LABELS.get(
+            tool_name, tool_name.replace("_", " ").capitalize()
+        )
+
+    def chat_stream(self, message: str, conversation_history: List[Dict] = None,
+                    system_prompt: str = None, max_tokens: int = 2000):
+        """
+        Streaming variant of chat(). Yields event dicts as the answer forms:
+
+          {"type": "status", "text": "Searching technical reports"} - tool runs
+          {"type": "text", "text": "..."}                           - text delta
+          {"type": "done", "usage": {...}, ...}                     - final event
+
+        Runs the same tool loop as chat(); the caller (an SSE view) is
+        responsible for framing these as wire events and recording usage.
+        """
+        if conversation_history is None:
+            conversation_history = []
+        if system_prompt is None:
+            system_prompt = self._get_optimized_system_prompt()
+
+        messages = conversation_history + [
+            {"role": "user", "content": message}
+        ]
+        tools = self._get_tools_for_query(message)
+
+        all_tool_calls = []
+        tools_loaded_dynamically = []
+        total_input_tokens = 0
+        total_output_tokens = 0
+        emitted_any_text = False
+
+        while True:
+            emitted_this_round = False
+            with self.client.messages.stream(
+                model="claude-sonnet-4-6",
+                max_tokens=max_tokens,
+                system=system_prompt,
+                tools=tools,
+                messages=messages,
+                extra_body={"cache_control": {"type": "ephemeral"}},
+            ) as stream:
+                for delta in stream.text_stream:
+                    if not delta:
+                        continue
+                    # Rounds are separate assistant turns ("Let me check..."
+                    # then tools, then the answer); without a break they would
+                    # concatenate mid-sentence in the client's single bubble.
+                    if emitted_any_text and not emitted_this_round:
+                        yield {"type": "text", "text": "\n\n"}
+                    emitted_any_text = emitted_this_round = True
+                    yield {"type": "text", "text": delta}
+                response = stream.get_final_message()
+
+            total_input_tokens += response.usage.input_tokens
+            total_output_tokens += response.usage.output_tokens
+
+            if response.stop_reason != "tool_use":
+                break
+
+            tool_results = []
+            for content_block in response.content:
+                if content_block.type != "tool_use":
+                    continue
+                tool_name = content_block.name
+                yield {"type": "status", "text": self._status_label(tool_name)}
+
+                result = self._route_tool_call(tool_name, content_block.input)
+                all_tool_calls.append({
+                    'tool': tool_name,
+                    'input': content_block.input,
+                    'result_tokens': TokenEstimator.estimate_tokens(result),
+                    'cached': result.get('_cached', False) if isinstance(result, dict) else False
+                })
+
+                if tool_name == "load_tool" and isinstance(result, dict) and result.get("success"):
+                    new_tool = result.get("tool")
+                    if new_tool and new_tool not in tools:
+                        tools.append(new_tool)
+                        tools_loaded_dynamically.append(new_tool.get("name"))
+
+                tool_results.append({
+                    "type": "tool_result",
+                    "tool_use_id": content_block.id,
+                    "content": str(result)
+                })
+
+            messages.extend([
+                {"role": "assistant", "content": response.content},
+                {"role": "user", "content": tool_results}
+            ])
+
+        yield {
+            "type": "done",
+            "usage": {
+                "input_tokens": total_input_tokens,
+                "output_tokens": total_output_tokens,
+                "total_tokens": total_input_tokens + total_output_tokens,
+            },
+            "tool_calls": len(all_tool_calls),
+            "tools_loaded_dynamically": tools_loaded_dynamically,
+        }
+
     def _get_optimized_system_prompt(self) -> str:
         """
         Get a shorter, more focused system prompt.

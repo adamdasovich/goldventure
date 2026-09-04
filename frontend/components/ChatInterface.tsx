@@ -7,6 +7,7 @@ import { Input } from "./ui/Input";
 import { Button } from "./ui/Button";
 import { Badge } from "./ui/Badge";
 import { claudeAPI, ApiError } from "@/lib/api";
+import type { ChatStreamResult } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
 import { LoginModal, RegisterModal } from "@/components/auth";
 import {
@@ -63,6 +64,9 @@ export default function ChatInterface({
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [limitReached, setLimitReached] = useState(false);
+  // What the assistant is doing right now ("Searching technical reports"),
+  // shown in the typing bubble until answer text starts arriving.
+  const [streamStatus, setStreamStatus] = useState<string | null>(null);
   // Signed-out visitors used to get a dead end here: the assistant replied
   // "Please log in to use the AI assistant" as plain text, with nothing to
   // click. Asking the assistant a question is the highest-intent action an
@@ -130,47 +134,70 @@ export default function ChatInterface({
     ];
     setMessages(newMessages);
 
-    try {
-      const response = await claudeAPI.chat(
-        { message: msg, conversation_history: messages },
-        accessToken,
-      );
-      setMessages([
-        ...newMessages,
-        { role: "assistant", content: response.message },
-      ]);
-    } catch (error: any) {
-      // A 401 means the stored token went stale under us (expired between
-      // refreshes, or invalidated server-side). Refresh once and retry before
-      // surfacing anything — the raw SimpleJWT text ("Given token not valid
-      // for any token type") means nothing to a visitor.
-      if (error instanceof ApiError && error.status === 401) {
-        const newToken = await refreshAccessToken();
-        if (newToken) {
-          try {
-            const response = await claudeAPI.chat(
-              { message: msg, conversation_history: messages },
-              newToken,
-            );
-            setMessages([
-              ...newMessages,
-              { role: "assistant", content: response.message },
-            ]);
-            return;
-          } catch {
-            // Retry failed too — fall through to the session message.
-          }
-        }
-        // No refresh possible: refreshAccessToken() has already logged the
-        // user out (and is redirecting), but leave a readable trace in case
-        // the navigation is interrupted.
-        setMessages([
-          ...newMessages,
-          {
-            role: "assistant",
-            content: "Your session has expired — please sign in again.",
+    const conversation = messages;
+    let streamedText = "";
+
+    const applyAssistant = (content: string) =>
+      setMessages([...newMessages, { role: "assistant", content }]);
+
+    const runStream = async (token: string): Promise<ChatStreamResult> => {
+      streamedText = "";
+      const result = await claudeAPI.chatStream(
+        { message: msg, conversation_history: conversation },
+        token,
+        {
+          onStatus: (status) => setStreamStatus(status),
+          onText: (delta) => {
+            streamedText += delta;
+            setStreamStatus(null);
+            applyAssistant(streamedText);
+            scrollToBottom();
           },
-        ]);
+        },
+      );
+      if (!streamedText) {
+        // A stream that ends without any text is a failure in disguise;
+        // throwing routes it into the JSON fallback below.
+        throw new Error("Empty response");
+      }
+      return result;
+    };
+
+    try {
+      try {
+        await runStream(accessToken);
+      } catch (error) {
+        // A 401 means the stored token went stale under us (expired between
+        // refreshes, or invalidated server-side). Refresh once and retry
+        // before surfacing anything — the raw SimpleJWT text ("Given token
+        // not valid for any token type") means nothing to a visitor.
+        if (error instanceof ApiError && error.status === 401) {
+          const newToken = await refreshAccessToken();
+          if (!newToken) {
+            // refreshAccessToken() has already logged the user out (and is
+            // redirecting), but leave a readable trace in case the
+            // navigation is interrupted.
+            applyAssistant("Your session has expired — please sign in again.");
+            setNeedsAccount(true);
+            return;
+          }
+          await runStream(newToken);
+        } else if (!streamedText) {
+          // Stream never produced anything (proxy trouble, config) — fall
+          // back to the blocking JSON endpoint rather than failing outright.
+          const response = await claudeAPI.chat(
+            { message: msg, conversation_history: conversation },
+            accessToken,
+          );
+          applyAssistant(response.message);
+        } else {
+          // Died mid-answer; keep what streamed and surface the error below.
+          throw error;
+        }
+      }
+    } catch (error: any) {
+      if (error instanceof ApiError && error.status === 401) {
+        applyAssistant("Your session has expired — please sign in again.");
         setNeedsAccount(true);
         return;
       }
@@ -180,12 +207,14 @@ export default function ChatInterface({
       if (errMsg.includes("limit") || errMsg.includes("429")) {
         setLimitReached(true);
       }
-      setMessages([
-        ...newMessages,
-        { role: "assistant", content: `Error: ${errMsg}` },
-      ]);
+      applyAssistant(
+        streamedText
+          ? `${streamedText}\n\n[Response interrupted: ${errMsg}]`
+          : `Error: ${errMsg}`,
+      );
     } finally {
       setIsLoading(false);
+      setStreamStatus(null);
     }
   };
 
@@ -323,23 +352,31 @@ export default function ChatInterface({
                 </div>
               ))}
 
-              {isLoading && (
-                <div className="flex justify-start animate-fade-in">
-                  <div className="glass border border-slate-700 px-4 py-3 rounded-[var(--radius-md)]">
-                    <div className="flex items-center space-x-2">
-                      <div className="animate-shimmer w-2 h-2 bg-gold-500 rounded-full"></div>
-                      <div
-                        className="animate-shimmer w-2 h-2 bg-gold-500 rounded-full"
-                        style={{ animationDelay: "0.2s" }}
-                      ></div>
-                      <div
-                        className="animate-shimmer w-2 h-2 bg-gold-500 rounded-full"
-                        style={{ animationDelay: "0.4s" }}
-                      ></div>
+              {/* Typing bubble: hidden once the streamed answer starts
+                  rendering as a real assistant message above. */}
+              {isLoading &&
+                messages[messages.length - 1]?.role !== "assistant" && (
+                  <div className="flex justify-start animate-fade-in">
+                    <div className="glass border border-slate-700 px-4 py-3 rounded-[var(--radius-md)]">
+                      <div className="flex items-center space-x-2">
+                        <div className="animate-shimmer w-2 h-2 bg-gold-500 rounded-full"></div>
+                        <div
+                          className="animate-shimmer w-2 h-2 bg-gold-500 rounded-full"
+                          style={{ animationDelay: "0.2s" }}
+                        ></div>
+                        <div
+                          className="animate-shimmer w-2 h-2 bg-gold-500 rounded-full"
+                          style={{ animationDelay: "0.4s" }}
+                        ></div>
+                        {streamStatus && (
+                          <span className="text-sm text-slate-400 pl-1">
+                            {streamStatus}…
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
-                </div>
-              )}
+                )}
               {needsAccount && (
                 <div className="rounded-xl border border-gold-500/40 bg-slate-900/70 p-5 animate-slide-in-up">
                   <p className="text-white font-semibold mb-1">

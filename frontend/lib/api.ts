@@ -282,6 +282,25 @@ export const financingAPI = {
     }),
 };
 
+/** Callbacks fired as a chat stream progresses. */
+export interface ChatStreamCallbacks {
+  /** A tool is running server-side ("Searching technical reports"). */
+  onStatus?: (status: string) => void;
+  /** A fragment of the answer text arrived. */
+  onText?: (delta: string) => void;
+}
+
+/** Terminal event of a chat stream. */
+export interface ChatStreamResult {
+  usage?: { input_tokens: number; output_tokens: number; total_tokens: number };
+  usage_remaining?: {
+    messages_today: number;
+    message_limit: number;
+    tokens_today: number;
+    token_limit: number;
+  };
+}
+
 // Claude Chat API - calls Django backend directly (nginx proxies /api/ to backend)
 export const claudeAPI = {
   chat: (request: ChatRequest, accessToken?: string): Promise<ChatResponse> =>
@@ -290,6 +309,75 @@ export const claudeAPI = {
       headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
       body: JSON.stringify(request),
     }),
+
+  /**
+   * Streaming chat over SSE. Resolves with the final "done" event after the
+   * stream ends; text arrives incrementally via callbacks. Throws ApiError
+   * (with status) if the request is rejected before streaming starts, or if
+   * the server sends an error event mid-stream.
+   */
+  chatStream: async (
+    request: ChatRequest,
+    accessToken: string,
+    callbacks: ChatStreamCallbacks,
+  ): Promise<ChatStreamResult> => {
+    const response = await fetch(`${API_BASE_URL}/claude/chat/stream/`, {
+      method: "POST",
+      cache: "no-store",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify(request),
+    });
+
+    if (!response.ok || !response.body) {
+      const error = await response.json().catch(() => ({}));
+      throw new ApiError(
+        error.error || error.detail || `API Error: ${response.status}`,
+        response.status,
+      );
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    let doneEvent: ChatStreamResult = {};
+
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+
+      // SSE frames are separated by a blank line; the tail may be partial.
+      const frames = buffer.split("\n\n");
+      buffer = frames.pop() ?? "";
+
+      for (const frame of frames) {
+        const dataLine = frame
+          .split("\n")
+          .find((line) => line.startsWith("data: "));
+        if (!dataLine) continue;
+        let event: any;
+        try {
+          event = JSON.parse(dataLine.slice(6));
+        } catch {
+          continue;
+        }
+        if (event.type === "text" && typeof event.text === "string") {
+          callbacks.onText?.(event.text);
+        } else if (event.type === "status" && typeof event.text === "string") {
+          callbacks.onStatus?.(event.text);
+        } else if (event.type === "error") {
+          throw new ApiError(event.error || "Streaming failed", 500);
+        } else if (event.type === "done") {
+          doneEvent = event;
+        }
+      }
+    }
+
+    return doneEvent;
+  },
 
   companyChat: (
     companyId: number,
