@@ -195,12 +195,15 @@ If you don't have access to specific information, say so clearly and suggest whe
         tools = self._get_all_tools()
 
         # Initial API call
+        # extra_body: top-level automatic prompt caching (anthropic 0.75.0 has
+        # no typed cache_control param, so it must go through the raw body)
         response = self.client.messages.create(
             model="claude-sonnet-4-6",
             max_tokens=max_tokens,
             system=system_prompt,
             tools=tools,
-            messages=messages
+            messages=messages,
+            extra_body={"cache_control": {"type": "ephemeral"}}
         )
 
         # Track all tool calls made
@@ -244,7 +247,8 @@ If you don't have access to specific information, say so clearly and suggest whe
                 max_tokens=max_tokens,
                 system=system_prompt,
                 tools=tools,
-                messages=messages
+                messages=messages,
+                extra_body={"cache_control": {"type": "ephemeral"}}
             )
 
         # Extract final text response

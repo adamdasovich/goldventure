@@ -306,12 +306,17 @@ class OptimizedClaudeClient:
         initial_tool_tokens = TokenEstimator.estimate_tokens(tools)
 
         # Initial API call
+        # extra_body: top-level automatic prompt caching (anthropic 0.75.0 has
+        # no typed cache_control param, so it must go through the raw body).
+        # Note: load_tool changing the tool set mid-loop invalidates the whole
+        # cache prefix — tools render first.
         response = self.client.messages.create(
             model="claude-sonnet-4-6",
             max_tokens=max_tokens,
             system=system_prompt,
             tools=tools,
-            messages=messages
+            messages=messages,
+            extra_body={"cache_control": {"type": "ephemeral"}}
         )
 
         all_tool_calls = []
@@ -361,7 +366,8 @@ class OptimizedClaudeClient:
                 max_tokens=max_tokens,
                 system=system_prompt,
                 tools=tools,
-                messages=messages
+                messages=messages,
+                extra_body={"cache_control": {"type": "ephemeral"}}
             )
 
         # Extract final response
