@@ -201,8 +201,11 @@ def classify_release(title: str) -> str:
 # says 'prefeasibility study'.
 _REPORT_TYPE_PATTERNS = [
     ('pea', re.compile(r'preliminary\s+economic\s+assessment|(?<![a-z0-9])pea(?![a-z0-9])', re.I)),
-    ('pfs', re.compile(r'pre-?feasibility|(?<![a-z0-9])pfs(?![a-z0-9])', re.I)),
-    ('dfs', re.compile(r'definitive\s+feasibility|feasibility\s+study|(?<![a-z0-9])dfs(?![a-z0-9])', re.I)),
+    # pre[\s-]? rather than pre-?: titles write "Pre Feasibility" with a space,
+    # and the separator-collapsed comparison view turns "pre-feasibility" into
+    # exactly that — a hyphen-only pattern classified those as dfs.
+    ('pfs', re.compile(r'pre[\s-]?feasibility|(?<![a-z0-9])pfs(?![a-z0-9])', re.I)),
+    ('dfs', re.compile(r'definitive\s+feasibility|(?<!pre)(?<!pre-)(?<!pre )feasibility\s+study|(?<![a-z0-9])dfs(?![a-z0-9])', re.I)),
     ('mre', re.compile(r'mineral\s+resource\s+estimate|resource\s+estimate|mineral\s+reserve|(?<![a-z0-9])mre(?![a-z0-9])', re.I)),
     ('ni43101', re.compile(r'ni\s*43-?101|43-101|technical\s+report', re.I)),
 ]
@@ -453,11 +456,15 @@ def extract_candidates(html: str, base_url: str) -> List[Dict]:
 
 _TYPE_MATCH_PATTERNS = {
     'pea': re.compile(r'preliminary\s+economic|(?<![a-z0-9])pea(?![a-z0-9])', re.I),
-    'pfs': re.compile(r'pre-?feasibility|(?<![a-z0-9])pfs(?![a-z0-9])', re.I),
-    # (?<!pre)(?<!pre-) so a prefeasibility study does not satisfy a definitive
-    # feasibility target: bare 'feasibility' matched inside 'prefeasibility',
-    # which let a PFS document auto-queue against a DFS announcement.
-    'dfs': re.compile(r'(?<!pre)(?<!pre-)feasibility|(?<![a-z0-9])dfs(?![a-z0-9])', re.I),
+    'pfs': re.compile(r'pre[\s-]?feasibility|(?<![a-z0-9])pfs(?![a-z0-9])', re.I),
+    # Three lookbehinds, one per separator, so a prefeasibility study does not
+    # satisfy a definitive feasibility target. Bare 'feasibility' matched
+    # inside 'prefeasibility', which let a PFS document auto-queue against a
+    # DFS announcement — and after that was guarded with (?<!pre)(?<!pre-),
+    # the separator-collapsed haystack reopened it: _hit() also searches a
+    # view where 'Pre-Feasibility-Study.pdf' reads 'pre feasibility study',
+    # which neither lookbehind covered. (?<!pre ) closes that channel.
+    'dfs': re.compile(r'(?<!pre)(?<!pre-)(?<!pre )feasibility|(?<![a-z0-9])dfs(?![a-z0-9])', re.I),
     'mre': re.compile(r'resource\s+estimate|mineral\s+reserve|(?<![a-z0-9])mre(?![a-z0-9])', re.I),
     'ni43101': re.compile(r'ni\s*43-?101|43-101|technical\s+report', re.I),
 }
@@ -619,6 +626,16 @@ def is_auto_queueable(candidate: Dict) -> bool:
     )
 
 
+# Per-host verdict cache for the SSRF gate. is_safe_url resolves DNS by
+# default, and rank_candidates gates every raw candidate — one Galway hunt
+# produced 149 candidates spread across two hostnames, shared by every flag of
+# the company, which meant hundreds of blocking DNS lookups for two answers.
+# Scheme+host is the right key: the private-IP and metadata checks depend on
+# nothing else, and a poisoned path cannot change the verdict.
+_SAFE_HOST_CACHE: Dict[str, bool] = {}
+_SAFE_HOST_CACHE_MAX = 512
+
+
 def is_safe_candidate_url(url: str) -> bool:
     """
     SSRF gate for any URL scraped off a page before we make a request to it.
@@ -630,15 +647,32 @@ def is_safe_candidate_url(url: str) -> bool:
     a configured Django process.
     """
     try:
+        parsed = urlparse(url or '')
+        cache_key = f'{parsed.scheme}://{(parsed.hostname or "").lower()}'
+    except Exception:
+        return False
+    if not parsed.hostname:
+        return False
+
+    cached = _SAFE_HOST_CACHE.get(cache_key)
+    if cached is not None:
+        return cached
+
+    try:
         from core.security_utils import is_safe_url
     except Exception:  # pragma: no cover - only outside Django
         logger.warning('[HUNT] SSRF checker unavailable; refusing %s', url[:80])
         return False
     try:
         ok, _reason = is_safe_url(url)
-        return bool(ok)
+        verdict = bool(ok)
     except Exception:
-        return False
+        verdict = False
+
+    if len(_SAFE_HOST_CACHE) >= _SAFE_HOST_CACHE_MAX:
+        _SAFE_HOST_CACHE.clear()  # crude, but a hunt never nears this many hosts
+    _SAFE_HOST_CACHE[cache_key] = verdict
+    return verdict
 
 
 def head_size_mb(url: str, timeout: int = 12) -> Optional[float]:
@@ -660,7 +694,12 @@ def head_size_mb(url: str, timeout: int = 12) -> Optional[float]:
     try:
         resp = requests.head(url, timeout=timeout, allow_redirects=False,
                              headers={'User-Agent': 'Mozilla/5.0 (compatible; GoldVentureBot/1.0)'})
-        if resp.status_code >= 400:
+        # >= 300, not >= 400. With redirects off, a 301/302 response passed a
+        # 400-only check and its OWN Content-Length — the redirect stub's few
+        # bytes, not the report's — was returned as the document size. A real
+        # 20MB report behind a www or https redirect then took the "-20 too
+        # small" penalty. A redirect means the size is unknown, so say so.
+        if resp.status_code >= 300:
             return None
         length = resp.headers.get('Content-Length')
         if length and length.isdigit():
@@ -737,7 +776,12 @@ def _discover_tech_pages(home_html: str, base_url: str, project: str) -> List[st
             continue
         if urlparse(full).netloc != host:
             continue
-        if project and project in blob:
+        # Compare with separators collapsed: the project is stored normalized
+        # ("loki flake") while hrefs write it "loki-flake", so a literal
+        # substring test never prioritized the hyphenated project URL — and
+        # prioritization is the whole point, since the page budget can run out
+        # before an unprioritized project page is reached.
+        if project and project in _collapse(blob):
             prioritized.append(full)
         else:
             general.append(full)

@@ -154,10 +154,10 @@ class NewsReportFlagViewSet(viewsets.ReadOnlyModelViewSet):
         document_type = doc_type_map[report_type]
 
         try:
-            # Reuse an existing pending/processing job for the same URL if one
-            # exists — avoids duplicate GPU work when the same report is
-            # submitted twice.
-            job, _ = DocumentProcessingJob.objects.get_or_create(
+            # Reuse an existing pending/processing/completed job for the same
+            # URL — avoids duplicate GPU work when the same report is submitted
+            # twice.
+            job, created = DocumentProcessingJob.objects.get_or_create(
                 url=report_url,
                 defaults={
                     'document_type': document_type,
@@ -166,6 +166,27 @@ class NewsReportFlagViewSet(viewsets.ReadOnlyModelViewSet):
                     'created_by': request.user,
                 },
             )
+            # A failed or cancelled job for this URL is dead: nothing retries a
+            # terminal failure, and linking the flag to it would mark the flag
+            # processed while no document ever arrives. The reviewer just
+            # explicitly asked for this URL, so revive the job rather than
+            # silently attaching a corpse.
+            if not created and job.status in ('failed', 'cancelled'):
+                previous_status = job.status
+                job.status = 'pending'
+                job.document_type = document_type
+                job.error_message = ''
+                job.retry_count = 0
+                job.progress_message = (
+                    f'Resubmitted by {request.user.username} from flag review '
+                    f'(was {previous_status})'
+                )
+                job.started_at = None
+                job.completed_at = None
+                job.save(update_fields=[
+                    'status', 'document_type', 'error_message', 'retry_count',
+                    'progress_message', 'started_at', 'completed_at',
+                ])
 
             flag.mark_as_processed(
                 reviewer=request.user,

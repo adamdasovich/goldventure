@@ -234,9 +234,18 @@ export default function DocumentQueuePage() {
             }`}
           >
             {tab.label}
-            {counts[tab.value] !== undefined && (
-              <span className="ml-2 opacity-70">{counts[tab.value]}</span>
-            )}
+            {/* The counts endpoint keys the sum as "total"; a status that has
+                no jobs is simply absent from the payload, so show 0 rather
+                than nothing — an empty badge reads as "not loaded". */}
+            {(() => {
+              const n =
+                tab.value === "all"
+                  ? counts["total"]
+                  : (counts[tab.value] ?? 0);
+              return n !== undefined ? (
+                <span className="ml-2 opacity-70">{n}</span>
+              ) : null;
+            })()}
           </button>
         ))}
       </div>

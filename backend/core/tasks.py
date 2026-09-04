@@ -3198,8 +3198,14 @@ def hunt_technical_reports_task(self, flag_ids=None, max_companies=None, dry_run
             flag.last_hunt_at = now
             stats['candidates_found'] += len(safe_ranked)
 
+            # hunt_attempts was just incremented, so subtract one to index the
+            # schedule: attempt 1 waits HUNT_BACKOFF_DAYS[0]. Indexing on the
+            # incremented value skipped the 1-day entry entirely — the first
+            # re-check of a 'results' flag, whose report can be filed any day
+            # inside its 45-day window, waited 3 days instead of 1 and the
+            # documented 1/3/7/14/21/30 schedule started at 3.
             backoff_days = HUNT_BACKOFF_DAYS[
-                min(flag.hunt_attempts, len(HUNT_BACKOFF_DAYS) - 1)
+                min(flag.hunt_attempts - 1, len(HUNT_BACKOFF_DAYS) - 1)
             ]
             save_fields = HUNT_STATE_FIELDS + [
                 'candidates', 'hunt_attempts', 'last_hunt_at',
@@ -3217,6 +3223,23 @@ def hunt_technical_reports_task(self, flag_ids=None, max_companies=None, dry_run
                             'status': 'pending',
                         },
                     )
+                    # get_or_create matches on URL alone, so an existing FAILED
+                    # job comes back too — and linking the flag to it would
+                    # close the flag as processed against a job nothing will
+                    # ever run (terminal failures are not retried). Leave the
+                    # flag for a human instead: the reviewer sees the ranked
+                    # candidates plus the old job's error and decides.
+                    if job.status == 'failed':
+                        logger.info(
+                            f"[HUNT] Not auto-queueing flag {flag.id}: existing "
+                            f"job {job.id} for this URL is failed "
+                            f"({(job.error_message or '')[:60]})"
+                        )
+                        flag.hunt_status = 'found'
+                        flag.next_hunt_at = now + timedelta(days=backoff_days)
+                        stats['awaiting_review'] += 1
+                        flag.save(update_fields=save_fields)
+                        continue
                     reasons = '; '.join(top.get('score_reasons', []))
                     flag.hunt_status = 'auto_queued'
                     flag.next_hunt_at = None

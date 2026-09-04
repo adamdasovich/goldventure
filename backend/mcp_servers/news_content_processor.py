@@ -399,6 +399,14 @@ class NewsContentProcessor(BaseMCPServer):
 
     def _fetch_content_from_url(self, url: str) -> Optional[str]:
         """Fetch and extract text content from a URL"""
+        # Tracked so the finally below can close it. With stream=True a
+        # response only releases its socket once the body is consumed or
+        # close() is called, and this function returns early from several
+        # places — an unsafe redirect, an oversize PDF, a mid-stream overflow —
+        # none of which consume the body. In a long-lived Celery worker those
+        # early returns accumulated half-open connections until GC got around
+        # to them.
+        response = None
         try:
             # SECURITY: Validate URL before fetching (SSRF prevention)
             is_safe, reason = is_safe_url(url, resolve_dns=True)
@@ -430,6 +438,8 @@ class NewsContentProcessor(BaseMCPServer):
                 if not is_safe:
                     return None  # Block unsafe redirects
 
+                # Release the superseded response's socket before replacing it.
+                response.close()
                 response = requests.get(redirect_url, headers=headers, timeout=15,
                                         allow_redirects=False, stream=True)
                 redirect_count += 1
@@ -509,6 +519,12 @@ class NewsContentProcessor(BaseMCPServer):
         except Exception as e:
             logger.error(f"Error fetching {url}: {e}")
             return None
+        finally:
+            if response is not None:
+                try:
+                    response.close()
+                except Exception:
+                    pass
 
     def _sanitize_text(self, text: str) -> str:
         """Remove NUL characters and other problematic bytes"""
