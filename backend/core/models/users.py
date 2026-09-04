@@ -112,6 +112,16 @@ class Company(models.Model):
     website = models.URLField(blank=True)
     news_url = models.URLField(blank=True, default='', help_text="Custom news page URL if different from standard patterns")
     last_working_news_url = models.URLField(blank=True, default='', help_text="Auto-cached: URL pattern that last successfully found news")
+    # When the weekly document-discovery crawl last visited this company's
+    # site. The discovery task orders by this (nulls first) and stamps it after
+    # every visit — including failed crawls, so a broken site cannot pin itself
+    # to the head of the rotation and starve everyone behind it. Without this
+    # the task sliced [:limit] off default ordering and crawled the same 25
+    # companies every week, forever.
+    last_discovered_at = models.DateTimeField(
+        null=True, blank=True, db_index=True,
+        help_text="Last visit by the weekly document-discovery crawl",
+    )
     headquarters_city = models.CharField(max_length=100, blank=True)
     headquarters_country = models.CharField(max_length=100, blank=True)
 

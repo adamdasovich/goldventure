@@ -729,6 +729,36 @@ def head_size_mb(url: str, timeout: int = 12) -> Optional[float]:
     return None
 
 
+def check_discovered_document(url: str, link_text: str = '') -> tuple:
+    """
+    Gate for a document found by site-wide discovery, where there is no
+    announcement to score against.
+
+    The hunter scores candidates against a HuntTarget built from a news
+    release; discovery has no release, so the anchored scoring cannot apply.
+    What transfers are the two structural checks the supervised hunts proved
+    out: a document that reads as an announcement, presentation or financial
+    statement is never a technical report, and a technical report is
+    megabytes — every wrong auto-queue across four supervised incidents was an
+    announcement PDF under 2MB while the real reports ran 10-30MB.
+
+    Returns (ok, reason). On ok=True the reason carries the confirmed size so
+    the caller can log it; on False it says which check refused and why, so a
+    skipped document is a log line rather than a silent drop.
+    """
+    haystack = f'{link_text or ""} {url or ""}'.lower()
+    haystack_norm = re.sub(r'[^a-z0-9]+', ' ', haystack)
+    if _NEGATIVE_HINT.search(haystack) or _NEGATIVE_HINT.search(haystack_norm):
+        return False, 'reads as an announcement/presentation/financial document'
+
+    size_mb = head_size_mb(url)
+    if size_mb is None:
+        return False, 'size unconfirmed (HEAD refused, redirected, or unsafe URL)'
+    if size_mb < MIN_AUTO_QUEUE_SIZE_MB:
+        return False, f'{size_mb:.1f}MB is below the {MIN_AUTO_QUEUE_SIZE_MB}MB report floor'
+    return True, f'{size_mb:.1f}MB confirmed'
+
+
 # --------------------------------------------------------------------------
 # Crawling
 # --------------------------------------------------------------------------

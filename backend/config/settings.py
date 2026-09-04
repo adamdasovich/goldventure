@@ -530,6 +530,16 @@ CELERY_BEAT_SCHEDULE = {
     # discovers becomes a DocumentProcessingJob that boots a GPU droplet at
     # ~$1.57/hr. Bulk backfill over the whole company list is a supervised batch
     # run, not something to let a weekly cron drift into.
+    # STILL DISABLED — but its three blocking flaws are fixed as of 2026-09-04:
+    # rotation (least-recently-visited via Company.last_discovered_at, stamped
+    # even on failed crawls), the CPU tail-call (process_document_queue() no
+    # longer runs Docling on this worker; jobs wait for the GPU orchestrator),
+    # and the missing gate (check_discovered_document(): announcement-shaped
+    # documents refused, confirmed Content-Length >= the report floor required).
+    # A dry_run kwarg exists for a supervised pass. Re-enabling is a product
+    # decision, not a code one.
+    #
+    # Original note, kept for history:
     # DISABLED 2026-09-03, to be revisited the week of 2026-09-07.
     #
     # The document-type fixes earlier today mean this task can queue technical

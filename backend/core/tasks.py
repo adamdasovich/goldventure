@@ -903,32 +903,58 @@ def fetch_stock_prices_task(self):
 
 
 @shared_task(bind=True, time_limit=3600, soft_time_limit=3540, on_failure=log_task_failure)
-def auto_discover_and_process_documents_task(self, company_ids=None, document_types=None, limit=None):
+def auto_discover_and_process_documents_task(self, company_ids=None, document_types=None,
+                                             limit=None, dry_run=False):
     """
-    Celery task to automatically discover and process documents for companies.
-    Can be scheduled to run periodically (e.g., daily, weekly).
-    
+    Crawl company websites for technical documents and queue the credible ones.
+
+    Rotation: companies are visited least-recently-first via
+    Company.last_discovered_at, which is stamped after every visit — including
+    failed crawls, so a broken site cannot pin the head of the rotation.
+
+    Gate: a discovered document only becomes a DocumentProcessingJob if it
+    passes check_discovered_document() — it must not read as an announcement,
+    presentation or financial statement, and it must have a confirmed
+    Content-Length at or above the report-size floor. Discovery has no news
+    release to score against, so these are the two structural checks that
+    transfer from the hunter; everything refused is logged with its reason.
+
+    Jobs are left pending for the GPU orchestrator. This task used to end by
+    calling process_document_queue(), which runs Docling in-process on the
+    Celery worker — the exact thing CLAUDE.md forbids (the workers hold
+    850M-2400M memory caps, a 300-page NI 43-101 does not fit) — while also
+    racing the GPU worker for the same rows without its row locking.
+
     Args:
-        company_ids (list, optional): List of company IDs to process. If None, processes all companies.
-        document_types (list, optional): List of document types to filter for. If None, processes all types.
-        limit (int, optional): Limit number of companies to process.
-    
-    Returns:
-        dict: Status information about the discovery and processing operation
+        company_ids: explicit companies, bypassing the rotation.
+        document_types: optional pre-filter on crawler-emitted types.
+        limit: companies per run.
+        dry_run: crawl and report what would be queued, but write nothing —
+            no jobs, no rotation stamps.
     """
     try:
         from core.models import Company
         from mcp_servers.website_crawler import crawl_company_website
+        from mcp_servers.report_hunter import check_discovered_document
         
         # Get companies to process
         if company_ids:
             companies = Company.objects.filter(id__in=company_ids, website__isnull=False).exclude(website='')
         else:
-            companies = Company.objects.filter(website__isnull=False).exclude(website='')
-        
+            # Least-recently-visited first, never-visited before that. The old
+            # selection sliced [:limit] off default ordering, which meant the
+            # weekly run crawled the same 25 companies every Sunday and
+            # coverage never advanced past them.
+            from django.db.models import F
+            companies = Company.objects.filter(
+                website__isnull=False
+            ).exclude(website='').order_by(
+                F('last_discovered_at').asc(nulls_first=True), 'id'
+            )
+
         if limit:
             companies = companies[:limit]
-        
+
         companies = list(companies)
         
         if not companies:
@@ -1031,6 +1057,31 @@ def auto_discover_and_process_documents_task(self, company_ids=None, document_ty
                     if existing:
                         continue
 
+                    # Structural gate before anything reaches the GPU.
+                    # Discovery has no announcement to score against, so the
+                    # anchored hunter scoring cannot apply — but the two checks
+                    # that caught every wrong auto-queue do: announcement-
+                    # shaped documents are refused, and the file must have a
+                    # confirmed report-sized Content-Length. Refusals are log
+                    # lines, never silent.
+                    doc_text = f"{doc.get('title', '')} {doc.get('link_text', '')}"
+                    ok, reason = check_discovered_document(doc['url'], doc_text)
+                    if not ok:
+                        total_gated += 1
+                        logger.info(
+                            f"    [GATED] {reason}: {doc.get('title', 'No title')[:56]} "
+                            f"({doc['url'][-56:]})"
+                        )
+                        continue
+
+                    if dry_run:
+                        jobs_created += 1
+                        logger.info(
+                            f"    [DRY-RUN would queue] {reason}: "
+                            f"{doc.get('title', 'No title')[:56]}"
+                        )
+                        continue
+
                     # Use get_or_create to avoid race condition (TOCTOU vulnerability)
                     # Only create job if status would be 'pending' (not already completed/processing)
                     job, job_created = DocumentProcessingJob.objects.get_or_create(
@@ -1045,27 +1096,43 @@ def auto_discover_and_process_documents_task(self, company_ids=None, document_ty
                     # Only count if newly created (not existing completed/processing)
                     if job_created:
                         jobs_created += 1
-                
+                        logger.info(f"    [QUEUED] {reason}: {doc.get('title', 'No title')[:56]}")
+
                 total_jobs_created += jobs_created
                 companies_processed += 1
-                
+
                 logger.info(f"  Created {jobs_created} new processing jobs")
-                
+
             except Exception as e:
                 logger.warning(f"Error processing {company.name}: {str(e)}")
                 continue
+            finally:
+                # Advance the rotation whatever happened. Stamping only on
+                # success would let one broken site sit at the head of the
+                # least-recently-visited order and block every company behind
+                # it, every week.
+                if not dry_run:
+                    Company.objects.filter(pk=company.pk).update(
+                        last_discovered_at=timezone.now()
+                    )
         
-        # Auto-process the queue
-        if total_jobs_created > 0:
-            logger.info(f"\nAuto-processing {total_jobs_created} new jobs...")
-            process_document_queue()
-        
+        # Jobs are deliberately left pending for the GPU orchestrator (60s
+        # poll). This used to call process_document_queue() here, which runs
+        # Docling in-process on this Celery worker — the "never process
+        # documents on CPU" case — while racing the GPU worker for the same
+        # pending rows without its FOR UPDATE SKIP LOCKED claim.
+
         return {
             'status': 'success',
+            'dry_run': dry_run,
             'companies_processed': companies_processed,
             'total_discovered': total_discovered,
+            'gated': total_gated,
             'jobs_created': total_jobs_created,
-            'message': f'Auto-discovery completed: {companies_processed} companies, {total_discovered} documents discovered, {total_jobs_created} jobs created'
+            'message': (f'Auto-discovery completed: {companies_processed} companies, '
+                        f'{total_discovered} documents discovered, {total_gated} gated, '
+                        f'{total_jobs_created} jobs '
+                        + ('would be created (dry run)' if dry_run else 'created'))
         }
         
     except Exception as e:
