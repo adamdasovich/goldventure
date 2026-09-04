@@ -63,9 +63,10 @@ class NI43101ReportsServer(BaseMCPServer):
 
     @property
     def rag_manager(self) -> RAGManager:
-        """Lazily build the RAG manager so non-vector tools stay lightweight."""
+        """Lazily fetch the RAG manager so non-vector tools stay lightweight."""
         if self._rag_manager is None:
-            self._rag_manager = RAGManager()
+            from .rag_utils import get_rag_manager
+            self._rag_manager = get_rag_manager()
         return self._rag_manager
 
     @property
@@ -354,8 +355,13 @@ class NI43101ReportsServer(BaseMCPServer):
         date_to = self._parse_date(params.get("date_to"), "date_to")
         max_results = max(1, min(int(params.get("max_results", 5)), 20))
 
-        # Over-fetch so post-filtering (type / date / access) still leaves enough.
-        fetch_n = max_results * 4
+        # Over-fetch so post-filtering still leaves enough — but only when a
+        # type/date filter is actually set. search_documents already fetches 4x
+        # internally, so this multiplier compounds straight into the MMR and
+        # cross-encoder candidate counts: a blanket ×4 here made one tool call
+        # cost ~30s warm (measured 2026-09-04); ×2 covers access-control drops.
+        has_post_filter = bool(document_type or date_from or date_to)
+        fetch_n = max_results * (4 if has_post_filter else 2)
         raw_results = self.rag_manager.search_documents(
             query=query,
             n_results=fetch_n,

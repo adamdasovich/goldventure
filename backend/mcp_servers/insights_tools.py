@@ -80,8 +80,8 @@ class InsightsToolsServer(BaseMCPServer):
     @property
     def rag_manager(self):
         if self._rag_manager is None:
-            from .rag_utils import RAGManager
-            self._rag_manager = RAGManager()
+            from .rag_utils import get_rag_manager
+            self._rag_manager = get_rag_manager()
         return self._rag_manager
 
     @staticmethod

@@ -8,6 +8,7 @@ Uses Voyage AI for fast embeddings when available, falls back to local model.
 
 import logging
 import os
+import threading
 
 import chromadb
 from chromadb.config import Settings
@@ -570,3 +571,26 @@ class RAGManager:
             return "No relevant content found in documents or news."
 
         return "\n\n---\n\n".join(context_parts)
+
+
+_shared_rag_manager: RAGManager = None
+_shared_rag_manager_lock = threading.Lock()
+
+
+def get_rag_manager() -> RAGManager:
+    """
+    Process-wide shared RAGManager.
+
+    Constructing a RAGManager connects to ChromaDB and (via the embedding
+    function) pulls in the voyageai → transformers → torch import chain —
+    ~25s cold, measured 2026-09-04. Before this existed, every chat request
+    built one per tool server (insights and ni43101 EACH built their own in a
+    single request), so the cost was paid repeatedly instead of once per
+    process. Callers on the chat path must use this instead of RAGManager().
+    """
+    global _shared_rag_manager
+    if _shared_rag_manager is None:
+        with _shared_rag_manager_lock:
+            if _shared_rag_manager is None:
+                _shared_rag_manager = RAGManager()
+    return _shared_rag_manager

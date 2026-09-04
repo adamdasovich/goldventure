@@ -287,39 +287,44 @@ def mmr_diversify(results: List[Dict], top_k: int = 5, lambda_param: float = 0.7
     if r_max > r_min:
         relevance_scores = (relevance_scores - r_min) / (r_max - r_min)
 
-    # Greedy MMR selection
+    # Precompute norms once. Recomputing both norms inside every pairwise call
+    # made this loop the dominant cost of a hybrid search (~88k similarity
+    # calls, 24s of a 34s tool call, on a 160-candidate set).
+    norms = [math.sqrt(sum(v * v for v in vec.values())) for vec in tfidf_matrix]
+
+    def _sim(i: int, j: int) -> float:
+        if norms[i] == 0 or norms[j] == 0:
+            return 0.0
+        vec_a, vec_b = tfidf_matrix[i], tfidf_matrix[j]
+        if len(vec_a) > len(vec_b):
+            vec_a, vec_b = vec_b, vec_a
+        dot = sum(w * vec_b[t] for t, w in vec_a.items() if t in vec_b)
+        return dot / (norms[i] * norms[j])
+
+    # Greedy MMR. Each candidate's similarity to the closest already-selected
+    # result is tracked incrementally: after a pick, only similarities to that
+    # one new pick need computing — O(k·n) pairs instead of O(k²·n).
     selected_indices = []
     remaining = set(range(len(results)))
+    max_sim_to_selected = [0.0] * len(results)
 
     for _ in range(top_k):
         if not remaining:
             break
 
-        best_idx = None
-        best_mmr = -float('inf')
-
-        for idx in remaining:
-            relevance = relevance_scores[idx]
-
-            # Max similarity to any already-selected result
-            if selected_indices:
-                similarities = [
-                    _cosine_sim_tfidf(tfidf_matrix[idx], tfidf_matrix[s])
-                    for s in selected_indices
-                ]
-                max_sim = max(similarities)
-            else:
-                max_sim = 0.0
-
-            mmr_score = lambda_param * relevance - (1 - lambda_param) * max_sim
-
-            if mmr_score > best_mmr:
-                best_mmr = mmr_score
-                best_idx = idx
-
-        if best_idx is not None:
-            selected_indices.append(best_idx)
-            remaining.discard(best_idx)
+        best_idx = max(
+            remaining,
+            key=lambda i: (
+                lambda_param * relevance_scores[i]
+                - (1 - lambda_param) * max_sim_to_selected[i]
+            ),
+        )
+        selected_indices.append(best_idx)
+        remaining.discard(best_idx)
+        for i in remaining:
+            s = _sim(i, best_idx)
+            if s > max_sim_to_selected[i]:
+                max_sim_to_selected[i] = s
 
     return [results[i] for i in selected_indices]
 
@@ -354,23 +359,6 @@ def _compute_tfidf_matrix(texts: List[str]) -> List[Dict[str, float]]:
         tfidf_vectors.append(vec)
 
     return tfidf_vectors
-
-
-def _cosine_sim_tfidf(vec_a: Dict[str, float], vec_b: Dict[str, float]) -> float:
-    """Cosine similarity between two sparse TF-IDF vectors."""
-    # Dot product over shared terms
-    shared_terms = set(vec_a.keys()) & set(vec_b.keys())
-    if not shared_terms:
-        return 0.0
-
-    dot = sum(vec_a[t] * vec_b[t] for t in shared_terms)
-    norm_a = math.sqrt(sum(v * v for v in vec_a.values()))
-    norm_b = math.sqrt(sum(v * v for v in vec_b.values()))
-
-    if norm_a == 0 or norm_b == 0:
-        return 0.0
-
-    return dot / (norm_a * norm_b)
 
 
 # ---------------------------------------------------------------------------

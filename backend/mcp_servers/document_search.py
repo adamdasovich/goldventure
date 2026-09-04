@@ -28,8 +28,8 @@ class DocumentSearchServer(BaseMCPServer):
             # Local import for the same reason: module import of rag_utils is
             # cheap, but keeping it beside the construction makes the cost
             # obvious to whoever reads this next.
-            from .rag_utils import RAGManager
-            self._rag_manager = RAGManager()
+            from .rag_utils import get_rag_manager
+            self._rag_manager = get_rag_manager()
         return self._rag_manager
 
     def _register_tools(self):
