@@ -1049,10 +1049,16 @@ def auto_discover_and_process_documents_task(self, company_ids=None, document_ty
                 # Create processing jobs (skip existing)
                 jobs_created = 0
                 for doc in documents:
-                    # Check if document already exists
+                    # Canonical identity: cache-buster params change per page
+                    # render, so raw-URL keys ingested the same PDF repeatedly.
+                    from mcp_servers.report_hunter import canonical_document_url
+                    doc_url = canonical_document_url(doc['url'])
+
+                    # Check if document already exists (either URL form —
+                    # historical rows carry raw URLs)
                     existing = Document.objects.filter(
                         company=company,
-                        file_url=doc['url']
+                        file_url__in=[doc_url, doc['url']]
                     ).exists()
 
                     if existing:
@@ -1066,7 +1072,7 @@ def auto_discover_and_process_documents_task(self, company_ids=None, document_ty
                     # confirmed report-sized Content-Length. Refusals are log
                     # lines, never silent.
                     doc_text = f"{doc.get('title', '')} {doc.get('link_text', '')}"
-                    ok, reason = check_discovered_document(doc['url'], doc_text)
+                    ok, reason = check_discovered_document(doc_url, doc_text)
                     if not ok:
                         total_gated += 1
                         logger.info(
@@ -1086,7 +1092,7 @@ def auto_discover_and_process_documents_task(self, company_ids=None, document_ty
                     # Use get_or_create to avoid race condition (TOCTOU vulnerability)
                     # Only create job if status would be 'pending' (not already completed/processing)
                     job, job_created = DocumentProcessingJob.objects.get_or_create(
-                        url=doc['url'],
+                        url=doc_url,
                         defaults={
                             'document_type': doc['document_type'],
                             'company_name': company.name,
@@ -3122,6 +3128,7 @@ def hunt_technical_reports_task(self, flag_ids=None, max_companies=None, dry_run
         HUNT_BACKOFF_DAYS,
         MAX_HUNT_ATTEMPTS,
         build_target,
+        canonical_document_url,
         is_auto_queueable,
         gather_company_candidates,
         rank_candidates,
@@ -3233,10 +3240,11 @@ def hunt_technical_reports_task(self, flag_ids=None, max_companies=None, dry_run
     # same top candidate, auto-queue it again, and the reviewer would cancel it
     # again — an endless loop that spends GPU time on every pass. A rejected URL
     # can still be picked by hand; it just never auto-queues.
-    rejected_urls = set(
-        DocumentProcessingJob.objects.filter(status='cancelled')
-        .values_list('url', flat=True)
-    )
+    rejected_urls = {
+        canonical_document_url(u)
+        for u in DocumentProcessingJob.objects.filter(status='cancelled')
+                                               .values_list('url', flat=True)
+    }
 
     for entry in by_company.values():
         company = entry['company']
@@ -3281,11 +3289,15 @@ def hunt_technical_reports_task(self, flag_ids=None, max_companies=None, dry_run
             ]
 
             top = safe_ranked[0] if safe_ranked else None
-            if top and is_auto_queueable(top) and top['url'] not in rejected_urls:
+            # Jobs are keyed on the canonical URL: sites re-render cache-buster
+            # params (?v=...) on every visit, and keying on the raw URL
+            # ingested the same PDF once per variant.
+            top_url = canonical_document_url(top['url']) if top else ''
+            if top and is_auto_queueable(top) and top_url not in rejected_urls:
                 doc_type = 'pea' if target.report_type == 'pea' else 'ni43101'
                 try:
                     job, _created = DocumentProcessingJob.objects.get_or_create(
-                        url=top['url'],
+                        url=top_url,
                         defaults={
                             'document_type': doc_type,
                             'company_name': company.name,
@@ -3318,7 +3330,7 @@ def hunt_technical_reports_task(self, flag_ids=None, max_companies=None, dry_run
                     flag.mark_as_processed(
                         reviewer=None,
                         job=job,
-                        report_url=top['url'],
+                        report_url=top_url,
                         report_type=(target.report_type
                                      if target.report_type in valid_report_types else 'other'),
                         notes=f"Auto-queued by report hunter (score {top['score']}): {reasons}",

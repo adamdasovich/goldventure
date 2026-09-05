@@ -119,7 +119,10 @@ class NewsReportFlagViewSet(viewsets.ReadOnlyModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        report_url = (request.data.get('report_url') or '').strip()
+        from mcp_servers.report_hunter import canonical_document_url
+        # Canonical identity — cache-buster params (?v=...) change per page
+        # render; keying jobs on the raw URL ingested the same PDF repeatedly.
+        report_url = canonical_document_url((request.data.get('report_url') or '').strip())
         report_type = (request.data.get('report_type') or '').strip()
         notes = request.data.get('notes', 'Submitted for docling processing from news flag')
 

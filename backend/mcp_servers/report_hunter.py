@@ -422,6 +422,46 @@ def normalize_url(url: str) -> str:
         return (url or '').rstrip('/').lower()
 
 
+# Query parameters that vary without the file changing. Sites append ?v=090508
+# style cache busters that differ per page render, so the same PDF arrives
+# under a new URL on every visit — and everything downstream keys on the raw
+# URL: DocumentProcessingJob.get_or_create, the discovery "Document already
+# exists" check, and the hunter's rejected-URL set. The Cuprita 43-101 was
+# ingested twice this way (?v=090508 and ?v=010903), and 1911 Gold's True
+# North report twice more.
+_VOLATILE_QUERY_PARAMS = {
+    'v', 'ver', 'version', 't', 'ts', 'time', 'timestamp',
+    'cache', 'nocache', 'cb', 'rev', '_',
+}
+
+
+def canonical_document_url(url: str) -> str:
+    """
+    The identity a document URL is stored and deduplicated under.
+
+    Strips only the known cache-buster params and the fragment. Meaningful
+    query params survive — download handlers like ?file=report.pdf or ?id=123
+    are the whole address of the document, and normalize_url's strip-everything
+    approach would merge distinct files. Malformed double-query URLs seen in
+    the wild ('...pdf?v=011202?v=1733179390') collapse cleanly because the
+    second '?' lands inside the first param's value, which is discarded with
+    it.
+    """
+    from urllib.parse import parse_qsl, urlencode
+    if not url:
+        return ''
+    try:
+        p = urlparse(url)
+        if not p.query:
+            return urlunparse((p.scheme, p.netloc, p.path, p.params, '', ''))
+        kept = [(k, v) for k, v in parse_qsl(p.query, keep_blank_values=True)
+                if k.lower() not in _VOLATILE_QUERY_PARAMS]
+        return urlunparse((p.scheme, p.netloc, p.path, p.params,
+                           urlencode(kept), ''))
+    except Exception:
+        return url
+
+
 def extract_candidates(html: str, base_url: str) -> List[Dict]:
     """
     Pull document links out of a page.
