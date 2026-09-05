@@ -540,9 +540,22 @@ class ToolRegistry:
                                             "current price", "today's price"]):
             recommended_categories.add(ToolCategory.MARKET)
 
-        # Document keywords
+        # Document keywords.
+        #
+        # "43-101" without the "ni " prefix, plus the report-type vocabulary
+        # users actually type. "Give me the highlights of Nobel Resources
+        # latest 43-101" matched nothing in the original list — the query was
+        # answered with MINING + NEWS tools only, and the assistant reported
+        # that no technical report existed the morning after one was ingested.
+        # The report tools were reachable the whole time; the model was never
+        # handed them and had no reason to go looking.
         if any(kw in query_lower for kw in ["document", "report", "ni 43-101", "technical",
-                                            "extract", "process", "pdf"]):
+                                            "extract", "process", "pdf",
+                                            "43-101", "43 101", "feasibility",
+                                            "resource estimate", "mineral reserve",
+                                            "scoping study",
+                                            "preliminary economic assessment",
+                                            "economic assessment"]):
             recommended_categories.add(ToolCategory.DOCUMENTS)
 
         # Search/RAG keywords
