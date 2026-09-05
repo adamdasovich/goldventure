@@ -186,6 +186,12 @@ class RAGManager:
                 'document_id': document.id,
                 'chunk_index': idx,
                 'company': document.company.name,
+                # company_id is what filtered retrieval matches on — the name
+                # string varies with how a caller types it. Every other writer
+                # (reindex, reconcile) already includes it; omitting it here
+                # would make this writer's chunks invisible to company-scoped
+                # search.
+                'company_id': document.company_id,
                 'document_type': document.document_type,
                 'document_date': str(document.document_date),
                 'document_title': document.title[:100]  # Truncate for metadata
@@ -302,6 +308,35 @@ class RAGManager:
             result['date'] = meta['date']
             result['company'] = company_name
 
+    def _resolve_company_filter(self, filter_company):
+        """
+        Resolve a human-typed company name to (company_id, canonical_name).
+
+        Chat callers pass whatever the user typed — "Nobel Resources" — while
+        chunk metadata and the companies table store "Nobel Resources Corp.".
+        Both retrieval legs used to filter by exact string equality, so any
+        non-verbatim name returned zero chunks and the assistant concluded the
+        documents did not exist: measured 2026-09-05 with the Cuprita 43-101,
+        the morning after it was ingested, when "give me the highlights of
+        Nobel Resources latest 43-101" came back "no report has been filed".
+
+        Every chunk's metadata carries company_id, so resolve the name once
+        and filter on the id. Ambiguous or unknown names fall back to the old
+        literal behaviour — no worse than before.
+        """
+        if not filter_company:
+            return None, None
+        from core.models import Company
+        name = filter_company.strip()
+        company = Company.objects.filter(name__iexact=name).first()
+        if not company:
+            matches = list(Company.objects.filter(name__icontains=name)[:2])
+            if len(matches) == 1:
+                company = matches[0]
+        if company:
+            return company.id, company.name
+        return None, name
+
     def search_documents(self, query: str, n_results: int = 5, filter_company: str = None) -> List[Dict]:
         """
         Hybrid search across document chunks: vector (ChromaDB) + BM25 (PostgreSQL),
@@ -317,10 +352,14 @@ class RAGManager:
         Returns:
             List of relevant chunks with metadata and scores
         """
-        # Build filter if company specified
+        # Filter on company_id, resolved from whatever name the caller typed.
+        # See _resolve_company_filter for why exact-name matching failed.
+        company_id, canonical_name = self._resolve_company_filter(filter_company)
         where_filter = None
-        if filter_company:
-            where_filter = {"company": filter_company}
+        if company_id:
+            where_filter = {"company_id": company_id}
+        elif canonical_name:
+            where_filter = {"company": canonical_name}
 
         # Over-fetch 4x candidates from each source for merging + re-ranking
         fetch_count = n_results * 4
@@ -345,7 +384,8 @@ class RAGManager:
 
         # --- BM25 keyword search (PostgreSQL) ---
         bm25_results = bm25_search_postgres(
-            query, DocumentChunk, top_k=fetch_count, filter_company=filter_company
+            query, DocumentChunk, top_k=fetch_count,
+            filter_company=canonical_name, filter_company_id=company_id,
         )
         # Normalize BM25 results to match vector result format.
         #
@@ -411,10 +451,14 @@ class RAGManager:
         Returns:
             List of relevant news chunks with metadata
         """
-        # Build filter if company specified
+        # Filter on company_id, resolved from whatever name the caller typed.
+        # See _resolve_company_filter for why exact-name matching failed.
+        company_id, canonical_name = self._resolve_company_filter(filter_company)
         where_filter = None
-        if filter_company:
-            where_filter = {"company": filter_company}
+        if company_id:
+            where_filter = {"company_id": company_id}
+        elif canonical_name:
+            where_filter = {"company": canonical_name}
 
         # Over-fetch 4x candidates from each source
         fetch_count = n_results * 4
@@ -442,7 +486,8 @@ class RAGManager:
 
         # --- BM25 keyword search (PostgreSQL) ---
         bm25_results = bm25_search_postgres(
-            query, NewsChunk, top_k=fetch_count, filter_company=filter_company
+            query, NewsChunk, top_k=fetch_count,
+            filter_company=canonical_name, filter_company_id=company_id,
         )
         # Same hydration as search_documents: without it, keyword-sourced hits
         # reach the caller with no title, date or company attribution.

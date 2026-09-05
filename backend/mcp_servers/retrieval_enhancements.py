@@ -128,7 +128,8 @@ def bm25_score_results(query: str, candidates: List[Dict]) -> List[Dict]:
 
 
 def bm25_search_postgres(query: str, model_class, top_k: int = 20,
-                         filter_company: str = None) -> List[Dict]:
+                         filter_company: str = None,
+                         filter_company_id: int = None) -> List[Dict]:
     """
     BM25 keyword search against PostgreSQL-stored chunks.
 
@@ -155,7 +156,15 @@ def bm25_search_postgres(query: str, model_class, top_k: int = 20,
         # Build queryset
         qs = model_class.objects.all()
 
-        if filter_company:
+        # Prefer the resolved id: exact name equality silently returned zero
+        # rows for any name the caller didn't type verbatim ("Nobel Resources"
+        # vs the stored "Nobel Resources Corp.").
+        if filter_company_id:
+            if hasattr(model_class, 'document'):
+                qs = qs.filter(document__company_id=filter_company_id)
+            elif hasattr(model_class, 'company'):
+                qs = qs.filter(company_id=filter_company_id)
+        elif filter_company:
             # DocumentChunk: company is on Document, NewsChunk: has direct company FK
             if hasattr(model_class, 'document'):
                 qs = qs.filter(document__company__name=filter_company)
