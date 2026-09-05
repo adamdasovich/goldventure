@@ -10,10 +10,16 @@ Key optimizations:
 4. Metadata caching - tool definitions cached to avoid regeneration
 """
 
+import re
+
 from typing import Dict, List, Any, Optional, Literal
 from functools import lru_cache
 from dataclasses import dataclass
 from enum import Enum
+
+# Report-type acronyms, boundary-matched. See the DOCUMENTS trigger in
+# get_recommended_tools for why these cannot live in the substring list.
+_re_report_acronyms = re.compile(r'(?<![a-z0-9])(pea|pfs|dfs|mre)(?![a-z0-9])')
 
 
 class ToolCategory(Enum):
@@ -550,12 +556,21 @@ class ToolRegistry:
         # The report tools were reachable the whole time; the model was never
         # handed them and had no reason to go looking.
         if any(kw in query_lower for kw in ["document", "report", "ni 43-101", "technical",
+                                            "technical report",
                                             "extract", "process", "pdf",
                                             "43-101", "43 101", "feasibility",
                                             "resource estimate", "mineral reserve",
                                             "scoping study",
                                             "preliminary economic assessment",
                                             "economic assessment"]):
+            recommended_categories.add(ToolCategory.DOCUMENTS)
+        # Report-type acronyms need word boundaries, not substring matching:
+        # bare 'pea' in a substring check fires on 'appear' and 'peak', 'mre'
+        # on 'more' — the same trap the flag-detection keywords hit before
+        # moving to boundary regexes. A user who says "the latest PEA" gets
+        # the document tools; one asking where the market appears to peak
+        # does not.
+        if _re_report_acronyms.search(query_lower):
             recommended_categories.add(ToolCategory.DOCUMENTS)
 
         # Search/RAG keywords
