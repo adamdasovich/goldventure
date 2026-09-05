@@ -3364,3 +3364,132 @@ def hunt_technical_reports_task(self, flag_ids=None, max_companies=None, dry_run
         logger.info(f"[HUNT] Chained discovery for {chain_discovery_limit} companies")
 
     return stats
+
+
+# ---------------------------------------------------------------------------
+# Morning audit of overnight technical-report ingestions
+# ---------------------------------------------------------------------------
+
+# What an announcement sounds like, tested against the first ingested chunk.
+# The URL/size gates run before ingestion and are blind to content; this runs
+# after, when the document has told us what it is. An image-heavy news-release
+# PDF ('2026-04-20-Cisco-MRE-vFINAL-1.pdf', clean filename, over the 2.5MB
+# floor) got through both structural gates on 2026-09-05 and opened with
+# "Q2 Metals Announces Inferred Mineral Resource Estimate on the Cisco
+# Lithium Project" — while every genuine report ingested that night opened
+# with report furniture: "NI 43-101 Technical Report", "Prepared for:",
+# "Qualified Person".
+_ANNOUNCE_VERB = _re.compile(
+    r'\b(announces?|is\s+pleased\s+to\s+(?:announce|report)|'
+    r'reports?\s+(?:results|positive|record|an?\s))',
+    _re.IGNORECASE,
+)
+_ANNOUNCE_CORROBORATOR = _re.compile(
+    r'\((?:TSX|TSXV|TSX\.V|CSE|NYSE|OTC|OTCQ[BX]|ASX|NASDAQ|FSE|NYSEA)\b'
+    r'|news\s+release|press\s+release'
+    r'|\b(?:british\s+columbia|ontario|alberta|quebec)\s*[-–—]',
+    _re.IGNORECASE,
+)
+_REPORT_FURNITURE = _re.compile(
+    r'prepared\s+(?:for|by)\s*:?|qualified\s+persons?|effective\s+date\s*:'
+    r'|technical\s+report\s+on|report\s+date\s*:',
+    _re.IGNORECASE,
+)
+
+# An announcement is a few pages. Every genuine report ingested so far runs 30+
+# chunks; the two announcement PDFs that slipped through ran 7 and 13. The
+# ceiling means a long document can never be reverted by this task, whatever
+# its first page sounds like.
+_AUDIT_MAX_CHUNKS = 50
+
+
+def _reads_as_announcement(first_chunk_text: str) -> bool:
+    """True when a document's opening is a news release, not a report."""
+    text = (first_chunk_text or '')[:3000]
+    if _REPORT_FURNITURE.search(text):
+        return False
+    return bool(_ANNOUNCE_VERB.search(text) and _ANNOUNCE_CORROBORATOR.search(text))
+
+
+@shared_task(bind=True, time_limit=300, soft_time_limit=280, on_failure=log_task_failure)
+def verify_overnight_technical_ingestions_task(self, hours=26, dry_run=False):
+    """
+    Morning self-audit: revert announcement PDFs that were ingested as reports.
+
+    Scans technical documents created in the last `hours` and reads what the
+    document actually says about itself. A short document whose first chunk
+    opens like a news release — an announce verb plus a ticker or dateline,
+    and none of a report's own furniture — is reverted exactly the way the
+    manual morning review did it: the job is cancelled (which also bars the
+    URL from ever auto-queueing again), any originating flag reopens with its
+    ranked candidates intact, and the document and its chunks are deleted.
+    The content is not lost to the platform; a news release belongs to the
+    news pipeline, which covers it separately.
+
+    Deliberately conservative in three ways: only short documents (a genuine
+    report can never trip it past _AUDIT_MAX_CHUNKS), only when report
+    furniture is absent, and everything it does is loudly logged so the
+    morning glance at /admin/document-queue shows exactly what happened.
+    """
+    from datetime import timedelta
+
+    from django.db import transaction
+
+    from .models import Document, DocumentProcessingJob, NewsReportFlag
+
+    cutoff = timezone.now() - timedelta(hours=hours)
+    candidates = Document.objects.filter(
+        created_at__gte=cutoff,
+        document_type__in=['ni43101', 'pea', 'technical_report'],
+    )
+
+    checked = 0
+    reverted = []
+    for doc in candidates:
+        checked += 1
+        chunks = doc.chunks.order_by('chunk_index')
+        count = chunks.count()
+        if count == 0 or count > _AUDIT_MAX_CHUNKS:
+            continue
+        first = chunks.first()
+        if not _reads_as_announcement(first.text):
+            continue
+
+        logger.warning(
+            f"[AUDIT] Document {doc.id} ({count} chunks) reads as an "
+            f"announcement: {first.text[:90]!r} url={doc.file_url[-70:]}"
+        )
+        if dry_run:
+            reverted.append(doc.id)
+            continue
+
+        with transaction.atomic():
+            for job in DocumentProcessingJob.objects.filter(document_id=doc.id):
+                job.status = 'cancelled'
+                job.error_message = (
+                    'Auto-reverted by the morning ingestion audit: the document '
+                    'opens like a news release, not a technical report.'
+                )
+                job.document = None
+                job.save(update_fields=['status', 'error_message', 'document'])
+                for flag in NewsReportFlag.objects.filter(processing_job=job):
+                    flag.status = 'pending'
+                    flag.hunt_status = 'found' if flag.candidates else 'not_found'
+                    flag.processing_job = None
+                    flag.report_url = ''
+                    flag.report_type = ''
+                    flag.reviewed_by = None
+                    flag.reviewed_at = None
+                    flag.review_notes = (
+                        'Reopened by the morning ingestion audit: the '
+                        'auto-queued document was an announcement PDF. '
+                        'Candidates intact.'
+                    )
+                    flag.save()
+                    logger.warning(f"[AUDIT] Flag {flag.id} reopened")
+            doc.delete()
+        reverted.append(doc.id)
+
+    logger.info(f"[AUDIT] Checked {checked} overnight technical documents, "
+                f"reverted {len(reverted)}: {reverted or 'none'}")
+    return {'checked': checked, 'reverted': reverted, 'dry_run': dry_run}

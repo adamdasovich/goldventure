@@ -457,6 +457,7 @@ CELERY_TASK_ROUTES = {
     'core.tasks.scrape_mining_news_task':               {'queue': 'scrape'},
     'core.tasks.auto_discover_and_process_documents_task': {'queue': 'scrape'},
     'core.tasks.hunt_technical_reports_task':           {'queue': 'scrape'},
+    'core.tasks.verify_overnight_technical_ingestions_task': {'queue': 'default'},
     'core.tasks.reconcile_chroma_index_task':           {'queue': 'scrape'},
     'core.tasks.backfill_document_dates_task':          {'queue': 'scrape'},
     'core.tasks.process_company_news_for_rag_task':     {'queue': 'scrape'},
@@ -585,6 +586,19 @@ CELERY_BEAT_SCHEDULE = {
             'max_companies': 40,  # Ceiling on sites crawled per run
             'chain_discovery_limit': 7,  # Companies for the chained discovery
         }
+    },
+
+    # Morning self-audit of whatever the night chain ingested. The pre-queue
+    # gates judge a URL, a filename and a byte count; this reads what the
+    # document says about itself once its text exists, and reverts short
+    # documents that open like a news release (announce verb + ticker or
+    # dateline, none of a report's own furniture) — job cancelled, flag
+    # reopened with candidates, document and chunks removed. A genuine report
+    # cannot trip it: report furniture vetoes, and documents over 50 chunks
+    # are never touched.
+    'verify-overnight-ingestions': {
+        'task': 'core.tasks.verify_overnight_technical_ingestions_task',
+        'schedule': crontab(hour=7, minute=0),  # 7 AM ET
     },
 
     # Scrape mining industry news 3 times daily (8 AM, 1 PM, 6 PM ET)
